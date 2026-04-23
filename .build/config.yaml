@@ -1,4 +1,4 @@
-stage: bootstrap
+stage: alpha
 
 paths:
   generated_marker: gen
@@ -50,7 +50,14 @@ lint:
         - unused-parameter
   arch:
     layers:
-      mahjong: internal/mahjong/**
+      # 将麻将子包拆分为独立组件，避免 go-arch-lint 将子包 import 误判为跨组件依赖
+      mahjong_xzdd: internal/mahjong/sichuanxzdd/**
+      mahjong_rules: internal/mahjong/rules/**
+      mahjong_tile: internal/mahjong/tile/**
+      mahjong_wall: internal/mahjong/wall/**
+      mahjong_hand: internal/mahjong/hand/**
+      mahjong_hu: internal/mahjong/hu/**
+      mahjong_fan: internal/mahjong/fan/**
       domain: internal/domain/**
       app: internal/app/**
       net: internal/net/**
@@ -65,7 +72,19 @@ lint:
       pkg: pkg/**
       apigen: api/gen/**
     deny:
-      - from: mahjong
+      - from: mahjong_xzdd
+        to: [net, cluster, handler, store, service, session, app, cmd]
+      - from: mahjong_rules
+        to: [net, cluster, handler, store, service, session, app, cmd]
+      - from: mahjong_tile
+        to: [net, cluster, handler, store, service, session, app, cmd]
+      - from: mahjong_wall
+        to: [net, cluster, handler, store, service, session, app, cmd]
+      - from: mahjong_hand
+        to: [net, cluster, handler, store, service, session, app, cmd]
+      - from: mahjong_hu
+        to: [net, cluster, handler, store, service, session, app, cmd]
+      - from: mahjong_fan
         to: [net, cluster, handler, store, service, session, app, cmd]
       - from: domain
         to: [net, cluster, handler, store, service, app, cmd]
@@ -74,9 +93,47 @@ lint:
       - from: service
         to: [net, handler, cluster, cmd]
       - from: pkg
-        to: [mahjong, domain, app, net, cluster, handler, store, service, session, config, log, cmd, apigen]
+        to:
+          - mahjong_xzdd
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - domain
+          - app
+          - net
+          - cluster
+          - handler
+          - store
+          - service
+          - session
+          - config
+          - log
+          - cmd
+          - apigen
       - from: apigen
-        to: [mahjong, domain, app, net, cluster, handler, store, service, session, config, log, cmd, pkg]
+        to:
+          - mahjong_xzdd
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - domain
+          - app
+          - net
+          - cluster
+          - handler
+          - store
+          - service
+          - session
+          - config
+          - log
+          - cmd
+          - pkg
 
 deps:
   denylist:

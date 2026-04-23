@@ -7,8 +7,20 @@ allow:
 excludeFiles:
   - "^.*_test\\.go$"
 components:
-  mahjong:
-    in: internal/mahjong/**
+  mahjong_xzdd:
+    in: internal/mahjong/sichuanxzdd/**
+  mahjong_rules:
+    in: internal/mahjong/rules/**
+  mahjong_tile:
+    in: internal/mahjong/tile/**
+  mahjong_wall:
+    in: internal/mahjong/wall/**
+  mahjong_hand:
+    in: internal/mahjong/hand/**
+  mahjong_hu:
+    in: internal/mahjong/hu/**
+  mahjong_fan:
+    in: internal/mahjong/fan/**
   domain:
     in: internal/domain/**
   app:
@@ -36,8 +48,92 @@ components:
   apigen:
     in: api/gen/**
 deps:
-  mahjong:
+  mahjong_xzdd:
     mayDependOn:
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  mahjong_rules:
+    mayDependOn:
+      - mahjong_xzdd
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  mahjong_tile:
+    mayDependOn:
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  mahjong_wall:
+    mayDependOn:
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  mahjong_hand:
+    mayDependOn:
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hu
+      - mahjong_fan
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  mahjong_hu:
+    mayDependOn:
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_fan
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  mahjong_fan:
+    mayDependOn:
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
       - domain
       - config
       - log
@@ -45,7 +141,13 @@ deps:
       - apigen
   domain:
     mayDependOn:
-      - mahjong
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
       - session
       - config
       - log
@@ -59,7 +161,13 @@ deps:
     anyProjectDeps: true
   handler:
     mayDependOn:
-      - mahjong
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
       - domain
       - app
       - net
@@ -75,7 +183,13 @@ deps:
     anyProjectDeps: true
   service:
     mayDependOn:
-      - mahjong
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
       - domain
       - app
       - store

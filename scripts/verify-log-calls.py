@@ -58,6 +58,9 @@ def _first_go_string(s: str) -> str | None:
         if not m:
             return None
         raw = m.group(1)
+        # 仅当存在反斜杠转义时再走 unicode_escape；否则 UTF-8 中文会被误解码为乱码。
+        if "\\" not in raw:
+            return raw
         try:
             return codecs.decode(raw, "unicode_escape")
         except Exception:

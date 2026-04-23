@@ -1,27 +1,19 @@
-# 房间状态机
+# 房间 FSM（Phase 1）
 
 ## 状态
 
-```mermaid
-stateDiagram-v2
-    [*] --> Waiting
-    Waiting --> Ready: all ready
-    Ready --> HuanSanZhang: enabled
-    HuanSanZhang --> DingQue
-    Ready --> DingQue: disabled
-    DingQue --> Playing
-    Playing --> Settling: win or wall exhausted
-    Settling --> [*]
-```
+- `idle`：占位，当前实现从 `waiting` 起步。
+- `waiting`：等待玩家进房与准备。
+- `ready`：四人已满且全准备，可开局。
+- `playing`：对局进行中（后续迭代补齐摸打与血战分支）。
+- `settling`：结算中。
+- `closed`：房间关闭。
 
-## 事件来源
+## 迁移
 
-- 来自网关的玩家指令
-- 内部定时器
-- 重连或快照恢复
+详见 `internal/domain/room/fsm.go` 中的显式迁移表；非法迁移会返回错误，避免静默破坏房间一致性。
 
-## 不变量
+## TODO
 
-1. 仅房间循环可变更房间状态。
-2. 动作须通过当前激活的规则实现校验。
-3. 结算消费终局状态的冻结快照。
+- 超时踢人与准备回退策略。
+- 断线重连与幂等恢复。

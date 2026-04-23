@@ -12,6 +12,7 @@ from lang_verify_common import (
     collect_by_patterns,
     extract_go_comment_text,
     load_section,
+    posix_rel,
 )
 
 

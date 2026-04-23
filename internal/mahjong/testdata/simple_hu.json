@@ -1,0 +1,7 @@
+{
+  "case": "standard_sequence_plus_triple_pair",
+  "hand": ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "p1", "p1", "p1", "p2"],
+  "win": "p2",
+  "want_win": true,
+  "want_min_total_fan": 1
+}

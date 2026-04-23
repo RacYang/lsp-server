@@ -9,6 +9,12 @@
 - Phase 2：基于 Redis 的拆分服务。
 - Phase 3+：持久化、重连、可观测性与更多规则集。
 
+## 快速启动（Phase 1）
+
+1. 可选：复制 `configs/dev.yaml` 并按需修改监听地址。
+2. 终端执行：`LSP_CONFIG=configs/dev.yaml go run ./cmd/all`（未设置 `LSP_CONFIG` 时默认仍尝试加载该路径）。
+3. WebSocket 地址：`ws://<ServerAddr>/ws`，协议见 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
+
 ## 命令
 
 - `make bootstrap`

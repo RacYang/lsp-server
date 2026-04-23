@@ -126,13 +126,10 @@ else
 endif
 
 verify-tidy:
-	@tmp_dir="$$(mktemp -d)"; \
-	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp go.mod "$$tmp_dir/go.mod"; \
-	if [[ -f go.sum ]]; then cp go.sum "$$tmp_dir/go.sum"; fi; \
-	(cd "$$tmp_dir" && go mod tidy >/dev/null 2>&1); \
-	diff -q go.mod "$$tmp_dir/go.mod"; \
-	if [[ -f go.sum || -f "$$tmp_dir/go.sum" ]]; then diff -q go.sum "$$tmp_dir/go.sum"; fi
+	@d1="$$( (cat go.mod; test -f go.sum && cat go.sum) | openssl dgst -sha256)"; \
+	go mod tidy >/dev/null; \
+	d2="$$( (cat go.mod; test -f go.sum && cat go.sum) | openssl dgst -sha256)"; \
+	test "$$d1" = "$$d2" || { echo "go.mod 或 go.sum 在 go mod tidy 后发生变化，请检查依赖声明" >&2; exit 1; }
 
 verify-secrets:
 	@gitleaks detect --no-banner --no-git --source . --redact

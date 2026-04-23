@@ -1,0 +1,5 @@
+# 本地开发默认配置（Phase 1 单体）
+server:
+  addr: ":18080"
+rule:
+  default_id: "sichuan_xzdd"

@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package client.v1;
+
+option go_package = "racoo.cn/lsp/api/gen/go/client/v1;clientv1";
+
+// 客户端 v1 载荷：消息类型由二进制帧头的 msg_id 标识，本文件仅承载业务字段与 req_id。
+
+// ErrorCode 为业务错误码，供客户端展示与分支处理。
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_UNAUTHORIZED = 1;
+  ERROR_CODE_ROOM_NOT_FOUND = 2;
+  ERROR_CODE_ROOM_FULL = 3;
+  ERROR_CODE_INVALID_STATE = 4;
+  ERROR_CODE_NOT_YOUR_TURN = 5;
+}
+
+// Envelope 为请求/响应通用外壳；body 使用 oneof 承载具体消息。
+message Envelope {
+  string req_id = 1;
+  oneof body {
+    LoginRequest login_req = 2;
+    LoginResponse login_resp = 3;
+    JoinRoomRequest join_room_req = 4;
+    JoinRoomResponse join_room_resp = 5;
+    ReadyRequest ready_req = 6;
+    ReadyResponse ready_resp = 7;
+    DiscardRequest discard_req = 8;
+    DiscardResponse discard_resp = 9;
+    PongRequest pong_req = 10;
+    GangRequest gang_req = 11;
+    HuRequest hu_req = 12;
+    StartGameNotify start_game = 13;
+    DrawTileNotify draw_tile = 14;
+    ActionNotify action = 15;
+    SettlementNotify settlement = 16;
+  }
+}
+
+message LoginRequest {
+  string nickname = 1;
+}
+
+message LoginResponse {
+  string user_id = 1;
+  ErrorCode error_code = 2;
+  string error_message = 3;
+}
+
+message JoinRoomRequest {
+  string room_id = 1;
+}
+
+message JoinRoomResponse {
+  int32 seat_index = 1;
+  ErrorCode error_code = 2;
+  string error_message = 3;
+}
+
+message ReadyRequest {}
+
+message ReadyResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
+message DiscardRequest {
+  string tile = 1;
+}
+
+message DiscardResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
+message PongRequest {}
+
+message GangRequest {
+  string tile = 1;
+}
+
+message HuRequest {}
+
+// StartGameNotify 表示房间开局（服务端推送）。
+message StartGameNotify {
+  string room_id = 1;
+  int32 dealer_seat = 2;
+}
+
+// DrawTileNotify 表示某座位摸牌。
+message DrawTileNotify {
+  int32 seat_index = 1;
+  string tile = 2;
+}
+
+// ActionNotify 表示他人可见动作（吃碰杠胡等，Phase 1 简化为文本描述）。
+message ActionNotify {
+  int32 seat_index = 1;
+  string action = 2;
+  string tile = 3;
+}
+
+// SettlementNotify 表示一局结算摘要。
+message SettlementNotify {
+  string room_id = 1;
+  repeated string winner_user_ids = 2;
+  int32 total_fan = 3;
+}
