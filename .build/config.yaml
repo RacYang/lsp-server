@@ -1,0 +1,209 @@
+stage: bootstrap
+
+paths:
+  generated_marker: gen
+  negatives: .build/negatives
+
+tools:
+  go: 1.26.2
+  golangci-lint: 2.1.6
+  go-arch-lint: 1.12.0
+  buf: 1.53.0
+  govulncheck: 1.1.4
+  gitleaks: 8.28.0
+  yq: 4.45.1
+  markdownlint-cli2: 0.18.1
+  shellcheck: 0.10.0
+  yamllint: 1.37.1
+  goimports: 0.32.0
+  protoc-gen-go: 1.36.10
+  protoc-gen-go-grpc: 1.5.1
+
+coverage:
+  thresholds:
+    internal/mahjong/...: 90
+    internal/domain/...: 80
+    default: 60
+  extra_exclude:
+    - cmd/**
+    - internal/app/**
+
+lint:
+  golangci:
+    enable:
+      - govet
+      - errcheck
+      - staticcheck
+      - ineffassign
+      - unused
+      - gosec
+      - revive
+      - gocritic
+      - errorlint
+      - bodyclose
+      - noctx
+      - testifylint
+    revive:
+      disable_rules:
+        - exported
+        - package-comments
+        - unused-parameter
+  arch:
+    layers:
+      mahjong: internal/mahjong/**
+      domain: internal/domain/**
+      app: internal/app/**
+      net: internal/net/**
+      cluster: internal/cluster/**
+      handler: internal/handler/**
+      store: internal/store/**
+      service: internal/service/**
+      session: internal/session/**
+      config: internal/config/**
+      log: internal/log/**
+      cmd: cmd/**
+      pkg: pkg/**
+      apigen: api/gen/**
+    deny:
+      - from: mahjong
+        to: [net, cluster, handler, store, service, session, app, cmd]
+      - from: domain
+        to: [net, cluster, handler, store, service, app, cmd]
+      - from: handler
+        to: [store]
+      - from: service
+        to: [net, handler, cluster, cmd]
+      - from: pkg
+        to: [mahjong, domain, app, net, cluster, handler, store, service, session, config, log, cmd, apigen]
+      - from: apigen
+        to: [mahjong, domain, app, net, cluster, handler, store, service, session, config, log, cmd, pkg]
+
+deps:
+  denylist:
+    - github.com/topfreegames/pitaya
+    - github.com/lonng/nano
+    - github.com/name5566/leaf
+    - github.com/davyxu/cellnet
+    - github.com/xiaonanln/goworld
+    - github.com/liangdas/mqant
+
+proto:
+  baseline_ref: refs/tags/proto-baseline
+
+commit:
+  conventional_types:
+    - feat
+    - fix
+    - docs
+    - refactor
+    - test
+    - chore
+    - build
+    - ci
+    - perf
+    - style
+  scopes_required: false
+  scope_pattern: "^[a-z0-9][a-z0-9/-]*$"
+  summary_min_cjk_ratio: 0.20
+  summary_disallow_terminal_punctuation: true
+
+git:
+  default_branch: main
+  protected_branches:
+    - main
+  branch:
+    topic_pattern: "^(feat|fix|docs|refactor|test|chore|build|ci|perf|style)/[a-z0-9][a-z0-9/-]*$"
+    forbid_direct_commit_on_protected: true
+    allow_detached_head: true
+    allow_branches:
+      - main
+  protected_push:
+    reject_direct_push: true
+    reject_non_fast_forward: true
+  merge:
+    server_strategy: squash
+    forbid_merge_commits_on_protected: true
+  history:
+    allow_force_push_on_protected: false
+    prefer_force_with_lease_elsewhere: true
+  tags:
+    release_pattern: "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$"
+    allow_special:
+      - proto-baseline
+    check_pushed_tags_only: true
+  trailers:
+    forbidden: []
+    generated_allowlist:
+      - Made-with
+  repo_hygiene:
+    max_tracked_file_bytes: 2097152
+    forbidden_basenames:
+      - ".DS_Store"
+      - "Thumbs.db"
+    binary_blocked: true
+    allow_binary_globs: []
+    allow_large_file_globs: []
+  signing:
+    policy: recommended
+  ci_parity:
+    pre_commit_target: verify-pre-commit
+    pre_push_target: verify
+    ci_target: verify
+
+language:
+  docs_paths:
+    - "docs/**/*.md"
+    - "*.md"
+    - "**/README.md"
+    - ".cursor/rules/*.mdc"
+    - ".cursor/skills/**/SKILL.md"
+  docs_exclude:
+    - ".build/negatives/**"
+    - "api/gen/**"
+  docs_min_cjk_ratio: 0.20
+
+commenting:
+  code_paths:
+    - "**/*.go"
+  code_exclude:
+    - "**/gen/**"
+    - ".build/negatives/**"
+    - "pkg/logx/**"
+  min_cjk_ratio: 0.30
+  technical_keywords:
+    - Goroutine
+    - Channel
+    - Context
+    - Redis
+    - PostgreSQL
+    - gRPC
+    - Protobuf
+    - WebSocket
+    - etcd
+    - Prometheus
+    - pprof
+
+logging:
+  facade_packages:
+    - "racoo.cn/lsp/pkg/logx"
+  facade_impl_paths:
+    - "pkg/logx/**"
+  forbidden_packages:
+    - "log/slog"
+    - "go.uber.org/zap"
+    - "go.uber.org/zap/zapcore"
+  message_min_cjk_ratio: 0.30
+  required_keys:
+    - trace_id
+    - user_id
+    - room_id
+
+stage_gates:
+  bootstrap:
+    cover_strict: false
+  alpha:
+    cover_strict: true
+  beta:
+    cover_strict: true
+  ga:
+    cover_strict: true

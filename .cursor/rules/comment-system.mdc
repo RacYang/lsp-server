@@ -1,0 +1,10 @@
+---
+kind: norm
+description: 注释分层与必须注释场景（规范优先于硬指标）
+alwaysApply: true
+adr: docs/adr/0005-comment-system.md
+---
+
+# 注释体系
+
+包、类型、导出函数与关键分支的注释要求见 ADR-0005 与 `docs/CODING-STYLE.md`。

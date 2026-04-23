@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: pre-commit、pre-push 与 CI 的 make 目标须与 SSOT 一致
+alwaysApply: true
+adr: docs/adr/0007-git-workflow-policy.md
+enforcer: scripts/verify-hooks-parity.py
+negative_test: .build/negatives/git_hooks_parity_missing.yml.neg
+---
+
+# Git hooks 与 CI 映射
+
+- `git.ci_parity.pre_commit_target`：当前为 `verify-pre-commit`（内含 `verify-git-local` 与 `verify-fast`）。
+- `git.ci_parity.pre_push_target`：当前为 `verify`，且 `pre-push` 须先执行 `verify-git-push`。
+- `git.ci_parity.ci_target`：当前为 `verify`。

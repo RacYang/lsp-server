@@ -1,0 +1,13 @@
+---
+kind: constraint
+description: 测试代码要通过 testifylint 并满足覆盖率门槛
+globs: "**/*_test.go"
+adr: docs/adr/0000-engineering-charter.md
+enforcer: .golangci.yml#{testifylint}
+negative_test: .build/negatives/testing_bad_assertion.go.neg
+---
+
+# 测试
+
+- 倾向表驱动测试与明确期望。
+- 麻将算法变更应新增或更新 YAML 夹具。

@@ -1,0 +1,13 @@
+package sample
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestBadAssertion(t *testing.T) {
+	actual := 1
+	expected := 2
+	assert.Equal(t, actual, expected)
+}

@@ -1,0 +1,7 @@
+package mahjong
+
+import "racoo.cn/lsp/internal/session"
+
+func badSessionUse() session.Stub {
+	return session.Stub{}
+}

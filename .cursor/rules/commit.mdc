@@ -1,0 +1,16 @@
+---
+kind: constraint
+description: 提交信息必须符合统一的 Conventional Commits 规范
+alwaysApply: true
+adr: docs/adr/0000-engineering-charter.md
+enforcer: .commitlintrc.json
+negative_test: .build/negatives/commit_non_unified_summary.txt.neg
+---
+
+# 提交信息
+
+- 使用 `type(scope): 摘要` 或 `type: 摘要`。
+- `type` 仅允许 SSOT 派生出的 conventional commit 类型。
+- `scope` 可省略；填写时使用小写英文、数字、短横线或 `/`。
+- `摘要` 使用简体中文短语，避免英文整句，不要以句号、感叹号等收尾。
+- 示例：`feat(room): 新增房间重连流程`、`docs: 补充集群部署说明`

@@ -1,0 +1,11 @@
+---
+kind: norm
+description: main 合入以 squash 为主，由托管侧分支保护落实
+alwaysApply: true
+adr: docs/adr/0007-git-workflow-policy.md
+---
+
+# Git 合并策略
+
+- 向 `main` 的合并在托管侧以 squash merge 为主（见 SSOT `git.merge.server_strategy`）。
+- 禁止普通 merge commit 直接落到 `main` 主要由托管侧「仅允许 squash」按钮与分支保护实现；本地 hook 无法完整替代。

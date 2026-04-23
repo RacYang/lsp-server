@@ -1,0 +1,10 @@
+---
+kind: norm
+description: 统一日志门面、级别与结构化字段约定
+alwaysApply: true
+adr: docs/adr/0006-logging-system-and-facade.md
+---
+
+# 日志体系
+
+门面路径、禁止项与字段约定见 ADR-0006 与 `docs/LOGGING.md`。

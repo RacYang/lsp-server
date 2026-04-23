@@ -1,0 +1,7 @@
+# English Only Document
+
+This document is intentionally written in English to trigger the language governance negative test.
+
+The verifier strips fenced code blocks and inline code, but this paragraph remains Latin letters only.
+
+Another sentence without any Chinese characters should keep the ratio below the configured threshold.

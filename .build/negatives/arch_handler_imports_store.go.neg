@@ -1,0 +1,7 @@
+package handler
+
+import "racoo.cn/lsp/internal/store"
+
+func badImport() store.Stub {
+	return store.Stub{}
+}

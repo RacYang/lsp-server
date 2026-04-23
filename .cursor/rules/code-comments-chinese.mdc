@@ -1,0 +1,12 @@
+---
+kind: constraint
+description: Go 源码注释以中文为主（仅统计注释文本）
+globs: "**/*.go"
+adr: docs/adr/0004-language-and-writing-policy.md
+enforcer: scripts/verify-lang-comments.py
+negative_test: .build/negatives/lang_code_english_comment.go.neg
+---
+
+# 注释语言约束
+
+见 ADR-0004 与 ADR-0005；阈值与关键字白名单见 SSOT `commenting` 节。

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CursorRuleFrontmatter",
+  "type": "object",
+  "required": ["kind", "description"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["constraint", "norm"]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "globs": {
+      "type": ["string", "array"],
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "alwaysApply": {
+      "type": "boolean"
+    },
+    "adr": {
+      "type": "string",
+      "minLength": 1
+    },
+    "enforcer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "negative_test": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "constraint" }
+        }
+      },
+      "then": {
+        "required": ["adr", "enforcer", "negative_test"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "norm" }
+        }
+      },
+      "then": {
+        "required": ["adr"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

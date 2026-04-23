@@ -1,0 +1,12 @@
+---
+kind: constraint
+description: 文档与规则正文以中文为主（剥离代码块后统计）
+globs: "**/*.{md,mdc}"
+adr: docs/adr/0004-language-and-writing-policy.md
+enforcer: scripts/verify-lang-docs.py
+negative_test: .build/negatives/lang_docs_full_english.md.neg
+---
+
+# 文档中文约束
+
+见 ADR-0004；阈值与路径由 `.build/config.yaml` 的 `language` 节配置。

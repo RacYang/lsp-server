@@ -1,0 +1,6 @@
+name: bad-ci
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "missing make verify"

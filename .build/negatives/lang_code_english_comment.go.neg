@@ -1,0 +1,6 @@
+package sample
+
+// This exported function intentionally uses English comments only.
+func Run() int {
+	return 0
+}

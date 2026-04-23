@@ -1,0 +1,11 @@
+---
+kind: norm
+description: 提交 Trailer 的允许与禁止集，待自动注入策略稳定后再硬化
+alwaysApply: true
+adr: docs/adr/0007-git-workflow-policy.md
+---
+
+# Git 提交 Trailer
+
+- SSOT 中 `git.trailers.generated_allowlist` 列出工具可能自动追加的 trailer（如 `Made-with`），Phase 1 不禁止。
+- `git.trailers.forbidden` 用于后续收紧禁止键；升级为 constraint 时由 `scripts/verify-commit-msg.py` 等统一校验。

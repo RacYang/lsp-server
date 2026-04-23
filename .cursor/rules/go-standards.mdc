@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: Go 代码必须显式处理错误并保持可追踪的错误链
+globs: "**/*.go"
+adr: docs/adr/0000-engineering-charter.md
+enforcer: .golangci.yml#{errcheck,errorlint,gocritic}
+negative_test: .build/negatives/go_standards_missing_wrap.go.neg
+---
+
+# Go 规范
+
+- 不得忽略返回的错误。
+- 传播错误时使用 `%w` 包装。
+- 保持函数短小、包依赖显式。

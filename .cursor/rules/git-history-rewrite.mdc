@@ -1,0 +1,11 @@
+---
+kind: norm
+description: 非受保护分支改写历史时优先使用 --force-with-lease
+alwaysApply: true
+adr: docs/adr/0007-git-workflow-policy.md
+---
+
+# Git 历史改写
+
+- 向非受保护分支强推时，优先使用 `git push --force-with-lease`，降低覆盖他人新提交的风险。
+- `pre-push` 无法区分 `--force` 与 `--force-with-lease`，因此本项为流程规范，不作为本地硬校验。

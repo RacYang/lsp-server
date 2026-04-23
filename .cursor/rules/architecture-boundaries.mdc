@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: 分层依赖必须受架构边界约束
+globs: "**/*.go"
+adr: docs/adr/0000-engineering-charter.md
+enforcer: .go-arch-lint.yml
+negative_test: .build/negatives/arch_handler_imports_store.go.neg
+---
+
+# 架构边界
+
+- `internal/handler` 不得 import `internal/store`。
+- `internal/mahjong` 不得依赖传输、会话、集群或 app 等包。
+- 即使能编译，也拒绝跨层捷径。

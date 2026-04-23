@@ -1,0 +1,384 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BuildConfig",
+  "type": "object",
+  "required": [
+    "stage",
+    "paths",
+    "tools",
+    "coverage",
+    "lint",
+    "deps",
+    "proto",
+    "commit",
+    "git",
+    "language",
+    "commenting",
+    "logging",
+    "stage_gates"
+  ],
+  "properties": {
+    "stage": {
+      "type": "string",
+      "enum": ["bootstrap", "alpha", "beta", "ga"]
+    },
+    "paths": {
+      "type": "object",
+      "required": ["generated_marker", "negatives"],
+      "properties": {
+        "generated_marker": { "type": "string", "minLength": 1 },
+        "negatives": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "object",
+      "required": ["go", "yq"],
+      "patternProperties": {
+        "^[a-z0-9-]+$": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["thresholds", "extra_exclude"],
+      "properties": {
+        "thresholds": {
+          "type": "object",
+          "required": ["default"],
+          "patternProperties": {
+            "^.+$": { "type": "integer", "minimum": 0, "maximum": 100 }
+          },
+          "additionalProperties": false
+        },
+        "extra_exclude": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "lint": {
+      "type": "object",
+      "required": ["golangci", "arch"],
+      "properties": {
+        "golangci": {
+          "type": "object",
+          "required": ["enable"],
+          "properties": {
+            "enable": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "revive": {
+              "type": "object",
+              "properties": {
+                "disable_rules": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "arch": {
+          "type": "object",
+          "required": ["layers", "deny"],
+          "properties": {
+            "layers": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-z0-9-]+$": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            },
+            "deny": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to"],
+                "properties": {
+                  "from": { "type": "string", "minLength": 1 },
+                  "to": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "deps": {
+      "type": "object",
+      "required": ["denylist"],
+      "properties": {
+        "denylist": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "proto": {
+      "type": "object",
+      "required": ["baseline_ref"],
+      "properties": {
+        "baseline_ref": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "commit": {
+      "type": "object",
+      "required": [
+        "conventional_types",
+        "scopes_required",
+        "scope_pattern",
+        "summary_min_cjk_ratio",
+        "summary_disallow_terminal_punctuation"
+      ],
+      "properties": {
+        "conventional_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "scopes_required": { "type": "boolean" },
+        "scope_pattern": { "type": "string", "minLength": 1 },
+        "summary_min_cjk_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "summary_disallow_terminal_punctuation": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "git": {
+      "type": "object",
+      "required": [
+        "default_branch",
+        "protected_branches",
+        "branch",
+        "protected_push",
+        "merge",
+        "history",
+        "tags",
+        "trailers",
+        "repo_hygiene",
+        "signing",
+        "ci_parity"
+      ],
+      "properties": {
+        "default_branch": { "type": "string", "minLength": 1 },
+        "protected_branches": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "branch": {
+          "type": "object",
+          "required": [
+            "topic_pattern",
+            "forbid_direct_commit_on_protected",
+            "allow_detached_head",
+            "allow_branches"
+          ],
+          "properties": {
+            "topic_pattern": { "type": "string", "minLength": 1 },
+            "forbid_direct_commit_on_protected": { "type": "boolean" },
+            "allow_detached_head": { "type": "boolean" },
+            "allow_branches": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "protected_push": {
+          "type": "object",
+          "required": ["reject_direct_push", "reject_non_fast_forward"],
+          "properties": {
+            "reject_direct_push": { "type": "boolean" },
+            "reject_non_fast_forward": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "merge": {
+          "type": "object",
+          "required": ["server_strategy", "forbid_merge_commits_on_protected"],
+          "properties": {
+            "server_strategy": { "type": "string", "minLength": 1 },
+            "forbid_merge_commits_on_protected": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "history": {
+          "type": "object",
+          "required": ["allow_force_push_on_protected", "prefer_force_with_lease_elsewhere"],
+          "properties": {
+            "allow_force_push_on_protected": { "type": "boolean" },
+            "prefer_force_with_lease_elsewhere": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "tags": {
+          "type": "object",
+          "required": ["release_pattern", "allow_special", "check_pushed_tags_only"],
+          "properties": {
+            "release_pattern": { "type": "string", "minLength": 1 },
+            "allow_special": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "check_pushed_tags_only": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "trailers": {
+          "type": "object",
+          "required": ["forbidden", "generated_allowlist"],
+          "properties": {
+            "forbidden": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "generated_allowlist": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "repo_hygiene": {
+          "type": "object",
+          "required": [
+            "max_tracked_file_bytes",
+            "forbidden_basenames",
+            "binary_blocked",
+            "allow_binary_globs",
+            "allow_large_file_globs"
+          ],
+          "properties": {
+            "max_tracked_file_bytes": { "type": "integer", "minimum": 1 },
+            "forbidden_basenames": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "binary_blocked": { "type": "boolean" },
+            "allow_binary_globs": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "allow_large_file_globs": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "signing": {
+          "type": "object",
+          "required": ["policy"],
+          "properties": {
+            "policy": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "ci_parity": {
+          "type": "object",
+          "required": ["pre_commit_target", "pre_push_target", "ci_target"],
+          "properties": {
+            "pre_commit_target": { "type": "string", "minLength": 1 },
+            "pre_push_target": { "type": "string", "minLength": 1 },
+            "ci_target": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "language": {
+      "type": "object",
+      "required": ["docs_paths", "docs_exclude", "docs_min_cjk_ratio"],
+      "properties": {
+        "docs_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "docs_exclude": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "docs_min_cjk_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "commenting": {
+      "type": "object",
+      "required": ["code_paths", "code_exclude", "min_cjk_ratio", "technical_keywords"],
+      "properties": {
+        "code_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "code_exclude": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "min_cjk_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "technical_keywords": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "required": [
+        "facade_packages",
+        "facade_impl_paths",
+        "forbidden_packages",
+        "message_min_cjk_ratio",
+        "required_keys"
+      ],
+      "properties": {
+        "facade_packages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "facade_impl_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "forbidden_packages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "message_min_cjk_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "required_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "stage_gates": {
+      "type": "object",
+      "required": ["bootstrap", "alpha", "beta", "ga"],
+      "patternProperties": {
+        "^(bootstrap|alpha|beta|ga)$": {
+          "type": "object",
+          "required": ["cover_strict"],
+          "properties": {
+            "cover_strict": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

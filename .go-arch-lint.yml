@@ -1,0 +1,98 @@
+# GENERATED from .build/config.yaml - DO NOT EDIT
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: true
+  ignoreNotFoundComponents: true
+excludeFiles:
+  - "^.*_test\\.go$"
+components:
+  mahjong:
+    in: internal/mahjong/**
+  domain:
+    in: internal/domain/**
+  app:
+    in: internal/app/**
+  net:
+    in: internal/net/**
+  cluster:
+    in: internal/cluster/**
+  handler:
+    in: internal/handler/**
+  store:
+    in: internal/store/**
+  service:
+    in: internal/service/**
+  session:
+    in: internal/session/**
+  config:
+    in: internal/config/**
+  log:
+    in: internal/log/**
+  cmd:
+    in: cmd/**
+  pkg:
+    in: pkg/**
+  apigen:
+    in: api/gen/**
+deps:
+  mahjong:
+    mayDependOn:
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  domain:
+    mayDependOn:
+      - mahjong
+      - session
+      - config
+      - log
+      - pkg
+      - apigen
+  app:
+    anyProjectDeps: true
+  net:
+    anyProjectDeps: true
+  cluster:
+    anyProjectDeps: true
+  handler:
+    mayDependOn:
+      - mahjong
+      - domain
+      - app
+      - net
+      - cluster
+      - service
+      - session
+      - config
+      - log
+      - cmd
+      - pkg
+      - apigen
+  store:
+    anyProjectDeps: true
+  service:
+    mayDependOn:
+      - mahjong
+      - domain
+      - app
+      - store
+      - session
+      - config
+      - log
+      - pkg
+      - apigen
+  session:
+    anyProjectDeps: true
+  config:
+    anyProjectDeps: true
+  log:
+    anyProjectDeps: true
+  cmd:
+    anyProjectDeps: true
+  pkg:
+    anyVendorDeps: true
+  apigen:
+    anyVendorDeps: true

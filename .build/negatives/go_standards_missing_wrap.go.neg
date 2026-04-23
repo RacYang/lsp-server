@@ -1,0 +1,15 @@
+package sample
+
+import (
+	"fmt"
+	"os"
+)
+
+func bad() error {
+	_, _ = fmt.Println("ignore")
+	err := os.WriteFile("tmp.txt", []byte("x"), 0o644)
+	if err != nil {
+		return fmt.Errorf("write failed: %v", err)
+	}
+	return nil
+}

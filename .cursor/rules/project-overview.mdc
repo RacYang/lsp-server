@@ -1,0 +1,12 @@
+---
+kind: norm
+description: 项目总览与自研路线原则
+alwaysApply: true
+adr: docs/adr/0000-engineering-charter.md
+---
+
+# 项目总览
+
+- 本仓库自研网络、房间编排与规则分发代码。
+- 倾向使用库而非框架。
+- Phase 0 以治理基线为先，功能交付在后。

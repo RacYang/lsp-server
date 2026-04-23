@@ -1,0 +1,11 @@
+---
+kind: norm
+description: 推荐为提交配置 GPG 或 SSH 签名
+alwaysApply: true
+adr: docs/adr/0007-git-workflow-policy.md
+---
+
+# Git 签名提交
+
+- `git.signing.policy` 当前为 `recommended`：鼓励在本地与 CI 逐步启用签名提交。
+- 若未来改为强制，应同步新增独立 ADR 或修订 ADR-0007，并增加可执行 enforcer 与负例。

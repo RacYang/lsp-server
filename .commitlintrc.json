@@ -1,0 +1,20 @@
+{
+  "generated": true,
+  "headerPattern": "^([a-z]+)(\\(([^)]+)\\))?: (.+)$",
+  "types": [
+  "feat",
+  "fix",
+  "docs",
+  "refactor",
+  "test",
+  "chore",
+  "build",
+  "ci",
+  "perf",
+  "style"
+],
+  "scopesRequired": false,
+  "scopePattern": "^[a-z0-9][a-z0-9/-]*$",
+  "summaryMinCjkRatio": 0.20,
+  "summaryDisallowTerminalPunctuation": true
+}

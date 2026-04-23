@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "make fix-file FILE=\"$CURSOR_FILE_PATH\"",
+        "timeout": 20
+      }
+    ]
+  }
+}

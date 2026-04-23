@@ -1,0 +1,13 @@
+---
+kind: constraint
+description: 麻将算法层必须保持纯净，不得依赖会话或网络层
+globs: "internal/mahjong/**/*.go"
+adr: docs/adr/0000-engineering-charter.md
+enforcer: .go-arch-lint.yml
+negative_test: .build/negatives/mahjong_sideeffect_imports_session.go.neg
+---
+
+# 麻将层纯净性
+
+- 麻将相关包仅包含确定性玩法逻辑。
+- `internal/mahjong` 内不得出现网络、会话或存储关切。

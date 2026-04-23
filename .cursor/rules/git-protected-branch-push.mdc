@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: 受保护分支禁止非 fast-forward 推送
+alwaysApply: true
+adr: docs/adr/0007-git-workflow-policy.md
+enforcer: scripts/verify-protected-branch-push.sh
+negative_test: .build/negatives/git_protected_branch_push.txt.neg
+---
+
+# Git 受保护分支推送
+
+- `pre-push` 须调用 `make verify-git-push`，其中包含本校验。
+- 向 `git.protected_branches` 中分支的更新须满足 `remote_sha` 是 `local_sha` 的祖先（fast-forward）。
+- 更细粒度「仅 PR 可合入」由托管侧分支保护承担，本规则不替代托管策略。

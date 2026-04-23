@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message InvalidPackageMessage {
+  string id = 1;
+}
