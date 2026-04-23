@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package cluster.v1;
+
+option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
+
+// LobbyService 提供房间创建、加入与元数据查询（集群内 gRPC，非客户端直连接口）。
+service LobbyService {
+  rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
+  rpc JoinRoom(JoinRoomRequest) returns (JoinRoomResponse);
+  rpc GetRoom(GetRoomRequest) returns (GetRoomResponse);
+}
+
+message CreateRoomRequest {
+  string room_id = 1;
+  string rule_id = 2;
+  string idempotency_key = 3;
+}
+
+message CreateRoomResponse {
+  string room_id = 1;
+  string room_node_id = 2;
+  string error = 3;
+}
+
+message JoinRoomRequest {
+  string room_id = 1;
+  string user_id = 2;
+  string idempotency_key = 3;
+}
+
+message JoinRoomResponse {
+  int32 seat_index = 1;
+  string error = 2;
+}
+
+message GetRoomRequest {
+  string room_id = 1;
+}
+
+message GetRoomResponse {
+  string room_id = 1;
+  string room_node_id = 2;
+  string error = 3;
+}

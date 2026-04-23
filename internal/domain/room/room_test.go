@@ -28,3 +28,21 @@ func TestJoinAndReadyFlow(t *testing.T) {
 		t.Fatalf("want ready got %s", r.FSM.State())
 	}
 }
+
+func TestJoinAutoSeatSameUserKeepsSeat(t *testing.T) {
+	r := NewRoom("r2")
+	seat0, ok := r.JoinAutoSeat("u1")
+	if !ok {
+		t.Fatal("first join failed")
+	}
+	seat1, ok := r.JoinAutoSeat("u1")
+	if !ok {
+		t.Fatal("second join failed")
+	}
+	if seat0 != seat1 {
+		t.Fatalf("want same seat got %d and %d", seat0, seat1)
+	}
+	if r.PlayerIDs[0] != "u1" || r.PlayerIDs[1] != "" {
+		t.Fatalf("unexpected seats: %#v", r.PlayerIDs)
+	}
+}

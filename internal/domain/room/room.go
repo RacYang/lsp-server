@@ -29,6 +29,11 @@ func (r *Room) JoinAutoSeat(userID string) (int, bool) {
 		return -1, false
 	}
 	for i := 0; i < 4; i++ {
+		if r.PlayerIDs[i] == userID && userID != "" {
+			return i, true
+		}
+	}
+	for i := 0; i < 4; i++ {
 		if r.PlayerIDs[i] == "" {
 			r.PlayerIDs[i] = userID
 			return i, true

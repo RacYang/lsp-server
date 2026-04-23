@@ -1,6 +1,13 @@
 # 客户端协议（v1）
 
-本文档描述 Phase 1 单体 MVP 的 WebSocket 二进制帧头与 Protobuf 载荷约定，对应 [ADR-0003](adr/0003-frame-protocol.md)。
+本文档描述单进程/集群基线下 WebSocket 二进制帧头与 Protobuf 载荷约定，对应 [ADR-0003](adr/0003-frame-protocol.md)。
+
+## 集群模式补充
+
+- 客户端始终只与 `gate` 建立 WebSocket 连接。
+- `gate` 内部通过 `cluster.v1.LobbyService` / `cluster.v1.RoomService` 与 `lobby`、`room` 协作。
+- `room` 输出的是 cluster 抽象事件，`gate` 再将其映射回本页定义的 `client.v1` 帧。
+- 若未来发生房间迁移，`gate` 可使用 `route_redirect` 通知客户端重连到新的接入地址。
 
 ## 二进制帧头（9 字节，大端）
 
@@ -32,8 +39,25 @@
 | 13 | 胡请求 | `hu_req` | C→S |
 | 14 | 动作通知 | `action` | S→C |
 | 15 | 结算通知 | `settlement` | S→C |
+| 16 | 心跳请求 | `heartbeat_req` | C→S |
+| 17 | 心跳响应 | `heartbeat_resp` | S→C |
+| 18 | 离房请求 | `leave_room_req` | C→S |
+| 19 | 离房响应 | `leave_room_resp` | S→C |
+| 20 | 路由重定向 | `route_redirect` | S→C |
+| 21 | 换三张请求 | `exchange_three_req` | C→S |
+| 22 | 换三张响应 | `exchange_three_resp` | S→C |
+| 23 | 换三张完成通知 | `exchange_three_done` | S→C |
+| 24 | 定缺请求 | `que_men_req` | C→S |
+| 25 | 定缺响应 | `que_men_resp` | S→C |
+| 26 | 定缺完成通知 | `que_men_done` | S→C |
 
-## Phase 1 未覆盖项（TODO）
+## 业务错误码（ErrorCode 节选）
 
-- 换三张、查花猪、查大叫、退税等川麻扩展结算。
-- 断线重连与幂等会话恢复。
+- `ROUTE_REDIRECT`：客户端应按 `RouteRedirectNotify` 切换连接。
+- `RATE_LIMITED`：请求过频，应退避重试。
+- `RECONNECTING`：断线重连中（Phase 3 完整会话恢复前可作占位）。
+
+## 尚未完全标准化的内容
+
+- 与 PostgreSQL 的持久对局与完整断线重连（见 [STORAGE](STORAGE.md) Phase 3）。
+- 客户端显式 `discard/pong/gang/hu` 的跨进程闭环当前仍以基线契约预留为主，Phase 2 已优先打通四人完整 ready->自动回放->结算链路。

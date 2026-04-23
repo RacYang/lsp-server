@@ -54,10 +54,17 @@ func (x *xzdd) ScoreFans(result rules.HuResult, _ rules.ScoreContext) fan.Breakd
 	if hu.SevenPairs(c) {
 		b.Add(fan.KindQiDui, 4, "七对")
 	} else {
-		b.Add(fan.KindPingHu, 1, "平胡")
+		if isDuiDuiHu(c) {
+			b.Add(fan.KindDuiDuiHu, 2, "对对胡")
+		} else {
+			b.Add(fan.KindPingHu, 1, "平胡")
+		}
 	}
 	if isQingYiSe(c) {
 		b.Add(fan.KindQingYiSe, 4, "清一色")
+	}
+	for i := 0; i < countGen(c); i++ {
+		b.Add(fan.KindYiGen, 1, "一根")
 	}
 	return b
 }
@@ -84,4 +91,32 @@ func isQingYiSe(c hu.Counts) bool {
 		}
 	}
 	return suits == 1
+}
+
+func isDuiDuiHu(c hu.Counts) bool {
+	pairs := 0
+	for _, n := range c {
+		switch n {
+		case 0:
+			continue
+		case 2:
+			pairs++
+		case 3:
+		case 4:
+			pairs++
+		default:
+			return false
+		}
+	}
+	return pairs == 1
+}
+
+func countGen(c hu.Counts) int {
+	n := 0
+	for _, v := range c {
+		if v == 4 {
+			n++
+		}
+	}
+	return n
 }

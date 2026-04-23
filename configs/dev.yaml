@@ -3,3 +3,6 @@ server:
   addr: ":18080"
 rule:
   default_id: "sichuan_xzdd"
+cluster:
+  lobby_addr: ""
+  room_addr: ""

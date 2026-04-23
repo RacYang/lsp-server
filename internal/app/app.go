@@ -17,21 +17,46 @@ import (
 
 // App 为可启动的应用实例。
 type App struct {
-	srv   *http.Server
-	ln    net.Listener
-	rooms *roomsvc.Service
+	srv     *http.Server
+	ln      net.Listener
+	rooms   *roomsvc.Service
+	cleanup func()
 }
 
-// New 根据配置装配应用。
+// New 根据配置装配应用；当前等价于 gate 角色，保留以兼容 Phase 1 调用点。
 func New(cfg config.Config) (*App, error) {
+	return NewGate(cfg)
+}
+
+// NewAllInProcess 装配本地单进程聚合入口，供 `cmd/all` 冒烟和开发自测使用。
+func NewAllInProcess(cfg config.Config) (*App, error) {
+	return NewGate(cfg)
+}
+
+// NewGate 装配 gate 角色：WebSocket 接入、房间服务与会话 Hub。
+func NewGate(cfg config.Config) (*App, error) {
 	ln, err := net.Listen("tcp", cfg.ServerAddr)
 	if err != nil {
 		return nil, fmt.Errorf("监听地址失败: %w", err)
 	}
 	hub := session.NewHub()
-	lb := roomsvc.NewLobby()
-	rs := roomsvc.NewService(lb)
-	deps := handler.Deps{Rooms: rs, Hub: hub}
+	var (
+		rs      *roomsvc.Service
+		cleanup func()
+		gateway handler.RoomGateway
+	)
+	if cfg.ClusterLobbyAddr != "" && cfg.ClusterRoomAddr != "" {
+		gateway, cleanup, err = newRemoteRoomGateway(cfg, hub)
+		if err != nil {
+			_ = ln.Close()
+			return nil, err
+		}
+	} else {
+		lb := roomsvc.NewLobby()
+		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID)
+		gateway = handler.NewLocalRoomGateway(rs, hub)
+	}
+	deps := handler.Deps{Rooms: gateway, Hub: hub}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		handler.HandleWebSocket(r.Context(), deps, w, r)
@@ -40,7 +65,7 @@ func New(cfg config.Config) (*App, error) {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	return &App{srv: srv, ln: ln, rooms: rs}, nil
+	return &App{srv: srv, ln: ln, rooms: rs, cleanup: cleanup}, nil
 }
 
 // Addr 返回已绑定的监听地址（用于测试与运维探测）。
@@ -56,6 +81,11 @@ func (a *App) Run(ctx context.Context) error {
 	if a == nil || a.srv == nil {
 		return fmt.Errorf("nil app")
 	}
+	defer func() {
+		if a.cleanup != nil {
+			a.cleanup()
+		}
+	}()
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- a.srv.Serve(a.ln)

@@ -31,6 +31,9 @@ const (
 	ErrorCode_ERROR_CODE_ROOM_FULL      ErrorCode = 3
 	ErrorCode_ERROR_CODE_INVALID_STATE  ErrorCode = 4
 	ErrorCode_ERROR_CODE_NOT_YOUR_TURN  ErrorCode = 5
+	ErrorCode_ERROR_CODE_ROUTE_REDIRECT ErrorCode = 6
+	ErrorCode_ERROR_CODE_RATE_LIMITED   ErrorCode = 7
+	ErrorCode_ERROR_CODE_RECONNECTING   ErrorCode = 8
 )
 
 // Enum value maps for ErrorCode.
@@ -42,6 +45,9 @@ var (
 		3: "ERROR_CODE_ROOM_FULL",
 		4: "ERROR_CODE_INVALID_STATE",
 		5: "ERROR_CODE_NOT_YOUR_TURN",
+		6: "ERROR_CODE_ROUTE_REDIRECT",
+		7: "ERROR_CODE_RATE_LIMITED",
+		8: "ERROR_CODE_RECONNECTING",
 	}
 	ErrorCode_value = map[string]int32{
 		"ERROR_CODE_UNSPECIFIED":    0,
@@ -50,6 +56,9 @@ var (
 		"ERROR_CODE_ROOM_FULL":      3,
 		"ERROR_CODE_INVALID_STATE":  4,
 		"ERROR_CODE_NOT_YOUR_TURN":  5,
+		"ERROR_CODE_ROUTE_REDIRECT": 6,
+		"ERROR_CODE_RATE_LIMITED":   7,
+		"ERROR_CODE_RECONNECTING":   8,
 	}
 )
 
@@ -101,6 +110,17 @@ type Envelope struct {
 	//	*Envelope_DrawTile
 	//	*Envelope_Action
 	//	*Envelope_Settlement
+	//	*Envelope_HeartbeatReq
+	//	*Envelope_HeartbeatResp
+	//	*Envelope_LeaveRoomReq
+	//	*Envelope_LeaveRoomResp
+	//	*Envelope_RouteRedirect
+	//	*Envelope_ExchangeThreeReq
+	//	*Envelope_ExchangeThreeResp
+	//	*Envelope_ExchangeThreeDone
+	//	*Envelope_QueMenReq
+	//	*Envelope_QueMenResp
+	//	*Envelope_QueMenDone
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -285,6 +305,105 @@ func (x *Envelope) GetSettlement() *SettlementNotify {
 	return nil
 }
 
+func (x *Envelope) GetHeartbeatReq() *HeartbeatRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_HeartbeatReq); ok {
+			return x.HeartbeatReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetHeartbeatResp() *HeartbeatResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_HeartbeatResp); ok {
+			return x.HeartbeatResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetLeaveRoomReq() *LeaveRoomRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_LeaveRoomReq); ok {
+			return x.LeaveRoomReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetLeaveRoomResp() *LeaveRoomResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_LeaveRoomResp); ok {
+			return x.LeaveRoomResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetRouteRedirect() *RouteRedirectNotify {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RouteRedirect); ok {
+			return x.RouteRedirect
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetExchangeThreeReq() *ExchangeThreeRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ExchangeThreeReq); ok {
+			return x.ExchangeThreeReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetExchangeThreeResp() *ExchangeThreeResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ExchangeThreeResp); ok {
+			return x.ExchangeThreeResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetExchangeThreeDone() *ExchangeThreeDoneNotify {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ExchangeThreeDone); ok {
+			return x.ExchangeThreeDone
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetQueMenReq() *QueMenRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_QueMenReq); ok {
+			return x.QueMenReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetQueMenResp() *QueMenResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_QueMenResp); ok {
+			return x.QueMenResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetQueMenDone() *QueMenDoneNotify {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_QueMenDone); ok {
+			return x.QueMenDone
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -349,6 +468,51 @@ type Envelope_Settlement struct {
 	Settlement *SettlementNotify `protobuf:"bytes,16,opt,name=settlement,proto3,oneof"`
 }
 
+type Envelope_HeartbeatReq struct {
+	// Phase 2 四川血战及会话扩展：以下编号仅追加，不回收旧值。
+	HeartbeatReq *HeartbeatRequest `protobuf:"bytes,17,opt,name=heartbeat_req,json=heartbeatReq,proto3,oneof"`
+}
+
+type Envelope_HeartbeatResp struct {
+	HeartbeatResp *HeartbeatResponse `protobuf:"bytes,18,opt,name=heartbeat_resp,json=heartbeatResp,proto3,oneof"`
+}
+
+type Envelope_LeaveRoomReq struct {
+	LeaveRoomReq *LeaveRoomRequest `protobuf:"bytes,19,opt,name=leave_room_req,json=leaveRoomReq,proto3,oneof"`
+}
+
+type Envelope_LeaveRoomResp struct {
+	LeaveRoomResp *LeaveRoomResponse `protobuf:"bytes,20,opt,name=leave_room_resp,json=leaveRoomResp,proto3,oneof"`
+}
+
+type Envelope_RouteRedirect struct {
+	RouteRedirect *RouteRedirectNotify `protobuf:"bytes,21,opt,name=route_redirect,json=routeRedirect,proto3,oneof"`
+}
+
+type Envelope_ExchangeThreeReq struct {
+	ExchangeThreeReq *ExchangeThreeRequest `protobuf:"bytes,22,opt,name=exchange_three_req,json=exchangeThreeReq,proto3,oneof"`
+}
+
+type Envelope_ExchangeThreeResp struct {
+	ExchangeThreeResp *ExchangeThreeResponse `protobuf:"bytes,23,opt,name=exchange_three_resp,json=exchangeThreeResp,proto3,oneof"`
+}
+
+type Envelope_ExchangeThreeDone struct {
+	ExchangeThreeDone *ExchangeThreeDoneNotify `protobuf:"bytes,24,opt,name=exchange_three_done,json=exchangeThreeDone,proto3,oneof"`
+}
+
+type Envelope_QueMenReq struct {
+	QueMenReq *QueMenRequest `protobuf:"bytes,25,opt,name=que_men_req,json=queMenReq,proto3,oneof"`
+}
+
+type Envelope_QueMenResp struct {
+	QueMenResp *QueMenResponse `protobuf:"bytes,26,opt,name=que_men_resp,json=queMenResp,proto3,oneof"`
+}
+
+type Envelope_QueMenDone struct {
+	QueMenDone *QueMenDoneNotify `protobuf:"bytes,27,opt,name=que_men_done,json=queMenDone,proto3,oneof"`
+}
+
 func (*Envelope_LoginReq) isEnvelope_Body() {}
 
 func (*Envelope_LoginResp) isEnvelope_Body() {}
@@ -378,6 +542,28 @@ func (*Envelope_DrawTile) isEnvelope_Body() {}
 func (*Envelope_Action) isEnvelope_Body() {}
 
 func (*Envelope_Settlement) isEnvelope_Body() {}
+
+func (*Envelope_HeartbeatReq) isEnvelope_Body() {}
+
+func (*Envelope_HeartbeatResp) isEnvelope_Body() {}
+
+func (*Envelope_LeaveRoomReq) isEnvelope_Body() {}
+
+func (*Envelope_LeaveRoomResp) isEnvelope_Body() {}
+
+func (*Envelope_RouteRedirect) isEnvelope_Body() {}
+
+func (*Envelope_ExchangeThreeReq) isEnvelope_Body() {}
+
+func (*Envelope_ExchangeThreeResp) isEnvelope_Body() {}
+
+func (*Envelope_ExchangeThreeDone) isEnvelope_Body() {}
+
+func (*Envelope_QueMenReq) isEnvelope_Body() {}
+
+func (*Envelope_QueMenResp) isEnvelope_Body() {}
+
+func (*Envelope_QueMenDone) isEnvelope_Body() {}
 
 type LoginRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1060,6 +1246,12 @@ type SettlementNotify struct {
 	RoomId        string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
 	WinnerUserIds []string               `protobuf:"bytes,2,rep,name=winner_user_ids,json=winnerUserIds,proto3" json:"winner_user_ids,omitempty"`
 	TotalFan      int32                  `protobuf:"varint,3,opt,name=total_fan,json=totalFan,proto3" json:"total_fan,omitempty"`
+	// 按座位累积分（血战多赢家与退税等），座位与 winner_user_ids 下标一一对应时可省略某侧。
+	SeatScores []*SeatScore `protobuf:"bytes,4,rep,name=seat_scores,json=seatScores,proto3" json:"seat_scores,omitempty"`
+	// 查花猪、查大叫、退税等罚分条目（点数以游戏内约定货币为单位）。
+	Penalties []*PenaltyItem `protobuf:"bytes,5,rep,name=penalties,proto3" json:"penalties,omitempty"`
+	// 可读的半结构化摘要，供客户端先展示，后续可逐步结构化。
+	DetailText    string `protobuf:"bytes,6,opt,name=detail_text,json=detailText,proto3" json:"detail_text,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1115,11 +1307,757 @@ func (x *SettlementNotify) GetTotalFan() int32 {
 	return 0
 }
 
+func (x *SettlementNotify) GetSeatScores() []*SeatScore {
+	if x != nil {
+		return x.SeatScores
+	}
+	return nil
+}
+
+func (x *SettlementNotify) GetPenalties() []*PenaltyItem {
+	if x != nil {
+		return x.Penalties
+	}
+	return nil
+}
+
+func (x *SettlementNotify) GetDetailText() string {
+	if x != nil {
+		return x.DetailText
+	}
+	return ""
+}
+
+// SeatScore 表示某玩家在本局结算中的番数/胜负摘要。
+type SeatScore struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	TotalFan      int32                  `protobuf:"varint,3,opt,name=total_fan,json=totalFan,proto3" json:"total_fan,omitempty"`
+	Skipped       bool                   `protobuf:"varint,4,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SeatScore) Reset() {
+	*x = SeatScore{}
+	mi := &file_client_v1_messages_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeatScore) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeatScore) ProtoMessage() {}
+
+func (x *SeatScore) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeatScore.ProtoReflect.Descriptor instead.
+func (*SeatScore) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *SeatScore) GetSeatIndex() int32 {
+	if x != nil {
+		return x.SeatIndex
+	}
+	return 0
+}
+
+func (x *SeatScore) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *SeatScore) GetTotalFan() int32 {
+	if x != nil {
+		return x.TotalFan
+	}
+	return 0
+}
+
+func (x *SeatScore) GetSkipped() bool {
+	if x != nil {
+		return x.Skipped
+	}
+	return false
+}
+
+// PenaltyItem 单条罚分或退税记录。
+type PenaltyItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	FromSeat      int32                  `protobuf:"varint,2,opt,name=from_seat,json=fromSeat,proto3" json:"from_seat,omitempty"`
+	ToSeat        int32                  `protobuf:"varint,3,opt,name=to_seat,json=toSeat,proto3" json:"to_seat,omitempty"`
+	Amount        int32                  `protobuf:"varint,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PenaltyItem) Reset() {
+	*x = PenaltyItem{}
+	mi := &file_client_v1_messages_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PenaltyItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PenaltyItem) ProtoMessage() {}
+
+func (x *PenaltyItem) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PenaltyItem.ProtoReflect.Descriptor instead.
+func (*PenaltyItem) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PenaltyItem) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *PenaltyItem) GetFromSeat() int32 {
+	if x != nil {
+		return x.FromSeat
+	}
+	return 0
+}
+
+func (x *PenaltyItem) GetToSeat() int32 {
+	if x != nil {
+		return x.ToSeat
+	}
+	return 0
+}
+
+func (x *PenaltyItem) GetAmount() int32 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// HeartbeatRequest/Response 用于长连接保活，载荷可为空。
+type HeartbeatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ClientTsMs    int64                  `protobuf:"varint,1,opt,name=client_ts_ms,json=clientTsMs,proto3" json:"client_ts_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatRequest) Reset() {
+	*x = HeartbeatRequest{}
+	mi := &file_client_v1_messages_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatRequest) ProtoMessage() {}
+
+func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *HeartbeatRequest) GetClientTsMs() int64 {
+	if x != nil {
+		return x.ClientTsMs
+	}
+	return 0
+}
+
+type HeartbeatResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ServerTsMs    int64                  `protobuf:"varint,1,opt,name=server_ts_ms,json=serverTsMs,proto3" json:"server_ts_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatResponse) Reset() {
+	*x = HeartbeatResponse{}
+	mi := &file_client_v1_messages_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatResponse) ProtoMessage() {}
+
+func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
+func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *HeartbeatResponse) GetServerTsMs() int64 {
+	if x != nil {
+		return x.ServerTsMs
+	}
+	return 0
+}
+
+// LeaveRoomRequest/Response 离开房间。
+type LeaveRoomRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaveRoomRequest) Reset() {
+	*x = LeaveRoomRequest{}
+	mi := &file_client_v1_messages_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaveRoomRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaveRoomRequest) ProtoMessage() {}
+
+func (x *LeaveRoomRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaveRoomRequest.ProtoReflect.Descriptor instead.
+func (*LeaveRoomRequest) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{20}
+}
+
+type LeaveRoomResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorCode     ErrorCode              `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaveRoomResponse) Reset() {
+	*x = LeaveRoomResponse{}
+	mi := &file_client_v1_messages_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaveRoomResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaveRoomResponse) ProtoMessage() {}
+
+func (x *LeaveRoomResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaveRoomResponse.ProtoReflect.Descriptor instead.
+func (*LeaveRoomResponse) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *LeaveRoomResponse) GetErrorCode() ErrorCode {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ErrorCode_ERROR_CODE_UNSPECIFIED
+}
+
+func (x *LeaveRoomResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+// RouteRedirectNotify 由 gate 告知客户端重连到新的接入地址或携带房间亲和提示。
+type RouteRedirectNotify struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WsUrl         string                 `protobuf:"bytes,1,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
+	RoomId        string                 `protobuf:"bytes,2,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RouteRedirectNotify) Reset() {
+	*x = RouteRedirectNotify{}
+	mi := &file_client_v1_messages_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RouteRedirectNotify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RouteRedirectNotify) ProtoMessage() {}
+
+func (x *RouteRedirectNotify) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RouteRedirectNotify.ProtoReflect.Descriptor instead.
+func (*RouteRedirectNotify) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *RouteRedirectNotify) GetWsUrl() string {
+	if x != nil {
+		return x.WsUrl
+	}
+	return ""
+}
+
+func (x *RouteRedirectNotify) GetRoomId() string {
+	if x != nil {
+		return x.RoomId
+	}
+	return ""
+}
+
+func (x *RouteRedirectNotify) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// ExchangeThreeRequest 换三张：提交要交出的三张牌（字符串编码同 tile 名称）。
+type ExchangeThreeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Tiles []string               `protobuf:"bytes,1,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	// 0=顺时针 1=逆时针 2=对家（与服务器状态机当前阶段一致时方可成功）
+	Direction     int32 `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExchangeThreeRequest) Reset() {
+	*x = ExchangeThreeRequest{}
+	mi := &file_client_v1_messages_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExchangeThreeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExchangeThreeRequest) ProtoMessage() {}
+
+func (x *ExchangeThreeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExchangeThreeRequest.ProtoReflect.Descriptor instead.
+func (*ExchangeThreeRequest) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ExchangeThreeRequest) GetTiles() []string {
+	if x != nil {
+		return x.Tiles
+	}
+	return nil
+}
+
+func (x *ExchangeThreeRequest) GetDirection() int32 {
+	if x != nil {
+		return x.Direction
+	}
+	return 0
+}
+
+type ExchangeThreeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorCode     ErrorCode              `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExchangeThreeResponse) Reset() {
+	*x = ExchangeThreeResponse{}
+	mi := &file_client_v1_messages_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExchangeThreeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExchangeThreeResponse) ProtoMessage() {}
+
+func (x *ExchangeThreeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExchangeThreeResponse.ProtoReflect.Descriptor instead.
+func (*ExchangeThreeResponse) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ExchangeThreeResponse) GetErrorCode() ErrorCode {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ErrorCode_ERROR_CODE_UNSPECIFIED
+}
+
+func (x *ExchangeThreeResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+// ExchangeThreeDoneNotify 服务器广播换三张完成、即将进入定缺。
+type ExchangeThreeDoneNotify struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 每座位实际换入的三张，按座位索引排列；不展示他人手牌时可为空并仅靠日志回放。
+	PerSeat       []*SeatTiles `protobuf:"bytes,1,rep,name=per_seat,json=perSeat,proto3" json:"per_seat,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExchangeThreeDoneNotify) Reset() {
+	*x = ExchangeThreeDoneNotify{}
+	mi := &file_client_v1_messages_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExchangeThreeDoneNotify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExchangeThreeDoneNotify) ProtoMessage() {}
+
+func (x *ExchangeThreeDoneNotify) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExchangeThreeDoneNotify.ProtoReflect.Descriptor instead.
+func (*ExchangeThreeDoneNotify) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ExchangeThreeDoneNotify) GetPerSeat() []*SeatTiles {
+	if x != nil {
+		return x.PerSeat
+	}
+	return nil
+}
+
+type SeatTiles struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
+	Tiles         []string               `protobuf:"bytes,2,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SeatTiles) Reset() {
+	*x = SeatTiles{}
+	mi := &file_client_v1_messages_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeatTiles) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeatTiles) ProtoMessage() {}
+
+func (x *SeatTiles) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeatTiles.ProtoReflect.Descriptor instead.
+func (*SeatTiles) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *SeatTiles) GetSeatIndex() int32 {
+	if x != nil {
+		return x.SeatIndex
+	}
+	return 0
+}
+
+func (x *SeatTiles) GetTiles() []string {
+	if x != nil {
+		return x.Tiles
+	}
+	return nil
+}
+
+// QueMenRequest/Notify 定缺：玩家声明一门为缺门。
+type QueMenRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 0=万 1=条 2=筒（与服务器 tile 包约定一致）
+	Suit          int32 `protobuf:"varint,1,opt,name=suit,proto3" json:"suit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueMenRequest) Reset() {
+	*x = QueMenRequest{}
+	mi := &file_client_v1_messages_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueMenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueMenRequest) ProtoMessage() {}
+
+func (x *QueMenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueMenRequest.ProtoReflect.Descriptor instead.
+func (*QueMenRequest) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *QueMenRequest) GetSuit() int32 {
+	if x != nil {
+		return x.Suit
+	}
+	return 0
+}
+
+type QueMenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorCode     ErrorCode              `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueMenResponse) Reset() {
+	*x = QueMenResponse{}
+	mi := &file_client_v1_messages_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueMenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueMenResponse) ProtoMessage() {}
+
+func (x *QueMenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueMenResponse.ProtoReflect.Descriptor instead.
+func (*QueMenResponse) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *QueMenResponse) GetErrorCode() ErrorCode {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ErrorCode_ERROR_CODE_UNSPECIFIED
+}
+
+func (x *QueMenResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+// QueMenDoneNotify 广播四人已定缺，进入开局打牌。
+type QueMenDoneNotify struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 每座位缺门花色，-1 表示未公开
+	QueSuitBySeat []int32 `protobuf:"varint,1,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueMenDoneNotify) Reset() {
+	*x = QueMenDoneNotify{}
+	mi := &file_client_v1_messages_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueMenDoneNotify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueMenDoneNotify) ProtoMessage() {}
+
+func (x *QueMenDoneNotify) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueMenDoneNotify.ProtoReflect.Descriptor instead.
+func (*QueMenDoneNotify) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *QueMenDoneNotify) GetQueSuitBySeat() []int32 {
+	if x != nil {
+		return x.QueSuitBySeat
+	}
+	return nil
+}
+
 var File_client_v1_messages_proto protoreflect.FileDescriptor
 
 const file_client_v1_messages_proto_rawDesc = "" +
 	"\n" +
-	"\x18client/v1/messages.proto\x12\tclient.v1\"\x97\a\n" +
+	"\x18client/v1/messages.proto\x12\tclient.v1\"\xaf\r\n" +
 	"\bEnvelope\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\tR\x05reqId\x126\n" +
 	"\tlogin_req\x18\x02 \x01(\v2\x17.client.v1.LoginRequestH\x00R\bloginReq\x129\n" +
@@ -1143,7 +2081,20 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x06action\x18\x0f \x01(\v2\x17.client.v1.ActionNotifyH\x00R\x06action\x12=\n" +
 	"\n" +
 	"settlement\x18\x10 \x01(\v2\x1b.client.v1.SettlementNotifyH\x00R\n" +
-	"settlementB\x06\n" +
+	"settlement\x12B\n" +
+	"\rheartbeat_req\x18\x11 \x01(\v2\x1b.client.v1.HeartbeatRequestH\x00R\fheartbeatReq\x12E\n" +
+	"\x0eheartbeat_resp\x18\x12 \x01(\v2\x1c.client.v1.HeartbeatResponseH\x00R\rheartbeatResp\x12C\n" +
+	"\x0eleave_room_req\x18\x13 \x01(\v2\x1b.client.v1.LeaveRoomRequestH\x00R\fleaveRoomReq\x12F\n" +
+	"\x0fleave_room_resp\x18\x14 \x01(\v2\x1c.client.v1.LeaveRoomResponseH\x00R\rleaveRoomResp\x12G\n" +
+	"\x0eroute_redirect\x18\x15 \x01(\v2\x1e.client.v1.RouteRedirectNotifyH\x00R\rrouteRedirect\x12O\n" +
+	"\x12exchange_three_req\x18\x16 \x01(\v2\x1f.client.v1.ExchangeThreeRequestH\x00R\x10exchangeThreeReq\x12R\n" +
+	"\x13exchange_three_resp\x18\x17 \x01(\v2 .client.v1.ExchangeThreeResponseH\x00R\x11exchangeThreeResp\x12T\n" +
+	"\x13exchange_three_done\x18\x18 \x01(\v2\".client.v1.ExchangeThreeDoneNotifyH\x00R\x11exchangeThreeDone\x12:\n" +
+	"\vque_men_req\x18\x19 \x01(\v2\x18.client.v1.QueMenRequestH\x00R\tqueMenReq\x12=\n" +
+	"\fque_men_resp\x18\x1a \x01(\v2\x19.client.v1.QueMenResponseH\x00R\n" +
+	"queMenResp\x12?\n" +
+	"\fque_men_done\x18\x1b \x01(\v2\x1b.client.v1.QueMenDoneNotifyH\x00R\n" +
+	"queMenDoneB\x06\n" +
 	"\x04body\"*\n" +
 	"\fLoginRequest\x12\x1a\n" +
 	"\bnickname\x18\x01 \x01(\tR\bnickname\"\x82\x01\n" +
@@ -1187,18 +2138,73 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x12\n" +
-	"\x04tile\x18\x03 \x01(\tR\x04tile\"p\n" +
+	"\x04tile\x18\x03 \x01(\tR\x04tile\"\xfe\x01\n" +
 	"\x10SettlementNotify\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12&\n" +
 	"\x0fwinner_user_ids\x18\x02 \x03(\tR\rwinnerUserIds\x12\x1b\n" +
-	"\ttotal_fan\x18\x03 \x01(\x05R\btotalFan*\xb9\x01\n" +
+	"\ttotal_fan\x18\x03 \x01(\x05R\btotalFan\x125\n" +
+	"\vseat_scores\x18\x04 \x03(\v2\x14.client.v1.SeatScoreR\n" +
+	"seatScores\x124\n" +
+	"\tpenalties\x18\x05 \x03(\v2\x16.client.v1.PenaltyItemR\tpenalties\x12\x1f\n" +
+	"\vdetail_text\x18\x06 \x01(\tR\n" +
+	"detailText\"z\n" +
+	"\tSeatScore\x12\x1d\n" +
+	"\n" +
+	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1b\n" +
+	"\ttotal_fan\x18\x03 \x01(\x05R\btotalFan\x12\x18\n" +
+	"\askipped\x18\x04 \x01(\bR\askipped\"s\n" +
+	"\vPenaltyItem\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\x12\x1b\n" +
+	"\tfrom_seat\x18\x02 \x01(\x05R\bfromSeat\x12\x17\n" +
+	"\ato_seat\x18\x03 \x01(\x05R\x06toSeat\x12\x16\n" +
+	"\x06amount\x18\x04 \x01(\x05R\x06amount\"4\n" +
+	"\x10HeartbeatRequest\x12 \n" +
+	"\fclient_ts_ms\x18\x01 \x01(\x03R\n" +
+	"clientTsMs\"5\n" +
+	"\x11HeartbeatResponse\x12 \n" +
+	"\fserver_ts_ms\x18\x01 \x01(\x03R\n" +
+	"serverTsMs\"\x12\n" +
+	"\x10LeaveRoomRequest\"m\n" +
+	"\x11LeaveRoomResponse\x123\n" +
+	"\n" +
+	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"]\n" +
+	"\x13RouteRedirectNotify\x12\x15\n" +
+	"\x06ws_url\x18\x01 \x01(\tR\x05wsUrl\x12\x17\n" +
+	"\aroom_id\x18\x02 \x01(\tR\x06roomId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"J\n" +
+	"\x14ExchangeThreeRequest\x12\x14\n" +
+	"\x05tiles\x18\x01 \x03(\tR\x05tiles\x12\x1c\n" +
+	"\tdirection\x18\x02 \x01(\x05R\tdirection\"q\n" +
+	"\x15ExchangeThreeResponse\x123\n" +
+	"\n" +
+	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"J\n" +
+	"\x17ExchangeThreeDoneNotify\x12/\n" +
+	"\bper_seat\x18\x01 \x03(\v2\x14.client.v1.SeatTilesR\aperSeat\"@\n" +
+	"\tSeatTiles\x12\x1d\n" +
+	"\n" +
+	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x14\n" +
+	"\x05tiles\x18\x02 \x03(\tR\x05tiles\"#\n" +
+	"\rQueMenRequest\x12\x12\n" +
+	"\x04suit\x18\x01 \x01(\x05R\x04suit\"j\n" +
+	"\x0eQueMenResponse\x123\n" +
+	"\n" +
+	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\";\n" +
+	"\x10QueMenDoneNotify\x12'\n" +
+	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat*\x92\x02\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17ERROR_CODE_UNAUTHORIZED\x10\x01\x12\x1d\n" +
 	"\x19ERROR_CODE_ROOM_NOT_FOUND\x10\x02\x12\x18\n" +
 	"\x14ERROR_CODE_ROOM_FULL\x10\x03\x12\x1c\n" +
 	"\x18ERROR_CODE_INVALID_STATE\x10\x04\x12\x1c\n" +
-	"\x18ERROR_CODE_NOT_YOUR_TURN\x10\x05B,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
+	"\x18ERROR_CODE_NOT_YOUR_TURN\x10\x05\x12\x1d\n" +
+	"\x19ERROR_CODE_ROUTE_REDIRECT\x10\x06\x12\x1b\n" +
+	"\x17ERROR_CODE_RATE_LIMITED\x10\a\x12\x1b\n" +
+	"\x17ERROR_CODE_RECONNECTING\x10\bB,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
 
 var (
 	file_client_v1_messages_proto_rawDescOnce sync.Once
@@ -1213,25 +2219,39 @@ func file_client_v1_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_client_v1_messages_proto_goTypes = []any{
-	(ErrorCode)(0),           // 0: client.v1.ErrorCode
-	(*Envelope)(nil),         // 1: client.v1.Envelope
-	(*LoginRequest)(nil),     // 2: client.v1.LoginRequest
-	(*LoginResponse)(nil),    // 3: client.v1.LoginResponse
-	(*JoinRoomRequest)(nil),  // 4: client.v1.JoinRoomRequest
-	(*JoinRoomResponse)(nil), // 5: client.v1.JoinRoomResponse
-	(*ReadyRequest)(nil),     // 6: client.v1.ReadyRequest
-	(*ReadyResponse)(nil),    // 7: client.v1.ReadyResponse
-	(*DiscardRequest)(nil),   // 8: client.v1.DiscardRequest
-	(*DiscardResponse)(nil),  // 9: client.v1.DiscardResponse
-	(*PongRequest)(nil),      // 10: client.v1.PongRequest
-	(*GangRequest)(nil),      // 11: client.v1.GangRequest
-	(*HuRequest)(nil),        // 12: client.v1.HuRequest
-	(*StartGameNotify)(nil),  // 13: client.v1.StartGameNotify
-	(*DrawTileNotify)(nil),   // 14: client.v1.DrawTileNotify
-	(*ActionNotify)(nil),     // 15: client.v1.ActionNotify
-	(*SettlementNotify)(nil), // 16: client.v1.SettlementNotify
+	(ErrorCode)(0),                  // 0: client.v1.ErrorCode
+	(*Envelope)(nil),                // 1: client.v1.Envelope
+	(*LoginRequest)(nil),            // 2: client.v1.LoginRequest
+	(*LoginResponse)(nil),           // 3: client.v1.LoginResponse
+	(*JoinRoomRequest)(nil),         // 4: client.v1.JoinRoomRequest
+	(*JoinRoomResponse)(nil),        // 5: client.v1.JoinRoomResponse
+	(*ReadyRequest)(nil),            // 6: client.v1.ReadyRequest
+	(*ReadyResponse)(nil),           // 7: client.v1.ReadyResponse
+	(*DiscardRequest)(nil),          // 8: client.v1.DiscardRequest
+	(*DiscardResponse)(nil),         // 9: client.v1.DiscardResponse
+	(*PongRequest)(nil),             // 10: client.v1.PongRequest
+	(*GangRequest)(nil),             // 11: client.v1.GangRequest
+	(*HuRequest)(nil),               // 12: client.v1.HuRequest
+	(*StartGameNotify)(nil),         // 13: client.v1.StartGameNotify
+	(*DrawTileNotify)(nil),          // 14: client.v1.DrawTileNotify
+	(*ActionNotify)(nil),            // 15: client.v1.ActionNotify
+	(*SettlementNotify)(nil),        // 16: client.v1.SettlementNotify
+	(*SeatScore)(nil),               // 17: client.v1.SeatScore
+	(*PenaltyItem)(nil),             // 18: client.v1.PenaltyItem
+	(*HeartbeatRequest)(nil),        // 19: client.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),       // 20: client.v1.HeartbeatResponse
+	(*LeaveRoomRequest)(nil),        // 21: client.v1.LeaveRoomRequest
+	(*LeaveRoomResponse)(nil),       // 22: client.v1.LeaveRoomResponse
+	(*RouteRedirectNotify)(nil),     // 23: client.v1.RouteRedirectNotify
+	(*ExchangeThreeRequest)(nil),    // 24: client.v1.ExchangeThreeRequest
+	(*ExchangeThreeResponse)(nil),   // 25: client.v1.ExchangeThreeResponse
+	(*ExchangeThreeDoneNotify)(nil), // 26: client.v1.ExchangeThreeDoneNotify
+	(*SeatTiles)(nil),               // 27: client.v1.SeatTiles
+	(*QueMenRequest)(nil),           // 28: client.v1.QueMenRequest
+	(*QueMenResponse)(nil),          // 29: client.v1.QueMenResponse
+	(*QueMenDoneNotify)(nil),        // 30: client.v1.QueMenDoneNotify
 }
 var file_client_v1_messages_proto_depIdxs = []int32{
 	2,  // 0: client.v1.Envelope.login_req:type_name -> client.v1.LoginRequest
@@ -1249,15 +2269,32 @@ var file_client_v1_messages_proto_depIdxs = []int32{
 	14, // 12: client.v1.Envelope.draw_tile:type_name -> client.v1.DrawTileNotify
 	15, // 13: client.v1.Envelope.action:type_name -> client.v1.ActionNotify
 	16, // 14: client.v1.Envelope.settlement:type_name -> client.v1.SettlementNotify
-	0,  // 15: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 16: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 17: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 18: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	19, // 15: client.v1.Envelope.heartbeat_req:type_name -> client.v1.HeartbeatRequest
+	20, // 16: client.v1.Envelope.heartbeat_resp:type_name -> client.v1.HeartbeatResponse
+	21, // 17: client.v1.Envelope.leave_room_req:type_name -> client.v1.LeaveRoomRequest
+	22, // 18: client.v1.Envelope.leave_room_resp:type_name -> client.v1.LeaveRoomResponse
+	23, // 19: client.v1.Envelope.route_redirect:type_name -> client.v1.RouteRedirectNotify
+	24, // 20: client.v1.Envelope.exchange_three_req:type_name -> client.v1.ExchangeThreeRequest
+	25, // 21: client.v1.Envelope.exchange_three_resp:type_name -> client.v1.ExchangeThreeResponse
+	26, // 22: client.v1.Envelope.exchange_three_done:type_name -> client.v1.ExchangeThreeDoneNotify
+	28, // 23: client.v1.Envelope.que_men_req:type_name -> client.v1.QueMenRequest
+	29, // 24: client.v1.Envelope.que_men_resp:type_name -> client.v1.QueMenResponse
+	30, // 25: client.v1.Envelope.que_men_done:type_name -> client.v1.QueMenDoneNotify
+	0,  // 26: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 27: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 28: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 29: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
+	17, // 30: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
+	18, // 31: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
+	0,  // 32: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 33: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
+	27, // 34: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
+	0,  // 35: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
+	36, // [36:36] is the sub-list for method output_type
+	36, // [36:36] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_client_v1_messages_proto_init() }
@@ -1281,6 +2318,17 @@ func file_client_v1_messages_proto_init() {
 		(*Envelope_DrawTile)(nil),
 		(*Envelope_Action)(nil),
 		(*Envelope_Settlement)(nil),
+		(*Envelope_HeartbeatReq)(nil),
+		(*Envelope_HeartbeatResp)(nil),
+		(*Envelope_LeaveRoomReq)(nil),
+		(*Envelope_LeaveRoomResp)(nil),
+		(*Envelope_RouteRedirect)(nil),
+		(*Envelope_ExchangeThreeReq)(nil),
+		(*Envelope_ExchangeThreeResp)(nil),
+		(*Envelope_ExchangeThreeDone)(nil),
+		(*Envelope_QueMenReq)(nil),
+		(*Envelope_QueMenResp)(nil),
+		(*Envelope_QueMenDone)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1288,7 +2336,7 @@ func file_client_v1_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v1_messages_proto_rawDesc), len(file_client_v1_messages_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   16,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

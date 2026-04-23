@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package cluster.v1;
+
+option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
+
+// RoomService 在房间归属节点上执行局内事件（集群内 gRPC）。
+service RoomService {
+  rpc ApplyEvent(ApplyEventRequest) returns (ApplyEventResponse);
+  rpc StreamEvents(StreamEventsRequest) returns (stream RoomServiceStreamEventsResponse);
+}
+
+message ApplyEventRequest {
+  string room_id = 1;
+  oneof body {
+    ReadyEvent ready = 2;
+    DiscardEvent discard = 3;
+    PongEvent pong = 4;
+    GangEvent gang = 5;
+    HuEvent hu = 6;
+    ExchangeThreeEvent exchange_three = 7;
+    QueMenEvent que_men = 8;
+  }
+  string idempotency_key = 9;
+  string user_id = 10;
+}
+
+message ApplyEventResponse {
+  bool accepted = 1;
+  string error = 2;
+}
+
+message StreamEventsRequest {
+  string room_id = 1;
+  string since_cursor = 2;
+}
+
+// RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
+message RoomServiceStreamEventsResponse {
+  string room_id = 1;
+  oneof body {
+    StartGameEvent start_game = 2;
+    DrawTileEvent draw_tile = 3;
+    ActionEvent action = 4;
+    SettlementEvent settlement = 5;
+    ExchangeThreeDoneEvent exchange_three_done = 6;
+    QueMenDoneEvent que_men_done = 7;
+    RouteRedirectEvent route_redirect = 8;
+  }
+  string cursor = 9;
+}
+
+message ReadyEvent {}
+
+message DiscardEvent {
+  string tile = 1;
+}
+
+message PongEvent {}
+
+message GangEvent {
+  string tile = 1;
+}
+
+message HuEvent {}
+
+message ExchangeThreeEvent {
+  repeated string tiles = 1;
+  int32 direction = 2;
+}
+
+message QueMenEvent {
+  int32 suit = 1;
+}
+
+message StartGameEvent {
+  int32 dealer_seat = 1;
+}
+
+message DrawTileEvent {
+  int32 seat_index = 1;
+  string tile = 2;
+}
+
+message ActionEvent {
+  int32 seat_index = 1;
+  string action = 2;
+  string tile = 3;
+}
+
+message SettlementEvent {
+  repeated string winner_user_ids = 1;
+  int32 total_fan = 2;
+  string detail_text = 3;
+}
+
+message ExchangeThreeDoneEvent {
+  repeated SeatTiles seat_tiles = 1;
+}
+
+message QueMenDoneEvent {
+  repeated int32 que_suit_by_seat = 1;
+}
+
+message RouteRedirectEvent {
+  string ws_url = 1;
+  string reason = 2;
+}
+
+message SeatTiles {
+  int32 seat_index = 1;
+  repeated string tiles = 2;
+}

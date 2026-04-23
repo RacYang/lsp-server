@@ -6,20 +6,38 @@
 
 - Phase 0：工程治理基线。
 - Phase 1：单进程川麻血战到底 MVP。
-- Phase 2：基于 Redis 的拆分服务。
+- Phase 2：`gate` / `lobby` / `room` 拆分、etcd + Redis 集群基线。
 - Phase 3+：持久化、重连、可观测性与更多规则集。
 
-## 快速启动（Phase 1）
+## 快速启动
+
+### 本地单进程冒烟
 
 1. 可选：复制 `configs/dev.yaml` 并按需修改监听地址。
-2. 终端执行：`LSP_CONFIG=configs/dev.yaml go run ./cmd/all`（未设置 `LSP_CONFIG` 时默认仍尝试加载该路径）。
-3. WebSocket 地址：`ws://<ServerAddr>/ws`，协议见 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
+2. 执行：`LSP_CONFIG=configs/dev.yaml go run ./cmd/all`
+3. WebSocket 地址：`ws://<ServerAddr>/ws`
+
+### 本地三进程基线
+
+1. 为 `gate`、`lobby`、`room` 分别准备配置文件，并设置：
+   - `server.addr`
+   - `rule.default_id`
+   - `cluster.lobby_addr`
+   - `cluster.room_addr`
+2. 分别执行：
+   - `LSP_CONFIG=path/to/lobby.yaml go run ./cmd/lobby`
+   - `LSP_CONFIG=path/to/room.yaml go run ./cmd/room`
+   - `LSP_CONFIG=path/to/gate.yaml go run ./cmd/gate`
+3. 客户端连接 `gate` 的 WebSocket 地址；内部 gRPC 协作对客户端透明。
+
+协议见 [docs/PROTOCOL.md](docs/PROTOCOL.md)，集群分工见 [docs/CLUSTER.md](docs/CLUSTER.md)。
 
 ## 命令
 
 - `make bootstrap`
 - `make generate`
 - `make verify`
+- `go test ./internal/app -run TestClusterProcessesFourPlayersReceiveSettlement -v`（跨进程四人完整回放冒烟）
 - `make verify-git-repo`（仓库卫生与 hook/CI 映射；亦由 `verify` / `verify-fast` 调用）
 - `make verify-pre-commit`（本地提交前：`verify-git-local` + `verify-fast`，由 `pre-commit` 调用）
 

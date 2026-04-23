@@ -24,8 +24,14 @@ var upgrader = websocket.Upgrader{
 
 // Deps 为处理器依赖。
 type Deps struct {
-	Rooms *roomsvc.Service
+	Rooms RoomGateway
 	Hub   *session.Hub
+}
+
+// RoomGateway 抽象本地房间服务或远程 room/lobby gRPC 协调器。
+type RoomGateway interface {
+	Join(ctx context.Context, roomID, userID string) (int, error)
+	Ready(ctx context.Context, roomID, userID string) (func(), error)
 }
 
 // HandleWebSocket 升级为 WebSocket 并处理帧循环。
@@ -35,7 +41,7 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 		logx.Error(ctx, "连接升级为 WebSocket 时失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
 		return
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = session.CloseConn(conn) }()
 	var userID string
 	var roomID string
 	for {
@@ -97,7 +103,7 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 			if roomID == "" || userID == "" {
 				continue
 			}
-			settlementPayload, err := deps.Rooms.Ready(ctx, roomID, userID)
+			afterReady, err := deps.Rooms.Ready(ctx, roomID, userID)
 			if err != nil {
 				resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_ReadyResp{ReadyResp: &clientv1.ReadyResponse{
 					ErrorCode: clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
@@ -109,11 +115,30 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 			resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_ReadyResp{ReadyResp: &clientv1.ReadyResponse{}}}
 			b, _ := proto.Marshal(resp)
 			_ = session.WriteBinary(conn, frame.Encode(msgid.ReadyResp, b))
-			if len(settlementPayload) > 0 {
-				deps.Hub.Broadcast(roomID, msgid.Settlement, settlementPayload)
+			if afterReady != nil {
+				afterReady()
 			}
 		default:
 			logx.Info(ctx, "收到尚未实现的消息编号已跳过", "trace_id", "", "user_id", userID, "room_id", roomID, "msg_id", fmt.Sprintf("%d", h.MsgID))
 		}
+	}
+}
+
+func outboundMsgID(kind roomsvc.Kind) (uint16, bool) {
+	switch kind {
+	case roomsvc.KindExchangeThreeDone:
+		return msgid.ExchangeThreeDone, true
+	case roomsvc.KindQueMenDone:
+		return msgid.QueMenDone, true
+	case roomsvc.KindStartGame:
+		return msgid.StartGame, true
+	case roomsvc.KindDrawTile:
+		return msgid.DrawTile, true
+	case roomsvc.KindAction:
+		return msgid.ActionNotify, true
+	case roomsvc.KindSettlement:
+		return msgid.Settlement, true
+	default:
+		return 0, false
 	}
 }

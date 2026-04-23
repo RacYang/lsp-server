@@ -29,3 +29,53 @@ func TestScoreFansQingYiSeWithSevenPairs(t *testing.T) {
 		t.Fatalf("expected qi dui + qing yise, got %+v total=%d", b.Items, b.Total)
 	}
 }
+
+func TestScoreFansDuiDuiHu(t *testing.T) {
+	var x xzdd
+	h := hand.New()
+	// 13 张：111 222 333 444 5，胡 5 成对对胡。
+	for _, s := range []string{
+		"m1", "m1", "m1",
+		"m2", "m2", "m2",
+		"m3", "m3", "m3",
+		"p4", "p4", "p4",
+		"s5",
+	} {
+		ti, _ := tile.Parse(s)
+		h.Add(ti)
+	}
+	win, _ := tile.Parse("s5")
+	res, ok := x.CheckHu(h, win, rules.HuContext{})
+	if !ok {
+		t.Fatal("expected win")
+	}
+	b := x.ScoreFans(res, rules.ScoreContext{})
+	if b.Total < 2 {
+		t.Fatalf("expected dui dui hu fan, got %+v total=%d", b.Items, b.Total)
+	}
+}
+
+func TestScoreFansQiDuiWithGen(t *testing.T) {
+	var x xzdd
+	h := hand.New()
+	for _, s := range []string{
+		"m1", "m1", "m1", "m1",
+		"m2", "m2",
+		"m3", "m3",
+		"p4", "p4",
+		"p5", "p5",
+		"s6",
+	} {
+		ti, _ := tile.Parse(s)
+		h.Add(ti)
+	}
+	win, _ := tile.Parse("s6")
+	res, ok := x.CheckHu(h, win, rules.HuContext{})
+	if !ok {
+		t.Fatal("expected win")
+	}
+	b := x.ScoreFans(res, rules.ScoreContext{})
+	if b.Total < 5 {
+		t.Fatalf("expected qi dui plus gen, got %+v total=%d", b.Items, b.Total)
+	}
+}

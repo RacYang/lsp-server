@@ -1,4 +1,4 @@
-// main 为 Phase 1 单体入口：读取环境变量 LSP_CONFIG 指向的 YAML（可选），加载配置并启动 WebSocket 服务。
+// main 为本地单进程聚合入口：用于保留 Phase 1 冒烟路径与 Phase 2 开发自测。
 package main
 
 import (
@@ -24,17 +24,17 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	cfgPath := os.Getenv("LSP_CONFIG")
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		logx.Error(ctx, "配置加载失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "聚合入口配置加载失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
 		return 1
 	}
-	a, err := app.New(cfg)
+	a, err := app.NewAllInProcess(cfg)
 	if err != nil {
-		logx.Error(ctx, "应用装配失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "聚合入口装配失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
 		return 1
 	}
-	logx.Info(ctx, "服务启动", "trace_id", "", "user_id", "", "room_id", "", "addr", cfg.ServerAddr)
+	logx.Info(ctx, "聚合入口启动", "trace_id", "", "user_id", "", "room_id", "", "addr", cfg.ServerAddr)
 	if err := a.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		logx.Error(ctx, "服务退出异常", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "聚合入口退出异常", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
 		return 1
 	}
 	return 0

@@ -7,95 +7,128 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 )
 
-// Service 编排房间命令。
+// Service 编排房间命令；每房间在内部通过 roomActor 单协程串行化变更。
 type Service struct {
-	lobby *Lobby
-	mu    sync.Mutex
+	lobby  *Lobby
+	mu     sync.Mutex
+	actors map[string]*roomActor
+	engine *Engine
 }
 
 // NewService 创建房间服务（广播由 handler 在写完应答帧后调用 Hub 完成）。
 func NewService(l *Lobby) *Service {
-	return &Service{lobby: l}
+	return NewServiceWithRule(l, "")
 }
 
-// EnsureRoom 若不存在则创建房间。
+// NewServiceWithRule 使用指定规则装配房间服务；ruleID 为空时回退默认四川血战规则。
+func NewServiceWithRule(l *Lobby, ruleID string) *Service {
+	return &Service{
+		lobby:  l,
+		actors: make(map[string]*roomActor),
+		engine: NewEngine(ruleID),
+	}
+}
+
+// EnsureRoom 若不存在则创建房间并启动该房的 mailbox 协程。
 func (s *Service) EnsureRoom(roomID string) error {
 	if s == nil {
 		return fmt.Errorf("nil service")
 	}
 	if _, ok := s.lobby.GetRoom(roomID); ok {
+		s.ensureActorForExistingRoom(roomID)
 		return nil
 	}
 	r := domainroom.NewRoom(roomID)
-	return s.lobby.CreateRoom(roomID, r)
+	if err := s.lobby.CreateRoom(roomID, r); err != nil {
+		// 并发首进房时，另一协程可能已经抢先建好了房；此时回读并补 actor 即可。
+		if _, ok := s.lobby.GetRoom(roomID); ok {
+			s.ensureActorForExistingRoom(roomID)
+			return nil
+		}
+		return err
+	}
+	s.startActorLocked(roomID, r)
+	return nil
+}
+
+func (s *Service) startActorLocked(roomID string, r *domainroom.Room) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.actors[roomID]; ok {
+		return
+	}
+	a := newRoomActor(r)
+	a.engine = s.engine
+	a.onExit = s.removeActor
+	s.actors[roomID] = a
+	go a.run()
+}
+
+func (s *Service) ensureActorForExistingRoom(roomID string) {
+	s.mu.Lock()
+	if _, ok := s.actors[roomID]; ok {
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+
+	r, ok := s.lobby.GetRoom(roomID)
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	if _, ok := s.actors[roomID]; ok {
+		s.mu.Unlock()
+		return
+	}
+	a := newRoomActor(r)
+	a.engine = s.engine
+	a.onExit = s.removeActor
+	s.actors[roomID] = a
+	s.mu.Unlock()
+	go a.run()
+}
+
+func (s *Service) removeActor(roomID string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.actors, roomID)
+}
+
+func (s *Service) getActor(roomID string) *roomActor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.actors[roomID]
 }
 
 // Join 自动占座并返回座位号。
 func (s *Service) Join(ctx context.Context, roomID, userID string) (int, error) {
-	_ = ctx
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.EnsureRoom(roomID); err != nil {
 		return -1, err
 	}
-	r, ok := s.lobby.GetRoom(roomID)
-	if !ok {
+	a := s.getActor(roomID)
+	if a == nil {
 		return -1, fmt.Errorf("room missing: %s", roomID)
 	}
-	seat, ok := r.JoinAutoSeat(userID)
-	if !ok {
-		return -1, fmt.Errorf("room full")
-	}
-	return seat, nil
+	return a.submitJoin(ctx, userID)
 }
 
 // Ready 标记准备并尝试开局。
 // 返回值：非空载荷表示须在调用方写完准备应答帧之后再调用 Hub.Broadcast，避免与同一
 // WebSocket 连接上的其它写操作并发（gorilla/websocket 要求单写者）。
-func (s *Service) Ready(ctx context.Context, roomID, userID string) ([]byte, error) {
-	_ = ctx
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	r, ok := s.lobby.GetRoom(roomID)
-	if !ok {
+func (s *Service) Ready(ctx context.Context, roomID, userID string) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	seat := -1
-	for i := 0; i < 4; i++ {
-		if r.PlayerIDs[i] == userID {
-			seat = i
-			break
-		}
-	}
-	if seat < 0 {
-		return nil, fmt.Errorf("not in room")
-	}
-	if err := r.SetReady(seat, true); err != nil {
-		return nil, err
-	}
-	if r.FSM.State() == domainroom.StateReady {
-		if err := r.StartPlaying(); err != nil {
-			return nil, err
-		}
-		// Phase 1：开局后立即推送简化结算，用于打通端到端链路；完整血战流程后续迭代补齐。
-		var settlement []byte
-		env := &clientv1.Envelope{ReqId: "ready", Body: &clientv1.Envelope_Settlement{
-			Settlement: &clientv1.SettlementNotify{RoomId: roomID, TotalFan: 0},
-		}}
-		if b, err := proto.Marshal(env); err == nil {
-			settlement = b
-		}
-		_ = r.CloseToSettling()
-		_ = r.CloseRoom()
-		return settlement, nil
-	}
-	return nil, nil
+	return a.submitReady(ctx, userID)
 }
 
 // NewUserID 生成用户 ID（登录用）。

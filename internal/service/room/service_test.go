@@ -3,7 +3,11 @@ package room
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"racoo.cn/lsp/internal/net/msgid"
 )
@@ -33,12 +37,14 @@ func TestReadyTriggersBroadcast(t *testing.T) {
 		}
 	}
 	for _, u := range uids {
-		payload, err := svc.Ready(ctx, rid, u)
+		notifications, err := svc.Ready(ctx, rid, u)
 		if err != nil {
 			t.Fatalf("ready %s: %v", u, err)
 		}
-		if len(payload) > 0 {
-			f.Broadcast(rid, msgid.Settlement, payload)
+		for _, notification := range notifications {
+			if notification.Kind == KindSettlement {
+				f.Broadcast(rid, msgid.Settlement, notification.Payload)
+			}
 		}
 	}
 	if f.n == 0 {
@@ -47,4 +53,48 @@ func TestReadyTriggersBroadcast(t *testing.T) {
 	if f.lastRoom != rid || f.lastMsg != msgid.Settlement {
 		t.Fatalf("unexpected broadcast room=%s msg=%d", f.lastRoom, f.lastMsg)
 	}
+}
+
+func TestEnsureRoomConcurrentFirstJoin(t *testing.T) {
+	t.Parallel()
+
+	svc := NewService(NewLobby())
+	ctx := context.Background()
+	const roomID = "room-race"
+
+	var wg sync.WaitGroup
+	results := make(chan error, 2)
+	for _, uid := range []string{"u1", "u2"} {
+		wg.Add(1)
+		go func(userID string) {
+			defer wg.Done()
+			_, err := svc.Join(ctx, roomID, userID)
+			results <- err
+		}(uid)
+	}
+	wg.Wait()
+	close(results)
+
+	for err := range results {
+		require.NoError(t, err)
+	}
+}
+
+func TestActorRemovedAfterRoomClosed(t *testing.T) {
+	t.Parallel()
+
+	svc := NewService(NewLobby())
+	ctx := context.Background()
+	const roomID = "room-close"
+	for _, uid := range []string{"p0", "p1", "p2", "p3"} {
+		_, err := svc.Join(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"p0", "p1", "p2", "p3"} {
+		_, err := svc.Ready(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+	require.Eventually(t, func() bool {
+		return svc.getActor(roomID) == nil
+	}, time.Second, 10*time.Millisecond)
 }

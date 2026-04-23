@@ -68,7 +68,7 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	lobby := roomsvc.NewLobby()
 	hub := session.NewHub()
 	svc := roomsvc.NewService(lobby)
-	srv := wsTestServer(t, Deps{Rooms: svc, Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
 	defer srv.Close()
 
 	conn := dialWS(t, srv)
@@ -111,7 +111,8 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 
 func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
-	srv := wsTestServer(t, Deps{Rooms: svc, Hub: session.NewHub()})
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	if err := conn.WriteMessage(websocket.BinaryMessage, []byte{0, 0, 0}); err != nil {
@@ -125,7 +126,8 @@ func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 
 func TestHandleWebSocketUnknownMsgID(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
-	srv := wsTestServer(t, Deps{Rooms: svc, Hub: session.NewHub()})
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
@@ -146,7 +148,7 @@ func TestHandleWebSocketJoinRoomFull(t *testing.T) {
 	lobby := roomsvc.NewLobby()
 	svc := roomsvc.NewService(lobby)
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: svc, Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
 	defer srv.Close()
 
 	for i := 0; i < 4; i++ {
@@ -181,7 +183,8 @@ func TestHandleWebSocketJoinRoomFull(t *testing.T) {
 
 func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
-	srv := wsTestServer(t, Deps{Rooms: svc, Hub: session.NewHub()})
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	jr := &clientv1.Envelope{ReqId: "y", Body: &clientv1.Envelope_JoinRoomReq{
@@ -197,7 +200,8 @@ func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 
 func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
-	srv := wsTestServer(t, Deps{Rooms: svc, Hub: session.NewHub()})
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
@@ -216,7 +220,8 @@ func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 
 func TestHandleWebSocketInvalidLoginPayload(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
-	srv := wsTestServer(t, Deps{Rooms: svc, Hub: session.NewHub()})
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	_ = conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, []byte{0xff}))

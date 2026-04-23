@@ -14,6 +14,9 @@ enum ErrorCode {
   ERROR_CODE_ROOM_FULL = 3;
   ERROR_CODE_INVALID_STATE = 4;
   ERROR_CODE_NOT_YOUR_TURN = 5;
+  ERROR_CODE_ROUTE_REDIRECT = 6;
+  ERROR_CODE_RATE_LIMITED = 7;
+  ERROR_CODE_RECONNECTING = 8;
 }
 
 // Envelope 为请求/响应通用外壳；body 使用 oneof 承载具体消息。
@@ -35,6 +38,18 @@ message Envelope {
     DrawTileNotify draw_tile = 14;
     ActionNotify action = 15;
     SettlementNotify settlement = 16;
+    // Phase 2 四川血战及会话扩展：以下编号仅追加，不回收旧值。
+    HeartbeatRequest heartbeat_req = 17;
+    HeartbeatResponse heartbeat_resp = 18;
+    LeaveRoomRequest leave_room_req = 19;
+    LeaveRoomResponse leave_room_resp = 20;
+    RouteRedirectNotify route_redirect = 21;
+    ExchangeThreeRequest exchange_three_req = 22;
+    ExchangeThreeResponse exchange_three_resp = 23;
+    ExchangeThreeDoneNotify exchange_three_done = 24;
+    QueMenRequest que_men_req = 25;
+    QueMenResponse que_men_resp = 26;
+    QueMenDoneNotify que_men_done = 27;
   }
 }
 
@@ -106,4 +121,90 @@ message SettlementNotify {
   string room_id = 1;
   repeated string winner_user_ids = 2;
   int32 total_fan = 3;
+  // 按座位累积分（血战多赢家与退税等），座位与 winner_user_ids 下标一一对应时可省略某侧。
+  repeated SeatScore seat_scores = 4;
+  // 查花猪、查大叫、退税等罚分条目（点数以游戏内约定货币为单位）。
+  repeated PenaltyItem penalties = 5;
+  // 可读的半结构化摘要，供客户端先展示，后续可逐步结构化。
+  string detail_text = 6;
+}
+
+// SeatScore 表示某玩家在本局结算中的番数/胜负摘要。
+message SeatScore {
+  int32 seat_index = 1;
+  string user_id = 2;
+  int32 total_fan = 3;
+  bool skipped = 4;
+}
+
+// PenaltyItem 单条罚分或退税记录。
+message PenaltyItem {
+  string reason = 1;
+  int32 from_seat = 2;
+  int32 to_seat = 3;
+  int32 amount = 4;
+}
+
+// HeartbeatRequest/Response 用于长连接保活，载荷可为空。
+message HeartbeatRequest {
+  int64 client_ts_ms = 1;
+}
+
+message HeartbeatResponse {
+  int64 server_ts_ms = 1;
+}
+
+// LeaveRoomRequest/Response 离开房间。
+message LeaveRoomRequest {}
+
+message LeaveRoomResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
+// RouteRedirectNotify 由 gate 告知客户端重连到新的接入地址或携带房间亲和提示。
+message RouteRedirectNotify {
+  string ws_url = 1;
+  string room_id = 2;
+  string reason = 3;
+}
+
+// ExchangeThreeRequest 换三张：提交要交出的三张牌（字符串编码同 tile 名称）。
+message ExchangeThreeRequest {
+  repeated string tiles = 1;
+  // 0=顺时针 1=逆时针 2=对家（与服务器状态机当前阶段一致时方可成功）
+  int32 direction = 2;
+}
+
+message ExchangeThreeResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
+// ExchangeThreeDoneNotify 服务器广播换三张完成、即将进入定缺。
+message ExchangeThreeDoneNotify {
+  // 每座位实际换入的三张，按座位索引排列；不展示他人手牌时可为空并仅靠日志回放。
+  repeated SeatTiles per_seat = 1;
+}
+
+message SeatTiles {
+  int32 seat_index = 1;
+  repeated string tiles = 2;
+}
+
+// QueMenRequest/Notify 定缺：玩家声明一门为缺门。
+message QueMenRequest {
+  // 0=万 1=条 2=筒（与服务器 tile 包约定一致）
+  int32 suit = 1;
+}
+
+message QueMenResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
+// QueMenDoneNotify 广播四人已定缺，进入开局打牌。
+message QueMenDoneNotify {
+  // 每座位缺门花色，-1 表示未公开
+  repeated int32 que_suit_by_seat = 1;
 }

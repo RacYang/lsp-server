@@ -162,7 +162,7 @@ func TestE2EFourPlayersReceiveSettlement(t *testing.T) {
 
 	var lastSn *clientv1.SettlementNotify
 	for _, c := range conns {
-		lastSn = readUntilSettlement(t, c, 8)
+		lastSn = readUntilSettlement(t, c, 64)
 	}
 	if lastSn == nil || lastSn.GetRoomId() != roomID {
 		t.Fatalf("结算房间号不一致: %+v", lastSn)
