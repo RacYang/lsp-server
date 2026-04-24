@@ -4,13 +4,17 @@ package handler
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	miniredis "github.com/alicebob/miniredis/v2"
 	"github.com/gorilla/websocket"
+	goredis "github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
@@ -18,7 +22,57 @@ import (
 	"racoo.cn/lsp/internal/net/msgid"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
+	redisstore "racoo.cn/lsp/internal/store/redis"
 )
+
+type fakeResumeGateway struct {
+	resumeResult *ResumeResult
+	resumeErr    error
+}
+
+func (f *fakeResumeGateway) Join(_ context.Context, _, _ string) (int, error) { return 0, nil }
+func (f *fakeResumeGateway) Ready(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (f *fakeResumeGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
+	if f.resumeErr != nil {
+		return nil, f.resumeErr
+	}
+	return f.resumeResult, nil
+}
+func (f *fakeResumeGateway) EnsureRoomEventSubscription(_ context.Context, _, _ string) error {
+	return nil
+}
+
+type joinStubGateway struct {
+	joinSeat int
+	joinErr  error
+}
+
+func (g *joinStubGateway) Join(_ context.Context, _, _ string) (int, error) {
+	if g == nil {
+		return 0, fmt.Errorf("nil gateway")
+	}
+	return g.joinSeat, g.joinErr
+}
+
+func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) { return nil, nil }
+func (g *joinStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (g *joinStubGateway) EnsureRoomEventSubscription(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func newTestRedisClient(t *testing.T) (*redisstore.Client, *miniredis.Miniredis) {
+	t.Helper()
+	srv, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(srv.Close)
+	cli := goredis.NewClient(&goredis.Options{Addr: srv.Addr()})
+	t.Cleanup(func() { _ = cli.Close() })
+	return redisstore.NewClientFromUniversal(cli), srv
+}
 
 func wsTestServer(t *testing.T, deps Deps) *httptest.Server {
 	t.Helper()
@@ -68,7 +122,7 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	lobby := roomsvc.NewLobby()
 	hub := session.NewHub()
 	svc := roomsvc.NewService(lobby)
-	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 
 	conn := dialWS(t, srv)
@@ -112,7 +166,7 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	if err := conn.WriteMessage(websocket.BinaryMessage, []byte{0, 0, 0}); err != nil {
@@ -127,7 +181,7 @@ func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 func TestHandleWebSocketUnknownMsgID(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
@@ -148,7 +202,7 @@ func TestHandleWebSocketJoinRoomFull(t *testing.T) {
 	lobby := roomsvc.NewLobby()
 	svc := roomsvc.NewService(lobby)
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 
 	for i := 0; i < 4; i++ {
@@ -181,10 +235,66 @@ func TestHandleWebSocketJoinRoomFull(t *testing.T) {
 	}
 }
 
+func TestJoinRoomErrorCodeMapsNonFullErrors(t *testing.T) {
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: &joinStubGateway{joinErr: fmt.Errorf("rpc: dial tcp connection refused")}, Hub: hub})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
+	pb, _ := proto.Marshal(login)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	readEnv(t, conn, msgid.LoginResp)
+
+	jr := &clientv1.Envelope{ReqId: "2", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "r1"}}}
+	pb, _ = proto.Marshal(jr)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
+	env := readEnv(t, conn, msgid.JoinRoomResp)
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, env.GetJoinRoomResp().GetErrorCode())
+}
+
+func TestJoinRoomErrorCodeRoomNotFound(t *testing.T) {
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: &joinStubGateway{joinErr: fmt.Errorf("room not found")}, Hub: hub})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
+	pb, _ := proto.Marshal(login)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	readEnv(t, conn, msgid.LoginResp)
+
+	jr := &clientv1.Envelope{ReqId: "2", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "missing"}}}
+	pb, _ = proto.Marshal(jr)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
+	env := readEnv(t, conn, msgid.JoinRoomResp)
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND, env.GetJoinRoomResp().GetErrorCode())
+}
+
+func TestJoinRoomBindSessionFailureReturnsInvalidState(t *testing.T) {
+	rcli, mr := newTestRedisClient(t)
+	hub := session.NewHub()
+	sess := session.NewManager(rcli)
+	srv := wsTestServer(t, Deps{Rooms: &joinStubGateway{joinSeat: 0, joinErr: nil}, Hub: hub, Session: sess})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{Nickname: "n"}}}
+	pb, _ := proto.Marshal(login)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	readEnv(t, conn, msgid.LoginResp)
+
+	mr.Close()
+
+	jr := &clientv1.Envelope{ReqId: "2", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "r1"}}}
+	pb, _ = proto.Marshal(jr)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
+	env := readEnv(t, conn, msgid.JoinRoomResp)
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, env.GetJoinRoomResp().GetErrorCode())
+	require.NotEmpty(t, env.GetJoinRoomResp().GetErrorMessage())
+}
+
 func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	jr := &clientv1.Envelope{ReqId: "y", Body: &clientv1.Envelope_JoinRoomReq{
@@ -201,7 +311,7 @@ func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
@@ -221,7 +331,7 @@ func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 func TestHandleWebSocketInvalidLoginPayload(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	_ = conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, []byte{0xff}))
@@ -244,4 +354,67 @@ func TestHandleWebSocketUpgradeReject(t *testing.T) {
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		t.Fatal("unexpected upgrade")
 	}
+}
+
+func TestHandleWebSocketResumeRedirect(t *testing.T) {
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{resumeResult: &ResumeResult{
+		UserID:   "u1",
+		RoomID:   "r1",
+		Redirect: &clientv1.RouteRedirectNotify{WsUrl: "ws://gate-b/ws", Reason: "moved"},
+	}}, Hub: hub, Session: &session.Manager{}})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+
+	req := &clientv1.Envelope{ReqId: "r", Body: &clientv1.Envelope_LoginReq{
+		LoginReq: &clientv1.LoginRequest{SessionToken: "tok"},
+	}}
+	pb, _ := proto.Marshal(req)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+
+	env := readEnv(t, conn, msgid.LoginResp)
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT, env.GetLoginResp().GetErrorCode())
+	redirect := readEnv(t, conn, msgid.RouteRedirectNotify)
+	require.Equal(t, "ws://gate-b/ws", redirect.GetRouteRedirect().GetWsUrl())
+}
+
+func TestHandleWebSocketResumeSettlementFallback(t *testing.T) {
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{resumeResult: &ResumeResult{
+		UserID:     "u1",
+		RoomID:     "r1",
+		Resumed:    false,
+		Settlement: &clientv1.SettlementNotify{RoomId: "r1", TotalFan: 8},
+	}}, Hub: hub, Session: &session.Manager{}})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+
+	req := &clientv1.Envelope{ReqId: "r", Body: &clientv1.Envelope_LoginReq{
+		LoginReq: &clientv1.LoginRequest{SessionToken: "tok"},
+	}}
+	pb, _ := proto.Marshal(req)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+
+	env := readEnv(t, conn, msgid.LoginResp)
+	require.False(t, env.GetLoginResp().GetResumed())
+	settle := readEnv(t, conn, msgid.Settlement)
+	require.Equal(t, "r1", settle.GetSettlement().GetRoomId())
+}
+
+func TestHandleWebSocketResumeErrorCode(t *testing.T) {
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{
+		resumeErr: fmt.Errorf("wrapped: %w", &ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: "recovering"}),
+	}, Hub: hub, Session: &session.Manager{}})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+
+	req := &clientv1.Envelope{ReqId: "r", Body: &clientv1.Envelope_LoginReq{
+		LoginReq: &clientv1.LoginRequest{SessionToken: "tok"},
+	}}
+	pb, _ := proto.Marshal(req)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+
+	env := readEnv(t, conn, msgid.LoginResp)
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_RECONNECTING, env.GetLoginResp().GetErrorCode())
 }

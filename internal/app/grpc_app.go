@@ -22,7 +22,10 @@ func NewGRPC(addr string, register func(*grpc.Server)) (*GRPCApp, error) {
 	if err != nil {
 		return nil, fmt.Errorf("监听 gRPC 地址失败: %w", err)
 	}
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(traceUnaryServerInterceptor()),
+		grpc.ChainStreamInterceptor(traceStreamServerInterceptor()),
+	)
 	if register != nil {
 		register(srv)
 	}

@@ -1,0 +1,5 @@
+feat(cluster): 禁止提交 Trailer 污染
+
+这是一条合法的提交正文。
+
+Made-with: Cursor

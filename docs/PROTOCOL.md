@@ -50,6 +50,13 @@
 | 24 | 定缺请求 | `que_men_req` | C→S |
 | 25 | 定缺响应 | `que_men_resp` | S→C |
 | 26 | 定缺完成通知 | `que_men_done` | S→C |
+| 27 | 快照通知 | `snapshot` | S→C |
+
+## Phase 3 登录与重连（节选）
+
+- `LoginRequest.session_token` 非空时表示尝试恢复；服务端校验 Redis 中的令牌摘要与会话记录。
+- `LoginResponse.session_token` 为新签发或沿用（重连成功时与请求相同）的不透明令牌；`resumed` 表示是否恢复上下文；`resume_cursor` 为建议保存的事件游标。
+- 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`。
 
 ## 业务错误码（ErrorCode 节选）
 
@@ -59,5 +66,4 @@
 
 ## 尚未完全标准化的内容
 
-- 与 PostgreSQL 的持久对局与完整断线重连（见 [STORAGE](STORAGE.md) Phase 3）。
 - 客户端显式 `discard/pong/gang/hu` 的跨进程闭环当前仍以基线契约预留为主，Phase 2 已优先打通四人完整 ready->自动回放->结算链路。

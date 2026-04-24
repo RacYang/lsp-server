@@ -1,11 +1,14 @@
 ---
-kind: norm
-description: 提交 Trailer 的允许与禁止集，待自动注入策略稳定后再硬化
+kind: constraint
+description: 提交历史禁止出现 SSOT 明确禁用的 Trailer（当前含 Made-with）
 alwaysApply: true
 adr: docs/adr/0007-git-workflow-policy.md
+enforcer: scripts/verify-commit-msg.py
+negative_test: .build/negatives/commit_forbidden_trailer.txt.neg
 ---
 
 # Git 提交 Trailer
 
-- SSOT 中 `git.trailers.generated_allowlist` 列出工具可能自动追加的 trailer（如 `Made-with`），Phase 1 不禁止。
-- `git.trailers.forbidden` 用于后续收紧禁止键；升级为 constraint 时由 `scripts/verify-commit-msg.py` 等统一校验。
+- SSOT 中 `git.trailers.forbidden` 当前禁止 `Made-with` 进入提交历史。
+- `commit-msg` hook 会先移除禁用 trailer，再由 `scripts/verify-commit-msg.py` 校验最终提交信息。
+- 直接校验提交消息文件时，若仍包含禁用 trailer，验证必须失败。

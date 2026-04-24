@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import re
@@ -13,13 +14,44 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = json.loads((ROOT / ".commitlintrc.json").read_text())
 HEADER = re.compile(CONFIG["headerPattern"])
 TERMINAL_PUNCTUATION = re.compile(r"[。！？!?.,，；;：:]$")
+TRAILER = re.compile(r"^([A-Za-z0-9-]+):[ \t]*(.*)$")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--strip-forbidden-trailers", action="store_true")
+    parser.add_argument("path")
+    return parser.parse_args()
+
+
+def normalize_forbidden_trailers() -> set[str]:
+    return {str(x).casefold() for x in CONFIG.get("forbiddenTrailers", [])}
+
+
+def strip_forbidden_trailers(path: pathlib.Path, forbidden: set[str]) -> None:
+    lines = path.read_text().splitlines()
+    filtered: list[str] = []
+    for line in lines:
+        match = TRAILER.match(line)
+        if match and match.group(1).casefold() in forbidden:
+            continue
+        filtered.append(line)
+    while filtered and filtered[-1] == "":
+        filtered.pop()
+    path.write_text("\n".join(filtered) + ("\n" if filtered else ""))
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("用法: verify-commit-msg.py <path>", file=sys.stderr)
+    args = parse_args()
+    path = pathlib.Path(args.path)
+    forbidden_trailers = normalize_forbidden_trailers()
+    if args.strip_forbidden_trailers and forbidden_trailers:
+        strip_forbidden_trailers(path, forbidden_trailers)
+    lines = path.read_text().strip().splitlines()
+    if not lines:
+        print("提交信息不能为空", file=sys.stderr)
         return 1
-    msg = pathlib.Path(sys.argv[1]).read_text().strip().splitlines()[0]
+    msg = lines[0]
     match = HEADER.match(msg)
     if not match:
         print("提交标题格式无效，应为 type(scope): 摘要 或 type: 摘要", file=sys.stderr)
@@ -45,6 +77,13 @@ def main() -> int:
     if CONFIG.get("summaryDisallowTerminalPunctuation") and TERMINAL_PUNCTUATION.search(summary):
         print("提交摘要末尾不能带句号、感叹号等收尾标点", file=sys.stderr)
         return 1
+    for line in lines[1:]:
+        trailer = TRAILER.match(line)
+        if not trailer:
+            continue
+        if trailer.group(1).casefold() in forbidden_trailers:
+            print(f"禁止的提交 Trailer: {trailer.group(1)}", file=sys.stderr)
+            return 1
     return 0
 
 

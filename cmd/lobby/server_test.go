@@ -12,7 +12,7 @@ import (
 
 func TestLobbyGRPCServerRoundTrip(t *testing.T) {
 	t.Parallel()
-	srv := newLobbyGRPCServer(lobbysvc.New())
+	srv := newLobbyGRPCServer(lobbysvc.New(), nil, "")
 	ctx := context.Background()
 
 	created, err := srv.CreateRoom(ctx, &clusterv1.CreateRoomRequest{RoomId: "r1"})

@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- Phase 3：新增 ADR-0013/0014；`client.v1` 登录重连字段与 `SnapshotNotify`；`cluster.v1.RoomService.SnapshotRoom`；`room` 可选 PostgreSQL 事件日志与结算表、Redis 快照元数据、`StreamEvents` 游标重放；`gate` Redis 会话令牌与 `Resume` 主路径；Prometheus 指标与各进程可观测性 HTTP（`/healthz`、`/readyz`、`/metrics`、pprof）。
 - Phase 2 完整集群基线：新增 `cmd/gate`、`cmd/lobby`、`cmd/room` 三进程入口，`gate` 可通过 `cluster.v1` gRPC 与 `lobby/room` 协作；`cmd/all` 明确降级为本地 in-process 冒烟入口。
 - Phase 2：`room` gRPC 已对接真实房间 worker；四人 `ready` 后可跑完整四川血战自动回放，并通过跨进程 WebSocket 冒烟测试验证 `gate -> lobby/room` 主链路。
 - Phase 2：引入 etcd 控制面与 Redis 数据面基础实现，补齐房间亲和、会话/幂等/路由缓存、`cluster.v1` 与 `client.v1` 协议扩展文档。

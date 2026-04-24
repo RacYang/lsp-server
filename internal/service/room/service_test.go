@@ -98,3 +98,17 @@ func TestActorRemovedAfterRoomClosed(t *testing.T) {
 		return svc.getActor(roomID) == nil
 	}, time.Second, 10*time.Millisecond)
 }
+
+func TestRecoverRoomAndRuleID(t *testing.T) {
+	t.Parallel()
+
+	svc := NewServiceWithRule(NewLobby(), "sichuan_xzdd")
+	err := svc.RecoverRoom("room-recover", []string{"u1", "u2", "u3", "u4"}, "ready")
+	require.NoError(t, err)
+
+	players, state, ok := svc.RoomSnapshot("room-recover")
+	require.True(t, ok)
+	require.Equal(t, "ready", state)
+	require.ElementsMatch(t, []string{"u1", "u2", "u3", "u4"}, players)
+	require.Equal(t, "sichuan_xzdd", svc.RuleID())
+}

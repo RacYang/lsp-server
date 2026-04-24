@@ -26,6 +26,10 @@ func (e *Etcd) roomKey(roomID string) string {
 	return fmt.Sprintf("%s/rooms/%s/owner", e.prefix, SanitizeRoomID(roomID))
 }
 
+func (e *Etcd) roomPrefix() string {
+	return fmt.Sprintf("%s/rooms/", e.prefix)
+}
+
 // ClaimRoom 使用 compare-and-set 声明房间归属；已被其他节点占用时返回错误。
 func (e *Etcd) ClaimRoom(ctx context.Context, roomID, roomNodeID string, leaseID int64) error {
 	if e == nil || e.cli == nil {
@@ -69,4 +73,30 @@ func (e *Etcd) ResolveRoomOwner(ctx context.Context, roomID string) (string, boo
 		return "", false, nil
 	}
 	return string(resp.Kvs[0].Value), true, nil
+}
+
+// ListRoomsByOwner 枚举当前归属于某 room 节点的房间，供进程冷启动恢复使用。
+func (e *Etcd) ListRoomsByOwner(ctx context.Context, roomNodeID string) ([]string, error) {
+	if e == nil || e.cli == nil {
+		return nil, fmt.Errorf("nil etcd client")
+	}
+	resp, err := e.cli.Get(ctx, e.roomPrefix(), clientv3.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(resp.Kvs))
+	for _, kv := range resp.Kvs {
+		if string(kv.Value) != roomNodeID {
+			continue
+		}
+		key := string(kv.Key)
+		if !strings.HasPrefix(key, e.roomPrefix()) || !strings.HasSuffix(key, "/owner") {
+			continue
+		}
+		roomID := strings.TrimSuffix(strings.TrimPrefix(key, e.roomPrefix()), "/owner")
+		if roomID != "" {
+			out = append(out, roomID)
+		}
+	}
+	return out, nil
 }

@@ -133,3 +133,22 @@ func (e *Etcd) listNodes(ctx context.Context, kind nodeid.Kind) ([]NodeInfo, err
 	}
 	return out, nil
 }
+
+// ResolveNode 读取单个节点元数据；键不存在时 ok=false。
+func (e *Etcd) ResolveNode(ctx context.Context, kind nodeid.Kind, nodeID string) (NodeInfo, bool, error) {
+	if e == nil || e.cli == nil {
+		return NodeInfo{}, false, fmt.Errorf("nil etcd client")
+	}
+	resp, err := e.cli.Get(ctx, e.nodeKey(kind, nodeID))
+	if err != nil {
+		return NodeInfo{}, false, err
+	}
+	if len(resp.Kvs) == 0 {
+		return NodeInfo{}, false, nil
+	}
+	var meta NodeMeta
+	if err := json.Unmarshal(resp.Kvs[0].Value, &meta); err != nil {
+		return NodeInfo{}, false, err
+	}
+	return NodeInfo{NodeID: nodeID, Kind: kind, Meta: meta}, true, nil
+}

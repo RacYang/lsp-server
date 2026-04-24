@@ -143,6 +143,7 @@ scopes_required="$(yq -r '.commit.scopes_required' "${CONFIG_FILE}")"
 scope_pattern_json="$(yq -o=json '.commit.scope_pattern' "${CONFIG_FILE}")"
 summary_min_cjk_ratio="$(yq -r '.commit.summary_min_cjk_ratio' "${CONFIG_FILE}")"
 summary_disallow_terminal_punctuation="$(yq -r '.commit.summary_disallow_terminal_punctuation' "${CONFIG_FILE}")"
+forbidden_trailers_json="$(yq -o=json '(.git.trailers.forbidden // [])' "${CONFIG_FILE}")"
 cat >"${OUTPUT_DIR}/.commitlintrc.json" <<EOF
 {
   "generated": true,
@@ -151,6 +152,7 @@ cat >"${OUTPUT_DIR}/.commitlintrc.json" <<EOF
   "scopesRequired": ${scopes_required},
   "scopePattern": ${scope_pattern_json},
   "summaryMinCjkRatio": ${summary_min_cjk_ratio},
-  "summaryDisallowTerminalPunctuation": ${summary_disallow_terminal_punctuation}
+  "summaryDisallowTerminalPunctuation": ${summary_disallow_terminal_punctuation},
+  "forbiddenTrailers": ${forbidden_trailers_json}
 }
 EOF

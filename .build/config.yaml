@@ -189,9 +189,9 @@ git:
       - proto-baseline
     check_pushed_tags_only: true
   trailers:
-    forbidden: []
-    generated_allowlist:
+    forbidden:
       - Made-with
+    generated_allowlist: []
   repo_hygiene:
     max_tracked_file_bytes: 2097152
     forbidden_basenames:

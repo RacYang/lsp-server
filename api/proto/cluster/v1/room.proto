@@ -8,6 +8,8 @@ option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
 service RoomService {
   rpc ApplyEvent(ApplyEventRequest) returns (ApplyEventResponse);
   rpc StreamEvents(StreamEventsRequest) returns (stream RoomServiceStreamEventsResponse);
+  // SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在 StreamEvents 前对齐切点。
+  rpc SnapshotRoom(SnapshotRoomRequest) returns (SnapshotRoomResponse);
 }
 
 message ApplyEventRequest {
@@ -33,6 +35,19 @@ message ApplyEventResponse {
 message StreamEventsRequest {
   string room_id = 1;
   string since_cursor = 2;
+}
+
+message SnapshotRoomRequest {
+  string room_id = 1;
+}
+
+// SnapshotRoomResponse.cursor 即快照游标 snapshot_cursor，与 room_events.seq 对齐。
+message SnapshotRoomResponse {
+  string cursor = 1;
+  repeated string player_ids = 2;
+  repeated int32 que_suit_by_seat = 3;
+  string state = 4;
+  string error = 5;
 }
 
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。

@@ -60,6 +60,64 @@ func readUntilSettlement(t *testing.T, conn *websocket.Conn, max int) *clientv1.
 	return nil
 }
 
+// loginJoinReturnSessionToken 与 loginJoin 相同，但返回登录响应中的 session_token（需 gate 启用 Redis）。
+func loginJoinReturnSessionToken(t *testing.T, conn *websocket.Conn, roomID string) string {
+	t.Helper()
+	login := &clientv1.Envelope{ReqId: "l", Body: &clientv1.Envelope_LoginReq{
+		LoginReq: &clientv1.LoginRequest{Nickname: "测试玩家"},
+	}}
+	pb, err := proto.Marshal(login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)); err != nil {
+		t.Fatal(err)
+	}
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := frame.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != msgid.LoginResp {
+		t.Fatal("登录响应异常")
+	}
+	var env clientv1.Envelope
+	if err := proto.Unmarshal(h.Payload, &env); err != nil {
+		t.Fatal(err)
+	}
+	tok := env.GetLoginResp().GetSessionToken()
+	if tok == "" {
+		t.Fatal("登录未返回会话令牌")
+	}
+
+	jr := &clientv1.Envelope{ReqId: "j", Body: &clientv1.Envelope_JoinRoomReq{
+		JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: roomID},
+	}}
+	pb, err = proto.Marshal(jr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)); err != nil {
+		t.Fatal(err)
+	}
+	_, data, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err = frame.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != msgid.JoinRoomResp {
+		t.Fatal("进房响应异常")
+	}
+	var joinEnv clientv1.Envelope
+	if err := proto.Unmarshal(h.Payload, &joinEnv); err != nil {
+		t.Fatal(err)
+	}
+	if joinEnv.GetJoinRoomResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		t.Fatalf("进房失败: %v %s", joinEnv.GetJoinRoomResp().GetErrorCode(), joinEnv.GetJoinRoomResp().GetErrorMessage())
+	}
+	return tok
+}
+
 func loginJoin(t *testing.T, conn *websocket.Conn, roomID string) {
 	t.Helper()
 	login := &clientv1.Envelope{ReqId: "l", Body: &clientv1.Envelope_LoginReq{
@@ -93,6 +151,13 @@ func loginJoin(t *testing.T, conn *websocket.Conn, roomID string) {
 	if err != nil || h.MsgID != msgid.JoinRoomResp {
 		t.Fatal("进房响应异常")
 	}
+	var joinEnv clientv1.Envelope
+	if err := proto.Unmarshal(h.Payload, &joinEnv); err != nil {
+		t.Fatal(err)
+	}
+	if joinEnv.GetJoinRoomResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		t.Fatalf("进房失败: %v %s", joinEnv.GetJoinRoomResp().GetErrorCode(), joinEnv.GetJoinRoomResp().GetErrorMessage())
+	}
 }
 
 func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
@@ -105,25 +170,29 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)); err != nil {
 		t.Fatal(err)
 	}
-	_ = conn.SetReadDeadline(time.Now().Add(4 * time.Second))
-	_, data, err := conn.ReadMessage()
-	if err != nil {
-		t.Fatal(err)
+	for i := 0; i < 16; i++ {
+		_ = conn.SetReadDeadline(time.Now().Add(4 * time.Second))
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := frame.ReadFrame(bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.MsgID != msgid.ReadyResp {
+			continue
+		}
+		var env clientv1.Envelope
+		if err := proto.Unmarshal(h.Payload, &env); err != nil {
+			t.Fatal(err)
+		}
+		if env.GetReadyResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+			t.Fatalf("准备失败: %v %s", env.GetReadyResp().GetErrorCode(), env.GetReadyResp().GetErrorMessage())
+		}
+		return
 	}
-	h, err := frame.ReadFrame(bytes.NewReader(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h.MsgID != msgid.ReadyResp {
-		t.Fatalf("准备阶段收到意外消息类型 %d", h.MsgID)
-	}
-	var env clientv1.Envelope
-	if err := proto.Unmarshal(h.Payload, &env); err != nil {
-		t.Fatal(err)
-	}
-	if env.GetReadyResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-		t.Fatalf("准备失败: %v", env.GetReadyResp().GetErrorCode())
-	}
+	t.Fatal("准备阶段未收到 ReadyResp")
 }
 
 func TestE2EFourPlayersReceiveSettlement(t *testing.T) {

@@ -33,4 +33,6 @@ const (
 	QueMenReq           uint16 = 24
 	QueMenResp          uint16 = 25
 	QueMenDone          uint16 = 26
+	// SnapshotNotify 为 Phase 3 重连恢复下发的房间快照通知。
+	SnapshotNotify uint16 = 27
 )

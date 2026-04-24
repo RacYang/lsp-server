@@ -131,6 +131,94 @@ func (s *Service) Ready(ctx context.Context, roomID, userID string) ([]Notificat
 	return a.submitReady(ctx, userID)
 }
 
+// RecoverRoom 基于 Redis snapmeta 恢复房间基础内存态，并重新挂起 actor。
+func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string) error {
+	if s == nil || s.lobby == nil {
+		return fmt.Errorf("nil service")
+	}
+	if roomID == "" {
+		return fmt.Errorf("empty room_id")
+	}
+	if _, ok := s.lobby.GetRoom(roomID); ok {
+		s.ensureActorForExistingRoom(roomID)
+		return nil
+	}
+	r := domainroom.NewRoom(roomID)
+	for _, userID := range playerIDs {
+		if userID == "" {
+			continue
+		}
+		if _, ok := r.JoinAutoSeat(userID); !ok {
+			return fmt.Errorf("recover room %s: room full", roomID)
+		}
+	}
+	switch domainroom.State(fsmState) {
+	case "", domainroom.StateWaiting:
+	case domainroom.StateReady:
+		if err := r.FSM.Transition(domainroom.StateReady); err != nil {
+			return err
+		}
+	case domainroom.StatePlaying:
+		if err := r.FSM.Transition(domainroom.StateReady); err != nil {
+			return err
+		}
+		if err := r.FSM.Transition(domainroom.StatePlaying); err != nil {
+			return err
+		}
+	case domainroom.StateSettling:
+		if err := r.FSM.Transition(domainroom.StateReady); err != nil {
+			return err
+		}
+		if err := r.FSM.Transition(domainroom.StatePlaying); err != nil {
+			return err
+		}
+		if err := r.FSM.Transition(domainroom.StateSettling); err != nil {
+			return err
+		}
+	case domainroom.StateClosed:
+		if err := r.FSM.Transition(domainroom.StateClosed); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown room state: %s", fsmState)
+	}
+	if err := s.lobby.CreateRoom(roomID, r); err != nil {
+		return err
+	}
+	s.startActorLocked(roomID, r)
+	return nil
+}
+
+// RoomSnapshot 返回当前内存房间的玩家列表与 FSM 状态字符串，供快照与 Redis 元数据写入。
+func (s *Service) RoomSnapshot(roomID string) (playerIDs []string, fsmState string, ok bool) {
+	if s == nil || s.lobby == nil {
+		return nil, "", false
+	}
+	r, ok := s.lobby.GetRoom(roomID)
+	if !ok || r == nil {
+		return nil, "", false
+	}
+	out := make([]string, 0, 4)
+	for _, id := range r.PlayerIDs {
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	st := ""
+	if r.FSM != nil {
+		st = string(r.FSM.State())
+	}
+	return out, st, true
+}
+
+// RuleID 返回当前房间服务使用的规则 ID，供持久化摘要写入。
+func (s *Service) RuleID() string {
+	if s == nil || s.engine == nil {
+		return ""
+	}
+	return s.engine.ruleID
+}
+
 // NewUserID 生成用户 ID（登录用）。
 func NewUserID() string {
 	return uuid.NewString()

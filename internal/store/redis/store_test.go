@@ -113,6 +113,64 @@ func TestPingAndClose(t *testing.T) {
 	require.NoError(t, cli.Close())
 }
 
+func TestNilRedisClientSessionErrors(t *testing.T) {
+	t.Parallel()
+	var cli *Client
+	ctx := context.Background()
+	require.Error(t, cli.PutSession(ctx, "u", SessionRecord{}, time.Minute))
+	require.Error(t, cli.SaveSessionWithPlainToken(ctx, "u", "tok", SessionRecord{}, time.Minute))
+	require.Error(t, cli.SaveSessionWithPlainToken(ctx, "u", "", SessionRecord{}, time.Minute))
+	_, _, err := cli.GetSession(ctx, "u")
+	require.Error(t, err)
+	_, _, err = cli.ResolveUserIDByPlainToken(ctx, "x")
+	require.Error(t, err)
+	require.Error(t, cli.DeleteSession(ctx, "u"))
+}
+
+func TestSaveSessionResolveAndSnapMeta(t *testing.T) {
+	t.Parallel()
+	cli, srv := newTestClient(t)
+	ctx := context.Background()
+
+	require.NoError(t, cli.SaveSessionWithPlainToken(ctx, "user-1", "plain-tok", SessionRecord{GateNodeID: "g1"}, time.Minute))
+	uid, ok, err := cli.ResolveUserIDByPlainToken(ctx, "plain-tok")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "user-1", uid)
+
+	uid, ok, err = cli.ResolveUserIDByPlainToken(ctx, "")
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Empty(t, uid)
+
+	meta := RoomSnapMeta{Seq: 4, State: "playing", PlayerIDs: []string{"a", "b"}}
+	require.NoError(t, cli.PutRoomSnapMeta(ctx, "snap-room", meta, time.Minute))
+	got, ok, err := cli.GetRoomSnapMeta(ctx, "snap-room")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, int64(4), got.Seq)
+	require.Equal(t, "playing", got.State)
+
+	require.Error(t, cli.PutRoomSnapMeta(ctx, "", RoomSnapMeta{Seq: 1}, time.Minute))
+
+	require.NoError(t, srv.Set(RoomSnapshotMetaKey("bad-json"), "not-json"))
+	_, _, err = cli.GetRoomSnapMeta(ctx, "bad-json")
+	require.Error(t, err)
+}
+
+func TestSessionTokenVersionHelpers(t *testing.T) {
+	t.Parallel()
+	token := FormatSessionToken(3, "entropy")
+	require.Equal(t, "v3.entropy", token)
+
+	ver, ok := ParseSessionTokenVersion(token)
+	require.True(t, ok)
+	require.EqualValues(t, 3, ver)
+
+	_, ok = ParseSessionTokenVersion("bad-token")
+	require.False(t, ok)
+}
+
 func TestMissesAndDefaultTTL(t *testing.T) {
 	t.Parallel()
 	cli, srv := newTestClient(t)

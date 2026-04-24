@@ -7,6 +7,11 @@ func SessionKey(userID string) string {
 	return fmt.Sprintf("lsp:session:%s", userID)
 }
 
+// SessionLookupKey 通过令牌摘要反查 user_id，键值仅存 user_id 字符串。
+func SessionLookupKey(tokenHash string) string {
+	return fmt.Sprintf("lsp:session:lookup:%s", tokenHash)
+}
+
 // IdempotencyKey 返回 lsp:idem:{scope}:{key} 形式的键名，用于缓存幂等响应与去重结果。
 func IdempotencyKey(scope, idempotencyKey string) string {
 	return fmt.Sprintf("lsp:idem:%s:%s", scope, idempotencyKey)

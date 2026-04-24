@@ -121,6 +121,7 @@ type Envelope struct {
 	//	*Envelope_QueMenReq
 	//	*Envelope_QueMenResp
 	//	*Envelope_QueMenDone
+	//	*Envelope_Snapshot
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -404,6 +405,15 @@ func (x *Envelope) GetQueMenDone() *QueMenDoneNotify {
 	return nil
 }
 
+func (x *Envelope) GetSnapshot() *SnapshotNotify {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Snapshot); ok {
+			return x.Snapshot
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -513,6 +523,11 @@ type Envelope_QueMenDone struct {
 	QueMenDone *QueMenDoneNotify `protobuf:"bytes,27,opt,name=que_men_done,json=queMenDone,proto3,oneof"`
 }
 
+type Envelope_Snapshot struct {
+	// Phase 3 断线重连：快照通知，供客户端在恢复后对齐房间视图。
+	Snapshot *SnapshotNotify `protobuf:"bytes,28,opt,name=snapshot,proto3,oneof"`
+}
+
 func (*Envelope_LoginReq) isEnvelope_Body() {}
 
 func (*Envelope_LoginResp) isEnvelope_Body() {}
@@ -565,9 +580,13 @@ func (*Envelope_QueMenResp) isEnvelope_Body() {}
 
 func (*Envelope_QueMenDone) isEnvelope_Body() {}
 
+func (*Envelope_Snapshot) isEnvelope_Body() {}
+
 type LoginRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Nickname      string                 `protobuf:"bytes,1,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Nickname string                 `protobuf:"bytes,1,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	// 非空表示尝试用既有会话恢复；空表示新登录。
+	SessionToken  string `protobuf:"bytes,2,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -609,11 +628,24 @@ func (x *LoginRequest) GetNickname() string {
 	return ""
 }
 
+func (x *LoginRequest) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
 type LoginResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	ErrorCode     ErrorCode              `protobuf:"varint,2,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
-	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	UserId       string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ErrorCode    ErrorCode              `protobuf:"varint,2,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
+	ErrorMessage string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	// 新登录或轮换后的不透明会话令牌；客户端下次重连时带回。
+	SessionToken string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	// true 表示服务端认为已成功恢复既有会话上下文。
+	Resumed bool `protobuf:"varint,5,opt,name=resumed,proto3" json:"resumed,omitempty"`
+	// 建议客户端保存的最后游标（与事件帧 req_id 对齐），可为空。
+	ResumeCursor  string `protobuf:"bytes,6,opt,name=resume_cursor,json=resumeCursor,proto3" json:"resume_cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -665,6 +697,27 @@ func (x *LoginResponse) GetErrorCode() ErrorCode {
 func (x *LoginResponse) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *LoginResponse) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
+func (x *LoginResponse) GetResumed() bool {
+	if x != nil {
+		return x.Resumed
+	}
+	return false
+}
+
+func (x *LoginResponse) GetResumeCursor() string {
+	if x != nil {
+		return x.ResumeCursor
 	}
 	return ""
 }
@@ -2053,11 +2106,88 @@ func (x *QueMenDoneNotify) GetQueSuitBySeat() []int32 {
 	return nil
 }
 
+// SnapshotNotify 为重连恢复下发的房间视图摘要；cursor 为快照游标，格式见 ADR-0013。
+type SnapshotNotify struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RoomId        string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	PlayerIds     []string               `protobuf:"bytes,2,rep,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
+	QueSuitBySeat []int32                `protobuf:"varint,3,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
+	Cursor        string                 `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	State         string                 `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SnapshotNotify) Reset() {
+	*x = SnapshotNotify{}
+	mi := &file_client_v1_messages_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SnapshotNotify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SnapshotNotify) ProtoMessage() {}
+
+func (x *SnapshotNotify) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SnapshotNotify.ProtoReflect.Descriptor instead.
+func (*SnapshotNotify) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *SnapshotNotify) GetRoomId() string {
+	if x != nil {
+		return x.RoomId
+	}
+	return ""
+}
+
+func (x *SnapshotNotify) GetPlayerIds() []string {
+	if x != nil {
+		return x.PlayerIds
+	}
+	return nil
+}
+
+func (x *SnapshotNotify) GetQueSuitBySeat() []int32 {
+	if x != nil {
+		return x.QueSuitBySeat
+	}
+	return nil
+}
+
+func (x *SnapshotNotify) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *SnapshotNotify) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 var File_client_v1_messages_proto protoreflect.FileDescriptor
 
 const file_client_v1_messages_proto_rawDesc = "" +
 	"\n" +
-	"\x18client/v1/messages.proto\x12\tclient.v1\"\xaf\r\n" +
+	"\x18client/v1/messages.proto\x12\tclient.v1\"\xe8\r\n" +
 	"\bEnvelope\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\tR\x05reqId\x126\n" +
 	"\tlogin_req\x18\x02 \x01(\v2\x17.client.v1.LoginRequestH\x00R\bloginReq\x129\n" +
@@ -2094,15 +2224,20 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\fque_men_resp\x18\x1a \x01(\v2\x19.client.v1.QueMenResponseH\x00R\n" +
 	"queMenResp\x12?\n" +
 	"\fque_men_done\x18\x1b \x01(\v2\x1b.client.v1.QueMenDoneNotifyH\x00R\n" +
-	"queMenDoneB\x06\n" +
-	"\x04body\"*\n" +
+	"queMenDone\x127\n" +
+	"\bsnapshot\x18\x1c \x01(\v2\x19.client.v1.SnapshotNotifyH\x00R\bsnapshotB\x06\n" +
+	"\x04body\"O\n" +
 	"\fLoginRequest\x12\x1a\n" +
-	"\bnickname\x18\x01 \x01(\tR\bnickname\"\x82\x01\n" +
+	"\bnickname\x18\x01 \x01(\tR\bnickname\x12#\n" +
+	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\"\xe6\x01\n" +
 	"\rLoginResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x123\n" +
 	"\n" +
 	"error_code\x18\x02 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"*\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\x12#\n" +
+	"\rsession_token\x18\x04 \x01(\tR\fsessionToken\x12\x18\n" +
+	"\aresumed\x18\x05 \x01(\bR\aresumed\x12#\n" +
+	"\rresume_cursor\x18\x06 \x01(\tR\fresumeCursor\"*\n" +
 	"\x0fJoinRoomRequest\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\"\x8b\x01\n" +
 	"\x10JoinRoomResponse\x12\x1d\n" +
@@ -2194,7 +2329,14 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\";\n" +
 	"\x10QueMenDoneNotify\x12'\n" +
-	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat*\x92\x02\n" +
+	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"\x9f\x01\n" +
+	"\x0eSnapshotNotify\x12\x17\n" +
+	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1d\n" +
+	"\n" +
+	"player_ids\x18\x02 \x03(\tR\tplayerIds\x12'\n" +
+	"\x10que_suit_by_seat\x18\x03 \x03(\x05R\rqueSuitBySeat\x12\x16\n" +
+	"\x06cursor\x18\x04 \x01(\tR\x06cursor\x12\x14\n" +
+	"\x05state\x18\x05 \x01(\tR\x05state*\x92\x02\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17ERROR_CODE_UNAUTHORIZED\x10\x01\x12\x1d\n" +
@@ -2219,7 +2361,7 @@ func file_client_v1_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_client_v1_messages_proto_goTypes = []any{
 	(ErrorCode)(0),                  // 0: client.v1.ErrorCode
 	(*Envelope)(nil),                // 1: client.v1.Envelope
@@ -2252,6 +2394,7 @@ var file_client_v1_messages_proto_goTypes = []any{
 	(*QueMenRequest)(nil),           // 28: client.v1.QueMenRequest
 	(*QueMenResponse)(nil),          // 29: client.v1.QueMenResponse
 	(*QueMenDoneNotify)(nil),        // 30: client.v1.QueMenDoneNotify
+	(*SnapshotNotify)(nil),          // 31: client.v1.SnapshotNotify
 }
 var file_client_v1_messages_proto_depIdxs = []int32{
 	2,  // 0: client.v1.Envelope.login_req:type_name -> client.v1.LoginRequest
@@ -2280,21 +2423,22 @@ var file_client_v1_messages_proto_depIdxs = []int32{
 	28, // 23: client.v1.Envelope.que_men_req:type_name -> client.v1.QueMenRequest
 	29, // 24: client.v1.Envelope.que_men_resp:type_name -> client.v1.QueMenResponse
 	30, // 25: client.v1.Envelope.que_men_done:type_name -> client.v1.QueMenDoneNotify
-	0,  // 26: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 27: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 28: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 29: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
-	17, // 30: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
-	18, // 31: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
-	0,  // 32: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 33: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
-	27, // 34: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
-	0,  // 35: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
-	36, // [36:36] is the sub-list for method output_type
-	36, // [36:36] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	31, // 26: client.v1.Envelope.snapshot:type_name -> client.v1.SnapshotNotify
+	0,  // 27: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 28: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 29: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 30: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
+	17, // 31: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
+	18, // 32: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
+	0,  // 33: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 34: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
+	27, // 35: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
+	0,  // 36: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
+	37, // [37:37] is the sub-list for method output_type
+	37, // [37:37] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_client_v1_messages_proto_init() }
@@ -2329,6 +2473,7 @@ func file_client_v1_messages_proto_init() {
 		(*Envelope_QueMenReq)(nil),
 		(*Envelope_QueMenResp)(nil),
 		(*Envelope_QueMenDone)(nil),
+		(*Envelope_Snapshot)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2336,7 +2481,7 @@ func file_client_v1_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v1_messages_proto_rawDesc), len(file_client_v1_messages_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   30,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

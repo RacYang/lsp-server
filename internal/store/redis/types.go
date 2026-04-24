@@ -1,9 +1,21 @@
 package redis
 
-// SessionRecord 为会话在线状态；当前只保存 gate 节点与可选接入地址，后续可追加版本号。
+// SessionRecord 为会话在线状态；Phase 3 起补充房间、游标与令牌摘要，供断线重连校验。
 type SessionRecord struct {
 	GateNodeID    string `json:"gate_node_id"`
 	AdvertiseAddr string `json:"advertise_addr,omitempty"`
+	RoomID        string `json:"room_id,omitempty"`
+	LastCursor    string `json:"last_cursor,omitempty"`
+	TokenHash     string `json:"token_hash,omitempty"`
+	SessionVer    int64  `json:"session_ver,omitempty"`
+}
+
+// RoomSnapMeta 为房间快照元数据摘要，与 PG 事件 seq 对齐，供重连与节点恢复。
+type RoomSnapMeta struct {
+	Seq       int64    `json:"seq"`
+	PlayerIDs []string `json:"player_ids,omitempty"`
+	QueSuits  []int32  `json:"que_suits,omitempty"`
+	State     string   `json:"state,omitempty"`
 }
 
 // RouteRecord 为房间路由缓存值；权威归属仍在 etcd，仅缓存 room 节点与可选版本。

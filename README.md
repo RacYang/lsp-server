@@ -7,7 +7,8 @@
 - Phase 0：工程治理基线。
 - Phase 1：单进程川麻血战到底 MVP。
 - Phase 2：`gate` / `lobby` / `room` 拆分、etcd + Redis 集群基线。
-- Phase 3+：持久化、重连、可观测性与更多规则集。
+- Phase 3：PostgreSQL 事件日志、Redis 会话与快照元数据、登录重连、`SnapshotRoom`/`StreamEvents` 游标重放、Prometheus 指标与健康检查（可选 `obs.addr`）。
+- Phase 3+：更多规则集与运维深化。
 
 ## 快速启动
 
@@ -24,6 +25,7 @@
    - `rule.default_id`
    - `cluster.lobby_addr`
    - `cluster.room_addr`
+   - 可选：`redis.addr`（`gate`/`room` 会话、幂等与快照）、`postgres.dsn`（`room` 事件与结算持久化）、`obs.addr`（各进程 `/healthz`、`/readyz`、`/metrics` 与 pprof）
 2. 分别执行：
    - `LSP_CONFIG=path/to/lobby.yaml go run ./cmd/lobby`
    - `LSP_CONFIG=path/to/room.yaml go run ./cmd/room`

@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	RoomService_ApplyEvent_FullMethodName   = "/cluster.v1.RoomService/ApplyEvent"
 	RoomService_StreamEvents_FullMethodName = "/cluster.v1.RoomService/StreamEvents"
+	RoomService_SnapshotRoom_FullMethodName = "/cluster.v1.RoomService/SnapshotRoom"
 )
 
 // RoomServiceClient is the client API for RoomService service.
@@ -31,6 +32,8 @@ const (
 type RoomServiceClient interface {
 	ApplyEvent(ctx context.Context, in *ApplyEventRequest, opts ...grpc.CallOption) (*ApplyEventResponse, error)
 	StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RoomServiceStreamEventsResponse], error)
+	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在 StreamEvents 前对齐切点。
+	SnapshotRoom(ctx context.Context, in *SnapshotRoomRequest, opts ...grpc.CallOption) (*SnapshotRoomResponse, error)
 }
 
 type roomServiceClient struct {
@@ -70,6 +73,16 @@ func (c *roomServiceClient) StreamEvents(ctx context.Context, in *StreamEventsRe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RoomService_StreamEventsClient = grpc.ServerStreamingClient[RoomServiceStreamEventsResponse]
 
+func (c *roomServiceClient) SnapshotRoom(ctx context.Context, in *SnapshotRoomRequest, opts ...grpc.CallOption) (*SnapshotRoomResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SnapshotRoomResponse)
+	err := c.cc.Invoke(ctx, RoomService_SnapshotRoom_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RoomServiceServer is the server API for RoomService service.
 // All implementations must embed UnimplementedRoomServiceServer
 // for forward compatibility.
@@ -78,6 +91,8 @@ type RoomService_StreamEventsClient = grpc.ServerStreamingClient[RoomServiceStre
 type RoomServiceServer interface {
 	ApplyEvent(context.Context, *ApplyEventRequest) (*ApplyEventResponse, error)
 	StreamEvents(*StreamEventsRequest, grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]) error
+	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在 StreamEvents 前对齐切点。
+	SnapshotRoom(context.Context, *SnapshotRoomRequest) (*SnapshotRoomResponse, error)
 	mustEmbedUnimplementedRoomServiceServer()
 }
 
@@ -93,6 +108,9 @@ func (UnimplementedRoomServiceServer) ApplyEvent(context.Context, *ApplyEventReq
 }
 func (UnimplementedRoomServiceServer) StreamEvents(*StreamEventsRequest, grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamEvents not implemented")
+}
+func (UnimplementedRoomServiceServer) SnapshotRoom(context.Context, *SnapshotRoomRequest) (*SnapshotRoomResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SnapshotRoom not implemented")
 }
 func (UnimplementedRoomServiceServer) mustEmbedUnimplementedRoomServiceServer() {}
 func (UnimplementedRoomServiceServer) testEmbeddedByValue()                     {}
@@ -144,6 +162,24 @@ func _RoomService_StreamEvents_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RoomService_StreamEventsServer = grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]
 
+func _RoomService_SnapshotRoom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SnapshotRoomRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoomServiceServer).SnapshotRoom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoomService_SnapshotRoom_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoomServiceServer).SnapshotRoom(ctx, req.(*SnapshotRoomRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RoomService_ServiceDesc is the grpc.ServiceDesc for RoomService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -154,6 +190,10 @@ var RoomService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyEvent",
 			Handler:    _RoomService_ApplyEvent_Handler,
+		},
+		{
+			MethodName: "SnapshotRoom",
+			Handler:    _RoomService_SnapshotRoom_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

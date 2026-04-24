@@ -9,10 +9,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"racoo.cn/lsp/internal/config"
 	"racoo.cn/lsp/internal/handler"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
+	"racoo.cn/lsp/internal/store/postgres"
+	"racoo.cn/lsp/internal/store/redis"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // App 为可启动的应用实例。
@@ -41,25 +46,90 @@ func NewGate(cfg config.Config) (*App, error) {
 	}
 	hub := session.NewHub()
 	var (
-		rs      *roomsvc.Service
-		cleanup func()
-		gateway handler.RoomGateway
+		rs           *roomsvc.Service
+		cleanup      func()
+		gateway      handler.RoomGateway
+		sessMgr      *session.Manager
+		redisCleanup func()
+		redisClient  *redis.Client
+		pgCleanup    func()
+		settlements  *postgres.SettlementStore
 	)
-	if cfg.ClusterLobbyAddr != "" && cfg.ClusterRoomAddr != "" {
-		gateway, cleanup, err = newRemoteRoomGateway(cfg, hub)
+	if cfg.RedisAddr != "" {
+		c, err := redis.NewClient(cfg.RedisAddr)
 		if err != nil {
 			_ = ln.Close()
+			return nil, fmt.Errorf("redis 客户端初始化失败: %w", err)
+		}
+		redisClient = c
+		sessMgr = session.NewManager(c)
+		redisCleanup = func() { _ = c.Close() }
+	}
+	if cfg.ClusterLobbyAddr != "" && cfg.ClusterRoomAddr != "" {
+		if cfg.PostgresDSN != "" {
+			pool, err := postgres.OpenPool(context.Background(), cfg.PostgresDSN)
+			if err != nil {
+				if redisCleanup != nil {
+					redisCleanup()
+				}
+				_ = ln.Close()
+				return nil, fmt.Errorf("postgres 客户端初始化失败: %w", err)
+			}
+			settlements = postgres.NewSettlementStore(pool)
+			pgCleanup = pool.Close
+		}
+		var gwCleanup func()
+		gateway, gwCleanup, err = newRemoteRoomGateway(cfg, hub, sessMgr, redisClient, settlements, ln.Addr().String())
+		if err != nil {
+			if redisCleanup != nil {
+				redisCleanup()
+			}
+			if pgCleanup != nil {
+				pgCleanup()
+			}
+			_ = ln.Close()
 			return nil, err
+		}
+		cleanup = func() {
+			gwCleanup()
+			if pgCleanup != nil {
+				pgCleanup()
+			}
+			if redisCleanup != nil {
+				redisCleanup()
+			}
 		}
 	} else {
 		lb := roomsvc.NewLobby()
 		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID)
-		gateway = handler.NewLocalRoomGateway(rs, hub)
+		gateway = handler.NewLocalRoomGateway(rs, hub, sessMgr)
+		cleanup = func() {
+			if redisCleanup != nil {
+				redisCleanup()
+			}
+		}
 	}
-	deps := handler.Deps{Rooms: gateway, Hub: hub}
+	deps := handler.Deps{Rooms: gateway, Hub: hub, Session: sessMgr}
+	obsStop, errObs := StartObsHTTP(cfg.ObsAddr, redisClient)
+	if errObs != nil {
+		if redisCleanup != nil {
+			redisCleanup()
+		}
+		_ = ln.Close()
+		return nil, fmt.Errorf("可观测性 HTTP 启动失败: %w", errObs)
+	}
+	prevCleanup := cleanup
+	cleanup = func() {
+		obsStop()
+		if prevCleanup != nil {
+			prevCleanup()
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		handler.HandleWebSocket(r.Context(), deps, w, r)
+		tid := uuid.NewString()
+		reqCtx := logx.WithTraceID(r.Context(), tid)
+		handler.HandleWebSocket(reqCtx, deps, w, r)
 	})
 	srv := &http.Server{
 		Handler:           mux,

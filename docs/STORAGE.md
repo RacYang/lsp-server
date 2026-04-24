@@ -27,10 +27,15 @@
 
 ## PostgreSQL 职责
 
-- 用户资料
-- 对局摘要
-- 操作日志 / 回放
-- 结算历史
+- 用户资料（后续）
+- 对局摘要 `game_summaries`
+- 房间事件日志 `room_events`（append-only，`seq` 单调递增）
+- 结算历史 `settlements`
+
+### 事件游标（Phase 3）
+
+- 稳定游标格式：`{room_id}:{seq}`，与 `room_events.seq` 对齐。
+- `cluster.v1.RoomService.SnapshotRoom` 返回的快照游标用于 `StreamEvents.since_cursor` 重放边界，详见 [ADR-0014](adr/0014-reconnect-session-and-snapshot-cutover.md)。
 
 ## 规则
 

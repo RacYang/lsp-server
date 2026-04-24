@@ -95,3 +95,17 @@ func TestEtcdRegisterWatchAndRevoke(t *testing.T) {
 		}
 	}, 5*time.Second, 20*time.Millisecond)
 }
+
+func TestEtcdResolveNode(t *testing.T) {
+	t.Parallel()
+	_, cli := startEmbeddedEtcd(t)
+	d := NewEtcd(cli, "/lsp-test", 5)
+
+	_, err := d.Register(context.Background(), nodeid.KindRoom, "room-local", NodeMeta{AdvertiseAddr: "127.0.0.1:19090", Version: "v1"})
+	require.NoError(t, err)
+
+	node, ok, err := d.ResolveNode(context.Background(), nodeid.KindRoom, "room-local")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "127.0.0.1:19090", node.Meta.AdvertiseAddr)
+}

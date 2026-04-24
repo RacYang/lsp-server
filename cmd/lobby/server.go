@@ -3,25 +3,42 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"google.golang.org/grpc"
 	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	"racoo.cn/lsp/internal/cluster/router"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 )
 
 // lobbyGRPCServer 将 lobby 业务服务适配为 cluster.v1.LobbyService。
 type lobbyGRPCServer struct {
-	svc *lobbysvc.Service
+	svc        *lobbysvc.Service
+	claimer    *router.Etcd
+	roomNodeID string
 }
 
-func newLobbyGRPCServer(svc *lobbysvc.Service) *lobbyGRPCServer {
-	return &lobbyGRPCServer{svc: svc}
+func newLobbyGRPCServer(svc *lobbysvc.Service, claimer *router.Etcd, roomNodeID string) *lobbyGRPCServer {
+	return &lobbyGRPCServer{svc: svc, claimer: claimer, roomNodeID: roomNodeID}
+}
+
+func (s *lobbyGRPCServer) ensureClaim(ctx context.Context, roomID string) error {
+	if s == nil || s.claimer == nil || roomID == "" || s.roomNodeID == "" {
+		return nil
+	}
+	if err := s.claimer.ClaimRoom(ctx, roomID, s.roomNodeID, 0); err != nil {
+		return fmt.Errorf("claim room owner: %w", err)
+	}
+	return nil
 }
 
 // CreateRoom 将 gRPC 请求翻译为大厅服务创建房间调用。
 func (s *lobbyGRPCServer) CreateRoom(ctx context.Context, req *clusterv1.CreateRoomRequest) (*clusterv1.CreateRoomResponse, error) {
 	nodeID, err := s.svc.CreateRoom(ctx, req.GetRoomId())
 	if err != nil {
+		return &clusterv1.CreateRoomResponse{Error: err.Error()}, nil
+	}
+	if err := s.ensureClaim(ctx, req.GetRoomId()); err != nil {
 		return &clusterv1.CreateRoomResponse{Error: err.Error()}, nil
 	}
 	return &clusterv1.CreateRoomResponse{RoomId: req.GetRoomId(), RoomNodeId: nodeID}, nil
@@ -31,6 +48,9 @@ func (s *lobbyGRPCServer) CreateRoom(ctx context.Context, req *clusterv1.CreateR
 func (s *lobbyGRPCServer) JoinRoom(ctx context.Context, req *clusterv1.JoinRoomRequest) (*clusterv1.JoinRoomResponse, error) {
 	seat, err := s.svc.JoinRoom(ctx, req.GetRoomId(), req.GetUserId())
 	if err != nil {
+		return &clusterv1.JoinRoomResponse{Error: err.Error()}, nil
+	}
+	if err := s.ensureClaim(ctx, req.GetRoomId()); err != nil {
 		return &clusterv1.JoinRoomResponse{Error: err.Error()}, nil
 	}
 	return &clusterv1.JoinRoomResponse{SeatIndex: seat}, nil

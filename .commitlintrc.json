@@ -16,5 +16,8 @@
   "scopesRequired": false,
   "scopePattern": "^[a-z0-9][a-z0-9/-]*$",
   "summaryMinCjkRatio": 0.20,
-  "summaryDisallowTerminalPunctuation": true
+  "summaryDisallowTerminalPunctuation": true,
+  "forbiddenTrailers": [
+  "Made-with"
+]
 }

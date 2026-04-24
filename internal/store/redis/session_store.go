@@ -21,7 +21,51 @@ func (c *Client) PutSession(ctx context.Context, userID string, record SessionRe
 	if err != nil {
 		return fmt.Errorf("marshal session: %w", err)
 	}
-	return c.kv.Set(ctx, SessionKey(userID), payload, ttlOrDefault(ttl, defaultSessionTTL)).Err()
+	ttlVal := ttlOrDefault(ttl, defaultSessionTTL)
+	if err := c.kv.Set(ctx, SessionKey(userID), payload, ttlVal).Err(); err != nil {
+		return err
+	}
+	if record.TokenHash != "" {
+		if err := c.kv.Set(ctx, SessionLookupKey(record.TokenHash), userID, ttlVal).Err(); err != nil {
+			return fmt.Errorf("set session lookup: %w", err)
+		}
+	}
+	return nil
+}
+
+// SaveSessionWithPlainToken 写入会话主记录并建立令牌反查键；plainToken 不落 Redis。
+func (c *Client) SaveSessionWithPlainToken(ctx context.Context, userID, plainToken string, record SessionRecord, ttl time.Duration) error {
+	if plainToken == "" {
+		return fmt.Errorf("empty session token")
+	}
+	rec := record
+	rec.TokenHash = HashSessionToken(plainToken)
+	if rec.SessionVer == 0 {
+		rec.SessionVer = 1
+	}
+	return c.PutSession(ctx, userID, rec, ttl)
+}
+
+// ResolveUserIDByPlainToken 通过明文令牌反查 user_id。
+func (c *Client) ResolveUserIDByPlainToken(ctx context.Context, plainToken string) (string, bool, error) {
+	if c == nil || c.kv == nil {
+		return "", false, fmt.Errorf("nil redis client")
+	}
+	h := HashSessionToken(plainToken)
+	if h == "" {
+		return "", false, nil
+	}
+	raw, err := c.kv.Get(ctx, SessionLookupKey(h)).Result()
+	if errors.Is(err, goredis.Nil) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if raw == "" {
+		return "", false, nil
+	}
+	return raw, true, nil
 }
 
 // GetSession 读取在线会话；键不存在时 ok=false 且 err=nil。

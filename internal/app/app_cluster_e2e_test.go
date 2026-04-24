@@ -12,9 +12,13 @@ import (
 	"testing"
 	"time"
 
+	miniredis "github.com/alicebob/miniredis/v2"
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/net/frame"
+	"racoo.cn/lsp/internal/net/msgid"
 )
 
 func TestClusterProcessesFourPlayersReceiveSettlement(t *testing.T) {
@@ -57,6 +61,115 @@ func TestClusterProcessesFourPlayersReceiveSettlement(t *testing.T) {
 	}
 	if lastSn == nil || lastSn.GetRoomId() != roomID {
 		t.Fatalf("跨进程结算房间号不一致: %+v", lastSn)
+	}
+}
+
+func TestClusterReconnectLoginWithSessionToken(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(mr.Close)
+	redisAddr := mr.Addr()
+
+	repoRoot := mustRepoRoot(t)
+	gateAddr := reserveTCPAddr(t)
+	lobbyAddr := reserveTCPAddr(t)
+	roomAddr := reserveTCPAddr(t)
+
+	tempDir := t.TempDir()
+	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", lobbyAddr, "sichuan_xzdd"))
+	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", roomAddr, "sichuan_xzdd"))
+	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf(
+		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: \"\"\n",
+		gateAddr, "sichuan_xzdd", lobbyAddr, roomAddr, redisAddr))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	startProc(t, ctx, repoRoot, "./cmd/lobby", lobbyCfg)
+	startProc(t, ctx, repoRoot, "./cmd/room", roomCfg)
+	startProc(t, ctx, repoRoot, "./cmd/gate", gateCfg)
+
+	waitForTCP(t, lobbyAddr, 20*time.Second)
+	waitForTCP(t, roomAddr, 20*time.Second)
+	waitForTCP(t, gateAddr, 20*time.Second)
+
+	roomID := "cluster-reconnect-room-1"
+	conns := make([]*websocket.Conn, 4)
+	for i := range conns {
+		conns[i] = dialWS(t, gateAddr)
+		t.Cleanup(func() { _ = conns[i].Close() })
+	}
+
+	tok0 := loginJoinReturnSessionToken(t, conns[0], roomID)
+	for i := 1; i < 4; i++ {
+		loginJoin(t, conns[i], roomID)
+	}
+	// 至少一次 Ready 才会在 room 进程内 materialize 房间，SnapshotRoom 才能命中。
+	sendReadyAndReadResp(t, conns[0])
+
+	if err := conns[0].Close(); err != nil {
+		t.Fatalf("关闭首路连接失败: %v", err)
+	}
+
+	reconn := dialWS(t, gateAddr)
+	t.Cleanup(func() { _ = reconn.Close() })
+
+	resume := &clientv1.Envelope{ReqId: "re", Body: &clientv1.Envelope_LoginReq{
+		LoginReq: &clientv1.LoginRequest{Nickname: "重连", SessionToken: tok0},
+	}}
+	pb, err := proto.Marshal(resume)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reconn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)); err != nil {
+		t.Fatal(err)
+	}
+	_ = reconn.SetReadDeadline(time.Now().Add(8 * time.Second))
+	_, data, err := reconn.ReadMessage()
+	if err != nil {
+		t.Fatalf("读登录响应失败: %v", err)
+	}
+	h, err := frame.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != msgid.LoginResp {
+		t.Fatal("重连登录响应异常")
+	}
+	var envLogin clientv1.Envelope
+	if err := proto.Unmarshal(h.Payload, &envLogin); err != nil {
+		t.Fatal(err)
+	}
+	if !envLogin.GetLoginResp().GetResumed() {
+		t.Fatalf("期望 resumed=true，实际 %+v", envLogin.GetLoginResp())
+	}
+
+	_, snapData, err := reconn.ReadMessage()
+	if err != nil {
+		t.Fatalf("读快照帧失败: %v", err)
+	}
+	hSnap, err := frame.ReadFrame(bytes.NewReader(snapData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hSnap.MsgID != msgid.SnapshotNotify {
+		t.Fatalf("期望 SnapshotNotify，实际 msg_id=%d", hSnap.MsgID)
+	}
+	var snapEnv clientv1.Envelope
+	if err := proto.Unmarshal(hSnap.Payload, &snapEnv); err != nil {
+		t.Fatal(err)
+	}
+	if snapEnv.GetSnapshot().GetRoomId() != roomID {
+		t.Fatalf("快照房间号不一致: %+v", snapEnv.GetSnapshot())
+	}
+
+	conns[0] = reconn
+	for i := range conns {
+		sendReadyAndReadResp(t, conns[i])
+	}
+	for _, c := range conns {
+		sn := readUntilSettlement(t, c, 96)
+		if sn == nil || sn.GetRoomId() != roomID {
+			t.Fatalf("结算房间号不一致: %+v", sn)
+		}
 	}
 }
 

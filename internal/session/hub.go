@@ -52,3 +52,15 @@ func (h *Hub) Broadcast(roomID string, msgID uint16, payload []byte) {
 		}
 	}
 }
+
+// IterRoomUsers 遍历某房间内已注册的用户 ID；fn 在持锁期间调用，勿执行阻塞或再次获取 Hub 锁。
+func (h *Hub) IterRoomUsers(roomID string, fn func(userID string)) {
+	if h == nil || fn == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for uid := range h.rooms[roomID] {
+		fn(uid)
+	}
+}

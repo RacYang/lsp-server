@@ -6,3 +6,11 @@ rule:
 cluster:
   lobby_addr: ""
   room_addr: ""
+redis:
+  addr: ""
+postgres:
+  dsn: ""
+obs:
+  addr: ""
+etcd:
+  endpoints: ""

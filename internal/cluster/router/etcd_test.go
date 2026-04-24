@@ -30,6 +30,20 @@ func TestEtcdClaimAndResolveRoomOwner(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestEtcdListRoomsByOwner(t *testing.T) {
+	t.Parallel()
+	_, cli := startEmbeddedEtcd(t)
+	r := NewEtcd(cli, "/lsp-test")
+
+	require.NoError(t, r.ClaimRoom(context.Background(), "room-a", "room-node-a", 0))
+	require.NoError(t, r.ClaimRoom(context.Background(), "room-b", "room-node-a", 0))
+	require.NoError(t, r.ClaimRoom(context.Background(), "room-c", "room-node-b", 0))
+
+	roomIDs, err := r.ListRoomsByOwner(context.Background(), "room-node-a")
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"room-a", "room-b"}, roomIDs)
+}
+
 func startEmbeddedEtcd(t *testing.T) (*embed.Etcd, *clientv3.Client) {
 	t.Helper()
 	cfg := embed.NewConfig()

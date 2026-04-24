@@ -50,17 +50,27 @@ message Envelope {
     QueMenRequest que_men_req = 25;
     QueMenResponse que_men_resp = 26;
     QueMenDoneNotify que_men_done = 27;
+    // Phase 3 断线重连：快照通知，供客户端在恢复后对齐房间视图。
+    SnapshotNotify snapshot = 28;
   }
 }
 
 message LoginRequest {
   string nickname = 1;
+  // 非空表示尝试用既有会话恢复；空表示新登录。
+  string session_token = 2;
 }
 
 message LoginResponse {
   string user_id = 1;
   ErrorCode error_code = 2;
   string error_message = 3;
+  // 新登录或轮换后的不透明会话令牌；客户端下次重连时带回。
+  string session_token = 4;
+  // true 表示服务端认为已成功恢复既有会话上下文。
+  bool resumed = 5;
+  // 建议客户端保存的最后游标（与事件帧 req_id 对齐），可为空。
+  string resume_cursor = 6;
 }
 
 message JoinRoomRequest {
@@ -207,4 +217,13 @@ message QueMenResponse {
 message QueMenDoneNotify {
   // 每座位缺门花色，-1 表示未公开
   repeated int32 que_suit_by_seat = 1;
+}
+
+// SnapshotNotify 为重连恢复下发的房间视图摘要；cursor 为快照游标，格式见 ADR-0013。
+message SnapshotNotify {
+  string room_id = 1;
+  repeated string player_ids = 2;
+  repeated int32 que_suit_by_seat = 3;
+  string cursor = 4;
+  string state = 5;
 }
