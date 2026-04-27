@@ -3,7 +3,9 @@ package sichuanxzdd
 import (
 	"testing"
 
+	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/hand"
+	"racoo.cn/lsp/internal/mahjong/hu"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
@@ -75,7 +77,69 @@ func TestScoreFansQiDuiWithGen(t *testing.T) {
 		t.Fatal("expected win")
 	}
 	b := x.ScoreFans(res, rules.ScoreContext{})
-	if b.Total < 5 {
-		t.Fatalf("expected qi dui plus gen, got %+v total=%d", b.Items, b.Total)
+	if !hasFanKind(b, fan.KindLongQiDui) {
+		t.Fatalf("expected long qi dui, got %+v total=%d", b.Items, b.Total)
 	}
+}
+
+func TestScoreFansHeavenlyAndEarthlyHand(t *testing.T) {
+	var x xzdd
+	res := rules.HuResult{Win: countsFromTileTexts(t, []string{
+		"m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "p1", "p1", "p1", "p2", "p2",
+	})}
+	heavenly := x.ScoreFans(res, rules.ScoreContext{HuSeat: 0, DealerSeat: 0, IsTsumo: true, IsOpeningDraw: true})
+	if !hasFanKind(heavenly, fan.KindHeavenlyHand) || hasFanKind(heavenly, fan.KindPingHu) {
+		t.Fatalf("unexpected heavenly hand breakdown: %+v", heavenly.Items)
+	}
+	earthly := x.ScoreFans(res, rules.ScoreContext{HuSeat: 1, DealerSeat: 0, IsDealerFirstDiscard: true})
+	if !hasFanKind(earthly, fan.KindEarthlyHand) || hasFanKind(earthly, fan.KindPingHu) {
+		t.Fatalf("unexpected earthly hand breakdown: %+v", earthly.Items)
+	}
+	notEarthly := x.ScoreFans(res, rules.ScoreContext{HuSeat: 1, DealerSeat: 0, IsTsumo: true, IsOpeningDraw: true})
+	if hasFanKind(notEarthly, fan.KindEarthlyHand) {
+		t.Fatalf("tsumo should not be earthly hand: %+v", notEarthly.Items)
+	}
+}
+
+func TestScoreFansShiBaLuoHanFiltersWinnerSeat(t *testing.T) {
+	var x xzdd
+	res := rules.HuResult{Win: countsFromTileTexts(t, []string{
+		"m1", "m1", "m1", "m2", "m2", "m2", "m3", "m3", "m3", "p4", "p4", "p4", "s5", "s5",
+	})}
+	records := []rules.GangRecord{
+		{Seat: 2, Kind: rules.GangKindMing},
+		{Seat: 2, Kind: rules.GangKindAn},
+		{Seat: 2, Kind: rules.GangKindBu},
+		{Seat: 2, Kind: rules.GangKindMing},
+	}
+	b := x.ScoreFans(res, rules.ScoreContext{HuSeat: 2, GangRecords: records})
+	if !hasFanKind(b, fan.KindShiBaLuoHan) || hasFanKind(b, fan.KindAnGang) {
+		t.Fatalf("expected shi ba luo han without an gang stacking, got %+v", b.Items)
+	}
+	other := x.ScoreFans(res, rules.ScoreContext{HuSeat: 1, GangRecords: records})
+	if hasFanKind(other, fan.KindShiBaLuoHan) {
+		t.Fatalf("other player's gangs should not count: %+v", other.Items)
+	}
+}
+
+func hasFanKind(b fan.Breakdown, kind fan.Kind) bool {
+	for _, item := range b.Items {
+		if item.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func countsFromTileTexts(t *testing.T, texts []string) hu.Counts {
+	t.Helper()
+	var c hu.Counts
+	for _, text := range texts {
+		ti, err := tile.Parse(text)
+		if err != nil {
+			t.Fatalf("parse tile %s: %v", text, err)
+		}
+		c[ti.Index()]++
+	}
+	return c
 }

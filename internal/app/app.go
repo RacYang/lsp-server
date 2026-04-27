@@ -44,6 +44,7 @@ func NewGate(cfg config.Config) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("监听地址失败: %w", err)
 	}
+	handler.ConfigureRuntime(cfg.Runtime.GateWSRateLimitPerSecond, cfg.Runtime.GateWSRateLimitBurst, cfg.Runtime.GateWSIdempotencyCache)
 	hub := session.NewHub()
 	var (
 		rs           *roomsvc.Service
@@ -102,6 +103,7 @@ func NewGate(cfg config.Config) (*App, error) {
 	} else {
 		lb := roomsvc.NewLobby()
 		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID)
+		rs.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
 		rs.SetTimeoutConfig(roomsvc.TimeoutConfig{
 			ExchangeThree: cfg.RoomTimeouts.ExchangeThree,
 			QueMen:        cfg.RoomTimeouts.QueMen,

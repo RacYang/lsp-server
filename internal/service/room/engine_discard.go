@@ -44,6 +44,10 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat int, til
 	}
 	rs.waitingDiscard = false
 	rs.currentDraw = 0
+	if seat == rs.dealerSeat && rs.openingDrawSeat == seat {
+		rs.dealerFirstDiscardOpen = true
+		rs.openingDrawSeat = -1
+	}
 	rs.lastDiscardAfterGang = rs.lastGangFollowUp
 	rs.lastGangFollowUp = false
 	seatIndex := int32(seat) //nolint:gosec // seat 范围固定
@@ -79,6 +83,7 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat int, til
 		return append(out, claimPrompts...), nil
 	}
 	rs.clearClaimWindow()
+	rs.closeOpeningClaimWindow()
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {
 		return nil, err
@@ -137,12 +142,16 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 		return nil, fmt.Errorf("hu not allowed")
 	}
 	breakdown := rs.rule.ScoreFans(result, rules.ScoreContext{
-		GangRecords:     append([]rules.GangRecord(nil), rs.gangRecords...),
-		IsTsumo:         source == rules.HuSourceTsumo,
-		IsGangShangHua:  source == rules.HuSourceTsumo && rs.lastGangFollowUp,
-		IsGangShangPao:  source != rules.HuSourceTsumo && rs.lastDiscardAfterGang,
-		ResponsibleSeat: payer,
-		WallRemaining:   rs.wall.Remaining(),
+		HuSeat:               seat,
+		DealerSeat:           rs.dealerSeat,
+		GangRecords:          append([]rules.GangRecord(nil), rs.gangRecords...),
+		IsTsumo:              source == rules.HuSourceTsumo,
+		IsOpeningDraw:        rs.isOpeningDrawHu(seat, source),
+		IsDealerFirstDiscard: rs.isDealerFirstDiscardHu(source),
+		IsGangShangHua:       source == rules.HuSourceTsumo && rs.lastGangFollowUp,
+		IsGangShangPao:       source != rules.HuSourceTsumo && rs.lastDiscardAfterGang,
+		ResponsibleSeat:      payer,
+		WallRemaining:        rs.wall.Remaining(),
 	})
 	appendHuEntries(rs, seat, breakdown.Total, source, payer, breakdown)
 	rs.markHued(seat)
@@ -150,6 +159,7 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 	rs.currentDraw = 0
 	rs.lastGangFollowUp = false
 	rs.lastDiscardAfterGang = false
+	rs.closeOpeningHuWindow(source)
 	rs.waitingTsumo = false
 	rs.waitingDiscard = false
 	rs.clearClaimWindow()
@@ -181,6 +191,32 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 	}
 	_ = ctx
 	return append(out, next...), nil
+}
+
+func (rs *RoundState) isOpeningDrawHu(seat int, source rules.HuSource) bool {
+	return rs != nil && source == rules.HuSourceTsumo && seat == rs.openingDrawSeat
+}
+
+func (rs *RoundState) isDealerFirstDiscardHu(source rules.HuSource) bool {
+	return rs != nil && source != rules.HuSourceTsumo && rs.dealerFirstDiscardOpen
+}
+
+func (rs *RoundState) closeOpeningHuWindow(source rules.HuSource) {
+	if rs == nil {
+		return
+	}
+	if source == rules.HuSourceTsumo {
+		rs.openingDrawSeat = -1
+		return
+	}
+	rs.closeOpeningClaimWindow()
+}
+
+func (rs *RoundState) closeOpeningClaimWindow() {
+	if rs == nil {
+		return
+	}
+	rs.dealerFirstDiscardOpen = false
 }
 
 func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {

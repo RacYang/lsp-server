@@ -36,6 +36,7 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 		candidate, ok := rs.bestClaimCandidate()
 		if !ok {
 			rs.clearClaimWindow()
+			rs.closeOpeningClaimWindow()
 			return e.drawForCurrentTurn(rs)
 		}
 		if hasAction(candidate.actions, "hu") {

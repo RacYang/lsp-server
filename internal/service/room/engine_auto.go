@@ -95,7 +95,12 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		out = append(out, Notification{Kind: KindDrawTile, Payload: drawPayload})
 
 		if result, ok := rule.CheckHu(hands[turn], drawn, rules.HuContext{}); ok {
-			breakdown := rule.ScoreFans(result, rules.ScoreContext{IsTsumo: true})
+			breakdown := rule.ScoreFans(result, rules.ScoreContext{
+				HuSeat:        turn,
+				DealerSeat:    0,
+				IsTsumo:       true,
+				IsOpeningDraw: step == 0 && turn == 0,
+			})
 			for other := 0; other < 4; other++ {
 				if other == turn {
 					continue
@@ -139,24 +144,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		winnerSeats = append(winnerSeats, winnerSeat)
 	}
 	seatScores, penalties, breakdowns, detail := sichuanxzdd.BuildSettlement(playerIDs, hands, queBySeat, ledger, winnerSeats)
-	winnerIDs := make([]string, 0, 1)
-	if winnerSeat >= 0 {
-		winnerIDs = append(winnerIDs, playerIDs[winnerSeat])
-	}
-	settlementPayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: "settlement",
-		Body: &clientv1.Envelope_Settlement{
-			Settlement: &clientv1.SettlementNotify{
-				RoomId:             roomID,
-				WinnerUserIds:      winnerIDs,
-				TotalFan:           sumPositiveSeatScores(seatScores),
-				SeatScores:         seatScores,
-				Penalties:          penalties,
-				DetailText:         detail,
-				PerWinnerBreakdown: breakdowns,
-			},
-		},
-	})
+	settlementPayload, err := buildSettlementNotification(roomID, playerIDs, winnerSeats, seatScores, penalties, breakdowns, detail)
 	if err != nil {
 		return nil, err
 	}

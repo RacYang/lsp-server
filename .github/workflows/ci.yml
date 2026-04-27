@@ -23,3 +23,5 @@ jobs:
           go-version-file: go.mod
       - run: make bootstrap
       - run: RUN_INTEGRATION=1 make verify-test-integration
+      - run: RUN_INTEGRATION=1 make verify-test-integration-nodocker
+      - run: RUN_INTEGRATION=1 make verify-test-integration-pg

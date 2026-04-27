@@ -53,7 +53,7 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat int, suit
 	startPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "start",
 		Body: &clientv1.Envelope_StartGame{
-			StartGame: &clientv1.StartGameNotify{RoomId: rs.roomID, DealerSeat: 0},
+			StartGame: &clientv1.StartGameNotify{RoomId: rs.roomID, DealerSeat: int32(rs.dealerSeat)}, //nolint:gosec // 座位范围固定
 		},
 	})
 	if err != nil {

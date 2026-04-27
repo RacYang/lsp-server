@@ -64,15 +64,19 @@ type HuResult struct {
 
 // ScoreContext 为计分上下文；Phase 5 规则 PR 会逐步消费这些字段。
 type ScoreContext struct {
-	SeatGenTiles    [][]tile.Tile
-	GangRecords     []GangRecord
-	IsTsumo         bool
-	IsHaiDi         bool
-	IsGangShangHua  bool
-	IsGangShangPao  bool
-	Que             []tile.Suit
-	ResponsibleSeat int
-	WallRemaining   int
+	HuSeat               int
+	DealerSeat           int
+	SeatGenTiles         [][]tile.Tile
+	GangRecords          []GangRecord
+	IsTsumo              bool
+	IsOpeningDraw        bool
+	IsDealerFirstDiscard bool
+	IsHaiDi              bool
+	IsGangShangHua       bool
+	IsGangShangPao       bool
+	Que                  []tile.Suit
+	ResponsibleSeat      int
+	WallRemaining        int
 }
 
 // GameState 描述血战到底结束条件所需的最小信息。

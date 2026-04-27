@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"racoo.cn/lsp/internal/metrics"
+	storex "racoo.cn/lsp/internal/store"
 )
 
 // roomEventPool 约束事件存储所需连接能力；*pgxpool.Pool 与 pgxmock 均可注入。
@@ -124,7 +125,12 @@ func (s *RoomEventStore) ListEventsAfter(ctx context.Context, roomID string, aft
 		opErr = fmt.Errorf("nil room event store")
 		return nil, opErr
 	}
-	rows, err := s.pool.Query(ctx, `SELECT room_id, seq, kind, payload FROM room_events WHERE room_id = $1 AND seq > $2 ORDER BY seq ASC`, roomID, afterSeq)
+	var rows pgx.Rows
+	err := storex.Retry(ctx, "postgres", "list_events_after", 2, func(opCtx context.Context) error {
+		var err error
+		rows, err = s.pool.Query(opCtx, `SELECT room_id, seq, kind, payload FROM room_events WHERE room_id = $1 AND seq > $2 ORDER BY seq ASC`, roomID, afterSeq)
+		return err
+	})
 	if err != nil {
 		opErr = err
 		return nil, err

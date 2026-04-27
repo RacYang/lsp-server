@@ -68,6 +68,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		return 1
 	}
 	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), cfg.RuleID)
+	svcCore.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
 	svcCore.SetTimeoutConfig(roomsvc.TimeoutConfig{
 		ExchangeThree: cfg.RoomTimeouts.ExchangeThree,
 		QueMen:        cfg.RoomTimeouts.QueMen,
@@ -76,6 +77,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		Discard:       cfg.RoomTimeouts.Discard,
 	})
 	svc := newRoomGRPCServer(svcCore, ev, gs, st, rcli)
+	svc.setIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {
 		svc.setReady(false)
 		cli, err := clientv3.New(clientv3.Config{Endpoints: splitEndpoints(cfg.EtcdEndpoints), DialTimeout: 5 * time.Second})
@@ -85,16 +87,15 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		}
 		defer func() { _ = cli.Close() }()
 		disco := discovery.NewEtcd(cli, "/lsp", 30)
-		leaseID, err := disco.Register(ctx, nodeid.KindRoom, defaultRoomNodeID, discovery.NodeMeta{
+		reg, err := disco.RegisterAndKeepAlive(ctx, nodeid.KindRoom, defaultRoomNodeID, discovery.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,
 			Version:       "phase3",
-		})
+		}, 10*time.Second)
 		if err != nil {
 			logx.Error(ctx, "房间节点注册到 etcd 失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
 			return 1
 		}
-		defer func() { _ = disco.Revoke(context.Background(), leaseID) }()
-		go keepRoomLease(ctx, disco, leaseID)
+		defer func() { _ = reg.Stop(context.Background()) }()
 
 		if rcli != nil {
 			rt := router.NewEtcd(cli, "/lsp")
@@ -124,22 +125,6 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		return 1
 	}
 	return 0
-}
-
-func keepRoomLease(ctx context.Context, disco *discovery.Etcd, leaseID int64) {
-	if disco == nil || leaseID == 0 {
-		return
-	}
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			_ = disco.KeepAlive(ctx, leaseID)
-		}
-	}
 }
 
 func recoverOwnedRooms(ctx context.Context, rt *router.Etcd, rnodeID string, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service) error {

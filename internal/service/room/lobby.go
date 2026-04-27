@@ -7,19 +7,27 @@ import (
 	domainroom "racoo.cn/lsp/internal/domain/room"
 )
 
-// Lobby 为内存大厅索引：创建、查询房间（Phase 1 不做持久化）。
-type Lobby struct {
+// RoomRegistry 为本进程房间索引，避免与集群大厅服务混淆。
+type RoomRegistry struct {
 	mu    sync.RWMutex
 	rooms map[string]*domainroom.Room
 }
 
-// NewLobby 创建空大厅。
-func NewLobby() *Lobby {
-	return &Lobby{rooms: make(map[string]*domainroom.Room)}
+// Lobby 是 RoomRegistry 的兼容别名；新代码应优先使用 RoomRegistry。
+type Lobby = RoomRegistry
+
+// NewRoomRegistry 创建空房间索引。
+func NewRoomRegistry() *RoomRegistry {
+	return &RoomRegistry{rooms: make(map[string]*domainroom.Room)}
+}
+
+// NewLobby 创建空房间索引，保留旧名称以兼容现有调用点。
+func NewLobby() *RoomRegistry {
+	return NewRoomRegistry()
 }
 
 // CreateRoom 创建房间；roomID 由调用方生成。
-func (l *Lobby) CreateRoom(roomID string, rv *domainroom.Room) error {
+func (l *RoomRegistry) CreateRoom(roomID string, rv *domainroom.Room) error {
 	if l == nil {
 		return fmt.Errorf("nil lobby")
 	}
@@ -33,7 +41,7 @@ func (l *Lobby) CreateRoom(roomID string, rv *domainroom.Room) error {
 }
 
 // GetRoom 返回房间。
-func (l *Lobby) GetRoom(roomID string) (*domainroom.Room, bool) {
+func (l *RoomRegistry) GetRoom(roomID string) (*domainroom.Room, bool) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	rv, ok := l.rooms[roomID]

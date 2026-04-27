@@ -109,3 +109,22 @@ func TestEtcdResolveNode(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "127.0.0.1:19090", node.Meta.AdvertiseAddr)
 }
+
+func TestEtcdRegisterAndKeepAlive(t *testing.T) {
+	t.Parallel()
+	_, cli := startEmbeddedEtcd(t)
+	d := NewEtcd(cli, "/lsp-test", 5)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reg, err := d.RegisterAndKeepAlive(ctx, nodeid.KindLobby, "lobby-a", NodeMeta{AdvertiseAddr: "127.0.0.1:19091"}, 10*time.Millisecond)
+	require.NoError(t, err)
+	require.Equal(t, "lobby-a", reg.NodeID)
+	require.Positive(t, reg.LeaseID)
+
+	node, ok, err := d.ResolveNode(context.Background(), nodeid.KindLobby, "lobby-a")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "127.0.0.1:19091", node.Meta.AdvertiseAddr)
+	require.NoError(t, reg.Stop(context.Background()))
+}

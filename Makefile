@@ -11,7 +11,7 @@ HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 
 .PHONY: bootstrap generate fix fix-file verify verify-fast verify-pre-commit \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
-	verify-test-fast verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets \
+	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
 	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang \
 	verify-git-repo verify-git-local verify-git-push
 
@@ -120,6 +120,28 @@ ifneq ($(HAS_GO),)
 	fi
 else
 	@echo "verify-test-integration: no go packages, skipping"
+endif
+
+verify-test-integration-nodocker:
+ifneq ($(HAS_GO),)
+	@if [[ "$${RUN_INTEGRATION:-0}" != "1" ]]; then \
+		echo "verify-test-integration-nodocker: RUN_INTEGRATION!=1，跳过"; \
+	else \
+		go test -tags=integration ./internal/app ./internal/handler ./internal/service/room -run 'Test(RoomProcessRestartReconnectNoDocker|ClusterReconnectLoginWithSessionToken|HandleWebSocketIdempotencyKeyDropsReplay|SubmitActionReturnsRateLimitedWhenMailboxFull|SchedulerAutoTimeoutUsesFakeClock)' -count=1 -v; \
+	fi
+else
+	@echo "verify-test-integration-nodocker: no go packages, skipping"
+endif
+
+verify-test-integration-pg:
+ifneq ($(HAS_GO),)
+	@if [[ "$${RUN_INTEGRATION:-0}" != "1" ]]; then \
+		echo "verify-test-integration-pg: RUN_INTEGRATION!=1，跳过"; \
+	else \
+		go test -tags=integration ./internal/app -run 'TestRoomProcessRestartReplay' -count=1 -v; \
+	fi
+else
+	@echo "verify-test-integration-pg: no go packages, skipping"
 endif
 
 verify-cover:

@@ -125,6 +125,70 @@ func TestRoomProcessRestartReplay(t *testing.T) {
 	}
 }
 
+func TestRoomProcessRestartReconnectNoDocker(t *testing.T) {
+	repoRoot := mustRepoRootIntegration(t)
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(mr.Close)
+
+	etcdURL := startEmbeddedEtcdForIntegration(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	gateAddr := reserveTCPAddr(t)
+	lobbyAddr := reserveTCPAddr(t)
+	roomAddr := reserveTCPAddr(t)
+	tempDir := t.TempDir()
+
+	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf(
+		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
+		lobbyAddr, "sichuan_xzdd", etcdURL,
+	))
+	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf(
+		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
+		roomAddr, "sichuan_xzdd", mr.Addr(), etcdURL,
+	))
+	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf(
+		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
+		gateAddr, "sichuan_xzdd", lobbyAddr, roomAddr, mr.Addr(), etcdURL,
+	))
+
+	lobbyProc := startManagedProc(t, ctx, repoRoot, "./cmd/lobby", lobbyCfg)
+	defer lobbyProc.Stop(t)
+	roomProc := startManagedProc(t, ctx, repoRoot, "./cmd/room", roomCfg)
+	defer roomProc.Stop(t)
+	gateProc := startManagedProc(t, ctx, repoRoot, "./cmd/gate", gateCfg)
+	defer gateProc.Stop(t)
+
+	waitForTCP(t, lobbyAddr, 20*time.Second)
+	waitForTCP(t, roomAddr, 20*time.Second)
+	waitForTCP(t, gateAddr, 20*time.Second)
+
+	roomID := "cluster-room-restart-nodocker"
+	conns := make([]*websocket.Conn, 4)
+	tokens := make([]string, 4)
+	for i := range conns {
+		conns[i] = dialWS(t, gateAddr)
+		tokens[i] = loginJoinReturnSessionToken(t, conns[i], roomID)
+	}
+	sendReadyAndReadResp(t, conns[0])
+	for _, conn := range conns {
+		_ = conn.Close()
+	}
+
+	roomProc.Stop(t)
+	roomProc = startManagedProc(t, ctx, repoRoot, "./cmd/room", roomCfg)
+	defer roomProc.Stop(t)
+	waitForTCP(t, roomAddr, 20*time.Second)
+
+	for i := range conns {
+		requireReconnectSnapshot(t, gateAddr, tokens[i], roomID, &conns[i])
+		_ = conns[i].Close()
+	}
+}
+
 type managedProc struct {
 	target string
 	cmd    *exec.Cmd

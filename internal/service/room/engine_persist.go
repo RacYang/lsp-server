@@ -12,7 +12,7 @@ import (
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
 
-const roundPersistSchemaVersion = 2
+const roundPersistSchemaVersion = 3
 
 // SnapshotView 返回当前局面的最小等待态摘要。
 func (rs *RoundState) SnapshotView() RoundView {
@@ -95,29 +95,32 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		return nil, nil
 	}
 	rp := roundPersist{
-		SchemaVersion:        roundPersistSchemaVersion,
-		RuleID:               rs.ruleID,
-		PlayerIDs:            rs.playerIDs,
-		QueBySeat:            append([]int32(nil), rs.queBySeat...),
-		WaitingExchange:      rs.waitingExchange,
-		ExchangeDir:          rs.exchangeDirection,
-		WaitingQueMen:        rs.waitingQueMen,
-		ExchangeDone:         append([]bool(nil), rs.exchangeSubmitted...),
-		QueDone:              append([]bool(nil), rs.queSubmitted...),
-		Turn:                 rs.turn,
-		Step:                 rs.step,
-		WaitingDiscard:       rs.waitingDiscard,
-		WaitingTsumo:         rs.waitingTsumo,
-		ClaimWindowOpen:      rs.claimWindowOpen,
-		QiangGangWindow:      rs.qiangGangWindow,
-		WinnerSeats:          append([]int(nil), rs.winnerSeats...),
-		HuedSeats:            append([]bool(nil), rs.huedSeats...),
-		Ledger:               append([]sichuanxzdd.ScoreEntry(nil), rs.ledger...),
-		GangRecords:          append([]rules.GangRecord(nil), rs.gangRecords...),
-		LastGangFollowUp:     rs.lastGangFollowUp,
-		LastDiscardAfterGang: rs.lastDiscardAfterGang,
-		Hands:                make([][]string, 4),
-		ExchangeTiles:        make([][]string, 4),
+		SchemaVersion:          roundPersistSchemaVersion,
+		RuleID:                 rs.ruleID,
+		PlayerIDs:              rs.playerIDs,
+		QueBySeat:              append([]int32(nil), rs.queBySeat...),
+		WaitingExchange:        rs.waitingExchange,
+		ExchangeDir:            rs.exchangeDirection,
+		WaitingQueMen:          rs.waitingQueMen,
+		ExchangeDone:           append([]bool(nil), rs.exchangeSubmitted...),
+		QueDone:                append([]bool(nil), rs.queSubmitted...),
+		Turn:                   rs.turn,
+		Step:                   rs.step,
+		DealerSeat:             rs.dealerSeat,
+		OpeningDrawSeat:        rs.openingDrawSeat,
+		DealerFirstDiscardOpen: rs.dealerFirstDiscardOpen,
+		WaitingDiscard:         rs.waitingDiscard,
+		WaitingTsumo:           rs.waitingTsumo,
+		ClaimWindowOpen:        rs.claimWindowOpen,
+		QiangGangWindow:        rs.qiangGangWindow,
+		WinnerSeats:            append([]int(nil), rs.winnerSeats...),
+		HuedSeats:              append([]bool(nil), rs.huedSeats...),
+		Ledger:                 append([]sichuanxzdd.ScoreEntry(nil), rs.ledger...),
+		GangRecords:            append([]rules.GangRecord(nil), rs.gangRecords...),
+		LastGangFollowUp:       rs.lastGangFollowUp,
+		LastDiscardAfterGang:   rs.lastDiscardAfterGang,
+		Hands:                  make([][]string, 4),
+		ExchangeTiles:          make([][]string, 4),
 	}
 	if rs.claimWindowOpen {
 		rp.ClaimCandidates = make([]claimCandidatePersist, 0, len(rs.claimCandidates))
@@ -198,34 +201,42 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 		}
 	}
 	rs := &RoundState{
-		roomID:               roomID,
-		ruleID:               ruleID,
-		playerIDs:            rp.PlayerIDs,
-		rule:                 rule,
-		wall:                 wall.NewFromOrderedTiles(wallTiles),
-		hands:                hands,
-		queBySeat:            append([]int32(nil), rp.QueBySeat...),
-		waitingExchange:      rp.WaitingExchange,
-		waitingQueMen:        rp.WaitingQueMen,
-		exchangeSubmitted:    append([]bool(nil), rp.ExchangeDone...),
-		exchangeDirection:    rp.ExchangeDir,
-		exchangeSelection:    make([][]tile.Tile, 4),
-		queSubmitted:         append([]bool(nil), rp.QueDone...),
-		waitingDiscard:       rp.WaitingDiscard,
-		waitingTsumo:         rp.WaitingTsumo,
-		claimWindowOpen:      rp.ClaimWindowOpen,
-		qiangGangWindow:      rp.QiangGangWindow,
-		turn:                 rp.Turn,
-		step:                 rp.Step,
-		winnerSeats:          append([]int(nil), rp.WinnerSeats...),
-		huedSeats:            append([]bool(nil), rp.HuedSeats...),
-		ledger:               append([]sichuanxzdd.ScoreEntry(nil), rp.Ledger...),
-		gangRecords:          append([]rules.GangRecord(nil), rp.GangRecords...),
-		lastGangFollowUp:     rp.LastGangFollowUp,
-		lastDiscardAfterGang: rp.LastDiscardAfterGang,
+		roomID:                 roomID,
+		ruleID:                 ruleID,
+		playerIDs:              rp.PlayerIDs,
+		rule:                   rule,
+		wall:                   wall.NewFromOrderedTiles(wallTiles),
+		hands:                  hands,
+		queBySeat:              append([]int32(nil), rp.QueBySeat...),
+		waitingExchange:        rp.WaitingExchange,
+		waitingQueMen:          rp.WaitingQueMen,
+		exchangeSubmitted:      append([]bool(nil), rp.ExchangeDone...),
+		exchangeDirection:      rp.ExchangeDir,
+		exchangeSelection:      make([][]tile.Tile, 4),
+		queSubmitted:           append([]bool(nil), rp.QueDone...),
+		waitingDiscard:         rp.WaitingDiscard,
+		waitingTsumo:           rp.WaitingTsumo,
+		claimWindowOpen:        rp.ClaimWindowOpen,
+		qiangGangWindow:        rp.QiangGangWindow,
+		turn:                   rp.Turn,
+		step:                   rp.Step,
+		dealerSeat:             rp.DealerSeat,
+		openingDrawSeat:        rp.OpeningDrawSeat,
+		dealerFirstDiscardOpen: rp.DealerFirstDiscardOpen,
+		winnerSeats:            append([]int(nil), rp.WinnerSeats...),
+		huedSeats:              append([]bool(nil), rp.HuedSeats...),
+		ledger:                 append([]sichuanxzdd.ScoreEntry(nil), rp.Ledger...),
+		gangRecords:            append([]rules.GangRecord(nil), rp.GangRecords...),
+		lastGangFollowUp:       rp.LastGangFollowUp,
+		lastDiscardAfterGang:   rp.LastDiscardAfterGang,
 	}
 	for len(rs.queBySeat) < 4 {
 		rs.queBySeat = append(rs.queBySeat, 0)
+	}
+	if rp.SchemaVersion < 3 {
+		rs.dealerSeat = 0
+		rs.openingDrawSeat = -1
+		rs.dealerFirstDiscardOpen = false
 	}
 	for len(rs.exchangeSubmitted) < 4 {
 		rs.exchangeSubmitted = append(rs.exchangeSubmitted, false)

@@ -15,13 +15,14 @@ import (
 
 // Service 编排房间命令；每房间在内部通过 roomActor 单协程串行化变更。
 type Service struct {
-	lobby  *Lobby
-	mu     sync.Mutex
-	actors map[string]*roomActor
-	engine *Engine
-	clock  clock.Clock
-	tmo    TimeoutConfig
-	onAuto func(context.Context, string, []Notification)
+	lobby           *RoomRegistry
+	mu              sync.Mutex
+	actors          map[string]*roomActor
+	engine          *Engine
+	clock           clock.Clock
+	tmo             TimeoutConfig
+	mailboxCapacity int
+	onAuto          func(context.Context, string, []Notification)
 }
 
 // TimeoutConfig 定义各等待态的服务端托管时长。
@@ -65,18 +66,19 @@ func (cfg TimeoutConfig) withDefaults() TimeoutConfig {
 }
 
 // NewService 创建房间服务（广播由 handler 在写完应答帧后调用 Hub 完成）。
-func NewService(l *Lobby) *Service {
+func NewService(l *RoomRegistry) *Service {
 	return NewServiceWithRule(l, "")
 }
 
 // NewServiceWithRule 使用指定规则装配房间服务；ruleID 为空时回退默认四川血战规则。
-func NewServiceWithRule(l *Lobby, ruleID string) *Service {
+func NewServiceWithRule(l *RoomRegistry, ruleID string) *Service {
 	return &Service{
-		lobby:  l,
-		actors: make(map[string]*roomActor),
-		engine: NewEngine(ruleID),
-		clock:  clock.NewReal(),
-		tmo:    DefaultTimeoutConfig(),
+		lobby:           l,
+		actors:          make(map[string]*roomActor),
+		engine:          NewEngine(ruleID),
+		clock:           clock.NewReal(),
+		tmo:             DefaultTimeoutConfig(),
+		mailboxCapacity: defaultMailboxCapacity,
 	}
 }
 
@@ -94,6 +96,17 @@ func (s *Service) SetTimeoutConfig(cfg TimeoutConfig) {
 		return
 	}
 	s.tmo = cfg.withDefaults()
+}
+
+// SetMailboxCapacity 覆盖新建房间 actor 的 mailbox 容量；非正值回退默认值。
+func (s *Service) SetMailboxCapacity(capacity int) {
+	if s == nil {
+		return
+	}
+	if capacity <= 0 {
+		capacity = defaultMailboxCapacity
+	}
+	s.mailboxCapacity = capacity
 }
 
 // SetAutoTimeoutHandler 注册后台托管通知处理器。
@@ -132,7 +145,7 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	if _, ok := s.actors[roomID]; ok {
 		return
 	}
-	a := newRoomActor(r, initialRound)
+	a := newRoomActorWithCapacity(r, initialRound, s.mailboxCapacity)
 	a.engine = s.engine
 	a.onExit = s.removeActor
 	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
@@ -158,7 +171,7 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 		s.mu.Unlock()
 		return
 	}
-	a := newRoomActor(r, nil)
+	a := newRoomActorWithCapacity(r, nil, s.mailboxCapacity)
 	a.engine = s.engine
 	a.onExit = s.removeActor
 	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)

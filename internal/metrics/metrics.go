@@ -39,6 +39,12 @@ var StorageOpSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.DefBuckets,
 }, []string{"store", "op", "result"})
 
+var StorageRetryTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "lsp",
+	Name:      "storage_retry_total",
+	Help:      "存储操作重试计数。",
+}, []string{"store", "op", "result"})
+
 var SettlementPenaltyTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "lsp",
 	Name:      "settlement_penalty_total",

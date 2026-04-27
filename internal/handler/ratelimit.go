@@ -92,3 +92,18 @@ var (
 	defaultWSRateLimiter = newUserRateLimiter(20, 40)
 	defaultWSIdemCache   = newIdemCache(4096)
 )
+
+// ConfigureRuntime 覆盖 WebSocket 入口限流与幂等缓存容量；非正值保留默认值。
+func ConfigureRuntime(rate, burst float64, idemCacheSize int) {
+	if rate <= 0 {
+		rate = 20
+	}
+	if burst <= 0 {
+		burst = 40
+	}
+	if idemCacheSize <= 0 {
+		idemCacheSize = 4096
+	}
+	defaultWSRateLimiter = newUserRateLimiter(rate, burst)
+	defaultWSIdemCache = newIdemCache(idemCacheSize)
+}

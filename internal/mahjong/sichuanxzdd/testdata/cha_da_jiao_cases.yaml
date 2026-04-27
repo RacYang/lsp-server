@@ -5,7 +5,7 @@ cases:
     winners: [1]
     expect_penalty: false
   - name: no_ting_player_gets_cha_da_jiao
-    hand: [m1, m2, m4, m6, m8, p1, p3, p5, p7, s1, s3, s5, s7]
+    hand: [p1, p3, p5, p7, p9, s1, s3, s5, s7, p2, p4, s2, s4]
     que_suit: m
     winners: [2]
     expect_penalty: true

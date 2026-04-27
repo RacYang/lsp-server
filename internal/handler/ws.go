@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -390,56 +389,6 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 			unknownMsgTotal.Inc()
 			logx.Info(ctx, "收到尚未实现的消息编号已跳过", "trace_id", "", "user_id", userID, "room_id", roomID, "msg_id", fmt.Sprintf("%d", h.MsgID))
 		}
-	}
-}
-
-func allowWebSocketOrigin(r *http.Request, allowedOrigins []string) bool {
-	if r == nil {
-		return false
-	}
-	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
-		return true
-	}
-	if len(allowedOrigins) > 0 {
-		for _, allowed := range allowedOrigins {
-			if strings.EqualFold(strings.TrimSpace(allowed), origin) {
-				return true
-			}
-		}
-		return false
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	return strings.EqualFold(u.Host, r.Host)
-}
-
-func shouldDropRequest(env *clientv1.Envelope, msgID uint16, userID string) bool {
-	if env == nil {
-		return false
-	}
-	if !defaultWSRateLimiter.Allow(userID) {
-		rateLimitedTotal.WithLabelValues("gate").Inc()
-		return true
-	}
-	key := strings.TrimSpace(env.GetIdempotencyKey())
-	if key == "" {
-		return false
-	}
-	if defaultWSIdemCache.SeenOrStore("ws", msgID, userID, key) {
-		idempotentReplayTotal.Inc()
-		return true
-	}
-	return false
-}
-
-func respondAction(conn *websocket.Conn, reqID string, responseMsgID uint16, env *clientv1.Envelope, after func()) {
-	b, _ := proto.Marshal(env)
-	_ = session.WriteBinary(conn, frame.Encode(responseMsgID, b))
-	if after != nil {
-		after()
 	}
 }
 

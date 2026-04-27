@@ -51,9 +51,25 @@ func (x *xzdd) CheckHu(h *hand.Hand, target tile.Tile, _ rules.HuContext) (rules
 func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Breakdown {
 	var b fan.Breakdown
 	c := result.Win
-	if hu.SevenPairs(c) {
+	specialOpening := false
+	switch {
+	case sc.HuSeat == sc.DealerSeat && sc.IsTsumo && sc.IsOpeningDraw:
+		b.Add(fan.KindHeavenlyHand, 8, "天胡")
+		specialOpening = true
+	case sc.HuSeat != sc.DealerSeat && !sc.IsTsumo && sc.IsDealerFirstDiscard:
+		b.Add(fan.KindEarthlyHand, 8, "地胡")
+		specialOpening = true
+	}
+	genCount := countGen(c)
+	longQiDui := hu.SevenPairs(c) && genCount > 0
+	switch {
+	case specialOpening:
+		// 天胡/地胡替代基础牌型番，但仍保留清一色、杠上炮等场况番。
+	case longQiDui:
+		b.Add(fan.KindLongQiDui, 8, "龙七对")
+	case hu.SevenPairs(c):
 		b.Add(fan.KindQiDui, 4, "七对")
-	} else {
+	default:
 		switch {
 		case isJiangDui(c):
 			b.Add(fan.KindJiangDui, 4, "将对")
@@ -66,8 +82,14 @@ func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Break
 	if isQingYiSe(c) {
 		b.Add(fan.KindQingYiSe, 4, "清一色")
 	}
-	for i := 0; i < countGen(c); i++ {
-		b.Add(fan.KindYiGen, 1, "一根")
+	if !longQiDui {
+		for i := 0; i < genCount; i++ {
+			b.Add(fan.KindYiGen, 1, "一根")
+		}
+	}
+	shiBaLuoHan := countSeatGang(sc.GangRecords, sc.HuSeat) >= 4
+	if shiBaLuoHan {
+		b.Add(fan.KindShiBaLuoHan, 16, "十八罗汉")
 	}
 	if sc.IsGangShangHua {
 		b.Add(fan.KindGangShangKai, 1, "杠上开花")
@@ -91,12 +113,14 @@ func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Break
 	for i := 0; i < countAnKe(c); i++ {
 		b.Add(fan.KindAnKe, 1, "暗刻")
 	}
-	anGang := countAnGang(sc.GangRecords)
-	for i := 0; i < anGang; i++ {
-		b.Add(fan.KindAnGang, 1, "暗杠")
-	}
-	if anGang >= 2 {
-		b.Add(fan.KindShuangAnGang, 1, "双暗杠")
+	if !shiBaLuoHan {
+		anGang := countAnGang(sc.GangRecords, sc.HuSeat)
+		for i := 0; i < anGang; i++ {
+			b.Add(fan.KindAnGang, 1, "暗杠")
+		}
+		if anGang >= 2 {
+			b.Add(fan.KindShuangAnGang, 1, "双暗杠")
+		}
 	}
 	return b
 }
@@ -179,10 +203,20 @@ func countAnKe(c hu.Counts) int {
 	return n
 }
 
-func countAnGang(records []rules.GangRecord) int {
+func countSeatGang(records []rules.GangRecord, seat int) int {
 	n := 0
 	for _, record := range records {
-		if record.Kind == rules.GangKindAn {
+		if record.Seat == seat && record.Kind != rules.GangKindUnspecified {
+			n++
+		}
+	}
+	return n
+}
+
+func countAnGang(records []rules.GangRecord, seat int) int {
+	n := 0
+	for _, record := range records {
+		if record.Seat == seat && record.Kind == rules.GangKindAn {
 			n++
 		}
 	}

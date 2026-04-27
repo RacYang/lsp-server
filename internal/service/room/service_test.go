@@ -552,6 +552,17 @@ func TestSubmitActionReturnsRateLimitedWhenMailboxFull(t *testing.T) {
 	require.Nil(t, notifs)
 }
 
+func TestServiceMailboxCapacityOverride(t *testing.T) {
+	t.Parallel()
+
+	svc := NewService(NewLobby())
+	svc.SetMailboxCapacity(3)
+	require.NoError(t, svc.EnsureRoom("mailbox-config-room"))
+	a := svc.getActor("mailbox-config-room")
+	require.NotNil(t, a)
+	require.Equal(t, 3, cap(a.ch))
+}
+
 func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 	t.Parallel()
 

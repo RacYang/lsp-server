@@ -12,6 +12,8 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"racoo.cn/lsp/internal/app"
+	"racoo.cn/lsp/internal/cluster/discovery"
+	"racoo.cn/lsp/internal/cluster/nodeid"
 	"racoo.cn/lsp/internal/cluster/router"
 	"racoo.cn/lsp/internal/config"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
@@ -45,6 +47,16 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
+		disco := discovery.NewEtcd(cli, "/lsp", 30)
+		reg, err := disco.RegisterAndKeepAlive(ctx, nodeid.KindLobby, nodeid.New(), discovery.NodeMeta{
+			AdvertiseAddr: cfg.ServerAddr,
+			Version:       "phase3",
+		}, 10*time.Second)
+		if err != nil {
+			logx.Error(ctx, "大厅节点注册到 etcd 失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+			return 1
+		}
+		defer func() { _ = reg.Stop(context.Background()) }()
 		claimer = router.NewEtcd(cli, "/lsp")
 	}
 	a, err := app.NewGRPC(cfg.ServerAddr, func(s *grpc.Server) {

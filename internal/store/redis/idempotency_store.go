@@ -10,6 +10,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 
 	"racoo.cn/lsp/internal/metrics"
+	storex "racoo.cn/lsp/internal/store"
 )
 
 const defaultIdempotencyTTL = 10 * time.Minute
@@ -28,7 +29,12 @@ func (c *Client) PutIdempotencyAbsent(ctx context.Context, scope, key string, re
 		opErr = fmt.Errorf("marshal idempotency: %w", err)
 		return false, opErr
 	}
-	created, err := c.kv.SetNX(ctx, IdempotencyKey(scope, key), payload, ttlOrDefault(ttl, defaultIdempotencyTTL)).Result()
+	var created bool
+	err = storex.Retry(ctx, "redis", "put_idempotency_absent", 2, func(opCtx context.Context) error {
+		var err error
+		created, err = c.kv.SetNX(opCtx, IdempotencyKey(scope, key), payload, ttlOrDefault(ttl, defaultIdempotencyTTL)).Result()
+		return err
+	})
 	if err != nil {
 		opErr = err
 		return false, err
@@ -45,7 +51,12 @@ func (c *Client) GetIdempotency(ctx context.Context, scope, key string) (Idempot
 		opErr = fmt.Errorf("nil redis client")
 		return IdempotencyRecord{}, false, opErr
 	}
-	raw, err := c.kv.Get(ctx, IdempotencyKey(scope, key)).Bytes()
+	var raw []byte
+	err := storex.Retry(ctx, "redis", "get_idempotency", 2, func(opCtx context.Context) error {
+		var err error
+		raw, err = c.kv.Get(opCtx, IdempotencyKey(scope, key)).Bytes()
+		return err
+	})
 	if errors.Is(err, goredis.Nil) {
 		return IdempotencyRecord{}, false, nil
 	}

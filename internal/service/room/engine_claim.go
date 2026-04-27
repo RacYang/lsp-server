@@ -27,6 +27,7 @@ func (e *Engine) ApplyPong(_ context.Context, rs *RoundState, seat int) ([]Notif
 	metrics.ClaimWindowTotal.WithLabelValues("pong").Inc()
 	claimedTile := rs.lastDiscard
 	rs.clearClaimWindow()
+	rs.closeOpeningClaimWindow()
 	if err := rs.rewindInterruptedTurn(); err != nil {
 		return nil, err
 	}
@@ -87,6 +88,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat int, tileText
 		gangTile = rs.lastDiscard
 		fromSeat := rs.lastDiscardSeat
 		rs.clearClaimWindow()
+		rs.closeOpeningClaimWindow()
 		if err := rs.rewindInterruptedTurn(); err != nil {
 			return nil, err
 		}

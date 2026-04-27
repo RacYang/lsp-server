@@ -19,6 +19,10 @@ const (
 	KindAnGang       Kind = "an_gang"        // 暗杠
 	KindGangShangPao Kind = "gang_shang_pao" // 杠上炮
 	KindShuangAnGang Kind = "shuang_an_gang" // 双暗杠
+	KindHeavenlyHand Kind = "heavenly_hand"  // 天胡
+	KindEarthlyHand  Kind = "earthly_hand"   // 地胡
+	KindLongQiDui    Kind = "long_qi_dui"    // 龙七对
+	KindShiBaLuoHan  Kind = "shi_ba_luo_han" // 十八罗汉
 )
 
 // Item 为单个番种项。

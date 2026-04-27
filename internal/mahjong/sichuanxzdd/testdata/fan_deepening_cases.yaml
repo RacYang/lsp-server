@@ -13,3 +13,31 @@ cases:
     score_context:
       is_gang_shang_pao: true
     expect_fans: [杠上炮]
+  - name: heavenly_hand
+    win: [m1, m2, m3, m4, m5, m6, m7, m8, m9, p1, p1, p1, p2, p2]
+    score_context:
+      hu_seat: 0
+      dealer_seat: 0
+      is_tsumo: true
+      is_opening_draw: true
+    expect_fans: [天胡]
+  - name: earthly_hand
+    win: [m1, m2, m3, m4, m5, m6, m7, m8, m9, p1, p1, p1, p2, p2]
+    score_context:
+      hu_seat: 1
+      dealer_seat: 0
+      is_dealer_first_discard: true
+    expect_fans: [地胡]
+  - name: long_qi_dui
+    win: [m1, m1, m1, m1, m2, m2, m3, m3, p4, p4, p5, p5, s6, s6]
+    expect_fans: [龙七对]
+  - name: shi_ba_luo_han
+    win: [m1, m1, m1, m2, m2, m2, m3, m3, m3, p4, p4, p4, s5, s5]
+    score_context:
+      hu_seat: 2
+    gang_records:
+      - {seat: 2, kind: ming, tile: m1}
+      - {seat: 2, kind: an, tile: m2}
+      - {seat: 2, kind: bu, tile: m3}
+      - {seat: 2, kind: ming, tile: p4}
+    expect_fans: [十八罗汉]
