@@ -3,10 +3,14 @@ package room
 import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/metrics"
 )
 
 func (rs *RoundState) finishRound() (Notification, error) {
-	seatScores, penalties, detail := sichuanxzdd.BuildSettlement(rs.playerIDs, rs.hands, rs.queBySeat, rs.winnerSeats, rs.totalFanBySeat)
+	seatScores, penalties, breakdowns, detail := sichuanxzdd.BuildSettlement(rs.playerIDs, rs.hands, rs.queBySeat, rs.ledger, rs.winnerSeats)
+	for _, penalty := range penalties {
+		metrics.SettlementPenaltyTotal.WithLabelValues(penalty.GetReason()).Inc()
+	}
 	winnerIDs := make([]string, 0, len(rs.winnerSeats))
 	for _, seat := range rs.winnerSeats {
 		if seat >= 0 && seat < len(rs.playerIDs) {
@@ -17,12 +21,13 @@ func (rs *RoundState) finishRound() (Notification, error) {
 		ReqId: "settlement",
 		Body: &clientv1.Envelope_Settlement{
 			Settlement: &clientv1.SettlementNotify{
-				RoomId:        rs.roomID,
-				WinnerUserIds: winnerIDs,
-				TotalFan:      sumInt32(rs.totalFanBySeat),
-				SeatScores:    seatScores,
-				Penalties:     penalties,
-				DetailText:    detail,
+				RoomId:             rs.roomID,
+				WinnerUserIds:      winnerIDs,
+				TotalFan:           sumPositiveSeatScores(seatScores),
+				SeatScores:         seatScores,
+				Penalties:          penalties,
+				DetailText:         detail,
+				PerWinnerBreakdown: breakdowns,
 			},
 		},
 	})
@@ -40,10 +45,12 @@ func (rs *RoundState) finishRound() (Notification, error) {
 	return Notification{Kind: KindSettlement, Payload: settlementPayload}, nil
 }
 
-func sumInt32(xs []int32) int32 {
+func sumPositiveSeatScores(scores []*clientv1.SeatScore) int32 {
 	var total int32
-	for _, x := range xs {
-		total += x
+	for _, score := range scores {
+		if score.GetTotalFan() > 0 {
+			total += score.GetTotalFan()
+		}
 	}
 	return total
 }

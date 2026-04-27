@@ -14,6 +14,11 @@ const (
 	KindHaiDiLao     Kind = "hai_di_lao"     // 海底捞月
 	KindHaiDiPao     Kind = "hai_di_pao"     // 海底炮
 	KindQiangGangHu  Kind = "qiang_gang_hu"  // 抢杠胡
+	KindJiangDui     Kind = "jiang_dui"      // 将对
+	KindAnKe         Kind = "an_ke"          // 暗刻
+	KindAnGang       Kind = "an_gang"        // 暗杠
+	KindGangShangPao Kind = "gang_shang_pao" // 杠上炮
+	KindShuangAnGang Kind = "shuang_an_gang" // 双暗杠
 )
 
 // Item 为单个番种项。

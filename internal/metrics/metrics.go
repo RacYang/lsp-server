@@ -39,6 +39,12 @@ var StorageOpSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.DefBuckets,
 }, []string{"store", "op", "result"})
 
+var SettlementPenaltyTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "lsp",
+	Name:      "settlement_penalty_total",
+	Help:      "局末罚分与退税条目计数。",
+}, []string{"reason"})
+
 func ObserveStorage(store, op string, started time.Time, err error) {
 	result := "ok"
 	if err != nil {

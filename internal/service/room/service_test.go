@@ -152,7 +152,6 @@ func TestRoundViewShowsClaimWindow(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            1,
-		totalFanBySeat:  make([]int32, 4),
 		currentDraw:     tile.Must(tile.SuitDots, 7),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
@@ -219,7 +218,6 @@ func TestQueMenUsesClientSuit(t *testing.T) {
 		queSubmitted:    make([]bool, 4),
 		waitingQueMen:   true,
 		lastDiscardSeat: -1,
-		totalFanBySeat:  make([]int32, 4),
 	}
 	e := NewEngine("sichuan_xzdd")
 	_, err := e.ApplyQueMen(context.Background(), rs, 0, int32(tile.SuitBamboo))
@@ -240,7 +238,6 @@ func TestApplyPongInterruptsPendingTurn(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            1,
-		totalFanBySeat:  make([]int32, 4),
 		currentDraw:     tile.Must(tile.SuitDots, 7),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
@@ -272,7 +269,6 @@ func roundWaitingExchange() *RoundState {
 		exchangeSelection: make([][]tile.Tile, 4),
 		queSubmitted:      make([]bool, 4),
 		lastDiscardSeat:   -1,
-		totalFanBySeat:    make([]int32, 4),
 	}
 }
 
@@ -290,7 +286,6 @@ func TestApplyDiscardPromptsClaimInsteadOfNextDraw(t *testing.T) {
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
-		totalFanBySeat:  make([]int32, 4),
 	}
 
 	e := NewEngine("sichuan_xzdd")
@@ -327,7 +322,6 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
-		totalFanBySeat:  make([]int32, 4),
 	}
 
 	e := NewEngine("sichuan_xzdd")
@@ -368,7 +362,6 @@ func TestClaimWindowPersistsAndRestores(t *testing.T) {
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
 		queBySeat:       make([]int32, 4),
 		turn:            1,
-		totalFanBySeat:  make([]int32, 4),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
 	}
@@ -400,7 +393,6 @@ func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
 		turn:            1,
 		huedSeats:       make([]bool, 4),
 		winnerSeats:     make([]int, 0, 3),
-		totalFanBySeat:  make([]int32, 4),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
 	}
@@ -435,7 +427,6 @@ func TestApplyTimeoutUsesBestClaimCandidate(t *testing.T) {
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
 		queBySeat:       make([]int32, 4),
 		turn:            1,
-		totalFanBySeat:  make([]int32, 4),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
 	}
@@ -462,7 +453,6 @@ func TestApplyTimeoutAutoDiscardsCurrentTurn(t *testing.T) {
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
-		totalFanBySeat:  make([]int32, 4),
 	}
 
 	notifs, err := NewEngine("sichuan_xzdd").ApplyTimeout(context.Background(), rs)
@@ -485,7 +475,6 @@ func TestServiceAutoTimeoutSubmitsThroughActor(t *testing.T) {
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
-		totalFanBySeat:  make([]int32, 4),
 	}
 	data, err := rs.MarshalRoundPersistJSON()
 	require.NoError(t, err)
@@ -586,7 +575,6 @@ func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 		queBySeat:      make([]int32, 4),
 		waitingDiscard: true,
 		turn:           0,
-		totalFanBySeat: make([]int32, 4),
 	}
 
 	a := newRoomActor(r, nil)

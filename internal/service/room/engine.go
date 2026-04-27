@@ -11,7 +11,7 @@ import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	_ "racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
@@ -54,28 +54,30 @@ type RoundState struct {
 	hands     []*hand.Hand
 	queBySeat []int32
 
-	waitingExchange   bool
-	exchangeDirection int32
-	waitingQueMen     bool
-	exchangeSubmitted []bool
-	exchangeSelection [][]tile.Tile
-	queSubmitted      []bool
-	waitingDiscard    bool
-	waitingTsumo      bool
-	pendingDraw       tile.Tile
-	currentDraw       tile.Tile
-	lastDiscard       tile.Tile
-	lastDiscardSeat   int
-	claimWindowOpen   bool
-	claimCandidates   []claimCandidate
-	qiangGangWindow   bool
-	turn              int
-	step              int
-	huedSeats         []bool
-	winnerSeats       []int
-	totalFanBySeat    []int32
-	gangRecords       []rules.GangRecord
-	closed            bool
+	waitingExchange      bool
+	exchangeDirection    int32
+	waitingQueMen        bool
+	exchangeSubmitted    []bool
+	exchangeSelection    [][]tile.Tile
+	queSubmitted         []bool
+	waitingDiscard       bool
+	waitingTsumo         bool
+	pendingDraw          tile.Tile
+	currentDraw          tile.Tile
+	lastDiscard          tile.Tile
+	lastDiscardSeat      int
+	claimWindowOpen      bool
+	claimCandidates      []claimCandidate
+	qiangGangWindow      bool
+	turn                 int
+	step                 int
+	huedSeats            []bool
+	winnerSeats          []int
+	ledger               []sichuanxzdd.ScoreEntry
+	gangRecords          []rules.GangRecord
+	lastGangFollowUp     bool
+	lastDiscardAfterGang bool
+	closed               bool
 }
 
 type claimCandidate struct {
@@ -89,34 +91,37 @@ type claimCandidatePersist struct {
 }
 
 type roundPersist struct {
-	SchemaVersion   int                     `json:"schema_version,omitempty"`
-	RuleID          string                  `json:"rule_id"`
-	PlayerIDs       [4]string               `json:"player_ids"`
-	QueBySeat       []int32                 `json:"que_by_seat"`
-	WaitingExchange bool                    `json:"waiting_exchange"`
-	ExchangeDir     int32                   `json:"exchange_dir,omitempty"`
-	WaitingQueMen   bool                    `json:"waiting_que_men"`
-	ExchangeDone    []bool                  `json:"exchange_done,omitempty"`
-	ExchangeTiles   [][]string              `json:"exchange_tiles,omitempty"`
-	QueDone         []bool                  `json:"que_done,omitempty"`
-	Turn            int                     `json:"turn"`
-	Step            int                     `json:"step"`
-	WaitingDiscard  bool                    `json:"waiting_discard"`
-	WaitingTsumo    bool                    `json:"waiting_tsumo"`
-	PendingDraw     string                  `json:"pending_draw,omitempty"`
-	CurrentDraw     string                  `json:"current_draw,omitempty"`
-	LastDiscard     string                  `json:"last_discard,omitempty"`
-	LastDiscardSeat int                     `json:"last_discard_seat"`
-	ClaimWindowOpen bool                    `json:"claim_window_open,omitempty"`
-	ClaimCandidates []claimCandidatePersist `json:"claim_candidates,omitempty"`
-	QiangGangWindow bool                    `json:"qiang_gang_window,omitempty"`
-	WinnerSeat      int                     `json:"winner_seat,omitempty"` // 兼容 schema_version=0/1 的单赢家快照
-	WinnerSeats     []int                   `json:"winner_seats,omitempty"`
-	HuedSeats       []bool                  `json:"hued_seats,omitempty"`
-	TotalFanBySeat  []int32                 `json:"total_fan_by_seat"`
-	GangRecords     []rules.GangRecord      `json:"gang_records,omitempty"`
-	Hands           [][]string              `json:"hands"`
-	WallRemaining   []string                `json:"wall_remaining"`
+	SchemaVersion        int                      `json:"schema_version,omitempty"`
+	RuleID               string                   `json:"rule_id"`
+	PlayerIDs            [4]string                `json:"player_ids"`
+	QueBySeat            []int32                  `json:"que_by_seat"`
+	WaitingExchange      bool                     `json:"waiting_exchange"`
+	ExchangeDir          int32                    `json:"exchange_dir,omitempty"`
+	WaitingQueMen        bool                     `json:"waiting_que_men"`
+	ExchangeDone         []bool                   `json:"exchange_done,omitempty"`
+	ExchangeTiles        [][]string               `json:"exchange_tiles,omitempty"`
+	QueDone              []bool                   `json:"que_done,omitempty"`
+	Turn                 int                      `json:"turn"`
+	Step                 int                      `json:"step"`
+	WaitingDiscard       bool                     `json:"waiting_discard"`
+	WaitingTsumo         bool                     `json:"waiting_tsumo"`
+	PendingDraw          string                   `json:"pending_draw,omitempty"`
+	CurrentDraw          string                   `json:"current_draw,omitempty"`
+	LastDiscard          string                   `json:"last_discard,omitempty"`
+	LastDiscardSeat      int                      `json:"last_discard_seat"`
+	ClaimWindowOpen      bool                     `json:"claim_window_open,omitempty"`
+	ClaimCandidates      []claimCandidatePersist  `json:"claim_candidates,omitempty"`
+	QiangGangWindow      bool                     `json:"qiang_gang_window,omitempty"`
+	WinnerSeat           int                      `json:"winner_seat,omitempty"` // 兼容 schema_version=0/1 的单赢家快照
+	WinnerSeats          []int                    `json:"winner_seats,omitempty"`
+	HuedSeats            []bool                   `json:"hued_seats,omitempty"`
+	TotalFanBySeat       []int32                  `json:"total_fan_by_seat,omitempty"` // 兼容 schema_version=0/1
+	Ledger               []sichuanxzdd.ScoreEntry `json:"ledger,omitempty"`
+	GangRecords          []rules.GangRecord       `json:"gang_records,omitempty"`
+	LastGangFollowUp     bool                     `json:"last_gang_follow_up,omitempty"`
+	LastDiscardAfterGang bool                     `json:"last_discard_after_gang,omitempty"`
+	Hands                [][]string               `json:"hands"`
+	WallRemaining        []string                 `json:"wall_remaining"`
 }
 
 // RoundView 描述客户端恢复时所需的最小等待态摘要。
@@ -163,7 +168,7 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 		lastDiscardSeat:   -1,
 		huedSeats:         make([]bool, 4),
 		winnerSeats:       make([]int, 0, 3),
-		totalFanBySeat:    make([]int32, 4),
+		ledger:            make([]sichuanxzdd.ScoreEntry, 0, 16),
 	}
 	for i := range rs.hands {
 		rs.hands[i] = hand.New()

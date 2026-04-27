@@ -69,6 +69,7 @@ type ScoreContext struct {
 	IsTsumo         bool
 	IsHaiDi         bool
 	IsGangShangHua  bool
+	IsGangShangPao  bool
 	Que             []tile.Suit
 	ResponsibleSeat int
 	WallRemaining   int

@@ -7,11 +7,12 @@ import (
 
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
+	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
 
-const roundPersistSchemaVersion = 1
+const roundPersistSchemaVersion = 2
 
 // SnapshotView 返回当前局面的最小等待态摘要。
 func (rs *RoundState) SnapshotView() RoundView {
@@ -94,27 +95,29 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		return nil, nil
 	}
 	rp := roundPersist{
-		SchemaVersion:   roundPersistSchemaVersion,
-		RuleID:          rs.ruleID,
-		PlayerIDs:       rs.playerIDs,
-		QueBySeat:       append([]int32(nil), rs.queBySeat...),
-		WaitingExchange: rs.waitingExchange,
-		ExchangeDir:     rs.exchangeDirection,
-		WaitingQueMen:   rs.waitingQueMen,
-		ExchangeDone:    append([]bool(nil), rs.exchangeSubmitted...),
-		QueDone:         append([]bool(nil), rs.queSubmitted...),
-		Turn:            rs.turn,
-		Step:            rs.step,
-		WaitingDiscard:  rs.waitingDiscard,
-		WaitingTsumo:    rs.waitingTsumo,
-		ClaimWindowOpen: rs.claimWindowOpen,
-		QiangGangWindow: rs.qiangGangWindow,
-		WinnerSeats:     append([]int(nil), rs.winnerSeats...),
-		HuedSeats:       append([]bool(nil), rs.huedSeats...),
-		TotalFanBySeat:  append([]int32(nil), rs.totalFanBySeat...),
-		GangRecords:     append([]rules.GangRecord(nil), rs.gangRecords...),
-		Hands:           make([][]string, 4),
-		ExchangeTiles:   make([][]string, 4),
+		SchemaVersion:        roundPersistSchemaVersion,
+		RuleID:               rs.ruleID,
+		PlayerIDs:            rs.playerIDs,
+		QueBySeat:            append([]int32(nil), rs.queBySeat...),
+		WaitingExchange:      rs.waitingExchange,
+		ExchangeDir:          rs.exchangeDirection,
+		WaitingQueMen:        rs.waitingQueMen,
+		ExchangeDone:         append([]bool(nil), rs.exchangeSubmitted...),
+		QueDone:              append([]bool(nil), rs.queSubmitted...),
+		Turn:                 rs.turn,
+		Step:                 rs.step,
+		WaitingDiscard:       rs.waitingDiscard,
+		WaitingTsumo:         rs.waitingTsumo,
+		ClaimWindowOpen:      rs.claimWindowOpen,
+		QiangGangWindow:      rs.qiangGangWindow,
+		WinnerSeats:          append([]int(nil), rs.winnerSeats...),
+		HuedSeats:            append([]bool(nil), rs.huedSeats...),
+		Ledger:               append([]sichuanxzdd.ScoreEntry(nil), rs.ledger...),
+		GangRecords:          append([]rules.GangRecord(nil), rs.gangRecords...),
+		LastGangFollowUp:     rs.lastGangFollowUp,
+		LastDiscardAfterGang: rs.lastDiscardAfterGang,
+		Hands:                make([][]string, 4),
+		ExchangeTiles:        make([][]string, 4),
 	}
 	if rs.claimWindowOpen {
 		rp.ClaimCandidates = make([]claimCandidatePersist, 0, len(rs.claimCandidates))
@@ -195,29 +198,31 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 		}
 	}
 	rs := &RoundState{
-		roomID:            roomID,
-		ruleID:            ruleID,
-		playerIDs:         rp.PlayerIDs,
-		rule:              rule,
-		wall:              wall.NewFromOrderedTiles(wallTiles),
-		hands:             hands,
-		queBySeat:         append([]int32(nil), rp.QueBySeat...),
-		waitingExchange:   rp.WaitingExchange,
-		waitingQueMen:     rp.WaitingQueMen,
-		exchangeSubmitted: append([]bool(nil), rp.ExchangeDone...),
-		exchangeDirection: rp.ExchangeDir,
-		exchangeSelection: make([][]tile.Tile, 4),
-		queSubmitted:      append([]bool(nil), rp.QueDone...),
-		waitingDiscard:    rp.WaitingDiscard,
-		waitingTsumo:      rp.WaitingTsumo,
-		claimWindowOpen:   rp.ClaimWindowOpen,
-		qiangGangWindow:   rp.QiangGangWindow,
-		turn:              rp.Turn,
-		step:              rp.Step,
-		winnerSeats:       append([]int(nil), rp.WinnerSeats...),
-		huedSeats:         append([]bool(nil), rp.HuedSeats...),
-		totalFanBySeat:    append([]int32(nil), rp.TotalFanBySeat...),
-		gangRecords:       append([]rules.GangRecord(nil), rp.GangRecords...),
+		roomID:               roomID,
+		ruleID:               ruleID,
+		playerIDs:            rp.PlayerIDs,
+		rule:                 rule,
+		wall:                 wall.NewFromOrderedTiles(wallTiles),
+		hands:                hands,
+		queBySeat:            append([]int32(nil), rp.QueBySeat...),
+		waitingExchange:      rp.WaitingExchange,
+		waitingQueMen:        rp.WaitingQueMen,
+		exchangeSubmitted:    append([]bool(nil), rp.ExchangeDone...),
+		exchangeDirection:    rp.ExchangeDir,
+		exchangeSelection:    make([][]tile.Tile, 4),
+		queSubmitted:         append([]bool(nil), rp.QueDone...),
+		waitingDiscard:       rp.WaitingDiscard,
+		waitingTsumo:         rp.WaitingTsumo,
+		claimWindowOpen:      rp.ClaimWindowOpen,
+		qiangGangWindow:      rp.QiangGangWindow,
+		turn:                 rp.Turn,
+		step:                 rp.Step,
+		winnerSeats:          append([]int(nil), rp.WinnerSeats...),
+		huedSeats:            append([]bool(nil), rp.HuedSeats...),
+		ledger:               append([]sichuanxzdd.ScoreEntry(nil), rp.Ledger...),
+		gangRecords:          append([]rules.GangRecord(nil), rp.GangRecords...),
+		lastGangFollowUp:     rp.LastGangFollowUp,
+		lastDiscardAfterGang: rp.LastDiscardAfterGang,
 	}
 	for len(rs.queBySeat) < 4 {
 		rs.queBySeat = append(rs.queBySeat, 0)
@@ -245,8 +250,8 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 			rs.huedSeats[seat] = true
 		}
 	}
-	for len(rs.totalFanBySeat) < 4 {
-		rs.totalFanBySeat = append(rs.totalFanBySeat, 0)
+	if len(rs.ledger) == 0 && len(rp.TotalFanBySeat) > 0 {
+		rs.ledger = legacyLedgerFromTotals(rp.TotalFanBySeat)
 	}
 	if rp.PendingDraw != "" {
 		t, err := tile.Parse(rp.PendingDraw)
@@ -302,6 +307,28 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 		}
 	}
 	return rs, nil
+}
+
+func legacyLedgerFromTotals(totals []int32) []sichuanxzdd.ScoreEntry {
+	out := make([]sichuanxzdd.ScoreEntry, 0, len(totals))
+	for seat, total := range totals {
+		if total == 0 {
+			continue
+		}
+		from, to, amount := -1, seat, total
+		if total < 0 {
+			from, to, amount = seat, -1, -total
+		}
+		out = append(out, sichuanxzdd.ScoreEntry{
+			Reason:     "legacy_total",
+			FromSeat:   from,
+			ToSeat:     to,
+			Amount:     amount,
+			Step:       0,
+			WinnerSeat: -1,
+		})
+	}
+	return out
 }
 
 // RoundViewFromPersistJSON 直接从持久化 JSON 还原等待态摘要，供快照 fallback 使用。

@@ -429,6 +429,45 @@ func clusterClaimCandidatesToClient(candidates []*clusterv1.ClaimCandidate) []*c
 	return out
 }
 
+func clusterSeatScoresToClient(scores []*clusterv1.SeatScore) []*clientv1.SeatScore {
+	out := make([]*clientv1.SeatScore, 0, len(scores))
+	for _, score := range scores {
+		out = append(out, &clientv1.SeatScore{
+			SeatIndex: score.GetSeatIndex(),
+			UserId:    score.GetUserId(),
+			TotalFan:  score.GetTotalFan(),
+			Skipped:   score.GetSkipped(),
+		})
+	}
+	return out
+}
+
+func clusterPenaltiesToClient(penalties []*clusterv1.PenaltyItem) []*clientv1.PenaltyItem {
+	out := make([]*clientv1.PenaltyItem, 0, len(penalties))
+	for _, penalty := range penalties {
+		out = append(out, &clientv1.PenaltyItem{
+			Reason:   penalty.GetReason(),
+			FromSeat: penalty.GetFromSeat(),
+			ToSeat:   penalty.GetToSeat(),
+			Amount:   penalty.GetAmount(),
+		})
+	}
+	return out
+}
+
+func clusterWinnerBreakdownsToClient(items []*clusterv1.WinnerBreakdown) []*clientv1.WinnerBreakdown {
+	out := make([]*clientv1.WinnerBreakdown, 0, len(items))
+	for _, item := range items {
+		out = append(out, &clientv1.WinnerBreakdown{
+			SeatIndex: item.GetSeatIndex(),
+			UserId:    item.GetUserId(),
+			Fan:       item.GetFan(),
+			FanNames:  append([]string(nil), item.GetFanNames()...),
+		})
+	}
+	return out
+}
+
 func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
 	defer func() {
 		_ = stream.CloseSend()
@@ -628,10 +667,13 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 		return marshalClientEnvelope(msgid.Settlement, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body: &clientv1.Envelope_Settlement{Settlement: &clientv1.SettlementNotify{
-				RoomId:        evt.GetRoomId(),
-				WinnerUserIds: append([]string(nil), body.Settlement.GetWinnerUserIds()...),
-				TotalFan:      body.Settlement.GetTotalFan(),
-				DetailText:    body.Settlement.GetDetailText(),
+				RoomId:             evt.GetRoomId(),
+				WinnerUserIds:      append([]string(nil), body.Settlement.GetWinnerUserIds()...),
+				TotalFan:           body.Settlement.GetTotalFan(),
+				SeatScores:         clusterSeatScoresToClient(body.Settlement.GetSeatScores()),
+				Penalties:          clusterPenaltiesToClient(body.Settlement.GetPenalties()),
+				DetailText:         body.Settlement.GetDetailText(),
+				PerWinnerBreakdown: clusterWinnerBreakdownsToClient(body.Settlement.GetPerWinnerBreakdown()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone:

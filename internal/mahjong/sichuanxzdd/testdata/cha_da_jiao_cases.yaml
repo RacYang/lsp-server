@@ -1,0 +1,16 @@
+cases:
+  - name: ting_player_skips_cha_da_jiao
+    hand: [m1, m1, m2, m3, m4, m5, m6, m7, p2, p3, p4, s8, s8]
+    que_suit: p
+    winners: [1]
+    expect_penalty: false
+  - name: no_ting_player_gets_cha_da_jiao
+    hand: [m1, m2, m4, m6, m8, p1, p3, p5, p7, s1, s3, s5, s7]
+    que_suit: m
+    winners: [2]
+    expect_penalty: true
+  - name: hua_zhu_uses_hua_zhu_penalty
+    hand: [m1, m2, m3, p1, p2, p3, s1, s2, s3, s5, s6, s7, s9]
+    que_suit: m
+    winners: [3]
+    expect_reason: 查花猪

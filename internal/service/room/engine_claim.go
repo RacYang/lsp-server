@@ -97,7 +97,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat int, tileText
 		}
 		rs.lastDiscard = 0
 		rs.lastDiscardSeat = -1
-		rs.applyGangScore(seat, gangTile, rules.GangKindMing, fromSeat)
+		appendGangEntries(rs, seat, gangTile, rules.GangKindMing, fromSeat)
 	} else {
 		gangTile, err = tile.Parse(tileText)
 		if err != nil {
@@ -117,7 +117,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat int, tileText
 				return nil, fmt.Errorf("consume self gang tiles: %w", err)
 			}
 		}
-		rs.applyGangScore(seat, gangTile, rules.GangKindAn, -1)
+		appendGangEntries(rs, seat, gangTile, rules.GangKindAn, -1)
 	}
 	rs.turn = seat
 	rs.waitingDiscard = false
@@ -353,39 +353,16 @@ func (rs *RoundState) rawCanClaimHu(seat int) bool {
 		return false
 	}
 	ctx := rules.HuContext{
-		Source:        rules.HuSourceDiscard,
-		PendingTile:   rs.lastDiscard,
-		Discarder:     rs.lastDiscardSeat,
-		WallRemaining: rs.wall.Remaining(),
+		Source:          rules.HuSourceDiscard,
+		PendingTile:     rs.lastDiscard,
+		Discarder:       rs.lastDiscardSeat,
+		ResponsibleSeat: rs.lastDiscardSeat,
+		GangHistory:     append([]rules.GangRecord(nil), rs.gangRecords...),
+		WallRemaining:   rs.wall.Remaining(),
 	}
 	if rs.qiangGangWindow {
 		ctx.Source = rules.HuSourceQiangGang
 	}
 	_, ok := rs.rule.CheckHu(rs.hands[seat], rs.lastDiscard, ctx)
 	return ok
-}
-
-func (rs *RoundState) applyGangScore(seat int, gangTile tile.Tile, kind rules.GangKind, fromSeat int) {
-	if rs == nil || seat < 0 || seat > 3 {
-		return
-	}
-	amount := int32(1)
-	if kind == rules.GangKindAn {
-		amount = 2
-	}
-	for other := 0; other < 4; other++ {
-		if other == seat || rs.isHued(other) {
-			continue
-		}
-		rs.totalFanBySeat[seat] += amount
-		rs.totalFanBySeat[other] -= amount
-	}
-	rs.gangRecords = append(rs.gangRecords, rules.GangRecord{
-		Seat:            seat,
-		Kind:            kind,
-		Tile:            gangTile,
-		FromSeat:        fromSeat,
-		ResponsibleSeat: fromSeat,
-		Step:            rs.step,
-	})
 }

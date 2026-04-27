@@ -54,9 +54,12 @@ func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Break
 	if hu.SevenPairs(c) {
 		b.Add(fan.KindQiDui, 4, "七对")
 	} else {
-		if isDuiDuiHu(c) {
+		switch {
+		case isJiangDui(c):
+			b.Add(fan.KindJiangDui, 4, "将对")
+		case isDuiDuiHu(c):
 			b.Add(fan.KindDuiDuiHu, 2, "对对胡")
-		} else {
+		default:
 			b.Add(fan.KindPingHu, 1, "平胡")
 		}
 	}
@@ -68,6 +71,9 @@ func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Break
 	}
 	if sc.IsGangShangHua {
 		b.Add(fan.KindGangShangKai, 1, "杠上开花")
+	}
+	if sc.IsGangShangPao {
+		b.Add(fan.KindGangShangPao, 1, "杠上炮")
 	}
 	if sc.IsHaiDi {
 		if sc.IsTsumo {
@@ -81,6 +87,16 @@ func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Break
 			b.Add(fan.KindQiangGangHu, 1, "抢杠胡")
 			break
 		}
+	}
+	for i := 0; i < countAnKe(c); i++ {
+		b.Add(fan.KindAnKe, 1, "暗刻")
+	}
+	anGang := countAnGang(sc.GangRecords)
+	for i := 0; i < anGang; i++ {
+		b.Add(fan.KindAnGang, 1, "暗杠")
+	}
+	if anGang >= 2 {
+		b.Add(fan.KindShuangAnGang, 1, "双暗杠")
 	}
 	return b
 }
@@ -127,10 +143,46 @@ func isDuiDuiHu(c hu.Counts) bool {
 	return pairs == 1
 }
 
+func isJiangDui(c hu.Counts) bool {
+	if !isDuiDuiHu(c) {
+		return false
+	}
+	for idx, n := range c {
+		if n == 0 {
+			continue
+		}
+		rank := idx%9 + 1
+		if rank != 2 && rank != 5 && rank != 8 {
+			return false
+		}
+	}
+	return true
+}
+
 func countGen(c hu.Counts) int {
 	n := 0
 	for _, v := range c {
 		if v == 4 {
+			n++
+		}
+	}
+	return n
+}
+
+func countAnKe(c hu.Counts) int {
+	n := 0
+	for _, v := range c {
+		if v == 3 {
+			n++
+		}
+	}
+	return n
+}
+
+func countAnGang(records []rules.GangRecord) int {
+	n := 0
+	for _, record := range records {
+		if record.Kind == rules.GangKindAn {
 			n++
 		}
 	}

@@ -44,6 +44,22 @@ Phase 5.3.0 扩展 `HuContext` / `ScoreContext`，把以下字段纳入规则接
 
 当前 `sichuanxzdd.ScoreFans` 接受扩展后的结构但暂不消费，后续每条血战规则 PR 在这些字段上增量实现。
 
+### 2.1 Phase 5.3 score ledger 与分摊口径
+
+Phase 5.3 将 `RoundState.totalFanBySeat` 替换为结算流水 `ScoreEntry`。房间层只负责把胡牌与杠牌事实追加到流水；`sichuanxzdd.BuildSettlement` 在局末 fold 出座位总分、罚分、退税与 `per_winner_breakdown`。
+
+胡牌分摊口径如下：
+
+- 自摸：未胡的三家各向胡家支付本次番数。
+- 点炮：放炮座位独自向胡家支付本次番数。
+- 抢杠胡：补杠座位作为责任方，按点炮口径支付，并在番种分解中标记「包牌」。
+
+杠分口径如下：
+
+- 明杠、补杠：每个未胡对手向杠牌座位支付 1 分。
+- 暗杠：每个未胡对手向杠牌座位支付 2 分。
+- 退税：花猪玩家退回其已收杠分；流局无听玩家退回其已收暗杠分。
+
 ### 3. `room` 包仍是编排边界
 
 `internal/service/room` 继续负责：

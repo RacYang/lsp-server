@@ -26,7 +26,7 @@ coverage:
     internal/domain/...: 80
     internal/app: 8
     internal/handler: 50
-    internal/service/room: 50
+    internal/service/room: 67
     cmd/all: 45
     cmd/gate: 45
     cmd/lobby: 15

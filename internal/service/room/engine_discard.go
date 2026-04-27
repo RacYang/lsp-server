@@ -44,6 +44,8 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat int, til
 	}
 	rs.waitingDiscard = false
 	rs.currentDraw = 0
+	rs.lastDiscardAfterGang = rs.lastGangFollowUp
+	rs.lastGangFollowUp = false
 	seatIndex := int32(seat) //nolint:gosec // seat 范围固定
 	actionPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("discard-%d", rs.step),
@@ -103,6 +105,7 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 		winTile      tile.Tile
 		source       = rules.HuSourceTsumo
 		nextTurnFrom int
+		payer        = -1
 	)
 	switch {
 	case rs.claimWindowOpen && rs.hasClaimAction(seat, "hu"):
@@ -114,6 +117,7 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 		if rs.qiangGangWindow {
 			source = rules.HuSourceQiangGang
 		}
+		payer = rs.lastDiscardSeat
 		nextTurnFrom = rs.lastDiscardSeat
 	case seat == rs.turn && rs.waitingTsumo:
 		winTile = rs.pendingDraw
@@ -122,19 +126,30 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 		return nil, fmt.Errorf("hu not allowed")
 	}
 	result, ok := rs.rule.CheckHu(rs.hands[seat], winTile, rules.HuContext{
-		Source:        source,
-		PendingTile:   winTile,
-		Discarder:     rs.lastDiscardSeat,
-		WallRemaining: rs.wall.Remaining(),
+		Source:          source,
+		PendingTile:     winTile,
+		Discarder:       rs.lastDiscardSeat,
+		ResponsibleSeat: payer,
+		GangHistory:     append([]rules.GangRecord(nil), rs.gangRecords...),
+		WallRemaining:   rs.wall.Remaining(),
 	})
 	if !ok {
 		return nil, fmt.Errorf("hu not allowed")
 	}
-	fanTotal := rs.rule.ScoreFans(result, rules.ScoreContext{IsTsumo: source == rules.HuSourceTsumo, WallRemaining: rs.wall.Remaining()}).Total
-	rs.totalFanBySeat[seat] = int32(fanTotal) //nolint:gosec // 番数极小
+	breakdown := rs.rule.ScoreFans(result, rules.ScoreContext{
+		GangRecords:     append([]rules.GangRecord(nil), rs.gangRecords...),
+		IsTsumo:         source == rules.HuSourceTsumo,
+		IsGangShangHua:  source == rules.HuSourceTsumo && rs.lastGangFollowUp,
+		IsGangShangPao:  source != rules.HuSourceTsumo && rs.lastDiscardAfterGang,
+		ResponsibleSeat: payer,
+		WallRemaining:   rs.wall.Remaining(),
+	})
+	appendHuEntries(rs, seat, breakdown.Total, source, payer, breakdown)
 	rs.markHued(seat)
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
+	rs.lastGangFollowUp = false
+	rs.lastDiscardAfterGang = false
 	rs.waitingTsumo = false
 	rs.waitingDiscard = false
 	rs.clearClaimWindow()

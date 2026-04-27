@@ -531,11 +531,12 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 		settlement := env.GetSettlement()
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_Settlement{
 			Settlement: &clusterv1.SettlementEvent{
-				WinnerUserIds: append([]string(nil), settlement.GetWinnerUserIds()...),
-				TotalFan:      settlement.GetTotalFan(),
-				DetailText:    settlement.GetDetailText(),
-				SeatScores:    clientSeatScoresToCluster(settlement.GetSeatScores()),
-				Penalties:     clientPenaltiesToCluster(settlement.GetPenalties()),
+				WinnerUserIds:      append([]string(nil), settlement.GetWinnerUserIds()...),
+				TotalFan:           settlement.GetTotalFan(),
+				DetailText:         settlement.GetDetailText(),
+				SeatScores:         clientSeatScoresToCluster(settlement.GetSeatScores()),
+				Penalties:          clientPenaltiesToCluster(settlement.GetPenalties()),
+				PerWinnerBreakdown: clientWinnerBreakdownsToCluster(settlement.GetPerWinnerBreakdown()),
 			},
 		}
 	default:
@@ -602,6 +603,19 @@ func clusterPenaltiesToClient(penalties []*clusterv1.PenaltyItem) []*clientv1.Pe
 			FromSeat: penalty.GetFromSeat(),
 			ToSeat:   penalty.GetToSeat(),
 			Amount:   penalty.GetAmount(),
+		})
+	}
+	return out
+}
+
+func clientWinnerBreakdownsToCluster(items []*clientv1.WinnerBreakdown) []*clusterv1.WinnerBreakdown {
+	out := make([]*clusterv1.WinnerBreakdown, 0, len(items))
+	for _, item := range items {
+		out = append(out, &clusterv1.WinnerBreakdown{
+			SeatIndex: item.GetSeatIndex(),
+			UserId:    item.GetUserId(),
+			Fan:       item.GetFan(),
+			FanNames:  append([]string(nil), item.GetFanNames()...),
 		})
 	}
 	return out

@@ -1,0 +1,12 @@
+cases:
+  - name: hua_zhu_refunds_ming_gang_income
+    skipped_seat: 1
+    ledger:
+      - {reason: gang_ming, from: 0, to: 1, amount: 1}
+    expect_penalty: {reason: refund_ming_gang, from: 1, to: 0, amount: 1}
+  - name: no_ting_draw_refunds_an_gang_income
+    no_ting_seat: 2
+    draw: true
+    ledger:
+      - {reason: gang_an, from: 3, to: 2, amount: 2}
+    expect_penalty: {reason: refund_an_gang, from: 2, to: 3, amount: 2}

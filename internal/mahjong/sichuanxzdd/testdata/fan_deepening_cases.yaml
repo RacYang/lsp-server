@@ -1,0 +1,15 @@
+cases:
+  - name: jiang_dui
+    win: [m2, m2, m2, m5, m5, m5, p2, p2, p2, p5, p5, p5, s8, s8]
+    expect_fans: [将对]
+  - name: an_ke
+    win: [m1, m1, m1, m2, m3, m4, p2, p3, p4, s5, s6, s7, s9, s9]
+    expect_fans: [暗刻]
+  - name: an_gang
+    gang_records:
+      - {seat: 0, kind: an, tile: m5}
+    expect_fans: [暗杠]
+  - name: gang_shang_pao
+    score_context:
+      is_gang_shang_pao: true
+    expect_fans: [杠上炮]

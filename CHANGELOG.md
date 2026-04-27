@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- Phase 5.3：血战规则深化，新增听牌检测、查大叫精准化、score ledger 结算流水、自摸/点炮/抢杠胡分摊、杠分退税、包牌标记、`per_winner_breakdown` 客户端透传与将对/暗刻/暗杠等番种。
 - BREAKING：Phase 5 重置 `proto-baseline`；`client.v1.Envelope` 追加 `idempotency_key`，`SnapshotNotify` / `SnapshotRoomResponse` 追加 `claim_candidates`，`cluster.v1.SettlementEvent` 补齐 `seat_scores` / `penalties` / `per_winner_breakdown`，跨进程结算不再丢失结构化罚分。
 - Phase 5：`room` 交互引擎按职责拆分，统一 `sichuanxzdd` 包名，并为 Redis `snapmeta.round_json` 增加 `schema_version`，未知未来版本恢复时降级为重新准备而非阻断 room 启动。
 - Phase 5：血战主链路支持胡后续行、点炮胡候选、抢杠胡窗口、胡/杠/碰优先级裁决、杠流水与更多番种上下文，删除 Phase 4 工程步数截断。

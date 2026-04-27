@@ -74,7 +74,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	}
 	out = append(out, Notification{Kind: KindStartGame, Payload: startPayload})
 
-	totalFanBySeat := make([]int32, 4)
+	ledger := make([]sichuanxzdd.ScoreEntry, 0, 8)
 	winnerSeat := -1
 	turn := 0
 	for step := 0; step < autoRoundStepLimit && w.Remaining() > 0; step++ {
@@ -95,8 +95,13 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		out = append(out, Notification{Kind: KindDrawTile, Payload: drawPayload})
 
 		if result, ok := rule.CheckHu(hands[turn], drawn, rules.HuContext{}); ok {
-			fanTotal := rule.ScoreFans(result, rules.ScoreContext{}).Total
-			totalFanBySeat[turn] = int32(fanTotal) //nolint:gosec // G115：当前番型总和极小，远低于 int32 上限
+			breakdown := rule.ScoreFans(result, rules.ScoreContext{IsTsumo: true})
+			for other := 0; other < 4; other++ {
+				if other == turn {
+					continue
+				}
+				ledger = append(ledger, huScoreEntry(sichuanxzdd.ReasonHuTsumo, other, turn, int32(breakdown.Total), step, turn, fanLabels(breakdown))) //nolint:gosec // 番数极小
+			}
 			winnerSeat = turn
 			huPayload, err := marshalEnvelope(&clientv1.Envelope{
 				ReqId: fmt.Sprintf("hu-%d", step),
@@ -133,7 +138,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	if winnerSeat >= 0 {
 		winnerSeats = append(winnerSeats, winnerSeat)
 	}
-	seatScores, penalties, detail := sichuanxzdd.BuildSettlement(playerIDs, hands, queBySeat, winnerSeats, totalFanBySeat)
+	seatScores, penalties, breakdowns, detail := sichuanxzdd.BuildSettlement(playerIDs, hands, queBySeat, ledger, winnerSeats)
 	winnerIDs := make([]string, 0, 1)
 	if winnerSeat >= 0 {
 		winnerIDs = append(winnerIDs, playerIDs[winnerSeat])
@@ -142,12 +147,13 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		ReqId: "settlement",
 		Body: &clientv1.Envelope_Settlement{
 			Settlement: &clientv1.SettlementNotify{
-				RoomId:        roomID,
-				WinnerUserIds: winnerIDs,
-				TotalFan:      sumInt32(totalFanBySeat),
-				SeatScores:    seatScores,
-				Penalties:     penalties,
-				DetailText:    detail,
+				RoomId:             roomID,
+				WinnerUserIds:      winnerIDs,
+				TotalFan:           sumPositiveSeatScores(seatScores),
+				SeatScores:         seatScores,
+				Penalties:          penalties,
+				DetailText:         detail,
+				PerWinnerBreakdown: breakdowns,
 			},
 		},
 	})

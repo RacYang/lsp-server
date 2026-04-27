@@ -1,0 +1,26 @@
+cases:
+  - name: tsumo_three_payers
+    winner: 0
+    source: tsumo
+    fan: 2
+    expect_entries:
+      - {from: 1, to: 0, amount: 2}
+      - {from: 2, to: 0, amount: 2}
+      - {from: 3, to: 0, amount: 2}
+  - name: discard_single_payer
+    winner: 2
+    source: discard
+    payer: 1
+    fan: 3
+    expect_entries:
+      - {from: 1, to: 2, amount: 3}
+  - name: qiang_gang_single_responsible_seat
+    winner: 3
+    source: qiang_gang
+    payer: 0
+    fan: 4
+    expect_fan_name: 包牌
+  - name: an_gang_all_active_payers
+    seat: 1
+    gang_kind: an
+    amount_per_payer: 2

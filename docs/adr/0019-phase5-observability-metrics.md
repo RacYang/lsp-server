@@ -18,6 +18,7 @@ Phase 5 引入血战完整化、actor 有界队列、自动托管与重连恢复
 - `lsp_actor_queue_depth{room}`：暴露房间 actor mailbox 当前深度。
 - `lsp_storage_op_seconds{store,op,result}`：记录 Redis/PostgreSQL 关键操作耗时，用 histogram 支持 p99 观察。
 - `lsp_rate_limited_total{layer}`、`lsp_idempotent_replay_total`、`lsp_unknown_msg_total`：接通 Phase 5.5 限流、幂等与未知消息观测。
+- `lsp_settlement_penalty_total{reason}`：按查花猪、查大叫、退税等局末结算条目观察规则异常与玩法分布。
 
 `/metrics` 仍使用 Prometheus 默认 registry，并在 obs 启动时显式确保 Go collector 与 Process collector 注册。
 

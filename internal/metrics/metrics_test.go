@@ -11,3 +11,7 @@ func TestObserveStorage(t *testing.T) {
 	ObserveStorage("test", "ok", started, nil)
 	ObserveStorage("test", "err", started, errors.New("boom"))
 }
+
+func TestSettlementPenaltyTotal(t *testing.T) {
+	SettlementPenaltyTotal.WithLabelValues("查大叫").Inc()
+}

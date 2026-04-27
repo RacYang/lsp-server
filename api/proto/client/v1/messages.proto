@@ -158,6 +158,8 @@ message SettlementNotify {
   repeated PenaltyItem penalties = 5;
   // 可读的半结构化摘要，供客户端先展示，后续可逐步结构化。
   string detail_text = 6;
+  // 每个胡牌玩家的番种分解，字段与 cluster.v1.WinnerBreakdown 对齐。
+  repeated WinnerBreakdown per_winner_breakdown = 7;
 }
 
 // SeatScore 表示某玩家在本局结算中的番数/胜负摘要。
@@ -174,6 +176,14 @@ message PenaltyItem {
   int32 from_seat = 2;
   int32 to_seat = 3;
   int32 amount = 4;
+}
+
+// WinnerBreakdown 表示某个胡牌玩家的番种分解。
+message WinnerBreakdown {
+  int32 seat_index = 1;
+  string user_id = 2;
+  int32 fan = 3;
+  repeated string fan_names = 4;
 }
 
 // HeartbeatRequest/Response 用于长连接保活，载荷可为空。
