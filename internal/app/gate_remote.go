@@ -23,6 +23,7 @@ import (
 	"racoo.cn/lsp/internal/cluster/router"
 	"racoo.cn/lsp/internal/config"
 	"racoo.cn/lsp/internal/handler"
+	"racoo.cn/lsp/internal/net/frame"
 	"racoo.cn/lsp/internal/net/msgid"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/internal/store/postgres"
@@ -184,6 +185,95 @@ func (g *remoteRoomGateway) Ready(ctx context.Context, roomID, userID string) (f
 	return nil, nil
 }
 
+func (g *remoteRoomGateway) Leave(_ context.Context, _, _ string) (func(), error) {
+	if g == nil {
+		return nil, fmt.Errorf("nil remote room gateway")
+	}
+	return nil, fmt.Errorf("集群模式暂不支持离房")
+}
+
+// Discard 将当前轮次出牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
+func (g *remoteRoomGateway) Discard(ctx context.Context, roomID, userID, tile string) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_Discard{Discard: &clusterv1.DiscardEvent{Tile: tile}},
+	})
+}
+
+// Pong 将碰牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
+func (g *remoteRoomGateway) Pong(ctx context.Context, roomID, userID string) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_Pong{Pong: &clusterv1.PongEvent{}},
+	})
+}
+
+// Gang 将杠牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
+func (g *remoteRoomGateway) Gang(ctx context.Context, roomID, userID, tile string) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_Gang{Gang: &clusterv1.GangEvent{Tile: tile}},
+	})
+}
+
+// Hu 将胡牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
+func (g *remoteRoomGateway) Hu(ctx context.Context, roomID, userID string) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_Hu{Hu: &clusterv1.HuEvent{}},
+	})
+}
+
+func (g *remoteRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body: &clusterv1.ApplyEventRequest_ExchangeThree{ExchangeThree: &clusterv1.ExchangeThreeEvent{
+			Tiles:     append([]string(nil), tiles...),
+			Direction: direction,
+		}},
+	})
+}
+
+func (g *remoteRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_QueMen{QueMen: &clusterv1.QueMenEvent{Suit: suit}},
+	})
+}
+
+func (g *remoteRoomGateway) applyRoomEvent(ctx context.Context, req *clusterv1.ApplyEventRequest) (func(), error) {
+	if g == nil {
+		return nil, fmt.Errorf("nil remote room gateway")
+	}
+	if req == nil {
+		return nil, fmt.Errorf("nil apply event request")
+	}
+	if err := g.EnsureRoomEventSubscription(ctx, req.GetRoomId(), ""); err != nil {
+		logx.Warn(ctx, "动作前订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", req.GetUserId(), "room_id", req.GetRoomId(), "err", err.Error())
+	}
+	roomClient, _, err := g.roomClientForRoom(ctx, req.GetRoomId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetError() != "" {
+		return nil, errors.New(resp.GetError())
+	}
+	if !resp.GetAccepted() {
+		return nil, fmt.Errorf("room apply event rejected")
+	}
+	return nil, nil
+}
+
 // EnsureRoomEventSubscription 建立对房间 gRPC 事件流的订阅；sinceCursor 传给 room 用于 PG 重放。
 func (g *remoteRoomGateway) EnsureRoomEventSubscription(ctx context.Context, roomID, sinceCursor string) error {
 	if g == nil {
@@ -300,11 +390,15 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		return nil, &handler.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: snapResp.GetError()}
 	}
 	snap := &clientv1.SnapshotNotify{
-		RoomId:        srec.RoomID,
-		PlayerIds:     append([]string(nil), snapResp.GetPlayerIds()...),
-		QueSuitBySeat: append([]int32(nil), snapResp.GetQueSuitBySeat()...),
-		Cursor:        snapResp.GetCursor(),
-		State:         snapResp.GetState(),
+		RoomId:           srec.RoomID,
+		PlayerIds:        append([]string(nil), snapResp.GetPlayerIds()...),
+		QueSuitBySeat:    append([]int32(nil), snapResp.GetQueSuitBySeat()...),
+		Cursor:           snapResp.GetCursor(),
+		State:            snapResp.GetState(),
+		ActingSeat:       snapResp.GetActingSeat(),
+		WaitingAction:    snapResp.GetWaitingAction(),
+		PendingTile:      snapResp.GetPendingTile(),
+		AvailableActions: append([]string(nil), snapResp.GetAvailableActions()...),
 	}
 	if snap.GetState() == "closed" {
 		if fallback, ok, ferr := g.loadSettlementFallback(ctx, uid, srec.RoomID); ferr != nil {
@@ -342,14 +436,15 @@ func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerS
 			logx.Warn(context.Background(), "房间事件转客户端推送失败", "trace_id", "", "user_id", "", "room_id", roomID, "err", err.Error())
 			continue
 		}
+		var delivered []string
 		if g.hub != nil {
-			g.hub.Broadcast(roomID, msgID, payload)
+			delivered = g.hub.BroadcastDeliveredUsers(roomID, frame.Encode(msgID, payload))
 		}
-		if g.sess != nil && g.hub != nil && evt.GetCursor() != "" {
+		if g.sess != nil && evt.GetCursor() != "" {
 			cur := evt.GetCursor()
-			g.hub.IterRoomUsers(roomID, func(uid string) {
+			for _, uid := range delivered {
 				_ = g.sess.UpdateCursor(context.Background(), uid, cur)
-			})
+			}
 		}
 	}
 }

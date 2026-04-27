@@ -31,10 +31,13 @@ date: 2026-04-22
 - `room` 侧 `StreamEvents`：先按 `since_cursor` 从 PG `ListEventsSince` 重放历史事件，再注册 live 订阅并按 cursor 去重接续内存尾流；保证 `snapshot_cursor` 之后的事件在 replay/live cutover 中不重复、不漏发。  
 - 若客户端本地 `last_client_cursor` 已晚于 `snapshot_cursor`，`gate` 可对下游推送按 `req_id`/cursor 去重。
 
-### 3. room 进程重启
+### 3. room 进程重启与最小牌局恢复
 
 - 归属以 etcd 为准（[ADR-0008](0008-cluster-topology-control-data-plane.md)、[ADR-0011](0011-room-affinity-routing.md)）。  
-- `room` 进程启动后，对当前节点 claim 的活跃 `room_id`：读 Redis `snapmeta`、PG `game_summaries` 与 `room_events` 推导到一致 `seq` 的**可恢复简化局况**并重建单房 actor；恢复完成前对该房拒绝 `SnapshotRoom` / `StreamEvents` / `ApplyEvent` 或返回 `ERROR_CODE_RECONNECTING`。当前基线不尝试完整逐手牌复原，而是恢复到可继续重连/继续准备/继续补帧的最小一致状态。
+- `room` 进程启动后，对当前节点 claim 的活跃 `room_id`：读 Redis `snapmeta`、PG `game_summaries` 与 `room_events` 推导到一致 `seq` 的最小一致状态并重建单房 actor；恢复完成前对该房拒绝 `SnapshotRoom` / `StreamEvents` / `ApplyEvent` 或返回 `ERROR_CODE_RECONNECTING`。
+- `snapmeta` 中的 `round_json` 保存进行中局的最小权威事实：轮到谁、是否处于自摸待决、碰/杠抢答候选窗口、四家手牌、剩余牌墙、定缺、已累计番数。
+- 恢复后保证继续处理 `discard_req` / `hu_req` / 合法的 `pong_req` / `gang_req`，并通过 `StreamEvents(since_cursor=snapshot_cursor)` 让客户端补齐可见历史。
+- 碰/杠抢答窗口按候选座位与候选动作恢复；更复杂的弃牌后胡牌优先级、过手限制等规则仍通过后续 ADR 收敛。
 
 ### 4. 客户端可见结果
 

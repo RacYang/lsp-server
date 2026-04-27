@@ -1,5 +1,7 @@
 package room
 
+import "fmt"
+
 // Room 为房间聚合根（Phase 1 内存版），包含状态机与座位绑定。
 type Room struct {
 	ID        string
@@ -40,6 +42,31 @@ func (r *Room) JoinAutoSeat(userID string) (int, bool) {
 		}
 	}
 	return -1, false
+}
+
+// Leave 将玩家移出房间；开局后不允许离房，避免破坏进行中局面。
+func (r *Room) Leave(userID string) error {
+	if r == nil || userID == "" {
+		return nil
+	}
+	if r.FSM != nil {
+		switch r.FSM.State() {
+		case StatePlaying, StateSettling, StateClosed:
+			return fmt.Errorf("room not leaveable in state %s", r.FSM.State())
+		}
+	}
+	for i := 0; i < 4; i++ {
+		if r.PlayerIDs[i] != userID {
+			continue
+		}
+		r.PlayerIDs[i] = ""
+		r.Ready[i] = false
+		if r.FSM != nil && r.FSM.State() == StateReady {
+			return r.FSM.Transition(StateWaiting)
+		}
+		return nil
+	}
+	return fmt.Errorf("not in room")
 }
 
 // SetReady 标记座位准备状态；若四人全准备则切到 ready 态。

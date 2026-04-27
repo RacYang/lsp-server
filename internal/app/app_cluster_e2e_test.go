@@ -55,10 +55,7 @@ func TestClusterProcessesFourPlayersReceiveSettlement(t *testing.T) {
 		sendReadyAndReadResp(t, conns[i])
 	}
 
-	var lastSn *clientv1.SettlementNotify
-	for _, c := range conns {
-		lastSn = readUntilSettlement(t, c, 64)
-	}
+	lastSn := drivePlayersUntilSettlement(t, conns)
 	if lastSn == nil || lastSn.GetRoomId() != roomID {
 		t.Fatalf("跨进程结算房间号不一致: %+v", lastSn)
 	}
@@ -165,11 +162,9 @@ func TestClusterReconnectLoginWithSessionToken(t *testing.T) {
 	for i := range conns {
 		sendReadyAndReadResp(t, conns[i])
 	}
-	for _, c := range conns {
-		sn := readUntilSettlement(t, c, 96)
-		if sn == nil || sn.GetRoomId() != roomID {
-			t.Fatalf("结算房间号不一致: %+v", sn)
-		}
+	sn := drivePlayersUntilSettlement(t, conns)
+	if sn == nil || sn.GetRoomId() != roomID {
+		t.Fatalf("结算房间号不一致: %+v", sn)
 	}
 }
 

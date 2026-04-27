@@ -16,7 +16,7 @@ import (
 
 func TestHubNilBroadcast(t *testing.T) {
 	var h *Hub
-	h.Broadcast("r1", 1, []byte{1})
+	h.Broadcast("r1", []byte{1})
 }
 
 func TestHubNilRegister(t *testing.T) {
@@ -95,7 +95,7 @@ func TestHubBroadcastTwoClients(t *testing.T) {
 	h.Register("b", "room1", sc1)
 
 	want := frame.Encode(9, []byte{1, 2, 3})
-	h.Broadcast("room1", 9, []byte{1, 2, 3})
+	h.Broadcast("room1", want)
 
 	_ = ca.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_ = cb.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -109,6 +109,18 @@ func TestHubBroadcastTwoClients(t *testing.T) {
 	}
 	if string(gotA) != string(want) || string(gotB) != string(want) {
 		t.Fatalf("帧不一致 lenA=%d lenB=%d", len(gotA), len(gotB))
+	}
+}
+
+func TestHubUnregister(t *testing.T) {
+	h := NewHub()
+	h.Register("u1", "room1", nil)
+	h.Unregister("u1", "room1")
+	if _, ok := h.users["u1"]; ok {
+		t.Fatal("user should be removed")
+	}
+	if _, ok := h.rooms["room1"]; ok {
+		t.Fatal("room entry should be removed when empty")
 	}
 }
 

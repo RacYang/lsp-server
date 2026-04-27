@@ -34,6 +34,27 @@ func (f *fakeResumeGateway) Join(_ context.Context, _, _ string) (int, error) { 
 func (f *fakeResumeGateway) Ready(_ context.Context, _, _ string) (func(), error) {
 	return nil, nil
 }
+func (f *fakeResumeGateway) Leave(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (f *fakeResumeGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
+	return nil, nil
+}
+func (f *fakeResumeGateway) QueMen(_ context.Context, _, _ string, _ int32) (func(), error) {
+	return nil, nil
+}
+func (f *fakeResumeGateway) Discard(_ context.Context, _, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (f *fakeResumeGateway) Pong(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (f *fakeResumeGateway) Gang(_ context.Context, _, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (f *fakeResumeGateway) Hu(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
 func (f *fakeResumeGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	if f.resumeErr != nil {
 		return nil, f.resumeErr
@@ -57,6 +78,25 @@ func (g *joinStubGateway) Join(_ context.Context, _, _ string) (int, error) {
 }
 
 func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) { return nil, nil }
+func (g *joinStubGateway) Leave(_ context.Context, _, _ string) (func(), error) { return nil, nil }
+func (g *joinStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
+	return nil, nil
+}
+func (g *joinStubGateway) QueMen(_ context.Context, _, _ string, _ int32) (func(), error) {
+	return nil, nil
+}
+func (g *joinStubGateway) Discard(_ context.Context, _, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (g *joinStubGateway) Pong(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (g *joinStubGateway) Gang(_ context.Context, _, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (g *joinStubGateway) Hu(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
 func (g *joinStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -196,6 +236,106 @@ func TestHandleWebSocketUnknownMsgID(t *testing.T) {
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("unknown msg should not respond")
 	}
+}
+
+func TestHandleWebSocketRejectsCrossOriginByDefault(t *testing.T) {
+	svc := roomsvc.NewService(roomsvc.NewLobby())
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	defer srv.Close()
+
+	u := "ws" + strings.TrimPrefix(srv.URL, "http")
+	header := http.Header{"Origin": []string{"https://evil.example"}}
+	conn, resp, err := websocket.DefaultDialer.Dial(u, header)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	require.Error(t, err)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+}
+
+func TestHandleWebSocketAllowsConfiguredOrigin(t *testing.T) {
+	svc := roomsvc.NewService(roomsvc.NewLobby())
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{
+		Rooms:          NewLocalRoomGateway(svc, hub, nil),
+		Hub:            hub,
+		AllowedOrigins: []string{"https://trusted.example"},
+	})
+	defer srv.Close()
+
+	u := "ws" + strings.TrimPrefix(srv.URL, "http")
+	header := http.Header{"Origin": []string{"https://trusted.example"}}
+	conn, resp, err := websocket.DefaultDialer.Dial(u, header)
+	require.NoError(t, err)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	_ = conn.Close()
+}
+
+func TestHandleWebSocketHeartbeat(t *testing.T) {
+	svc := roomsvc.NewService(roomsvc.NewLobby())
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+
+	req := &clientv1.Envelope{ReqId: "hb", Body: &clientv1.Envelope_HeartbeatReq{
+		HeartbeatReq: &clientv1.HeartbeatRequest{ClientTsMs: 1},
+	}}
+	pb, _ := proto.Marshal(req)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.HeartbeatReq, pb)))
+	env := readEnv(t, conn, msgid.HeartbeatResp)
+	require.NotZero(t, env.GetHeartbeatResp().GetServerTsMs())
+}
+
+func TestHandleWebSocketLeaveRoom(t *testing.T) {
+	rcli, _ := newTestRedisClient(t)
+	sess := session.NewManager(rcli)
+	lobby := roomsvc.NewLobby()
+	hub := session.NewHub()
+	svc := roomsvc.NewService(lobby)
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, sess), Hub: hub, Session: sess})
+	defer srv.Close()
+
+	conn := dialWS(t, srv)
+	login := &clientv1.Envelope{ReqId: "a", Body: &clientv1.Envelope_LoginReq{
+		LoginReq: &clientv1.LoginRequest{Nickname: "玩家"},
+	}}
+	pb, _ := proto.Marshal(login)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	loginResp := readEnv(t, conn, msgid.LoginResp)
+	uid := loginResp.GetLoginResp().GetUserId()
+
+	jr := &clientv1.Envelope{ReqId: "b", Body: &clientv1.Envelope_JoinRoomReq{
+		JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "room-leave"},
+	}}
+	pb, _ = proto.Marshal(jr)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
+	readEnv(t, conn, msgid.JoinRoomResp)
+
+	req := &clientv1.Envelope{ReqId: "c", Body: &clientv1.Envelope_LeaveRoomReq{
+		LeaveRoomReq: &clientv1.LeaveRoomRequest{},
+	}}
+	pb, _ = proto.Marshal(req)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LeaveRoomReq, pb)))
+	env := readEnv(t, conn, msgid.LeaveRoomResp)
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, env.GetLeaveRoomResp().GetErrorCode())
+
+	token := loginResp.GetLoginResp().GetSessionToken()
+	_, rec, err := sess.Resume(context.Background(), token)
+	require.NoError(t, err)
+	require.Empty(t, rec.RoomID)
+	stillRegistered := false
+	hub.IterRoomUsers("room-leave", func(userID string) {
+		if userID == uid {
+			stillRegistered = true
+		}
+	})
+	require.False(t, stillRegistered)
 }
 
 func TestHandleWebSocketJoinRoomFull(t *testing.T) {

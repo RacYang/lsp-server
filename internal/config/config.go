@@ -11,6 +11,7 @@ import (
 // Config 为进程级配置快照。
 type Config struct {
 	ServerAddr       string
+	WSAllowedOrigins []string
 	RuleID           string
 	ClusterLobbyAddr string
 	ClusterRoomAddr  string
@@ -37,6 +38,7 @@ func Load(path string) (Config, error) {
 	}
 	return Config{
 		ServerAddr:       v.GetString("server.addr"),
+		WSAllowedOrigins: v.GetStringSlice("server.ws_allowed_origins"),
 		RuleID:           v.GetString("rule.default_id"),
 		ClusterLobbyAddr: v.GetString("cluster.lobby_addr"),
 		ClusterRoomAddr:  v.GetString("cluster.room_addr"),

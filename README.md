@@ -8,7 +8,8 @@
 - Phase 1：单进程川麻血战到底 MVP。
 - Phase 2：`gate` / `lobby` / `room` 拆分、etcd + Redis 集群基线。
 - Phase 3：PostgreSQL 事件日志、Redis 会话与快照元数据、登录重连、`SnapshotRoom`/`StreamEvents` 游标重放、Prometheus 指标与健康检查（可选 `obs.addr`）。
-- Phase 3+：更多规则集与运维深化。
+- Phase 4：交互式房间主循环基线，补齐 `HeartbeatReq` / `LeaveRoomReq`、换三张/定缺确认链路，以及碰/杠多候选抢答提示、确定性裁决与托管推进。
+- Phase 4+：更多规则集与运维深化。
 
 ## 快速启动
 
@@ -39,6 +40,7 @@
 - `make bootstrap`
 - `make generate`
 - `make verify`
+- `RUN_INTEGRATION=1 make verify-test-integration`（执行带 `integration` tag 的房间重启恢复回放）
 - `go test ./internal/app -run TestClusterProcessesFourPlayersReceiveSettlement -v`（跨进程四人完整回放冒烟）
 - `make verify-git-repo`（仓库卫生与 hook/CI 映射；亦由 `verify` / `verify-fast` 调用）
 - `make verify-pre-commit`（本地提交前：`verify-git-local` + `verify-fast`，由 `pre-commit` 调用）

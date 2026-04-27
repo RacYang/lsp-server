@@ -46,3 +46,27 @@ func TestJoinAutoSeatSameUserKeepsSeat(t *testing.T) {
 		t.Fatalf("unexpected seats: %#v", r.PlayerIDs)
 	}
 }
+
+func TestLeaveMovesReadyRoomBackToWaiting(t *testing.T) {
+	r := NewRoom("r3")
+	for i := 0; i < 4; i++ {
+		if _, ok := r.JoinAutoSeat(fmt.Sprintf("u%d", i)); !ok {
+			t.Fatalf("join seat %d", i)
+		}
+		if err := r.SetReady(i, true); err != nil {
+			t.Fatalf("ready %d: %v", i, err)
+		}
+	}
+	if r.FSM.State() != StateReady {
+		t.Fatalf("want ready got %s", r.FSM.State())
+	}
+	if err := r.Leave("u1"); err != nil {
+		t.Fatal(err)
+	}
+	if r.FSM.State() != StateWaiting {
+		t.Fatalf("want waiting got %s", r.FSM.State())
+	}
+	if r.PlayerIDs[1] != "" || r.Ready[1] {
+		t.Fatalf("seat should be cleared: %#v %#v", r.PlayerIDs, r.Ready)
+	}
+}

@@ -70,6 +70,22 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 
 	_, err = gw.Join(ctx, "resume-room", "resume-user")
 	require.NoError(t, err)
+	for _, uid := range []string{"u2", "u3", "u4"} {
+		_, err = gw.Join(ctx, "resume-room", uid)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"resume-user", "u2", "u3", "u4"} {
+		_, err = gw.Ready(ctx, "resume-room", uid)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"resume-user", "u2", "u3", "u4"} {
+		_, err = gw.ExchangeThree(ctx, "resume-room", uid, nil, 0)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"resume-user", "u2", "u3", "u4"} {
+		_, err = gw.QueMen(ctx, "resume-room", uid, 0)
+		require.NoError(t, err)
+	}
 	require.NoError(t, mgr.BindRoom(ctx, "resume-user", "resume-room"))
 
 	res, err := gw.Resume(ctx, tok)
@@ -78,6 +94,7 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 	require.Equal(t, "resume-room", res.RoomID)
 	require.NotNil(t, res.Snapshot)
 	require.Equal(t, "resume-room", res.Snapshot.GetRoomId())
+	require.Len(t, res.Snapshot.GetQueSuitBySeat(), 4)
 }
 
 func TestLocalRoomGatewayReadyBroadcastSkippedWhenHubNil(t *testing.T) {

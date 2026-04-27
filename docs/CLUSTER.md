@@ -8,14 +8,14 @@ Phase 2 已从单进程演进为可拆分的 `gate` / `lobby` / `room` 三进程
 
 - `gate`：WebSocket 接入、会话注册、客户端帧编解码、房间事件转推。
 - `lobby`：`cluster.v1.LobbyService`，负责建房、进房与房间元数据查询。
-- `room`：`cluster.v1.RoomService`，负责单房事件循环、自动回放、结算与事件流输出。
+- `room`：`cluster.v1.RoomService`，负责单房事件循环、动作裁决、结算与事件流输出。
 
 ## 进程关系
 
 1. 客户端连接到 `gate` 的 `/ws`。
 2. `gate` 通过 `LobbyService.JoinRoom` 获取座位与房间归属。
 3. `gate` 对目标房间建立 `RoomService.StreamEvents` 订阅。
-4. 客户端 `ready` 后，`gate` 调用 `RoomService.ApplyEvent`。
+4. 客户端 `ready` / `discard` / `pong` / `gang` / `hu` 都经 `gate` 映射到 `RoomService.ApplyEvent`。
 5. `room` 产出的局内事件经 gRPC 流返回给 `gate`，再被映射为 `client.v1` 推送。
 
 ## 路由
@@ -26,7 +26,7 @@ Phase 2 已从单进程演进为可拆分的 `gate` / `lobby` / `room` 三进程
 
 - `cmd/all`：单进程聚合模式，便于开发期快速冒烟。
 - `cmd/gate`、`cmd/lobby`、`cmd/room`：独立进程模式，供 Phase 2 跨进程回放与后续部署使用。
-- 当前仓库已包含跨进程四人完整对局冒烟测试，验证 `gate -> lobby/room gRPC -> WebSocket 推送` 主链路。
+- 当前仓库已包含跨进程四人交互式对局冒烟测试，验证 `gate -> lobby/room gRPC -> WebSocket 推送 -> 客户端动作回流` 主链路。
 
 ## Phase 3 断线重连（概要）
 
@@ -37,7 +37,18 @@ Phase 2 已从单进程演进为可拆分的 `gate` / `lobby` / `room` 三进程
 
 ### 房间进程冷启动与 etcd
 
-`room` 在配置 `etcd.endpoints` 时会先向 etcd 注册 `room-local` 节点，再按 ownership 枚举归属自己的活跃房间；恢复时会结合 Redis `snapmeta`、PG `game_summaries` 与 `room_events` 推导座位与阶段后重建 actor，并在恢复完成前拒绝 `SnapshotRoom` / `StreamEvents` / `ApplyEvent`。当前限制是：由于基线房间内存模型尚未持久化完整手牌与进行中动作，重启后能恢复到“可继续重连/继续准备”的简化局况，但还不是完整逐事件复原的生产态实现。
+`room` 在配置 `etcd.endpoints` 时会先向 etcd 注册 `room-local` 节点，再按 ownership 枚举归属自己的活跃房间；恢复时会结合 Redis `snapmeta`、PG `game_summaries` 与 `room_events` 推导座位与阶段后重建 actor，并在恢复完成前拒绝 `SnapshotRoom` / `StreamEvents` / `ApplyEvent`。
+
+Phase 4 起，Redis `snapmeta` 追加 `round_json`，保存进行中牌局的最小可恢复事实：
+
+- 当前轮到谁出牌。
+- 当前是否处于自摸待决窗口。
+- 最近一次弃牌与可中断的抢答窗口。
+- 抢答窗口内的候选座位与可执行动作。
+- 四家手牌、牌墙剩余顺序、定缺结果。
+- 已累计番数与当前赢家座位。
+
+恢复策略是：先用 `snapmeta` 直接重建最小运行态，再由 `room_events` / `StreamEvents` 继续补齐客户端可见历史。若 `round_json` 缺失，则不会再把房间错误恢复成不可交互的 `playing`，而是降级回可重新准备的阶段。`pong` / `gang` 抢答窗口会随候选座位与动作一起恢复，裁决仍由单房 actor 串行执行。
 
 ## 安全缩容
 

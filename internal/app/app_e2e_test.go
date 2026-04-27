@@ -4,7 +4,9 @@ package app_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,33 +33,6 @@ func dialWS(t *testing.T, base string) *websocket.Conn {
 		}
 	}
 	return c
-}
-
-func readUntilSettlement(t *testing.T, conn *websocket.Conn, max int) *clientv1.SettlementNotify {
-	t.Helper()
-	for n := 0; n < max; n++ {
-		_ = conn.SetReadDeadline(time.Now().Add(4 * time.Second))
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			t.Fatalf("读消息失败: %v", err)
-		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if h.MsgID != msgid.Settlement {
-			continue
-		}
-		var env clientv1.Envelope
-		if err := proto.Unmarshal(h.Payload, &env); err != nil {
-			t.Fatal(err)
-		}
-		if sn := env.GetSettlement(); sn != nil {
-			return sn
-		}
-	}
-	t.Fatal("未收到结算推送")
-	return nil
 }
 
 // loginJoinReturnSessionToken 与 loginJoin 相同，但返回登录响应中的 session_token（需 gate 启用 Redis）。
@@ -195,6 +170,138 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 	t.Fatal("准备阶段未收到 ReadyResp")
 }
 
+func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clientv1.SettlementNotify, error) {
+	for n := 0; n < max; n++ {
+		_ = conn.SetReadDeadline(time.Now().Add(8 * time.Second))
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			return nil, fmt.Errorf("读消息失败: %w", err)
+		}
+		h, err := frame.ReadFrame(bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
+		var env clientv1.Envelope
+		if err := proto.Unmarshal(h.Payload, &env); err != nil {
+			return nil, err
+		}
+		switch h.MsgID {
+		case msgid.DrawTile:
+			draw := env.GetDrawTile()
+			if draw != nil && draw.GetSeatIndex() == seat {
+				req := &clientv1.Envelope{
+					ReqId: fmt.Sprintf("discard-%d", n),
+					Body: &clientv1.Envelope_DiscardReq{
+						DiscardReq: &clientv1.DiscardRequest{Tile: draw.GetTile()},
+					},
+				}
+				pb, err := proto.Marshal(req)
+				if err != nil {
+					return nil, err
+				}
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.DiscardReq, pb)); err != nil {
+					return nil, err
+				}
+			}
+		case msgid.ActionNotify:
+			action := env.GetAction()
+			if action == nil || action.GetSeatIndex() != seat {
+				break
+			}
+			switch action.GetAction() {
+			case "exchange_three":
+				req := &clientv1.Envelope{
+					ReqId: fmt.Sprintf("exchange-%d", n),
+					Body: &clientv1.Envelope_ExchangeThreeReq{
+						ExchangeThreeReq: &clientv1.ExchangeThreeRequest{},
+					},
+				}
+				pb, err := proto.Marshal(req)
+				if err != nil {
+					return nil, err
+				}
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ExchangeThreeReq, pb)); err != nil {
+					return nil, err
+				}
+			case "que_men":
+				req := &clientv1.Envelope{
+					ReqId: fmt.Sprintf("que-%d", n),
+					Body: &clientv1.Envelope_QueMenReq{
+						QueMenReq: &clientv1.QueMenRequest{Suit: 0},
+					},
+				}
+				pb, err := proto.Marshal(req)
+				if err != nil {
+					return nil, err
+				}
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.QueMenReq, pb)); err != nil {
+					return nil, err
+				}
+			case "pong_choice":
+				req := &clientv1.Envelope{
+					ReqId: fmt.Sprintf("pong-%d", n),
+					Body: &clientv1.Envelope_PongReq{
+						PongReq: &clientv1.PongRequest{},
+					},
+				}
+				pb, err := proto.Marshal(req)
+				if err != nil {
+					return nil, err
+				}
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.PongReq, pb)); err != nil {
+					return nil, err
+				}
+			case "gang_choice":
+				req := &clientv1.Envelope{
+					ReqId: fmt.Sprintf("gang-%d", n),
+					Body: &clientv1.Envelope_GangReq{
+						GangReq: &clientv1.GangRequest{Tile: action.GetTile()},
+					},
+				}
+				pb, err := proto.Marshal(req)
+				if err != nil {
+					return nil, err
+				}
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.GangReq, pb)); err != nil {
+					return nil, err
+				}
+			}
+		case msgid.Settlement:
+			if sn := env.GetSettlement(); sn != nil {
+				return sn, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("未收到结算推送")
+}
+
+func drivePlayersUntilSettlement(t *testing.T, conns []*websocket.Conn) *clientv1.SettlementNotify {
+	t.Helper()
+	type result struct {
+		sn  *clientv1.SettlementNotify
+		err error
+	}
+	results := make([]result, len(conns))
+	var wg sync.WaitGroup
+	for i, conn := range conns {
+		wg.Add(1)
+		go func(idx int, c *websocket.Conn) {
+			defer wg.Done()
+			sn, err := driveConnUntilSettlement(c, int32(idx), 128) //nolint:gosec // 测试固定 4 个连接，idx 仅为 0..3
+			results[idx] = result{sn: sn, err: err}
+		}(i, conn)
+	}
+	wg.Wait()
+	var last *clientv1.SettlementNotify
+	for _, result := range results {
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		last = result.sn
+	}
+	return last
+}
+
 func TestE2EFourPlayersReceiveSettlement(t *testing.T) {
 	cfg := config.Config{ServerAddr: "127.0.0.1:0", RuleID: "sichuan_xzdd"}
 	a, err := app.New(cfg)
@@ -229,10 +336,7 @@ func TestE2EFourPlayersReceiveSettlement(t *testing.T) {
 		sendReadyAndReadResp(t, conns[i])
 	}
 
-	var lastSn *clientv1.SettlementNotify
-	for _, c := range conns {
-		lastSn = readUntilSettlement(t, c, 64)
-	}
+	lastSn := drivePlayersUntilSettlement(t, conns)
 	if lastSn == nil || lastSn.GetRoomId() != roomID {
 		t.Fatalf("结算房间号不一致: %+v", lastSn)
 	}

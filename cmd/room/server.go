@@ -92,36 +92,101 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 		if err != nil {
 			return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
-		for idx, notification := range notifications {
-			cursor, err := s.persistAndCursor(ctx, roomID, idx, notification)
-			if err != nil {
-				return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
-			}
-			evt, err := mapNotificationToEvent(roomID, cursor, notification)
-			if err != nil {
-				return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
-			}
-			s.publish(roomID, evt)
-			s.afterEventSideEffects(ctx, roomID, notification, evt, cursor)
-		}
-		if idemKey != "" && s.rdb != nil {
-			scope := "room_apply_event"
-			fullKey := roomID + ":" + idemKey
-			// 业务已成功：幂等键落库尽力而为，失败也不回滚已发布事件。
-			_, _ = s.rdb.PutIdempotencyAbsent(ctx, scope, fullKey, redis.IdempotencyRecord{Result: "ok"}, 0)
+		if err := s.persistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
+			return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
 		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+	case *clusterv1.ApplyEventRequest_Discard:
+		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile())
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_Pong:
+		notifications, err := s.rooms.Pong(ctx, roomID, userID)
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_Gang:
+		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile())
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_Hu:
+		notifications, err := s.rooms.Hu(ctx, roomID, userID)
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_ExchangeThree:
+		notifications, err := s.rooms.ExchangeThree(ctx, roomID, userID, req.GetExchangeThree().GetTiles(), req.GetExchangeThree().GetDirection())
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_QueMen:
+		notifications, err := s.rooms.QueMen(ctx, roomID, userID, req.GetQueMen().GetSuit())
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	default:
 		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
 	}
 }
 
-func (s *roomGRPCServer) persistAndCursor(ctx context.Context, roomID string, idx int, notification roomsvc.Notification) (string, error) {
-	if s.ev == nil {
-		return fmt.Sprintf("%s-%d", notification.Kind, idx), nil
+func (s *roomGRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*clusterv1.ApplyEventResponse, error) {
+	if err != nil {
+		return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
-	_, cursor, err := s.ev.AppendEvent(ctx, roomID, string(notification.Kind), notification.Payload)
-	return cursor, err
+	if err := s.persistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
+		return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+	}
+	return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+}
+
+func (s *roomGRPCServer) persistPublishAndFinalize(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification) error {
+	events, err := s.persistNotifications(ctx, roomID, notifications)
+	if err != nil {
+		return err
+	}
+	if idemKey != "" && s.rdb != nil {
+		scope := "room_apply_event"
+		fullKey := roomID + ":" + idemKey
+		// 事件已成功持久化后，幂等键只做成功标记；写入失败不再回滚已落盘事件。
+		_, _ = s.rdb.PutIdempotencyAbsent(ctx, scope, fullKey, redis.IdempotencyRecord{Result: "ok"}, 0)
+	}
+	for idx, event := range events {
+		s.publish(roomID, event.evt)
+		s.afterEventSideEffects(ctx, roomID, notifications[idx], event.evt, event.cursor)
+	}
+	return nil
+}
+
+type persistedEvent struct {
+	cursor string
+	evt    *clusterv1.RoomServiceStreamEventsResponse
+}
+
+func (s *roomGRPCServer) persistNotifications(ctx context.Context, roomID string, notifications []roomsvc.Notification) ([]persistedEvent, error) {
+	if len(notifications) == 0 {
+		return nil, nil
+	}
+	cursors := make([]string, len(notifications))
+	if s.ev == nil {
+		for idx, notification := range notifications {
+			cursors[idx] = fmt.Sprintf("%s-%d", notification.Kind, idx)
+		}
+	} else {
+		rows := make([]postgres.RoomEventRow, 0, len(notifications))
+		for _, notification := range notifications {
+			rows = append(rows, postgres.RoomEventRow{
+				Kind:    string(notification.Kind),
+				Payload: append([]byte(nil), notification.Payload...),
+			})
+		}
+		persistedRows, err := s.ev.AppendEvents(ctx, roomID, rows)
+		if err != nil {
+			return nil, err
+		}
+		for idx, row := range persistedRows {
+			cursors[idx] = fmt.Sprintf("%s:%d", roomID, row.Seq)
+		}
+	}
+
+	out := make([]persistedEvent, 0, len(notifications))
+	for idx, notification := range notifications {
+		evt, err := mapNotificationToEvent(roomID, cursors[idx], notification)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, persistedEvent{cursor: cursors[idx], evt: evt})
+	}
+	return out, nil
 }
 
 func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification roomsvc.Notification, evt *clusterv1.RoomServiceStreamEventsResponse, cursor string) {
@@ -150,6 +215,10 @@ func (s *roomGRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq
 	if s == nil || s.rdb == nil {
 		return
 	}
+	var prev redis.RoomSnapMeta
+	if meta, ok, err := s.rdb.GetRoomSnapMeta(ctx, roomID); err == nil && ok {
+		prev = meta
+	}
 	players, state, ok := s.rooms.RoomSnapshot(roomID)
 	if !ok {
 		state = ""
@@ -163,9 +232,15 @@ func (s *roomGRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq
 		Seq:       seq,
 		PlayerIDs: append([]string(nil), players...),
 		State:     state,
+		QueSuits:  append([]int32(nil), prev.QueSuits...),
 	}
 	if notification != nil {
-		meta.QueSuits = queSuitsFromNotification(*notification)
+		if qs := queSuitsFromNotification(*notification); len(qs) > 0 {
+			meta.QueSuits = qs
+		}
+	}
+	if roundJSON, err := s.rooms.RoundPersistSnapshot(ctx, roomID); err == nil && len(roundJSON) > 0 {
+		meta.RoundJSON = string(roundJSON)
 	}
 	_ = s.rdb.PutRoomSnapMeta(ctx, roomID, meta, 0)
 }
@@ -181,7 +256,7 @@ func queSuitsFromNotification(n roomsvc.Notification) []int32 {
 	return append([]int32(nil), env.GetQueMenDone().GetQueSuitBySeat()...)
 }
 
-// SnapshotRoom 返回快照游标与房间摘要；无持久化时退化为内存视图。
+// SnapshotRoom - 返回快照游标与房间摘要；无持久化时退化为内存视图。
 func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.SnapshotRoomRequest) (*clusterv1.SnapshotRoomResponse, error) {
 	if s == nil || s.rooms == nil {
 		return nil, fmt.Errorf("nil room grpc server")
@@ -197,6 +272,12 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	if !ok {
 		if s.rdb != nil {
 			if meta, okm, _ := s.rdb.GetRoomSnapMeta(ctx, roomID); okm {
+				view := roomsvc.RoundView{}
+				if meta.RoundJSON != "" {
+					if v, err := roomsvc.RoundViewFromPersistJSON(roomID, []byte(meta.RoundJSON)); err == nil {
+						view = v
+					}
+				}
 				cur := ""
 				if s.ev != nil {
 					if m, err := s.ev.MaxSeq(ctx, roomID); err == nil && m > 0 {
@@ -204,10 +285,14 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					}
 				}
 				return &clusterv1.SnapshotRoomResponse{
-					Cursor:        cur,
-					PlayerIds:     append([]string(nil), meta.PlayerIDs...),
-					QueSuitBySeat: append([]int32(nil), meta.QueSuits...),
-					State:         meta.State,
+					Cursor:           cur,
+					PlayerIds:        append([]string(nil), meta.PlayerIDs...),
+					QueSuitBySeat:    append([]int32(nil), meta.QueSuits...),
+					State:            meta.State,
+					ActingSeat:       view.ActingSeat,
+					WaitingAction:    view.WaitingAction,
+					PendingTile:      view.PendingTile,
+					AvailableActions: append([]string(nil), view.AvailableActions...),
 				}, nil
 			}
 		}
@@ -224,11 +309,16 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 		cur = fmt.Sprintf("%s:%d", roomID, maxSeq)
 	}
 	qs := pickLastQueSuits(ctx, s, roomID)
+	view, _, _ := s.rooms.RoundView(ctx, roomID)
 	return &clusterv1.SnapshotRoomResponse{
-		Cursor:        cur,
-		PlayerIds:     players,
-		QueSuitBySeat: qs,
-		State:         state,
+		Cursor:           cur,
+		PlayerIds:        players,
+		QueSuitBySeat:    qs,
+		State:            state,
+		ActingSeat:       view.ActingSeat,
+		WaitingAction:    view.WaitingAction,
+		PendingTile:      view.PendingTile,
+		AvailableActions: append([]string(nil), view.AvailableActions...),
 	}, nil
 }
 

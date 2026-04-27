@@ -95,6 +95,22 @@ func (m *Manager) BindRoom(ctx context.Context, userID, roomID string) error {
 	return m.c.PutSession(ctx, userID, srec, defaultSessionTTL)
 }
 
+// UnbindRoom 清空会话绑定的房间号；离房成功后由 gate 调用。
+func (m *Manager) UnbindRoom(ctx context.Context, userID string) error {
+	if m == nil || m.c == nil || userID == "" {
+		return nil
+	}
+	srec, ok, err := m.c.GetSession(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	srec.RoomID = ""
+	return m.c.PutSession(ctx, userID, srec, defaultSessionTTL)
+}
+
 // UpdateCursor 更新用户会话中最后收到的房间事件游标。
 func (m *Manager) UpdateCursor(ctx context.Context, userID, cursor string) error {
 	if m == nil || m.c == nil || userID == "" || cursor == "" {

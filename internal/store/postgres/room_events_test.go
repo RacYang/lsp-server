@@ -77,6 +77,63 @@ func TestRoomEventStoreAppendEventInsertFails(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestRoomEventStoreAppendEventsSuccess(t *testing.T) {
+	t.Parallel()
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	t.Cleanup(func() { mock.Close() })
+
+	mock.ExpectBeginTx(pgx.TxOptions{})
+	mock.ExpectQuery("SELECT seq FROM room_events").
+		WithArgs("room-b").
+		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(4)))
+	mock.ExpectExec("INSERT INTO room_events").
+		WithArgs("room-b", int64(5), "draw", []byte("a")).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectExec("INSERT INTO room_events").
+		WithArgs("room-b", int64(6), "action", []byte("b")).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectCommit()
+
+	s := postgres.NewRoomEventStore(mock)
+	rows, err := s.AppendEvents(context.Background(), "room-b", []postgres.RoomEventRow{
+		{Kind: "draw", Payload: []byte("a")},
+		{Kind: "action", Payload: []byte("b")},
+	})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	require.Equal(t, int64(5), rows[0].Seq)
+	require.Equal(t, int64(6), rows[1].Seq)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRoomEventStoreAppendEventsRollbackOnFailure(t *testing.T) {
+	t.Parallel()
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	t.Cleanup(func() { mock.Close() })
+
+	mock.ExpectBeginTx(pgx.TxOptions{})
+	mock.ExpectQuery("SELECT seq FROM room_events").
+		WithArgs("room-c").
+		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(1)))
+	mock.ExpectExec("INSERT INTO room_events").
+		WithArgs("room-c", int64(2), "draw", []byte("a")).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectExec("INSERT INTO room_events").
+		WithArgs("room-c", int64(3), "action", []byte("b")).
+		WillReturnError(errors.New("insert failed"))
+	mock.ExpectRollback()
+
+	s := postgres.NewRoomEventStore(mock)
+	_, err = s.AppendEvents(context.Background(), "room-c", []postgres.RoomEventRow{
+		{Kind: "draw", Payload: []byte("a")},
+		{Kind: "action", Payload: []byte("b")},
+	})
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestRoomEventStoreListEventsAfter(t *testing.T) {
 	t.Parallel()
 	mock, err := pgxmock.NewPool()
@@ -216,6 +273,8 @@ func TestRoomEventStoreNilReceiver(t *testing.T) {
 	t.Parallel()
 	var s *postgres.RoomEventStore
 	_, _, err := s.AppendEvent(context.Background(), "r", "k", nil)
+	require.Error(t, err)
+	_, err = s.AppendEvents(context.Background(), "r", []postgres.RoomEventRow{{Kind: "k"}})
 	require.Error(t, err)
 	_, err = s.ListEventsAfter(context.Background(), "r", 0)
 	require.Error(t, err)

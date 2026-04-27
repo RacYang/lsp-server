@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
@@ -20,35 +22,50 @@ import (
 	"racoo.cn/lsp/pkg/logx"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
 // Deps 为处理器依赖。
 type Deps struct {
 	Rooms   RoomGateway
 	Hub     *session.Hub
 	Session *session.Manager
+	// AllowedOrigins 非空时表示允许跨站 WebSocket 的白名单；为空时退回同源校验。
+	AllowedOrigins []string
 }
 
 // RoomGateway 抽象本地房间服务或远程 room/lobby gRPC 协调器。
 type RoomGateway interface {
 	Join(ctx context.Context, roomID, userID string) (int, error)
 	Ready(ctx context.Context, roomID, userID string) (func(), error)
+	Leave(ctx context.Context, roomID, userID string) (func(), error)
+	ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error)
+	QueMen(ctx context.Context, roomID, userID string, suit int32) (func(), error)
+	Discard(ctx context.Context, roomID, userID, tile string) (func(), error)
+	Pong(ctx context.Context, roomID, userID string) (func(), error)
+	Gang(ctx context.Context, roomID, userID, tile string) (func(), error)
+	Hu(ctx context.Context, roomID, userID string) (func(), error)
 	Resume(ctx context.Context, sessionToken string) (*ResumeResult, error)
 	EnsureRoomEventSubscription(ctx context.Context, roomID, sinceCursor string) error
 }
 
 // HandleWebSocket 升级为 WebSocket 并处理帧循环。
 func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(req *http.Request) bool {
+			return allowWebSocketOrigin(req, deps.AllowedOrigins)
+		},
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logx.Error(ctx, "连接升级为 WebSocket 时失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
 		return
 	}
-	defer func() { _ = session.CloseConn(conn) }()
 	var userID string
 	var roomID string
+	defer func() {
+		if deps.Hub != nil && userID != "" {
+			deps.Hub.Unregister(userID, roomID)
+		}
+		_ = session.CloseConn(conn)
+	}()
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
@@ -106,7 +123,11 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 					deps.Hub.Register(userID, roomID, conn)
 				}
 				if rr.Resumed {
-					if err := deps.Rooms.EnsureRoomEventSubscription(ctx, roomID, rr.SnapshotSinceCursor); err != nil {
+					sinceCursor := rr.SnapshotSinceCursor
+					if sinceCursor == "" && roomID != "" {
+						sinceCursor = roomID + ":0"
+					}
+					if err := deps.Rooms.EnsureRoomEventSubscription(ctx, roomID, sinceCursor); err != nil {
 						logx.Warn(ctx, "恢复后订阅房间事件流失败", "trace_id", "", "user_id", userID, "room_id", roomID, "err", err.Error())
 					}
 				}
@@ -207,10 +228,225 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 			if afterReady != nil {
 				afterReady()
 			}
+		case msgid.HeartbeatReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			if env.GetHeartbeatReq() == nil {
+				continue
+			}
+			resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_HeartbeatResp{
+				HeartbeatResp: &clientv1.HeartbeatResponse{ServerTsMs: time.Now().UnixMilli()},
+			}}
+			b, _ := proto.Marshal(resp)
+			_ = session.WriteBinary(conn, frame.Encode(msgid.HeartbeatResp, b))
+		case msgid.ExchangeThreeReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			req := env.GetExchangeThreeReq()
+			if req == nil || roomID == "" || userID == "" {
+				continue
+			}
+			after, err := deps.Rooms.ExchangeThree(ctx, roomID, userID, req.GetTiles(), req.GetDirection())
+			resp, after := exchangeThreeErrEnvelope(env.ReqId, after, err)
+			respondAction(conn, env.ReqId, msgid.ExchangeThreeResp, resp, after)
+		case msgid.QueMenReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			req := env.GetQueMenReq()
+			if req == nil || roomID == "" || userID == "" {
+				continue
+			}
+			after, err := deps.Rooms.QueMen(ctx, roomID, userID, req.GetSuit())
+			resp, after := queMenErrEnvelope(env.ReqId, after, err)
+			respondAction(conn, env.ReqId, msgid.QueMenResp, resp, after)
+		case msgid.LeaveRoomReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			if env.GetLeaveRoomReq() == nil {
+				continue
+			}
+			if roomID == "" || userID == "" {
+				resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LeaveRoomResp{LeaveRoomResp: &clientv1.LeaveRoomResponse{
+					ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+					ErrorMessage: "尚未进入房间",
+				}}}
+				b, _ := proto.Marshal(resp)
+				_ = session.WriteBinary(conn, frame.Encode(msgid.LeaveRoomResp, b))
+				continue
+			}
+			oldRoomID := roomID
+			after, err := deps.Rooms.Leave(ctx, roomID, userID)
+			if err != nil {
+				resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LeaveRoomResp{LeaveRoomResp: &clientv1.LeaveRoomResponse{
+					ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+					ErrorMessage: err.Error(),
+				}}}
+				b, _ := proto.Marshal(resp)
+				_ = session.WriteBinary(conn, frame.Encode(msgid.LeaveRoomResp, b))
+				continue
+			}
+			roomID = ""
+			if deps.Hub != nil {
+				deps.Hub.Unregister(userID, oldRoomID)
+			}
+			if deps.Session != nil {
+				_ = deps.Session.UnbindRoom(ctx, userID)
+			}
+			resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LeaveRoomResp{LeaveRoomResp: &clientv1.LeaveRoomResponse{}}}
+			b, _ := proto.Marshal(resp)
+			_ = session.WriteBinary(conn, frame.Encode(msgid.LeaveRoomResp, b))
+			if after != nil {
+				after()
+			}
+		case msgid.DiscardReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			req := env.GetDiscardReq()
+			if req == nil || roomID == "" || userID == "" {
+				continue
+			}
+			after, err := deps.Rooms.Discard(ctx, roomID, userID, req.GetTile())
+			resp, after := discardErrEnvelope(env.ReqId, after, err)
+			respondAction(conn, env.ReqId, msgid.DiscardResp, resp, after)
+		case msgid.PongReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			if env.GetPongReq() == nil || roomID == "" || userID == "" {
+				continue
+			}
+			after, err := deps.Rooms.Pong(ctx, roomID, userID)
+			resp, after := pongErrEnvelope(env.ReqId, after, err)
+			respondAction(conn, env.ReqId, msgid.PongResp, resp, after)
+		case msgid.GangReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			req := env.GetGangReq()
+			if req == nil || roomID == "" || userID == "" {
+				continue
+			}
+			after, err := deps.Rooms.Gang(ctx, roomID, userID, req.GetTile())
+			resp, after := gangErrEnvelope(env.ReqId, after, err)
+			respondAction(conn, env.ReqId, msgid.GangResp, resp, after)
+		case msgid.HuReq:
+			var env clientv1.Envelope
+			if err := proto.Unmarshal(h.Payload, &env); err != nil {
+				continue
+			}
+			if env.GetHuReq() == nil || roomID == "" || userID == "" {
+				continue
+			}
+			after, err := deps.Rooms.Hu(ctx, roomID, userID)
+			resp, after := huErrEnvelope(env.ReqId, after, err)
+			respondAction(conn, env.ReqId, msgid.HuResp, resp, after)
 		default:
 			logx.Info(ctx, "收到尚未实现的消息编号已跳过", "trace_id", "", "user_id", userID, "room_id", roomID, "msg_id", fmt.Sprintf("%d", h.MsgID))
 		}
 	}
+}
+
+func allowWebSocketOrigin(r *http.Request, allowedOrigins []string) bool {
+	if r == nil {
+		return false
+	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	if len(allowedOrigins) > 0 {
+		for _, allowed := range allowedOrigins {
+			if strings.EqualFold(strings.TrimSpace(allowed), origin) {
+				return true
+			}
+		}
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Host, r.Host)
+}
+
+func respondAction(conn *websocket.Conn, reqID string, responseMsgID uint16, env *clientv1.Envelope, after func()) {
+	b, _ := proto.Marshal(env)
+	_ = session.WriteBinary(conn, frame.Encode(responseMsgID, b))
+	if after != nil {
+		after()
+	}
+}
+
+func discardErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_DiscardResp{DiscardResp: &clientv1.DiscardResponse{
+			ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+			ErrorMessage: err.Error(),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_DiscardResp{DiscardResp: &clientv1.DiscardResponse{}}}, after
+}
+
+func pongErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PongResp{PongResp: &clientv1.PongResponse{
+			ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+			ErrorMessage: err.Error(),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PongResp{PongResp: &clientv1.PongResponse{}}}, after
+}
+
+func gangErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_GangResp{GangResp: &clientv1.GangResponse{
+			ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+			ErrorMessage: err.Error(),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_GangResp{GangResp: &clientv1.GangResponse{}}}, after
+}
+
+func huErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_HuResp{HuResp: &clientv1.HuResponse{
+			ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+			ErrorMessage: err.Error(),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_HuResp{HuResp: &clientv1.HuResponse{}}}, after
+}
+
+func exchangeThreeErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{
+			ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+			ErrorMessage: err.Error(),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{}}}, after
+}
+
+func queMenErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_QueMenResp{QueMenResp: &clientv1.QueMenResponse{
+			ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+			ErrorMessage: err.Error(),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_QueMenResp{QueMenResp: &clientv1.QueMenResponse{}}}, after
 }
 
 // joinRoomErrorCode 将进房失败映射为客户端 ErrorCode；未知错误使用 UNSPECIFIED，避免误报「房间已满」。

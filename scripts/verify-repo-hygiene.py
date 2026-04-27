@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import fnmatch
 import subprocess
 import sys
@@ -21,7 +22,7 @@ def _is_likely_binary(path: Path) -> bool:
     if b"\x00" in data:
         return True
     try:
-        data.decode("utf-8")
+        codecs.getincrementaldecoder("utf-8")().decode(data, final=False)
     except UnicodeDecodeError:
         return True
     return False

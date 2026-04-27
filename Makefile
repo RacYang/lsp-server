@@ -11,7 +11,7 @@ HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 
 .PHONY: bootstrap generate fix fix-file verify verify-fast verify-pre-commit \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
-	verify-test-fast verify-test verify-cover verify-vuln verify-tidy verify-secrets \
+	verify-test-fast verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets \
 	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang \
 	verify-git-repo verify-git-local verify-git-push
 
@@ -37,7 +37,7 @@ fix:
 fix-file:
 	@if [[ -n "$(FILE)" && -f "$(FILE)" && "$(FILE)" == *.go ]]; then gofmt -w "$(FILE)"; goimports -w "$(FILE)"; fi
 
-verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-tools verify-determinism verify-git-repo verify-lang
+verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-tools verify-determinism verify-git-repo verify-lang
 
 verify-fast: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-test-fast verify-secrets verify-meta verify-config verify-tools verify-determinism verify-git-repo verify-lang
 
@@ -109,6 +109,17 @@ ifneq ($(HAS_GO),)
 	@go test -race -coverprofile=coverage.out ./...
 else
 	@echo "verify-test: no go packages, skipping"
+endif
+
+verify-test-integration:
+ifneq ($(HAS_GO),)
+	@if [[ "$${RUN_INTEGRATION:-0}" != "1" ]]; then \
+		echo "verify-test-integration: RUN_INTEGRATION!=1，跳过"; \
+	else \
+		go test -tags=integration ./internal/app -run TestRoomProcessRestartReplay -count=1 -v; \
+	fi
+else
+	@echo "verify-test-integration: no go packages, skipping"
 endif
 
 verify-cover:

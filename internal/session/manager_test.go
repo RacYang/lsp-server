@@ -37,6 +37,11 @@ func TestManagerIssueResumeBind(t *testing.T) {
 	require.Equal(t, "room-xyz", rec.RoomID)
 	require.Equal(t, "room-xyz:7", rec.LastCursor)
 	require.EqualValues(t, 1, rec.SessionVer)
+
+	require.NoError(t, mgr.UnbindRoom(ctx, uid))
+	_, rec, err = mgr.Resume(ctx, tok)
+	require.NoError(t, err)
+	require.Empty(t, rec.RoomID)
 }
 
 func TestManagerResumeRejectsSessionVersionMismatch(t *testing.T) {

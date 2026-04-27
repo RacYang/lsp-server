@@ -52,6 +52,10 @@ message Envelope {
     QueMenDoneNotify que_men_done = 27;
     // Phase 3 断线重连：快照通知，供客户端在恢复后对齐房间视图。
     SnapshotNotify snapshot = 28;
+    // Phase 4 交互闭环：动作请求的显式响应。
+    PongResponse pong_resp = 29;
+    GangResponse gang_resp = 30;
+    HuResponse hu_resp = 31;
   }
 }
 
@@ -101,11 +105,26 @@ message DiscardResponse {
 
 message PongRequest {}
 
+message PongResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
 message GangRequest {
   string tile = 1;
 }
 
+message GangResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
 message HuRequest {}
+
+message HuResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
 
 // StartGameNotify 表示房间开局（服务端推送）。
 message StartGameNotify {
@@ -226,4 +245,8 @@ message SnapshotNotify {
   repeated int32 que_suit_by_seat = 3;
   string cursor = 4;
   string state = 5;
+  int32 acting_seat = 6;
+  string waiting_action = 7;
+  string pending_tile = 8;
+  repeated string available_actions = 9;
 }

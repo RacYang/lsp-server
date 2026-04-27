@@ -35,4 +35,8 @@ const (
 	QueMenDone          uint16 = 26
 	// SnapshotNotify 为 Phase 3 重连恢复下发的房间快照通知。
 	SnapshotNotify uint16 = 27
+	// Phase 4 交互闭环动作响应。
+	PongResp uint16 = 28
+	GangResp uint16 = 29
+	HuResp   uint16 = 30
 )

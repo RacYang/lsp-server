@@ -51,17 +51,17 @@ func (s *Service) EnsureRoom(roomID string) error {
 		}
 		return err
 	}
-	s.startActorLocked(roomID, r)
+	s.startActorLocked(roomID, r, nil)
 	return nil
 }
 
-func (s *Service) startActorLocked(roomID string, r *domainroom.Room) {
+func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRound *RoundState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.actors[roomID]; ok {
 		return
 	}
-	a := newRoomActor(r)
+	a := newRoomActor(r, initialRound)
 	a.engine = s.engine
 	a.onExit = s.removeActor
 	s.actors[roomID] = a
@@ -85,7 +85,7 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 		s.mu.Unlock()
 		return
 	}
-	a := newRoomActor(r)
+	a := newRoomActor(r, nil)
 	a.engine = s.engine
 	a.onExit = s.removeActor
 	s.actors[roomID] = a
@@ -131,8 +131,98 @@ func (s *Service) Ready(ctx context.Context, roomID, userID string) ([]Notificat
 	return a.submitReady(ctx, userID)
 }
 
+// Leave 将玩家从 waiting/ready 房间移除；playing 及以后状态返回错误。
+func (s *Service) Leave(ctx context.Context, roomID, userID string) error {
+	a := s.getActor(roomID)
+	if a == nil {
+		return fmt.Errorf("room not found")
+	}
+	return a.submitLeave(ctx, userID)
+}
+
+// Discard 提交当前轮次出牌动作。
+func (s *Service) Discard(ctx context.Context, roomID, userID, tile string) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitDiscard(ctx, userID, tile)
+}
+
+// Pong 提交弃牌抢答窗口中的碰牌动作。
+func (s *Service) Pong(ctx context.Context, roomID, userID string) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitPong(ctx, userID)
+}
+
+// Gang 提交弃牌抢答窗口中的杠牌或当前座位自杠动作。
+func (s *Service) Gang(ctx context.Context, roomID, userID, tile string) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitGang(ctx, userID, tile)
+}
+
+// Hu 提交胡牌动作（当前为自摸待决窗口）。
+func (s *Service) Hu(ctx context.Context, roomID, userID string) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitHu(ctx, userID)
+}
+
+// AutoTimeout 执行当前等待态的服务端托管动作，供上层定时器到期后调用。
+func (s *Service) AutoTimeout(ctx context.Context, roomID string) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitAutoTimeout(ctx)
+}
+
+// ExchangeThree 提交换三张确认；最后一名提交后统一换牌并进入定缺阶段。
+func (s *Service) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitExchangeThree(ctx, userID, tiles, direction)
+}
+
+// QueMen 提交定缺确认；最后一名提交后开局并进入首轮摸牌。
+func (s *Service) QueMen(ctx context.Context, roomID, userID string, suit int32) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitQueMen(ctx, userID, suit)
+}
+
+// RoundPersistSnapshot 返回当前进行中牌局的最小可恢复快照。
+func (s *Service) RoundPersistSnapshot(ctx context.Context, roomID string) ([]byte, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, nil
+	}
+	return a.submitRoundSnapJSON(ctx)
+}
+
+// RoundView 返回当前进行中局面的等待态摘要。
+func (s *Service) RoundView(ctx context.Context, roomID string) (RoundView, bool, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return RoundView{}, false, nil
+	}
+	return a.submitRoundView(ctx)
+}
+
 // RecoverRoom 基于 Redis snapmeta 恢复房间基础内存态，并重新挂起 actor。
-func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string) error {
+func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string, roundPersistJSON []byte) error {
 	if s == nil || s.lobby == nil {
 		return fmt.Errorf("nil service")
 	}
@@ -185,7 +275,17 @@ func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string
 	if err := s.lobby.CreateRoom(roomID, r); err != nil {
 		return err
 	}
-	s.startActorLocked(roomID, r)
+	var initialRound *RoundState
+	if domainroom.State(fsmState) == domainroom.StatePlaying && len(roundPersistJSON) > 0 {
+		rs, err := RestoreRoundFromPersistJSON(roomID, roundPersistJSON)
+		if err != nil {
+			return fmt.Errorf("restore round: %w", err)
+		}
+		initialRound = rs
+	} else if domainroom.State(fsmState) == domainroom.StatePlaying {
+		return fmt.Errorf("recover room %s: missing round snapshot for playing state", roomID)
+	}
+	s.startActorLocked(roomID, r, initialRound)
 	return nil
 }
 

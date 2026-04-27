@@ -48,6 +48,10 @@ message SnapshotRoomResponse {
   repeated int32 que_suit_by_seat = 3;
   string state = 4;
   string error = 5;
+  int32 acting_seat = 6;
+  string waiting_action = 7;
+  string pending_tile = 8;
+  repeated string available_actions = 9;
 }
 
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。

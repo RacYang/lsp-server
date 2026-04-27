@@ -16,6 +16,7 @@ type RoomSnapMeta struct {
 	PlayerIDs []string `json:"player_ids,omitempty"`
 	QueSuits  []int32  `json:"que_suits,omitempty"`
 	State     string   `json:"state,omitempty"`
+	RoundJSON string   `json:"round_json,omitempty"`
 }
 
 // RouteRecord 为房间路由缓存值；权威归属仍在 etcd，仅缓存 room 节点与可选版本。

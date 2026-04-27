@@ -38,15 +38,36 @@ func NewRoomEventStore(pool roomEventPool) *RoomEventStore {
 
 // AppendEvent 在事务内分配 seq 并写入；返回新 seq 与游标字符串。
 func (s *RoomEventStore) AppendEvent(ctx context.Context, roomID, kind string, payload []byte) (seq int64, cursor string, err error) {
-	if s == nil || s.pool == nil {
-		return 0, "", fmt.Errorf("nil room event store")
+	rows, err := s.AppendEvents(ctx, roomID, []RoomEventRow{{Kind: kind, Payload: payload}})
+	if err != nil {
+		return 0, "", err
 	}
-	if roomID == "" || kind == "" {
-		return 0, "", fmt.Errorf("empty room_id or kind")
+	if len(rows) == 0 {
+		return 0, "", fmt.Errorf("append event returned no rows")
+	}
+	row := rows[0]
+	return row.Seq, fmt.Sprintf("%s:%d", row.RoomID, row.Seq), nil
+}
+
+// AppendEvents 在单事务内为一批事件连续分配 seq 并写入；要么全部成功，要么全部回滚。
+func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events []RoomEventRow) ([]RoomEventRow, error) {
+	if s == nil || s.pool == nil {
+		return nil, fmt.Errorf("nil room event store")
+	}
+	if roomID == "" {
+		return nil, fmt.Errorf("empty room_id")
+	}
+	if len(events) == 0 {
+		return nil, nil
+	}
+	for _, event := range events {
+		if event.Kind == "" {
+			return nil, fmt.Errorf("empty kind")
+		}
 	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return 0, "", err
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -59,15 +80,26 @@ func (s *RoomEventStore) AppendEvent(ctx context.Context, roomID, kind string, p
 	case errors.Is(err, pgx.ErrNoRows):
 		next = 1
 	default:
-		return 0, "", fmt.Errorf("alloc seq: %w", err)
+		return nil, fmt.Errorf("alloc seq: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO room_events (room_id, seq, kind, payload) VALUES ($1, $2, $3, $4)`, roomID, next, kind, payload); err != nil {
-		return 0, "", fmt.Errorf("insert event: %w", err)
+
+	out := make([]RoomEventRow, 0, len(events))
+	for _, event := range events {
+		if _, err := tx.Exec(ctx, `INSERT INTO room_events (room_id, seq, kind, payload) VALUES ($1, $2, $3, $4)`, roomID, next, event.Kind, event.Payload); err != nil {
+			return nil, fmt.Errorf("insert event: %w", err)
+		}
+		out = append(out, RoomEventRow{
+			RoomID:  roomID,
+			Seq:     next,
+			Kind:    event.Kind,
+			Payload: append([]byte(nil), event.Payload...),
+		})
+		next++
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return 0, "", err
+		return nil, err
 	}
-	return next, fmt.Sprintf("%s:%d", roomID, next), nil
+	return out, nil
 }
 
 // ListEventsAfter 返回 seq 严格大于 afterSeq 的事件，按 seq 升序。

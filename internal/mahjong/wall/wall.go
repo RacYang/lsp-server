@@ -28,6 +28,17 @@ func NewFull108() *Wall {
 	return &Wall{tiles: tiles, pos: 0}
 }
 
+// NewFromOrderedTiles 使用给定顺序构造牌墙，摸牌按切片顺序从前往后消耗。
+// 用于从持久化快照恢复剩余牌墙。
+func NewFromOrderedTiles(ts []tile.Tile) *Wall {
+	if len(ts) == 0 {
+		return &Wall{}
+	}
+	cp := make([]tile.Tile, len(ts))
+	copy(cp, ts)
+	return &Wall{tiles: cp}
+}
+
 // Tiles 返回当前尚未摸走的牌序列快照（含已摸部分之后的牌），仅用于测试或诊断。
 func (w *Wall) Tiles() []tile.Tile {
 	if w == nil {
@@ -80,6 +91,20 @@ func (w *Wall) Draw() (tile.Tile, error) {
 	t := w.tiles[w.pos]
 	w.pos++
 	return t, nil
+}
+
+// PushFront 将一张牌放回当前摸牌指针前方，用于撤销尚未生效的摸牌。
+func (w *Wall) PushFront(t tile.Tile) error {
+	if w == nil {
+		return fmt.Errorf("nil wall")
+	}
+	if w.pos == 0 {
+		w.tiles = append([]tile.Tile{t}, w.tiles...)
+		return nil
+	}
+	w.pos--
+	w.tiles[w.pos] = t
+	return nil
 }
 
 // ResetCursor 将摸牌指针重置到起点（不改变牌序），用于测试。

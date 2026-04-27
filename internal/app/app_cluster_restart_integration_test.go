@@ -117,13 +117,11 @@ func TestRoomProcessRestartReplay(t *testing.T) {
 	}
 
 	for i := range conns {
-		sendReadyOnly(t, conns[i])
+		sendReadyAndReadResp(t, conns[i])
 	}
-	for _, c := range conns {
-		sn := readUntilSettlement(t, c, 128)
-		if sn == nil || sn.GetRoomId() != roomID {
-			t.Fatalf("重启后结算房间号不一致: %+v", sn)
-		}
+	sn := drivePlayersUntilSettlement(t, conns)
+	if sn == nil || sn.GetRoomId() != roomID {
+		t.Fatalf("重启后结算房间号不一致: %+v", sn)
 	}
 }
 

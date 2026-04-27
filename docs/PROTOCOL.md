@@ -51,6 +51,9 @@
 | 25 | 定缺响应 | `que_men_resp` | S→C |
 | 26 | 定缺完成通知 | `que_men_done` | S→C |
 | 27 | 快照通知 | `snapshot` | S→C |
+| 28 | 碰响应 | `pong_resp` | S→C |
+| 29 | 杠响应 | `gang_resp` | S→C |
+| 30 | 胡响应 | `hu_resp` | S→C |
 
 ## Phase 3 登录与重连（节选）
 
@@ -64,6 +67,10 @@
 - `RATE_LIMITED`：请求过频，应退避重试。
 - `RECONNECTING`：断线重连中（Phase 3 完整会话恢复前可作占位）。
 
-## 尚未完全标准化的内容
+## Phase 4 交互闭环
 
-- 客户端显式 `discard/pong/gang/hu` 的跨进程闭环当前仍以基线契约预留为主，Phase 2 已优先打通四人完整 ready->自动回放->结算链路。
+- `discard_req` 已打通到 `ws -> gate -> room.ApplyEvent -> room actor -> StreamEvents`，服务端进入真正的“等待摸牌/等待出牌”循环，而不是 `ready` 后自动整局回放。
+- `pong_req` / `gang_req` / `hu_req` 都有显式响应帧；当前其中 `hu_req` 用于自摸待决窗口，`pong` / `gang` 支持对最近一次弃牌打开多候选抢答窗口。服务端会向可抢座位分别下发 `pong_choice` / `gang_choice`，并按“杠优先于碰、同优先级按出牌座位下家顺序”的规则裁决。
+- 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端随后可发送 `hu_req`，也可直接对该摸到的牌发送 `discard_req` 继续轮转。
+- `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions`，用于重连后恢复当前等待态。
+- 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。

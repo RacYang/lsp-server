@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/net/frame"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 )
@@ -44,9 +45,98 @@ func (g *LocalRoomGateway) Ready(ctx context.Context, roomID, userID string) (fu
 			if !ok || g.hub == nil {
 				continue
 			}
-			g.hub.Broadcast(roomID, outMsgID, notification.Payload)
+			g.hub.Broadcast(roomID, frame.Encode(outMsgID, notification.Payload))
 		}
 	}, nil
+}
+
+func (g *LocalRoomGateway) Leave(ctx context.Context, roomID, userID string) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	if err := g.rooms.Leave(ctx, roomID, userID); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+// Discard 触发本地房间推进一轮，并返回在响应之后执行的广播回调。
+func (g *LocalRoomGateway) Discard(ctx context.Context, roomID, userID, tile string) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile)
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
+func (g *LocalRoomGateway) Pong(ctx context.Context, roomID, userID string) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.Pong(ctx, roomID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
+func (g *LocalRoomGateway) Gang(ctx context.Context, roomID, userID, tile string) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile)
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
+func (g *LocalRoomGateway) Hu(ctx context.Context, roomID, userID string) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.Hu(ctx, roomID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
+func (g *LocalRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.ExchangeThree(ctx, roomID, userID, tiles, direction)
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
+func (g *LocalRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.QueMen(ctx, roomID, userID, suit)
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
+func (g *LocalRoomGateway) broadcastAfter(roomID string, notifications []roomsvc.Notification) func() {
+	return func() {
+		for _, notification := range notifications {
+			outMsgID, ok := outboundMsgID(notification.Kind)
+			if !ok || g.hub == nil {
+				continue
+			}
+			g.hub.Broadcast(roomID, frame.Encode(outMsgID, notification.Payload))
+		}
+	}
 }
 
 // EnsureRoomEventSubscription 本地进程内无 gRPC 事件流，由 Hub 广播承担。
@@ -73,12 +163,21 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 	if !ok {
 		return nil, fmt.Errorf("房间不存在或已回收")
 	}
+	view, _, _ := g.rooms.RoundView(ctx, srec.RoomID)
+	var queSuits []int32
+	if roundJSON, err := g.rooms.RoundPersistSnapshot(ctx, srec.RoomID); err == nil && len(roundJSON) > 0 {
+		queSuits, _ = roomsvc.QueSuitsFromPersistJSON(roundJSON)
+	}
 	snap := &clientv1.SnapshotNotify{
-		RoomId:        srec.RoomID,
-		PlayerIds:     append([]string(nil), players...),
-		QueSuitBySeat: nil,
-		Cursor:        srec.LastCursor,
-		State:         state,
+		RoomId:           srec.RoomID,
+		PlayerIds:        append([]string(nil), players...),
+		QueSuitBySeat:    append([]int32(nil), queSuits...),
+		Cursor:           srec.LastCursor,
+		State:            state,
+		ActingSeat:       view.ActingSeat,
+		WaitingAction:    view.WaitingAction,
+		PendingTile:      view.PendingTile,
+		AvailableActions: append([]string(nil), view.AvailableActions...),
 	}
 	return &ResumeResult{
 		UserID:              uid,

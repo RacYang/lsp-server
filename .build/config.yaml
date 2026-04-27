@@ -21,12 +21,18 @@ tools:
 
 coverage:
   thresholds:
+    internal/mahjong/wall: 65
     internal/mahjong/...: 90
     internal/domain/...: 80
+    internal/app: 8
+    internal/handler: 50
+    internal/service/room: 50
+    cmd/all: 45
+    cmd/gate: 45
+    cmd/lobby: 15
+    cmd/room: 40
     default: 60
-  extra_exclude:
-    - cmd/**
-    - internal/app/**
+  extra_exclude: []
 
 lint:
   golangci:

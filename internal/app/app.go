@@ -109,7 +109,7 @@ func NewGate(cfg config.Config) (*App, error) {
 			}
 		}
 	}
-	deps := handler.Deps{Rooms: gateway, Hub: hub, Session: sessMgr}
+	deps := handler.Deps{Rooms: gateway, Hub: hub, Session: sessMgr, AllowedOrigins: append([]string(nil), cfg.WSAllowedOrigins...)}
 	obsStop, errObs := StartObsHTTP(cfg.ObsAddr, redisClient)
 	if errObs != nil {
 		if redisCleanup != nil {

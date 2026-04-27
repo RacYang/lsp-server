@@ -145,8 +145,9 @@ func recoverOwnedRooms(ctx context.Context, rt *router.Etcd, rnodeID string, rcl
 	}
 	for _, roomID := range roomIDs {
 		var (
-			players []string
-			state   = "waiting"
+			players   []string
+			state     = "waiting"
+			roundJSON []byte
 		)
 		if meta, ok, err := rcli.GetRoomSnapMeta(ctx, roomID); err != nil {
 			return err
@@ -154,6 +155,9 @@ func recoverOwnedRooms(ctx context.Context, rt *router.Etcd, rnodeID string, rcl
 			players = append(players, meta.PlayerIDs...)
 			if strings.TrimSpace(meta.State) != "" {
 				state = meta.State
+			}
+			if meta.RoundJSON != "" {
+				roundJSON = []byte(meta.RoundJSON)
 			}
 		}
 		if gs != nil {
@@ -182,7 +186,10 @@ func recoverOwnedRooms(ctx context.Context, rt *router.Etcd, rnodeID string, rcl
 		if state == "closed" || len(players) == 0 {
 			continue
 		}
-		if err := svc.RecoverRoom(roomID, players, state); err != nil {
+		if state == "playing" && len(roundJSON) == 0 {
+			state = "ready"
+		}
+		if err := svc.RecoverRoom(roomID, players, state, roundJSON); err != nil {
 			return err
 		}
 	}

@@ -357,14 +357,18 @@ func (x *SnapshotRoomRequest) GetRoomId() string {
 
 // SnapshotRoomResponse.cursor 即快照游标 snapshot_cursor，与 room_events.seq 对齐。
 type SnapshotRoomResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Cursor        string                 `protobuf:"bytes,1,opt,name=cursor,proto3" json:"cursor,omitempty"`
-	PlayerIds     []string               `protobuf:"bytes,2,rep,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
-	QueSuitBySeat []int32                `protobuf:"varint,3,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
-	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
-	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Cursor           string                 `protobuf:"bytes,1,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	PlayerIds        []string               `protobuf:"bytes,2,rep,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
+	QueSuitBySeat    []int32                `protobuf:"varint,3,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
+	State            string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	Error            string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	ActingSeat       int32                  `protobuf:"varint,6,opt,name=acting_seat,json=actingSeat,proto3" json:"acting_seat,omitempty"`
+	WaitingAction    string                 `protobuf:"bytes,7,opt,name=waiting_action,json=waitingAction,proto3" json:"waiting_action,omitempty"`
+	PendingTile      string                 `protobuf:"bytes,8,opt,name=pending_tile,json=pendingTile,proto3" json:"pending_tile,omitempty"`
+	AvailableActions []string               `protobuf:"bytes,9,rep,name=available_actions,json=availableActions,proto3" json:"available_actions,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SnapshotRoomResponse) Reset() {
@@ -430,6 +434,34 @@ func (x *SnapshotRoomResponse) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *SnapshotRoomResponse) GetActingSeat() int32 {
+	if x != nil {
+		return x.ActingSeat
+	}
+	return 0
+}
+
+func (x *SnapshotRoomResponse) GetWaitingAction() string {
+	if x != nil {
+		return x.WaitingAction
+	}
+	return ""
+}
+
+func (x *SnapshotRoomResponse) GetPendingTile() string {
+	if x != nil {
+		return x.PendingTile
+	}
+	return ""
+}
+
+func (x *SnapshotRoomResponse) GetAvailableActions() []string {
+	if x != nil {
+		return x.AvailableActions
+	}
+	return nil
 }
 
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
@@ -1337,14 +1369,19 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12!\n" +
 	"\fsince_cursor\x18\x02 \x01(\tR\vsinceCursor\".\n" +
 	"\x13SnapshotRoomRequest\x12\x17\n" +
-	"\aroom_id\x18\x01 \x01(\tR\x06roomId\"\xa2\x01\n" +
+	"\aroom_id\x18\x01 \x01(\tR\x06roomId\"\xba\x02\n" +
 	"\x14SnapshotRoomResponse\x12\x16\n" +
 	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12\x1d\n" +
 	"\n" +
 	"player_ids\x18\x02 \x03(\tR\tplayerIds\x12'\n" +
 	"\x10que_suit_by_seat\x18\x03 \x03(\x05R\rqueSuitBySeat\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"\xa3\x04\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\x12\x1f\n" +
+	"\vacting_seat\x18\x06 \x01(\x05R\n" +
+	"actingSeat\x12%\n" +
+	"\x0ewaiting_action\x18\a \x01(\tR\rwaitingAction\x12!\n" +
+	"\fpending_tile\x18\b \x01(\tR\vpendingTile\x12+\n" +
+	"\x11available_actions\x18\t \x03(\tR\x10availableActions\"\xa3\x04\n" +
 	"\x1fRoomServiceStreamEventsResponse\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12;\n" +
 	"\n" +
