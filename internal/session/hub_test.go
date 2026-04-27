@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"racoo.cn/lsp/internal/clock"
 	"racoo.cn/lsp/internal/net/frame"
 )
 
@@ -121,6 +122,41 @@ func TestHubUnregister(t *testing.T) {
 	}
 	if _, ok := h.rooms["room1"]; ok {
 		t.Fatal("room entry should be removed when empty")
+	}
+}
+
+func TestHubHeartbeatTimeoutUsesClock(t *testing.T) {
+	fc := clock.NewFake(time.Unix(0, 0))
+	h := NewHub()
+	h.SetClock(fc)
+	h.SetHeartbeatTimeout(time.Second)
+	h.Register("u1", "room1", nil)
+	h.Register("u2", "room1", nil)
+	fc.Advance(500 * time.Millisecond)
+	h.TouchHeartbeat("u2")
+	fc.Advance(600 * time.Millisecond)
+
+	closed := h.CloseExpiredHeartbeats()
+	if len(closed) != 1 || closed[0] != "u1" {
+		t.Fatalf("closed mismatch: %+v", closed)
+	}
+	if _, ok := h.users["u1"]; ok {
+		t.Fatal("expired user should be removed")
+	}
+	if _, ok := h.users["u2"]; !ok {
+		t.Fatal("fresh user should stay")
+	}
+}
+
+func TestHubHeartbeatTimeoutDisabled(t *testing.T) {
+	fc := clock.NewFake(time.Unix(0, 0))
+	h := NewHub()
+	h.SetClock(fc)
+	h.SetHeartbeatTimeout(0)
+	h.Register("u1", "room1", nil)
+	fc.Advance(time.Hour)
+	if closed := h.CloseExpiredHeartbeats(); len(closed) != 0 {
+		t.Fatalf("timeout disabled closed users: %+v", closed)
 	}
 }
 

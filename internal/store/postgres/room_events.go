@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"racoo.cn/lsp/internal/metrics"
 )
 
 // roomEventPool 约束事件存储所需连接能力；*pgxpool.Pool 与 pgxmock 均可注入。
@@ -51,22 +54,29 @@ func (s *RoomEventStore) AppendEvent(ctx context.Context, roomID, kind string, p
 
 // AppendEvents 在单事务内为一批事件连续分配 seq 并写入；要么全部成功，要么全部回滚。
 func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events []RoomEventRow) ([]RoomEventRow, error) {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("postgres", "append_events", started, opErr) }()
 	if s == nil || s.pool == nil {
-		return nil, fmt.Errorf("nil room event store")
+		opErr = fmt.Errorf("nil room event store")
+		return nil, opErr
 	}
 	if roomID == "" {
-		return nil, fmt.Errorf("empty room_id")
+		opErr = fmt.Errorf("empty room_id")
+		return nil, opErr
 	}
 	if len(events) == 0 {
 		return nil, nil
 	}
 	for _, event := range events {
 		if event.Kind == "" {
-			return nil, fmt.Errorf("empty kind")
+			opErr = fmt.Errorf("empty kind")
+			return nil, opErr
 		}
 	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
+		opErr = err
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
@@ -80,13 +90,15 @@ func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events
 	case errors.Is(err, pgx.ErrNoRows):
 		next = 1
 	default:
-		return nil, fmt.Errorf("alloc seq: %w", err)
+		opErr = fmt.Errorf("alloc seq: %w", err)
+		return nil, opErr
 	}
 
 	out := make([]RoomEventRow, 0, len(events))
 	for _, event := range events {
 		if _, err := tx.Exec(ctx, `INSERT INTO room_events (room_id, seq, kind, payload) VALUES ($1, $2, $3, $4)`, roomID, next, event.Kind, event.Payload); err != nil {
-			return nil, fmt.Errorf("insert event: %w", err)
+			opErr = fmt.Errorf("insert event: %w", err)
+			return nil, opErr
 		}
 		out = append(out, RoomEventRow{
 			RoomID:  roomID,
@@ -97,6 +109,7 @@ func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events
 		next++
 	}
 	if err := tx.Commit(ctx); err != nil {
+		opErr = err
 		return nil, err
 	}
 	return out, nil
@@ -104,11 +117,16 @@ func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events
 
 // ListEventsAfter 返回 seq 严格大于 afterSeq 的事件，按 seq 升序。
 func (s *RoomEventStore) ListEventsAfter(ctx context.Context, roomID string, afterSeq int64) ([]RoomEventRow, error) {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("postgres", "list_events_after", started, opErr) }()
 	if s == nil || s.pool == nil {
-		return nil, fmt.Errorf("nil room event store")
+		opErr = fmt.Errorf("nil room event store")
+		return nil, opErr
 	}
 	rows, err := s.pool.Query(ctx, `SELECT room_id, seq, kind, payload FROM room_events WHERE room_id = $1 AND seq > $2 ORDER BY seq ASC`, roomID, afterSeq)
 	if err != nil {
+		opErr = err
 		return nil, err
 	}
 	defer rows.Close()
@@ -116,11 +134,13 @@ func (s *RoomEventStore) ListEventsAfter(ctx context.Context, roomID string, aft
 	for rows.Next() {
 		var r RoomEventRow
 		if err := rows.Scan(&r.RoomID, &r.Seq, &r.Kind, &r.Payload); err != nil {
+			opErr = err
 			return nil, err
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	opErr = rows.Err()
+	return out, opErr
 }
 
 // MaxSeq 返回房间当前最大 seq；无记录时为 0。

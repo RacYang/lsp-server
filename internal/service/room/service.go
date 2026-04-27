@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
+	"racoo.cn/lsp/internal/clock"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 )
 
@@ -17,6 +19,49 @@ type Service struct {
 	mu     sync.Mutex
 	actors map[string]*roomActor
 	engine *Engine
+	clock  clock.Clock
+	tmo    TimeoutConfig
+	onAuto func(context.Context, string, []Notification)
+}
+
+// TimeoutConfig 定义各等待态的服务端托管时长。
+type TimeoutConfig struct {
+	ExchangeThree time.Duration
+	QueMen        time.Duration
+	ClaimWindow   time.Duration
+	TsumoWindow   time.Duration
+	Discard       time.Duration
+}
+
+// DefaultTimeoutConfig 返回 Phase 5 定时器默认值。
+func DefaultTimeoutConfig() TimeoutConfig {
+	return TimeoutConfig{
+		ExchangeThree: 15 * time.Second,
+		QueMen:        15 * time.Second,
+		ClaimWindow:   3 * time.Second,
+		TsumoWindow:   3 * time.Second,
+		Discard:       15 * time.Second,
+	}
+}
+
+func (cfg TimeoutConfig) withDefaults() TimeoutConfig {
+	def := DefaultTimeoutConfig()
+	if cfg.ExchangeThree <= 0 {
+		cfg.ExchangeThree = def.ExchangeThree
+	}
+	if cfg.QueMen <= 0 {
+		cfg.QueMen = def.QueMen
+	}
+	if cfg.ClaimWindow <= 0 {
+		cfg.ClaimWindow = def.ClaimWindow
+	}
+	if cfg.TsumoWindow <= 0 {
+		cfg.TsumoWindow = def.TsumoWindow
+	}
+	if cfg.Discard <= 0 {
+		cfg.Discard = def.Discard
+	}
+	return cfg
 }
 
 // NewService 创建房间服务（广播由 handler 在写完应答帧后调用 Hub 完成）。
@@ -30,7 +75,33 @@ func NewServiceWithRule(l *Lobby, ruleID string) *Service {
 		lobby:  l,
 		actors: make(map[string]*roomActor),
 		engine: NewEngine(ruleID),
+		clock:  clock.NewReal(),
+		tmo:    DefaultTimeoutConfig(),
 	}
+}
+
+// SetClock 注入时间源；主要供测试使用。
+func (s *Service) SetClock(c clock.Clock) {
+	if s == nil || c == nil {
+		return
+	}
+	s.clock = c
+}
+
+// SetTimeoutConfig 覆盖房间托管时长。
+func (s *Service) SetTimeoutConfig(cfg TimeoutConfig) {
+	if s == nil {
+		return
+	}
+	s.tmo = cfg.withDefaults()
+}
+
+// SetAutoTimeoutHandler 注册后台托管通知处理器。
+func (s *Service) SetAutoTimeoutHandler(fn func(context.Context, string, []Notification)) {
+	if s == nil {
+		return
+	}
+	s.onAuto = fn
 }
 
 // EnsureRoom 若不存在则创建房间并启动该房的 mailbox 协程。
@@ -64,6 +135,8 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	a := newRoomActor(r, initialRound)
 	a.engine = s.engine
 	a.onExit = s.removeActor
+	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
+	a.onAuto = s.onAuto
 	s.actors[roomID] = a
 	go a.run()
 }
@@ -88,6 +161,8 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 	a := newRoomActor(r, nil)
 	a.engine = s.engine
 	a.onExit = s.removeActor
+	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
+	a.onAuto = s.onAuto
 	s.actors[roomID] = a
 	s.mu.Unlock()
 	go a.run()

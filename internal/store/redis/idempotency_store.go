@@ -8,21 +8,29 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
+
+	"racoo.cn/lsp/internal/metrics"
 )
 
 const defaultIdempotencyTTL = 10 * time.Minute
 
 // PutIdempotencyAbsent 仅在键不存在时写入幂等记录；created=false 表示此前已有结果。
 func (c *Client) PutIdempotencyAbsent(ctx context.Context, scope, key string, record IdempotencyRecord, ttl time.Duration) (bool, error) {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("redis", "put_idempotency_absent", started, opErr) }()
 	if c == nil || c.kv == nil {
-		return false, fmt.Errorf("nil redis client")
+		opErr = fmt.Errorf("nil redis client")
+		return false, opErr
 	}
 	payload, err := json.Marshal(record)
 	if err != nil {
-		return false, fmt.Errorf("marshal idempotency: %w", err)
+		opErr = fmt.Errorf("marshal idempotency: %w", err)
+		return false, opErr
 	}
 	created, err := c.kv.SetNX(ctx, IdempotencyKey(scope, key), payload, ttlOrDefault(ttl, defaultIdempotencyTTL)).Result()
 	if err != nil {
+		opErr = err
 		return false, err
 	}
 	return created, nil
@@ -30,19 +38,25 @@ func (c *Client) PutIdempotencyAbsent(ctx context.Context, scope, key string, re
 
 // GetIdempotency 读取幂等记录；键不存在时返回 ok=false。
 func (c *Client) GetIdempotency(ctx context.Context, scope, key string) (IdempotencyRecord, bool, error) {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("redis", "get_idempotency", started, opErr) }()
 	if c == nil || c.kv == nil {
-		return IdempotencyRecord{}, false, fmt.Errorf("nil redis client")
+		opErr = fmt.Errorf("nil redis client")
+		return IdempotencyRecord{}, false, opErr
 	}
 	raw, err := c.kv.Get(ctx, IdempotencyKey(scope, key)).Bytes()
 	if errors.Is(err, goredis.Nil) {
 		return IdempotencyRecord{}, false, nil
 	}
 	if err != nil {
+		opErr = err
 		return IdempotencyRecord{}, false, err
 	}
 	var rec IdempotencyRecord
 	if err := json.Unmarshal(raw, &rec); err != nil {
-		return IdempotencyRecord{}, false, fmt.Errorf("unmarshal idempotency: %w", err)
+		opErr = fmt.Errorf("unmarshal idempotency: %w", err)
+		return IdempotencyRecord{}, false, opErr
 	}
 	return rec, true, nil
 }

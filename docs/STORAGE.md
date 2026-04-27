@@ -45,3 +45,9 @@
 
 - 房间归属以 etcd 为准。
 - Redis 中的房间路由仅是缓存，不得单独决定最终请求落点。
+
+## Phase 5 运行时约定
+
+- `snapmeta.round_json` 带 `schema_version`；恢复遇到未来版本时不继续反序列化进行中局面，而是降级到重新准备，避免启动阻断。
+- WS 入口的进程内幂等缓存只保护当前进程快速重放；跨进程 `ApplyEvent.idempotency_key` 仍以 Redis 为准。
+- Redis 与 PostgreSQL 关键操作会记录到 `lsp_storage_op_seconds{store,op,result}`，用于观察 p99 尾延迟。

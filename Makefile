@@ -116,7 +116,7 @@ ifneq ($(HAS_GO),)
 	@if [[ "$${RUN_INTEGRATION:-0}" != "1" ]]; then \
 		echo "verify-test-integration: RUN_INTEGRATION!=1，跳过"; \
 	else \
-		go test -tags=integration ./internal/app -run TestRoomProcessRestartReplay -count=1 -v; \
+		go test -tags=integration ./internal/app ./internal/handler ./internal/service/room -run 'Test(ClusterReconnectLoginWithSessionToken|HandleWebSocketIdempotencyKeyDropsReplay|SubmitActionReturnsRateLimitedWhenMailboxFull|SchedulerAutoTimeoutUsesFakeClock)' -count=1 -v; \
 	fi
 else
 	@echo "verify-test-integration: no go packages, skipping"

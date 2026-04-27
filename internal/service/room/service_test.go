@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/clock"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
@@ -24,6 +25,11 @@ type fakeBC struct {
 	lastRoom string
 	lastMsg  uint16
 	n        int
+}
+
+func TestRestoreRoundRejectsFutureSchema(t *testing.T) {
+	_, err := RestoreRoundFromPersistJSON("room-future-schema", []byte(`{"schema_version":999}`))
+	require.ErrorIs(t, err, ErrRoundPersistUnsupportedSchema)
 }
 
 func (f *fakeBC) Broadcast(roomID string, msgID uint16, payload []byte) {
@@ -146,8 +152,6 @@ func TestRoundViewShowsClaimWindow(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            1,
-		maxSteps:        16,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 		currentDraw:     tile.Must(tile.SuitDots, 7),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
@@ -160,6 +164,67 @@ func TestRoundViewShowsClaimWindow(t *testing.T) {
 	require.Equal(t, "claim", view.WaitingAction)
 	require.Equal(t, "m3", view.PendingTile)
 	require.Equal(t, []string{"pong"}, view.AvailableActions)
+}
+
+func TestExchangeThreeUsesClientDirection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		direction int32
+		wantSeat0 []tile.Tile
+	}{
+		{name: "clockwise", direction: 1, wantSeat0: []tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2), tile.Must(tile.SuitDots, 3)}},
+		{name: "opposite", direction: 2, wantSeat0: []tile.Tile{tile.Must(tile.SuitBamboo, 1), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3)}},
+		{name: "counterclockwise", direction: 3, wantSeat0: []tile.Tile{tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 5), tile.Must(tile.SuitCharacters, 6)}},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rs := roundWaitingExchange()
+			e := NewEngine("sichuan_xzdd")
+			for seat := 0; seat < 4; seat++ {
+				_, err := e.ApplyExchangeThree(context.Background(), rs, seat, tilesToStrings(rs.hands[seat].Tiles()), tt.direction)
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantSeat0, rs.hands[0].Tiles())
+		})
+	}
+}
+
+func TestExchangeThreeRejectsMismatchedDirection(t *testing.T) {
+	t.Parallel()
+
+	rs := roundWaitingExchange()
+	e := NewEngine("sichuan_xzdd")
+	_, err := e.ApplyExchangeThree(context.Background(), rs, 0, tilesToStrings(rs.hands[0].Tiles()), 1)
+	require.NoError(t, err)
+	_, err = e.ApplyExchangeThree(context.Background(), rs, 1, tilesToStrings(rs.hands[1].Tiles()), 2)
+	require.ErrorContains(t, err, "exchange direction mismatch")
+}
+
+func TestQueMenUsesClientSuit(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-que",
+		ruleID:          "sichuan_xzdd",
+		rule:            rules.MustGet("sichuan_xzdd"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3)}), hand.New(), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		queSubmitted:    make([]bool, 4),
+		waitingQueMen:   true,
+		lastDiscardSeat: -1,
+		totalFanBySeat:  make([]int32, 4),
+	}
+	e := NewEngine("sichuan_xzdd")
+	_, err := e.ApplyQueMen(context.Background(), rs, 0, int32(tile.SuitBamboo))
+	require.NoError(t, err)
+	require.EqualValues(t, tile.SuitBamboo, rs.queBySeat[0])
 }
 
 func TestApplyPongInterruptsPendingTurn(t *testing.T) {
@@ -175,8 +240,6 @@ func TestApplyPongInterruptsPendingTurn(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            1,
-		maxSteps:        16,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 		currentDraw:     tile.Must(tile.SuitDots, 7),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
@@ -195,6 +258,24 @@ func TestApplyPongInterruptsPendingTurn(t *testing.T) {
 	require.Empty(t, rs.hands[2].Tiles())
 }
 
+func roundWaitingExchange() *RoundState {
+	return &RoundState{
+		roomID:            "r-exchange",
+		ruleID:            "sichuan_xzdd",
+		rule:              rules.MustGet("sichuan_xzdd"),
+		playerIDs:         [4]string{"u0", "u1", "u2", "u3"},
+		hands:             []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2), tile.Must(tile.SuitDots, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 1), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 5), tile.Must(tile.SuitCharacters, 6)})},
+		queBySeat:         make([]int32, 4),
+		waitingExchange:   true,
+		exchangeSubmitted: make([]bool, 4),
+		exchangeDirection: -1,
+		exchangeSelection: make([][]tile.Tile, 4),
+		queSubmitted:      make([]bool, 4),
+		lastDiscardSeat:   -1,
+		totalFanBySeat:    make([]int32, 4),
+	}
+}
+
 func TestApplyDiscardPromptsClaimInsteadOfNextDraw(t *testing.T) {
 	t.Parallel()
 
@@ -208,9 +289,7 @@ func TestApplyDiscardPromptsClaimInsteadOfNextDraw(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            0,
-		maxSteps:        16,
 		lastDiscardSeat: -1,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 	}
 
@@ -247,9 +326,7 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            0,
-		maxSteps:        16,
 		lastDiscardSeat: -1,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 	}
 
@@ -291,8 +368,6 @@ func TestClaimWindowPersistsAndRestores(t *testing.T) {
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
 		queBySeat:       make([]int32, 4),
 		turn:            1,
-		maxSteps:        16,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
@@ -311,6 +386,43 @@ func TestClaimWindowPersistsAndRestores(t *testing.T) {
 	require.Equal(t, []string{"gang", "pong"}, view.AvailableActions)
 }
 
+func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-discard-hu",
+		ruleID:          "sichuan_xzdd",
+		rule:            rules.MustGet("sichuan_xzdd"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.New(), hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 1)}), hand.New()},
+		queBySeat:       make([]int32, 4),
+		turn:            1,
+		huedSeats:       make([]bool, 4),
+		winnerSeats:     make([]int, 0, 3),
+		totalFanBySeat:  make([]int32, 4),
+		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
+		lastDiscardSeat: 0,
+	}
+	rs.openClaimWindow()
+
+	notifs, err := NewEngine("sichuan_xzdd").ApplyHu(context.Background(), rs, 2)
+	require.NoError(t, err)
+	require.False(t, rs.closed)
+	require.True(t, rs.isHued(2))
+	require.Equal(t, 1, rs.turn)
+
+	var sawSeat1Draw bool
+	for _, notification := range notifs {
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		if draw := env.GetDrawTile(); draw != nil && draw.GetSeatIndex() == 1 {
+			sawSeat1Draw = true
+		}
+	}
+	require.True(t, sawSeat1Draw)
+}
+
 func TestApplyTimeoutUsesBestClaimCandidate(t *testing.T) {
 	t.Parallel()
 
@@ -323,8 +435,6 @@ func TestApplyTimeoutUsesBestClaimCandidate(t *testing.T) {
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
 		queBySeat:       make([]int32, 4),
 		turn:            1,
-		maxSteps:        16,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
@@ -351,9 +461,7 @@ func TestApplyTimeoutAutoDiscardsCurrentTurn(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            0,
-		maxSteps:        16,
 		lastDiscardSeat: -1,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 	}
 
@@ -376,9 +484,7 @@ func TestServiceAutoTimeoutSubmitsThroughActor(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		waitingDiscard:  true,
 		turn:            0,
-		maxSteps:        16,
 		lastDiscardSeat: -1,
-		winnerSeat:      -1,
 		totalFanBySeat:  make([]int32, 4),
 	}
 	data, err := rs.MarshalRoundPersistJSON()
@@ -389,6 +495,45 @@ func TestServiceAutoTimeoutSubmitsThroughActor(t *testing.T) {
 	notifs, err := svc.AutoTimeout(context.Background(), "r-service-timeout")
 	require.NoError(t, err)
 	require.Len(t, notifs, 2)
+}
+
+func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
+	fc := clock.NewFake(time.Unix(0, 0))
+	svc := NewServiceWithRule(NewLobby(), "sichuan_xzdd")
+	svc.SetClock(fc)
+	svc.SetTimeoutConfig(TimeoutConfig{
+		ExchangeThree: time.Second,
+		QueMen:        time.Second,
+		ClaimWindow:   time.Second,
+		TsumoWindow:   time.Second,
+		Discard:       time.Second,
+	})
+	got := make(chan []Notification, 1)
+	svc.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []Notification) {
+		if roomID == "r-scheduler" {
+			got <- notifications
+		}
+	})
+	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
+		_, err := svc.Join(context.Background(), "r-scheduler", uid)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
+		_, err := svc.Ready(context.Background(), "r-scheduler", uid)
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < 4; i++ {
+		fc.Advance(time.Second)
+	}
+	require.Eventually(t, func() bool {
+		select {
+		case notifications := <-got:
+			return len(notifications) > 0
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestSubmitActionReturnsActorResultAfterContextCanceled(t *testing.T) {
@@ -406,6 +551,16 @@ func TestSubmitActionReturnsActorResultAfterContextCanceled(t *testing.T) {
 	notifs, err := a.submitAction(ctx, cmdDiscard{userID: "u1", tile: "m1", res: make(chan actionResult, 1)})
 	require.NoError(t, err)
 	require.Len(t, notifs, 1)
+}
+
+func TestSubmitActionReturnsRateLimitedWhenMailboxFull(t *testing.T) {
+	t.Parallel()
+
+	a := &roomActor{ch: make(chan any, 1)}
+	a.ch <- cmdReady{}
+	notifs, err := a.submitAction(context.Background(), cmdDiscard{userID: "u1", tile: "m1", res: make(chan actionResult, 1)})
+	require.ErrorIs(t, err, ErrRateLimited)
+	require.Nil(t, notifs)
 }
 
 func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
@@ -431,8 +586,6 @@ func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 		queBySeat:      make([]int32, 4),
 		waitingDiscard: true,
 		turn:           0,
-		maxSteps:       16,
-		winnerSeat:     -1,
 		totalFanBySeat: make([]int32, 4),
 	}
 
@@ -467,7 +620,7 @@ func outboundTestMsgID(kind Kind) (uint16, bool) {
 }
 
 func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
-	for i := 0; i < 64; i++ {
+	for i := 0; i < 256; i++ {
 		a := svc.getActor(roomID)
 		if a == nil || a.round == nil {
 			return nil

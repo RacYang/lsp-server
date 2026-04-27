@@ -399,6 +399,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		WaitingAction:    snapResp.GetWaitingAction(),
 		PendingTile:      snapResp.GetPendingTile(),
 		AvailableActions: append([]string(nil), snapResp.GetAvailableActions()...),
+		ClaimCandidates:  clusterClaimCandidatesToClient(snapResp.GetClaimCandidates()),
 	}
 	if snap.GetState() == "closed" {
 		if fallback, ok, ferr := g.loadSettlementFallback(ctx, uid, srec.RoomID); ferr != nil {
@@ -415,6 +416,17 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		Snapshot:            snap,
 		SnapshotSinceCursor: since,
 	}, nil
+}
+
+func clusterClaimCandidatesToClient(candidates []*clusterv1.ClaimCandidate) []*clientv1.ClaimCandidate {
+	out := make([]*clientv1.ClaimCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, &clientv1.ClaimCandidate{
+			SeatIndex: candidate.GetSeatIndex(),
+			Actions:   append([]string(nil), candidate.GetActions()...),
+		})
+	}
+	return out
 }
 
 func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {

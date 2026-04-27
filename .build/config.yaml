@@ -73,27 +73,29 @@ lint:
       service: internal/service/**
       session: internal/session/**
       config: internal/config/**
+      clock: internal/clock/**
+      metrics: internal/metrics/**
       log: internal/log/**
       cmd: cmd/**
       pkg: pkg/**
       apigen: api/gen/**
     deny:
       - from: mahjong_xzdd
-        to: [net, cluster, handler, store, service, session, app, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
       - from: mahjong_rules
-        to: [net, cluster, handler, store, service, session, app, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
       - from: mahjong_tile
-        to: [net, cluster, handler, store, service, session, app, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
       - from: mahjong_wall
-        to: [net, cluster, handler, store, service, session, app, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
       - from: mahjong_hand
-        to: [net, cluster, handler, store, service, session, app, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
       - from: mahjong_hu
-        to: [net, cluster, handler, store, service, session, app, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
       - from: mahjong_fan
-        to: [net, cluster, handler, store, service, session, app, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
       - from: domain
-        to: [net, cluster, handler, store, service, app, cmd]
+        to: [net, cluster, handler, store, service, app, clock, metrics, cmd]
       - from: handler
         to: [store]
       - from: service
@@ -116,6 +118,8 @@ lint:
           - service
           - session
           - config
+          - clock
+          - metrics
           - log
           - cmd
           - apigen
@@ -137,6 +141,8 @@ lint:
           - service
           - session
           - config
+          - clock
+          - metrics
           - log
           - cmd
           - pkg

@@ -2,20 +2,27 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/pprof"
+	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"racoo.cn/lsp/internal/store/redis"
 )
+
+var registerRuntimeCollectorsOnce sync.Once
 
 // StartObsHTTP 若 addr 非空则启动可观测性 HTTP 服务（健康检查、就绪检查、指标、pprof）。
 func StartObsHTTP(addr string, rcli *redis.Client) (stop func(), err error) {
 	if addr == "" {
 		return func() {}, nil
 	}
+	registerRuntimeCollectorsOnce.Do(registerRuntimeCollectors)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -51,4 +58,18 @@ func StartObsHTTP(addr string, rcli *redis.Client) (stop func(), err error) {
 		defer cancel()
 		_ = srv.Shutdown(shCtx)
 	}, nil
+}
+
+func registerRuntimeCollectors() {
+	registerCollector(collectors.NewGoCollector())
+	registerCollector(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+}
+
+func registerCollector(c prometheus.Collector) {
+	if err := prometheus.Register(c); err != nil {
+		var already prometheus.AlreadyRegisteredError
+		if !errors.As(err, &already) {
+			return
+		}
+	}
 }

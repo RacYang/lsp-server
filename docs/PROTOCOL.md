@@ -70,7 +70,9 @@
 ## Phase 4 交互闭环
 
 - `discard_req` 已打通到 `ws -> gate -> room.ApplyEvent -> room actor -> StreamEvents`，服务端进入真正的“等待摸牌/等待出牌”循环，而不是 `ready` 后自动整局回放。
-- `pong_req` / `gang_req` / `hu_req` 都有显式响应帧；当前其中 `hu_req` 用于自摸待决窗口，`pong` / `gang` 支持对最近一次弃牌打开多候选抢答窗口。服务端会向可抢座位分别下发 `pong_choice` / `gang_choice`，并按“杠优先于碰、同优先级按出牌座位下家顺序”的规则裁决。
+- `Envelope.idempotency_key` 可由客户端为会改变房间状态的请求生成。WS 入口会对已知状态变更请求做进程内去重，未知 `msg_id` 不进入幂等缓存。
+- `pong_req` / `gang_req` / `hu_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口。服务端会向可抢座位分别下发 `hu_choice` / `qiang_gang_choice` / `pong_choice` / `gang_choice`，并按“胡优先于杠、杠优先于碰、同优先级按出牌座位下家顺序”的规则裁决。
 - 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端随后可发送 `hu_req`，也可直接对该摸到的牌发送 `discard_req` 继续轮转。
-- `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions`，用于重连后恢复当前等待态。
+- `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions` 与 `claim_candidates`，用于重连后恢复当前等待态。
 - 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。
+- WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。

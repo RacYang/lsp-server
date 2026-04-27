@@ -102,6 +102,13 @@ func NewGate(cfg config.Config) (*App, error) {
 	} else {
 		lb := roomsvc.NewLobby()
 		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID)
+		rs.SetTimeoutConfig(roomsvc.TimeoutConfig{
+			ExchangeThree: cfg.RoomTimeouts.ExchangeThree,
+			QueMen:        cfg.RoomTimeouts.QueMen,
+			ClaimWindow:   cfg.RoomTimeouts.ClaimWindow,
+			TsumoWindow:   cfg.RoomTimeouts.TsumoWindow,
+			Discard:       cfg.RoomTimeouts.Discard,
+		})
 		gateway = handler.NewLocalRoomGateway(rs, hub, sessMgr)
 		cleanup = func() {
 			if redisCleanup != nil {

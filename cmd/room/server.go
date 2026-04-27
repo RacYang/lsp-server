@@ -40,6 +40,11 @@ func newRoomGRPCServer(rooms *roomsvc.Service, ev *postgres.RoomEventStore, gs *
 		rdb:     rdb,
 		streams: make(map[string][]chan *clusterv1.RoomServiceStreamEventsResponse),
 	}
+	if rooms != nil {
+		rooms.SetAutoTimeoutHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
+			_ = srv.persistPublishAndFinalize(ctx, roomID, "", notifications)
+		})
+	}
 	srv.ready.Store(true)
 	return srv
 }
@@ -203,6 +208,8 @@ func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID strin
 			RoomId:        roomID,
 			WinnerUserIds: append([]string(nil), st.GetWinnerUserIds()...),
 			TotalFan:      st.GetTotalFan(),
+			SeatScores:    clusterSeatScoresToClient(st.GetSeatScores()),
+			Penalties:     clusterPenaltiesToClient(st.GetPenalties()),
 			DetailText:    st.GetDetailText(),
 		})
 	}
@@ -293,6 +300,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					WaitingAction:    view.WaitingAction,
 					PendingTile:      view.PendingTile,
 					AvailableActions: append([]string(nil), view.AvailableActions...),
+					ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
 				}, nil
 			}
 		}
@@ -319,6 +327,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 		WaitingAction:    view.WaitingAction,
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),
+		ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
 	}, nil
 }
 
@@ -519,17 +528,83 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 			},
 		}
 	case roomsvc.KindSettlement:
+		settlement := env.GetSettlement()
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_Settlement{
 			Settlement: &clusterv1.SettlementEvent{
-				WinnerUserIds: append([]string(nil), env.GetSettlement().GetWinnerUserIds()...),
-				TotalFan:      env.GetSettlement().GetTotalFan(),
-				DetailText:    env.GetSettlement().GetDetailText(),
+				WinnerUserIds: append([]string(nil), settlement.GetWinnerUserIds()...),
+				TotalFan:      settlement.GetTotalFan(),
+				DetailText:    settlement.GetDetailText(),
+				SeatScores:    clientSeatScoresToCluster(settlement.GetSeatScores()),
+				Penalties:     clientPenaltiesToCluster(settlement.GetPenalties()),
 			},
 		}
 	default:
 		return nil, fmt.Errorf("unsupported notification kind: %s", notification.Kind)
 	}
 	return resp, nil
+}
+
+func roomClaimCandidatesToCluster(candidates []roomsvc.RoundClaimCandidate) []*clusterv1.ClaimCandidate {
+	out := make([]*clusterv1.ClaimCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, &clusterv1.ClaimCandidate{
+			SeatIndex: candidate.Seat,
+			Actions:   append([]string(nil), candidate.Actions...),
+		})
+	}
+	return out
+}
+
+func clientSeatScoresToCluster(scores []*clientv1.SeatScore) []*clusterv1.SeatScore {
+	out := make([]*clusterv1.SeatScore, 0, len(scores))
+	for _, score := range scores {
+		out = append(out, &clusterv1.SeatScore{
+			SeatIndex: score.GetSeatIndex(),
+			UserId:    score.GetUserId(),
+			TotalFan:  score.GetTotalFan(),
+			Skipped:   score.GetSkipped(),
+		})
+	}
+	return out
+}
+
+func clusterSeatScoresToClient(scores []*clusterv1.SeatScore) []*clientv1.SeatScore {
+	out := make([]*clientv1.SeatScore, 0, len(scores))
+	for _, score := range scores {
+		out = append(out, &clientv1.SeatScore{
+			SeatIndex: score.GetSeatIndex(),
+			UserId:    score.GetUserId(),
+			TotalFan:  score.GetTotalFan(),
+			Skipped:   score.GetSkipped(),
+		})
+	}
+	return out
+}
+
+func clientPenaltiesToCluster(penalties []*clientv1.PenaltyItem) []*clusterv1.PenaltyItem {
+	out := make([]*clusterv1.PenaltyItem, 0, len(penalties))
+	for _, penalty := range penalties {
+		out = append(out, &clusterv1.PenaltyItem{
+			Reason:   penalty.GetReason(),
+			FromSeat: penalty.GetFromSeat(),
+			ToSeat:   penalty.GetToSeat(),
+			Amount:   penalty.GetAmount(),
+		})
+	}
+	return out
+}
+
+func clusterPenaltiesToClient(penalties []*clusterv1.PenaltyItem) []*clientv1.PenaltyItem {
+	out := make([]*clientv1.PenaltyItem, 0, len(penalties))
+	for _, penalty := range penalties {
+		out = append(out, &clientv1.PenaltyItem{
+			Reason:   penalty.GetReason(),
+			FromSeat: penalty.GetFromSeat(),
+			ToSeat:   penalty.GetToSeat(),
+			Amount:   penalty.GetAmount(),
+		})
+	}
+	return out
 }
 
 type roomService interface {

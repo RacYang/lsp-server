@@ -41,3 +41,7 @@ logx.Info(ctx, "玩家进入房间", "trace_id", tid, "user_id", uid, "room_id",
 
 - `verify-no-direct-logging`：拦截非法直调。
 - `verify-log-calls`：校验门面 message 中文占比及 key 是否出现（实现见 `scripts/verify-log-calls.py`）。
+
+## 与指标的边界
+
+限流、幂等重放、抢答窗口、自动托管、重连结果、actor 队列深度与存储耗时以 Prometheus 指标为主；日志只记录异常、降级与需要审计的关键路径，避免把高频运行态写成日志噪声。

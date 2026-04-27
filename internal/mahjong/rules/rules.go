@@ -13,16 +13,66 @@ import (
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
 
-// HuContext 为和牌判定的最小上下文；Phase 1 仅占位，后续可扩展场况与根牌等。
-type HuContext struct{}
+// HuSource 表示和牌来源，供规则实现区分自摸、点炮与抢杠等场况。
+type HuSource string
+
+const (
+	HuSourceUnspecified HuSource = ""
+	HuSourceTsumo       HuSource = "tsumo"
+	HuSourceDiscard     HuSource = "discard"
+	HuSourceQiangGang   HuSource = "qiang_gang"
+	HuSourceBuGang      HuSource = "bu_gang"
+)
+
+// GangKind 表示杠牌类型，供结算阶段计算刮风下雨与退税。
+type GangKind string
+
+const (
+	GangKindUnspecified GangKind = ""
+	GangKindMing        GangKind = "ming"
+	GangKindAn          GangKind = "an"
+	GangKindBu          GangKind = "bu"
+)
+
+// GangRecord 记录一笔杠牌流水，后续用于抢杠、退税与责任方判定。
+type GangRecord struct {
+	Seat            int
+	Kind            GangKind
+	Tile            tile.Tile
+	FromSeat        int
+	ResponsibleSeat int
+	Step            int
+}
+
+// HuContext 为和牌判定上下文；规则实现可按需消费场况字段。
+type HuContext struct {
+	Source          HuSource
+	PendingTile     tile.Tile
+	Que             []tile.Suit
+	Discarder       int
+	IsHaiDi         bool
+	IsGangShangHua  bool
+	ResponsibleSeat int
+	GangHistory     []GangRecord
+	WallRemaining   int
+}
 
 // HuResult 保存和牌后的 14 张计数快照，供计分使用。
 type HuResult struct {
 	Win hu.Counts
 }
 
-// ScoreContext 为计分上下文占位。
-type ScoreContext struct{}
+// ScoreContext 为计分上下文；Phase 5 规则 PR 会逐步消费这些字段。
+type ScoreContext struct {
+	SeatGenTiles    [][]tile.Tile
+	GangRecords     []GangRecord
+	IsTsumo         bool
+	IsHaiDi         bool
+	IsGangShangHua  bool
+	Que             []tile.Suit
+	ResponsibleSeat int
+	WallRemaining   int
+}
 
 // GameState 描述血战到底结束条件所需的最小信息。
 type GameState struct {

@@ -22,6 +22,8 @@ enum ErrorCode {
 // Envelope 为请求/响应通用外壳；body 使用 oneof 承载具体消息。
 message Envelope {
   string req_id = 1;
+  // 幂等键由客户端为会改变房间状态的请求生成；为空表示不启用请求去重。
+  string idempotency_key = 32;
   oneof body {
     LoginRequest login_req = 2;
     LoginResponse login_resp = 3;
@@ -201,7 +203,7 @@ message RouteRedirectNotify {
 // ExchangeThreeRequest 换三张：提交要交出的三张牌（字符串编码同 tile 名称）。
 message ExchangeThreeRequest {
   repeated string tiles = 1;
-  // 0=顺时针 1=逆时针 2=对家（与服务器状态机当前阶段一致时方可成功）
+  // 1=顺时针 2=对家 3=逆时针（四家必须提交一致方向）
   int32 direction = 2;
 }
 
@@ -249,4 +251,11 @@ message SnapshotNotify {
   string waiting_action = 7;
   string pending_tile = 8;
   repeated string available_actions = 9;
+  repeated ClaimCandidate claim_candidates = 10;
+}
+
+// ClaimCandidate 表示快照中仍然有效的抢答候选。
+message ClaimCandidate {
+  int32 seat_index = 1;
+  repeated string actions = 2;
 }

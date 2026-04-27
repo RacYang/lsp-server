@@ -6,6 +6,8 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
+
+	"racoo.cn/lsp/internal/metrics"
 )
 
 // Client 封装 go-redis 客户端，集中承载会话、幂等键与路由缓存访问。
@@ -32,10 +34,15 @@ func NewClientFromUniversal(cli goredis.UniversalClient) *Client {
 
 // Ping 用于启动期探活与集成测试连通性确认。
 func (c *Client) Ping(ctx context.Context) error {
+	started := time.Now()
 	if c == nil || c.kv == nil {
-		return fmt.Errorf("nil redis client")
+		err := fmt.Errorf("nil redis client")
+		metrics.ObserveStorage("redis", "ping", started, err)
+		return err
 	}
-	return c.kv.Ping(ctx).Err()
+	err := c.kv.Ping(ctx).Err()
+	metrics.ObserveStorage("redis", "ping", started, err)
+	return err
 }
 
 // Close 关闭底层连接池；重复调用时按 go-redis 语义返回 nil。

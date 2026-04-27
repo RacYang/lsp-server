@@ -39,6 +39,10 @@ components:
     in: internal/session/**
   config:
     in: internal/config/**
+  clock:
+    in: internal/clock/**
+  metrics:
+    in: internal/metrics/**
   log:
     in: internal/log/**
   cmd:
@@ -175,6 +179,8 @@ deps:
       - service
       - session
       - config
+      - clock
+      - metrics
       - log
       - cmd
       - pkg
@@ -195,12 +201,18 @@ deps:
       - store
       - session
       - config
+      - clock
+      - metrics
       - log
       - pkg
       - apigen
   session:
     anyProjectDeps: true
   config:
+    anyProjectDeps: true
+  clock:
+    anyProjectDeps: true
+  metrics:
     anyProjectDeps: true
   log:
     anyProjectDeps: true

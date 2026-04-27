@@ -10,7 +10,10 @@ const (
 	KindQingYiSe     Kind = "qing_yi_se"     // 清一色
 	KindQiDui        Kind = "qi_dui"         // 七对
 	KindYiGen        Kind = "yi_gen"         // 根（四张相同未杠出）
-	KindGangShangKai Kind = "gang_shang_kai" // 杠上开花（Phase 1 仅占位）
+	KindGangShangKai Kind = "gang_shang_kai" // 杠上开花
+	KindHaiDiLao     Kind = "hai_di_lao"     // 海底捞月
+	KindHaiDiPao     Kind = "hai_di_pao"     // 海底炮
+	KindQiangGangHu  Kind = "qiang_gang_hu"  // 抢杠胡
 )
 
 // Item 为单个番种项。

@@ -265,6 +265,20 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.GangReq, pb)); err != nil {
 					return nil, err
 				}
+			case "hu_choice", "qiang_gang_choice", "tsumo_choice":
+				req := &clientv1.Envelope{
+					ReqId: fmt.Sprintf("hu-%d", n),
+					Body: &clientv1.Envelope_HuReq{
+						HuReq: &clientv1.HuRequest{},
+					},
+				}
+				pb, err := proto.Marshal(req)
+				if err != nil {
+					return nil, err
+				}
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.HuReq, pb)); err != nil {
+					return nil, err
+				}
 			}
 		case msgid.Settlement:
 			if sn := env.GetSettlement(); sn != nil {
@@ -287,7 +301,7 @@ func drivePlayersUntilSettlement(t *testing.T, conns []*websocket.Conn) *clientv
 		wg.Add(1)
 		go func(idx int, c *websocket.Conn) {
 			defer wg.Done()
-			sn, err := driveConnUntilSettlement(c, int32(idx), 128) //nolint:gosec // 测试固定 4 个连接，idx 仅为 0..3
+			sn, err := driveConnUntilSettlement(c, int32(idx), 512) //nolint:gosec // 测试固定 4 个连接，idx 仅为 0..3
 			results[idx] = result{sn: sn, err: err}
 		}(i, conn)
 	}

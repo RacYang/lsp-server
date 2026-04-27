@@ -68,6 +68,13 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		return 1
 	}
 	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), cfg.RuleID)
+	svcCore.SetTimeoutConfig(roomsvc.TimeoutConfig{
+		ExchangeThree: cfg.RoomTimeouts.ExchangeThree,
+		QueMen:        cfg.RoomTimeouts.QueMen,
+		ClaimWindow:   cfg.RoomTimeouts.ClaimWindow,
+		TsumoWindow:   cfg.RoomTimeouts.TsumoWindow,
+		Discard:       cfg.RoomTimeouts.Discard,
+	})
 	svc := newRoomGRPCServer(svcCore, ev, gs, st, rcli)
 	if cfg.EtcdEndpoints != "" {
 		svc.setReady(false)
@@ -190,6 +197,14 @@ func recoverOwnedRooms(ctx context.Context, rt *router.Etcd, rnodeID string, rcl
 			state = "ready"
 		}
 		if err := svc.RecoverRoom(roomID, players, state, roundJSON); err != nil {
+			if errors.Is(err, roomsvc.ErrRoundPersistUnsupportedSchema) {
+				state = "ready"
+				roundJSON = nil
+				if errRetry := svc.RecoverRoom(roomID, players, state, roundJSON); errRetry != nil {
+					return errRetry
+				}
+				continue
+			}
 			return err
 		}
 	}

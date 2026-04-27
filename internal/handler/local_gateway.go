@@ -19,7 +19,13 @@ type LocalRoomGateway struct {
 
 // NewLocalRoomGateway 创建进程内房间网关；sess 可为 nil 表示不启用 Redis 会话。
 func NewLocalRoomGateway(rooms *roomsvc.Service, hub *session.Hub, sess *session.Manager) *LocalRoomGateway {
-	return &LocalRoomGateway{rooms: rooms, hub: hub, sess: sess}
+	g := &LocalRoomGateway{rooms: rooms, hub: hub, sess: sess}
+	if rooms != nil {
+		rooms.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []roomsvc.Notification) {
+			g.broadcastAfter(roomID, notifications)()
+		})
+	}
+	return g
 }
 
 // Join 直接走本地房间服务加入逻辑。
@@ -178,6 +184,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		WaitingAction:    view.WaitingAction,
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),
+		ClaimCandidates:  roomClaimCandidatesToClient(view.ClaimCandidates),
 	}
 	return &ResumeResult{
 		UserID:              uid,
@@ -186,4 +193,15 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		Snapshot:            snap,
 		SnapshotSinceCursor: srec.LastCursor,
 	}, nil
+}
+
+func roomClaimCandidatesToClient(candidates []roomsvc.RoundClaimCandidate) []*clientv1.ClaimCandidate {
+	out := make([]*clientv1.ClaimCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, &clientv1.ClaimCandidate{
+			SeatIndex: candidate.Seat,
+			Actions:   append([]string(nil), candidate.Actions...),
+		})
+	}
+	return out
 }

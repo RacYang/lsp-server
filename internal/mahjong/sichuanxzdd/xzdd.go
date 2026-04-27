@@ -1,5 +1,5 @@
-// Package sichuan_xzdd 实现四川麻将「血战到底」Phase 1 MVP 子集（不含换三张、查花猪等扩展）。
-package sichuan_xzdd
+// Package sichuanxzdd 实现四川麻将「血战到底」规则子集，覆盖交互房间主链路所需的和牌、番种与结算。
+package sichuanxzdd
 
 import (
 	"context"
@@ -48,7 +48,7 @@ func (x *xzdd) CheckHu(h *hand.Hand, target tile.Tile, _ rules.HuContext) (rules
 	return rules.HuResult{Win: c}, true
 }
 
-func (x *xzdd) ScoreFans(result rules.HuResult, _ rules.ScoreContext) fan.Breakdown {
+func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Breakdown {
 	var b fan.Breakdown
 	c := result.Win
 	if hu.SevenPairs(c) {
@@ -65,6 +65,22 @@ func (x *xzdd) ScoreFans(result rules.HuResult, _ rules.ScoreContext) fan.Breakd
 	}
 	for i := 0; i < countGen(c); i++ {
 		b.Add(fan.KindYiGen, 1, "一根")
+	}
+	if sc.IsGangShangHua {
+		b.Add(fan.KindGangShangKai, 1, "杠上开花")
+	}
+	if sc.IsHaiDi {
+		if sc.IsTsumo {
+			b.Add(fan.KindHaiDiLao, 1, "海底捞月")
+		} else {
+			b.Add(fan.KindHaiDiPao, 1, "海底炮")
+		}
+	}
+	for _, record := range sc.GangRecords {
+		if record.Kind == rules.GangKindBu && record.ResponsibleSeat >= 0 {
+			b.Add(fan.KindQiangGangHu, 1, "抢杠胡")
+			break
+		}
 	}
 	return b
 }

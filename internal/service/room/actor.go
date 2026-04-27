@@ -2,12 +2,19 @@ package room
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 
 	domainroom "racoo.cn/lsp/internal/domain/room"
+	"racoo.cn/lsp/internal/metrics"
 )
+
+// ErrRateLimited 表示入口或房间队列限流。
+var ErrRateLimited = errors.New("rate limited")
+
+const defaultMailboxCapacity = 64
 
 // roomActor 单房间串行化执行 Join/Ready 等命令，符合「每房一事件循环」模型。
 type roomActor struct {
@@ -18,10 +25,12 @@ type roomActor struct {
 	// 当前实现保持“单房单命令在途”，避免房间关闭时遗留未消费命令造成悬挂。
 	ch chan any
 	// submitMu 串行化外部提交，保证房间关闭后不会再有新的发送者卡在无人接收的通道上。
-	submitMu sync.Mutex
-	closed   atomic.Bool
-	onExit   func(roomID string)
-	engine   *Engine
+	submitMu  sync.Mutex
+	closed    atomic.Bool
+	onExit    func(roomID string)
+	engine    *Engine
+	scheduler *roomScheduler
+	onAuto    func(context.Context, string, []Notification)
 }
 
 type cmdJoin struct {
@@ -118,7 +127,7 @@ func newRoomActor(r *domainroom.Room, initialRound *RoundState) *roomActor {
 	return &roomActor{
 		room:         r,
 		initialRound: initialRound,
-		ch:           make(chan any),
+		ch:           make(chan any, defaultMailboxCapacity),
 	}
 }
 
@@ -131,36 +140,55 @@ func (a *roomActor) run() {
 		a.round = a.initialRound
 		a.initialRound = nil
 	}
+	a.resetScheduler()
 	for msg := range a.ch {
+		if a.room != nil {
+			metrics.ActorQueueDepth.WithLabelValues(a.room.ID).Set(float64(len(a.ch)))
+		}
 		switch m := msg.(type) {
 		case cmdJoin:
 			seat, err := a.doJoin(m.userID)
 			m.res <- joinResult{seat: seat, err: err}
 		case cmdReady:
 			notifications, err := a.doReady(m.userID)
+			a.resetScheduler()
 			m.res <- readyResult{notifications: notifications, err: err}
 		case cmdLeave:
 			m.res <- a.doLeave(m.userID)
 		case cmdDiscard:
 			notifications, err := a.doDiscard(m.userID, m.tile)
+			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdPong:
 			notifications, err := a.doPong(m.userID)
+			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdGang:
 			notifications, err := a.doGang(m.userID, m.tile)
+			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdHu:
 			notifications, err := a.doHu(m.userID)
+			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdAutoTimeout:
+			kind := "none"
+			if a.round != nil {
+				kind = a.round.waitingKind()
+			}
 			notifications, err := a.doAutoTimeout()
+			if err == nil {
+				metrics.AutoTimeoutTotal.WithLabelValues(kind).Inc()
+			}
+			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdExchangeThree:
 			notifications, err := a.doExchangeThree(m.userID, m.tiles, m.direction)
+			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdQueMen:
 			notifications, err := a.doQueMen(m.userID, m.suit)
+			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdRoundSnap:
 			var data []byte
@@ -179,6 +207,9 @@ func (a *roomActor) run() {
 		}
 		if a.room != nil && a.room.FSM != nil && a.room.FSM.State() == domainroom.StateClosed {
 			a.closed.Store(true)
+			if a.scheduler != nil {
+				a.scheduler.stop()
+			}
 			if a.onExit != nil {
 				a.onExit(a.room.ID)
 			}
@@ -327,7 +358,7 @@ func (a *roomActor) doExchangeThree(userID string, tiles []string, direction int
 	if err != nil {
 		return nil, err
 	}
-	return a.engine.ApplyExchangeThree(context.Background(), a.round, seat, tiles)
+	return a.engine.ApplyExchangeThree(context.Background(), a.round, seat, tiles, direction)
 }
 
 func (a *roomActor) doQueMen(userID string, suit int32) ([]Notification, error) {
@@ -375,6 +406,8 @@ func (a *roomActor) submitJoin(ctx context.Context, userID string) (int, error) 
 	cmd := cmdJoin{userID: userID, res: res}
 	select {
 	case a.ch <- cmd:
+	default:
+		return -1, ErrRateLimited
 	case <-ctx.Done():
 		return -1, ctx.Err()
 	}
@@ -398,10 +431,20 @@ func (a *roomActor) submitReady(ctx context.Context, userID string) ([]Notificat
 	}
 	res := make(chan readyResult, 1)
 	cmd := cmdReady{userID: userID, res: res}
-	select {
-	case a.ch <- cmd:
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	if cap(a.ch) == 0 {
+		select {
+		case a.ch <- cmd:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	} else {
+		select {
+		case a.ch <- cmd:
+		default:
+			return nil, ErrRateLimited
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	select {
 	case rr := <-res:
@@ -424,6 +467,8 @@ func (a *roomActor) submitLeave(ctx context.Context, userID string) error {
 	cmd := cmdLeave{userID: userID, res: res}
 	select {
 	case a.ch <- cmd:
+	default:
+		return ErrRateLimited
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -474,10 +519,20 @@ func (a *roomActor) submitRoundSnapJSON(ctx context.Context) ([]byte, error) {
 	}
 	res := make(chan roundSnapResult, 1)
 	cmd := cmdRoundSnap{res: res}
-	select {
-	case a.ch <- cmd:
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	if cap(a.ch) == 0 {
+		select {
+		case a.ch <- cmd:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	} else {
+		select {
+		case a.ch <- cmd:
+		default:
+			return nil, ErrRateLimited
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	select {
 	case rr := <-res:
@@ -500,6 +555,8 @@ func (a *roomActor) submitRoundView(ctx context.Context) (RoundView, bool, error
 	cmd := cmdRoundView{res: res}
 	select {
 	case a.ch <- cmd:
+	default:
+		return RoundView{}, false, ErrRateLimited
 	case <-ctx.Done():
 		return RoundView{}, false, ctx.Err()
 	}
@@ -520,10 +577,20 @@ func (a *roomActor) submitAction(ctx context.Context, cmd any) ([]Notification, 
 	if a.closed.Load() {
 		return nil, fmt.Errorf("room closed")
 	}
-	select {
-	case a.ch <- cmd:
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	if cap(a.ch) == 0 {
+		select {
+		case a.ch <- cmd:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	} else {
+		select {
+		case a.ch <- cmd:
+		default:
+			return nil, ErrRateLimited
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	switch c := cmd.(type) {
 	case cmdDiscard:

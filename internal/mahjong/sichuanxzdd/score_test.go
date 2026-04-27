@@ -1,4 +1,4 @@
-package sichuan_xzdd
+package sichuanxzdd
 
 import (
 	"testing"

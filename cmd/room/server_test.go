@@ -61,7 +61,7 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 
 	var gotSettlement bool
 	players := []string{"u1", "u2", "u3", "u4"}
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 512; i++ {
 		evt, err := stream.Recv()
 		require.NoError(t, err)
 		require.Equal(t, "r1", evt.GetRoomId())
@@ -101,6 +101,13 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
 					Body:   &clusterv1.ApplyEventRequest_Gang{Gang: &clusterv1.GangEvent{Tile: action.GetTile()}},
+				})
+				require.NoError(t, err)
+			case "hu_choice", "qiang_gang_choice", "tsumo_choice":
+				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+					RoomId: "r1",
+					UserId: players[action.GetSeatIndex()],
+					Body:   &clusterv1.ApplyEventRequest_Hu{Hu: &clusterv1.HuEvent{}},
 				})
 				require.NoError(t, err)
 			}

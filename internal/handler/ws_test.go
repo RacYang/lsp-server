@@ -68,6 +68,7 @@ func (f *fakeResumeGateway) EnsureRoomEventSubscription(_ context.Context, _, _ 
 type joinStubGateway struct {
 	joinSeat int
 	joinErr  error
+	readyN   int
 }
 
 func (g *joinStubGateway) Join(_ context.Context, _, _ string) (int, error) {
@@ -77,7 +78,10 @@ func (g *joinStubGateway) Join(_ context.Context, _, _ string) (int, error) {
 	return g.joinSeat, g.joinErr
 }
 
-func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) { return nil, nil }
+func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) {
+	g.readyN++
+	return nil, nil
+}
 func (g *joinStubGateway) Leave(_ context.Context, _, _ string) (func(), error) { return nil, nil }
 func (g *joinStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
 	return nil, nil
@@ -216,6 +220,39 @@ func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("expected timeout without server reply")
 	}
+}
+
+func TestHandleWebSocketIdempotencyKeyDropsReplay(t *testing.T) {
+	defaultWSRateLimiter = newUserRateLimiter(1000, 1000)
+	defaultWSIdemCache = newIdemCache(16)
+	gateway := &joinStubGateway{joinSeat: 0}
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: gateway, Hub: hub})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+
+	login := &clientv1.Envelope{ReqId: "login", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
+	pb, _ := proto.Marshal(login)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	_ = readEnv(t, conn, msgid.LoginResp)
+
+	join := &clientv1.Envelope{ReqId: "join", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "r-idem"}}}
+	pb, _ = proto.Marshal(join)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
+	_ = readEnv(t, conn, msgid.JoinRoomResp)
+
+	ready := &clientv1.Envelope{ReqId: "ready-1", IdempotencyKey: "idem-1", Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}}
+	pb, _ = proto.Marshal(ready)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)))
+	_ = readEnv(t, conn, msgid.ReadyResp)
+	ready.ReqId = "ready-2"
+	pb, _ = proto.Marshal(ready)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)))
+
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_, _, err := conn.ReadMessage()
+	require.Error(t, err)
+	require.Equal(t, 1, gateway.readyN)
 }
 
 func TestHandleWebSocketUnknownMsgID(t *testing.T) {

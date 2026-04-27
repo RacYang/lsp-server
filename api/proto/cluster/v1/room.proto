@@ -52,6 +52,7 @@ message SnapshotRoomResponse {
   string waiting_action = 7;
   string pending_tile = 8;
   repeated string available_actions = 9;
+  repeated ClaimCandidate claim_candidates = 10;
 }
 
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
@@ -85,6 +86,7 @@ message HuEvent {}
 
 message ExchangeThreeEvent {
   repeated string tiles = 1;
+  // 1=顺时针 2=对家 3=逆时针（四家必须提交一致方向）
   int32 direction = 2;
 }
 
@@ -111,6 +113,9 @@ message SettlementEvent {
   repeated string winner_user_ids = 1;
   int32 total_fan = 2;
   string detail_text = 3;
+  repeated SeatScore seat_scores = 4;
+  repeated PenaltyItem penalties = 5;
+  repeated WinnerBreakdown per_winner_breakdown = 6;
 }
 
 message ExchangeThreeDoneEvent {
@@ -129,4 +134,30 @@ message RouteRedirectEvent {
 message SeatTiles {
   int32 seat_index = 1;
   repeated string tiles = 2;
+}
+
+message ClaimCandidate {
+  int32 seat_index = 1;
+  repeated string actions = 2;
+}
+
+message SeatScore {
+  int32 seat_index = 1;
+  string user_id = 2;
+  int32 total_fan = 3;
+  bool skipped = 4;
+}
+
+message PenaltyItem {
+  string reason = 1;
+  int32 from_seat = 2;
+  int32 to_seat = 3;
+  int32 amount = 4;
+}
+
+message WinnerBreakdown {
+  int32 seat_index = 1;
+  string user_id = 2;
+  int32 fan = 3;
+  repeated string fan_names = 4;
 }

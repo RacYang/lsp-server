@@ -93,6 +93,8 @@ func (ErrorCode) EnumDescriptor() ([]byte, []int) {
 type Envelope struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	ReqId string                 `protobuf:"bytes,1,opt,name=req_id,json=reqId,proto3" json:"req_id,omitempty"`
+	// 幂等键由客户端为会改变房间状态的请求生成；为空表示不启用请求去重。
+	IdempotencyKey string `protobuf:"bytes,32,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	// Types that are valid to be assigned to Body:
 	//
 	//	*Envelope_LoginReq
@@ -163,6 +165,13 @@ func (*Envelope) Descriptor() ([]byte, []int) {
 func (x *Envelope) GetReqId() string {
 	if x != nil {
 		return x.ReqId
+	}
+	return ""
+}
+
+func (x *Envelope) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
 	}
 	return ""
 }
@@ -1967,7 +1976,7 @@ func (x *RouteRedirectNotify) GetReason() string {
 type ExchangeThreeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Tiles []string               `protobuf:"bytes,1,rep,name=tiles,proto3" json:"tiles,omitempty"`
-	// 0=顺时针 1=逆时针 2=对家（与服务器状态机当前阶段一致时方可成功）
+	// 1=顺时针 2=对家 3=逆时针（四家必须提交一致方向）
 	Direction     int32 `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2323,6 +2332,7 @@ type SnapshotNotify struct {
 	WaitingAction    string                 `protobuf:"bytes,7,opt,name=waiting_action,json=waitingAction,proto3" json:"waiting_action,omitempty"`
 	PendingTile      string                 `protobuf:"bytes,8,opt,name=pending_tile,json=pendingTile,proto3" json:"pending_tile,omitempty"`
 	AvailableActions []string               `protobuf:"bytes,9,rep,name=available_actions,json=availableActions,proto3" json:"available_actions,omitempty"`
+	ClaimCandidates  []*ClaimCandidate      `protobuf:"bytes,10,rep,name=claim_candidates,json=claimCandidates,proto3" json:"claim_candidates,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -2420,13 +2430,74 @@ func (x *SnapshotNotify) GetAvailableActions() []string {
 	return nil
 }
 
+func (x *SnapshotNotify) GetClaimCandidates() []*ClaimCandidate {
+	if x != nil {
+		return x.ClaimCandidates
+	}
+	return nil
+}
+
+// ClaimCandidate 表示快照中仍然有效的抢答候选。
+type ClaimCandidate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
+	Actions       []string               `protobuf:"bytes,2,rep,name=actions,proto3" json:"actions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimCandidate) Reset() {
+	*x = ClaimCandidate{}
+	mi := &file_client_v1_messages_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimCandidate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimCandidate) ProtoMessage() {}
+
+func (x *ClaimCandidate) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimCandidate.ProtoReflect.Descriptor instead.
+func (*ClaimCandidate) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ClaimCandidate) GetSeatIndex() int32 {
+	if x != nil {
+		return x.SeatIndex
+	}
+	return 0
+}
+
+func (x *ClaimCandidate) GetActions() []string {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
 var File_client_v1_messages_proto protoreflect.FileDescriptor
 
 const file_client_v1_messages_proto_rawDesc = "" +
 	"\n" +
-	"\x18client/v1/messages.proto\x12\tclient.v1\"\x8a\x0f\n" +
+	"\x18client/v1/messages.proto\x12\tclient.v1\"\xb3\x0f\n" +
 	"\bEnvelope\x12\x15\n" +
-	"\x06req_id\x18\x01 \x01(\tR\x05reqId\x126\n" +
+	"\x06req_id\x18\x01 \x01(\tR\x05reqId\x12'\n" +
+	"\x0fidempotency_key\x18  \x01(\tR\x0eidempotencyKey\x126\n" +
 	"\tlogin_req\x18\x02 \x01(\v2\x17.client.v1.LoginRequestH\x00R\bloginReq\x129\n" +
 	"\n" +
 	"login_resp\x18\x03 \x01(\v2\x18.client.v1.LoginResponseH\x00R\tloginResp\x12@\n" +
@@ -2582,7 +2653,7 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\";\n" +
 	"\x10QueMenDoneNotify\x12'\n" +
-	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"\xb7\x02\n" +
+	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"\xfd\x02\n" +
 	"\x0eSnapshotNotify\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1d\n" +
 	"\n" +
@@ -2594,7 +2665,13 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"actingSeat\x12%\n" +
 	"\x0ewaiting_action\x18\a \x01(\tR\rwaitingAction\x12!\n" +
 	"\fpending_tile\x18\b \x01(\tR\vpendingTile\x12+\n" +
-	"\x11available_actions\x18\t \x03(\tR\x10availableActions*\x92\x02\n" +
+	"\x11available_actions\x18\t \x03(\tR\x10availableActions\x12D\n" +
+	"\x10claim_candidates\x18\n" +
+	" \x03(\v2\x19.client.v1.ClaimCandidateR\x0fclaimCandidates\"I\n" +
+	"\x0eClaimCandidate\x12\x1d\n" +
+	"\n" +
+	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x18\n" +
+	"\aactions\x18\x02 \x03(\tR\aactions*\x92\x02\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17ERROR_CODE_UNAUTHORIZED\x10\x01\x12\x1d\n" +
@@ -2619,7 +2696,7 @@ func file_client_v1_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_client_v1_messages_proto_goTypes = []any{
 	(ErrorCode)(0),                  // 0: client.v1.ErrorCode
 	(*Envelope)(nil),                // 1: client.v1.Envelope
@@ -2656,6 +2733,7 @@ var file_client_v1_messages_proto_goTypes = []any{
 	(*QueMenResponse)(nil),          // 32: client.v1.QueMenResponse
 	(*QueMenDoneNotify)(nil),        // 33: client.v1.QueMenDoneNotify
 	(*SnapshotNotify)(nil),          // 34: client.v1.SnapshotNotify
+	(*ClaimCandidate)(nil),          // 35: client.v1.ClaimCandidate
 }
 var file_client_v1_messages_proto_depIdxs = []int32{
 	2,  // 0: client.v1.Envelope.login_req:type_name -> client.v1.LoginRequest
@@ -2701,11 +2779,12 @@ var file_client_v1_messages_proto_depIdxs = []int32{
 	0,  // 40: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
 	30, // 41: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
 	0,  // 42: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
-	43, // [43:43] is the sub-list for method output_type
-	43, // [43:43] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	35, // 43: client.v1.SnapshotNotify.claim_candidates:type_name -> client.v1.ClaimCandidate
+	44, // [44:44] is the sub-list for method output_type
+	44, // [44:44] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_client_v1_messages_proto_init() }
@@ -2751,7 +2830,7 @@ func file_client_v1_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v1_messages_proto_rawDesc), len(file_client_v1_messages_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   34,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

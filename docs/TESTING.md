@@ -6,6 +6,7 @@
 2. 针对麻将示例的夹具测试。
 3. 针对房间编排的服务测试。
 4. 针对单进程 MVP 的端到端测试。
+5. 针对重连、幂等、限流与托管超时的 integration 目标。
 
 ## 覆盖率策略
 
@@ -14,3 +15,14 @@
 ## 负例样本
 
 每条约束 enforcer 须有隔离的负例，存放在 `.build/negatives`。
+
+## Integration
+
+`RUN_INTEGRATION=1 make verify-test-integration` 当前覆盖：
+
+- 集群重连会话恢复。
+- WS `idempotency_key` 重放去重。
+- room actor mailbox 满队列限流。
+- 基于 `fakeClock` 的托管超时推进。
+
+进程级重启恢复回放仍保留为专项测试，默认 integration 目标优先选择稳定且耗时可控的链路。
