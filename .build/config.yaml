@@ -24,12 +24,12 @@ coverage:
     internal/mahjong/wall: 65
     internal/mahjong/...: 90
     internal/domain/...: 80
-    internal/app: 8
-    internal/handler: 50
+    internal/app: 34
+    internal/handler: 75
     internal/service/room: 67
     cmd/all: 45
     cmd/gate: 45
-    cmd/lobby: 15
+    cmd/lobby: 55
     cmd/room: 40
     default: 60
   extra_exclude: []
@@ -212,6 +212,10 @@ git:
     binary_blocked: true
     allow_binary_globs: []
     allow_large_file_globs: []
+    workspace_space_dirs_blocked: true
+    workspace_scan_excludes:
+      - ".git/**"
+      - "api/gen/**"
   signing:
     policy: recommended
   ci_parity:

@@ -10,7 +10,8 @@
 - Phase 3：PostgreSQL 事件日志、Redis 会话与快照元数据、登录重连、`SnapshotRoom`/`StreamEvents` 游标重放、Prometheus 指标与健康检查（可选 `obs.addr`）。
 - Phase 4：交互式房间主循环基线，补齐 `HeartbeatReq` / `LeaveRoomReq`、换三张/定缺确认链路，以及碰/杠多候选抢答提示、确定性裁决与托管推进。
 - Phase 5：血战规则补完、room 引擎拆分、proto baseline 重置、可注入时钟、双层限流、WS 幂等与最小可观测指标集合。
-- Phase 5+：更多规则集与运维深化。
+- Phase 5.3 / 5.4 / 5.5：规则深化、庄家与高阶番种、运行时参数与存储弹性。
+- Phase 6：生产部署、SLO、压测与容量基线（范围见 [docs/adr/0023](docs/adr/0023-phase6-scope-and-roadmap.md)）。新规则集议题暂缓。
 
 ## 快速启动
 

@@ -139,6 +139,76 @@ func TestRecoverRoomPlayingRequiresRoundSnapshot(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRecoverRoomFSMStates(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		fsmInput   string
+		wantState  string
+		expectFail bool
+	}{
+		{name: "empty becomes waiting", fsmInput: "", wantState: "waiting"},
+		{name: "explicit waiting", fsmInput: "waiting", wantState: "waiting"},
+		{name: "ready", fsmInput: "ready", wantState: "ready"},
+		{name: "settling", fsmInput: "settling", wantState: "settling"},
+		{name: "closed", fsmInput: "closed", wantState: "closed"},
+		{name: "unknown rejected", fsmInput: "garbage", expectFail: true},
+		{name: "idle rejected", fsmInput: "idle", expectFail: true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := NewServiceWithRule(NewLobby(), "sichuan_xzdd")
+			roomID := "room-recover-" + tc.fsmInput
+			if roomID == "room-recover-" {
+				roomID = "room-recover-empty"
+			}
+			err := svc.RecoverRoom(roomID, []string{"u1", "u2", "u3", "u4"}, tc.fsmInput, nil)
+			if tc.expectFail {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			_, state, ok := svc.RoomSnapshot(roomID)
+			require.True(t, ok)
+			require.Equal(t, tc.wantState, state)
+		})
+	}
+}
+
+func TestRecoverRoomReadyDoesNotChainTransitions(t *testing.T) {
+	// 旧实现走 Transition(StateReady) 链式爬升；新实现走 FSM.Restore 一次性置位。
+	// 关键差异：从 ready 直接迁到 settling 在普通 transition 下非法（ready→playing→settling），
+	// 但通过 RecoverRoom("settling", ...) 应当成功一次性置位。
+	t.Parallel()
+
+	svc := NewServiceWithRule(NewLobby(), "sichuan_xzdd")
+	err := svc.RecoverRoom("room-direct-settling", []string{"u1", "u2", "u3", "u4"}, "settling", nil)
+	require.NoError(t, err)
+	_, state, ok := svc.RoomSnapshot("room-direct-settling")
+	require.True(t, ok)
+	require.Equal(t, "settling", state)
+}
+
+func TestRecoverRoomIdempotentForExistingRoom(t *testing.T) {
+	t.Parallel()
+
+	svc := NewServiceWithRule(NewLobby(), "sichuan_xzdd")
+	const rid = "room-recover-idem"
+	require.NoError(t, svc.RecoverRoom(rid, []string{"u1", "u2", "u3", "u4"}, "ready", nil))
+
+	// 第二次调用应当复用 lobby 中已有 room，不返回错误也不重置 FSM。
+	require.NoError(t, svc.RecoverRoom(rid, []string{"u1", "u2", "u3", "u4"}, "playing", nil))
+
+	_, state, ok := svc.RoomSnapshot(rid)
+	require.True(t, ok)
+	require.Equal(t, "ready", state, "已存在房间不应被第二次 RecoverRoom 改写")
+}
+
 func TestRoundViewShowsClaimWindow(t *testing.T) {
 	t.Parallel()
 

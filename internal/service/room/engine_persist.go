@@ -159,6 +159,9 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 }
 
 // RestoreRoundFromPersistJSON 从 JSON 恢复进行中牌局的最小运行态。
+//
+// 流程：解析 JSON → 把旧 schema 升级为当前版本（schema 兼容逻辑集中于 engine_persist_migrate.go）
+// → 解析牌墙 / 手牌 / 弃牌等具象字段并填到 RoundState → 修复运行时不变量。
 func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error) {
 	if roomID == "" {
 		return nil, fmt.Errorf("empty room_id")
@@ -173,11 +176,34 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 	if rp.SchemaVersion > roundPersistSchemaVersion {
 		return nil, fmt.Errorf("%w: %d", ErrRoundPersistUnsupportedSchema, rp.SchemaVersion)
 	}
+
+	migratePersistToCurrent(&rp)
+
+	rs, err := buildRoundStateFromPersist(roomID, &rp)
+	if err != nil {
+		return nil, err
+	}
+	if err := decodeTileFieldsIntoRound(rs, &rp); err != nil {
+		return nil, err
+	}
+	if err := decodeClaimCandidatesIntoRound(rs, &rp); err != nil {
+		return nil, err
+	}
+	if err := decodeExchangeTilesIntoRound(rs, &rp); err != nil {
+		return nil, err
+	}
+	finalizeRoundInvariants(rs)
+	return rs, nil
+}
+
+// buildRoundStateFromPersist 把已升级到当前 schema 的持久化结构映射为最小 RoundState 骨架。
+func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, error) {
 	ruleID := rp.RuleID
 	if ruleID == "" {
 		ruleID = "sichuan_xzdd"
 	}
 	rule := rules.MustGet(ruleID)
+
 	wallTiles := make([]tile.Tile, 0, len(rp.WallRemaining))
 	for _, raw := range rp.WallRemaining {
 		t, err := tile.Parse(raw)
@@ -186,6 +212,7 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 		}
 		wallTiles = append(wallTiles, t)
 	}
+
 	hands := make([]*hand.Hand, 4)
 	for seat := 0; seat < 4; seat++ {
 		hands[seat] = hand.New()
@@ -200,6 +227,7 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 			hands[seat].Add(t)
 		}
 	}
+
 	rs := &RoundState{
 		roomID:                 roomID,
 		ruleID:                 ruleID,
@@ -230,13 +258,81 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 		lastGangFollowUp:       rp.LastGangFollowUp,
 		lastDiscardAfterGang:   rp.LastDiscardAfterGang,
 	}
+	return rs, nil
+}
+
+// decodeTileFieldsIntoRound 把 pendingDraw / currentDraw / lastDiscard 等字符串字段还原为牌。
+func decodeTileFieldsIntoRound(rs *RoundState, rp *roundPersist) error {
+	if rp.PendingDraw != "" {
+		t, err := tile.Parse(rp.PendingDraw)
+		if err != nil {
+			return fmt.Errorf("parse pending draw: %w", err)
+		}
+		rs.pendingDraw = t
+	}
+	if rp.CurrentDraw != "" {
+		t, err := tile.Parse(rp.CurrentDraw)
+		if err != nil {
+			return fmt.Errorf("parse current draw: %w", err)
+		}
+		rs.currentDraw = t
+	}
+	if rp.LastDiscard != "" {
+		t, err := tile.Parse(rp.LastDiscard)
+		if err != nil {
+			return fmt.Errorf("parse last discard: %w", err)
+		}
+		rs.lastDiscard = t
+		rs.lastDiscardSeat = rp.LastDiscardSeat
+	} else {
+		rs.lastDiscardSeat = -1
+	}
+	return nil
+}
+
+// decodeClaimCandidatesIntoRound 重建抢答候选列表，并校验座位与动作合法性。
+func decodeClaimCandidatesIntoRound(rs *RoundState, rp *roundPersist) error {
+	for _, candidate := range rp.ClaimCandidates {
+		if candidate.Seat < 0 || candidate.Seat > 3 {
+			return fmt.Errorf("invalid claim candidate seat: %d", candidate.Seat)
+		}
+		actions := make([]string, 0, len(candidate.Actions))
+		for _, action := range candidate.Actions {
+			switch action {
+			case "hu", "gang", "pong":
+				actions = append(actions, action)
+			default:
+				return fmt.Errorf("invalid claim candidate action: %s", action)
+			}
+		}
+		if len(actions) > 0 {
+			rs.claimCandidates = append(rs.claimCandidates, claimCandidate{seat: candidate.Seat, actions: actions})
+		}
+	}
+	if rs.claimWindowOpen && len(rs.claimCandidates) == 0 {
+		rs.claimCandidates = rs.buildClaimCandidates()
+	}
+	return nil
+}
+
+// decodeExchangeTilesIntoRound 还原换三张选牌；旧快照在该窗口已关闭时该字段为空。
+func decodeExchangeTilesIntoRound(rs *RoundState, rp *roundPersist) error {
+	for seat := 0; seat < len(rp.ExchangeTiles) && seat < 4; seat++ {
+		for _, raw := range rp.ExchangeTiles[seat] {
+			t, err := tile.Parse(raw)
+			if err != nil {
+				return fmt.Errorf("parse exchange tile %q: %w", raw, err)
+			}
+			rs.exchangeSelection[seat] = append(rs.exchangeSelection[seat], t)
+		}
+	}
+	return nil
+}
+
+// finalizeRoundInvariants 把切片字段补齐到固定长度，并与 winnerSeats 同步 huedSeats。
+func finalizeRoundInvariants(rs *RoundState) {
 	for len(rs.queBySeat) < 4 {
 		rs.queBySeat = append(rs.queBySeat, 0)
-	}
-	if rp.SchemaVersion < 3 {
-		rs.dealerSeat = 0
-		rs.openingDrawSeat = -1
-		rs.dealerFirstDiscardOpen = false
 	}
 	for len(rs.exchangeSubmitted) < 4 {
 		rs.exchangeSubmitted = append(rs.exchangeSubmitted, false)
@@ -250,9 +346,6 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 	for len(rs.queSubmitted) < 4 {
 		rs.queSubmitted = append(rs.queSubmitted, false)
 	}
-	if len(rs.winnerSeats) == 0 && rp.WinnerSeat >= 0 {
-		rs.winnerSeats = append(rs.winnerSeats, rp.WinnerSeat)
-	}
 	for len(rs.huedSeats) < 4 {
 		rs.huedSeats = append(rs.huedSeats, false)
 	}
@@ -261,85 +354,6 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 			rs.huedSeats[seat] = true
 		}
 	}
-	if len(rs.ledger) == 0 && len(rp.TotalFanBySeat) > 0 {
-		rs.ledger = legacyLedgerFromTotals(rp.TotalFanBySeat)
-	}
-	if rp.PendingDraw != "" {
-		t, err := tile.Parse(rp.PendingDraw)
-		if err != nil {
-			return nil, fmt.Errorf("parse pending draw: %w", err)
-		}
-		rs.pendingDraw = t
-	}
-	if rp.CurrentDraw != "" {
-		t, err := tile.Parse(rp.CurrentDraw)
-		if err != nil {
-			return nil, fmt.Errorf("parse current draw: %w", err)
-		}
-		rs.currentDraw = t
-	}
-	if rp.LastDiscard != "" {
-		t, err := tile.Parse(rp.LastDiscard)
-		if err != nil {
-			return nil, fmt.Errorf("parse last discard: %w", err)
-		}
-		rs.lastDiscard = t
-		rs.lastDiscardSeat = rp.LastDiscardSeat
-	} else {
-		rs.lastDiscardSeat = -1
-	}
-	for _, candidate := range rp.ClaimCandidates {
-		if candidate.Seat < 0 || candidate.Seat > 3 {
-			return nil, fmt.Errorf("invalid claim candidate seat: %d", candidate.Seat)
-		}
-		actions := make([]string, 0, len(candidate.Actions))
-		for _, action := range candidate.Actions {
-			switch action {
-			case "hu", "gang", "pong":
-				actions = append(actions, action)
-			default:
-				return nil, fmt.Errorf("invalid claim candidate action: %s", action)
-			}
-		}
-		if len(actions) > 0 {
-			rs.claimCandidates = append(rs.claimCandidates, claimCandidate{seat: candidate.Seat, actions: actions})
-		}
-	}
-	if rs.claimWindowOpen && len(rs.claimCandidates) == 0 {
-		rs.claimCandidates = rs.buildClaimCandidates()
-	}
-	for seat := 0; seat < len(rp.ExchangeTiles) && seat < 4; seat++ {
-		for _, raw := range rp.ExchangeTiles[seat] {
-			t, err := tile.Parse(raw)
-			if err != nil {
-				return nil, fmt.Errorf("parse exchange tile %q: %w", raw, err)
-			}
-			rs.exchangeSelection[seat] = append(rs.exchangeSelection[seat], t)
-		}
-	}
-	return rs, nil
-}
-
-func legacyLedgerFromTotals(totals []int32) []sichuanxzdd.ScoreEntry {
-	out := make([]sichuanxzdd.ScoreEntry, 0, len(totals))
-	for seat, total := range totals {
-		if total == 0 {
-			continue
-		}
-		from, to, amount := -1, seat, total
-		if total < 0 {
-			from, to, amount = seat, -1, -total
-		}
-		out = append(out, sichuanxzdd.ScoreEntry{
-			Reason:     "legacy_total",
-			FromSeat:   from,
-			ToSeat:     to,
-			Amount:     amount,
-			Step:       0,
-			WinnerSeat: -1,
-		})
-	}
-	return out
 }
 
 // RoundViewFromPersistJSON 直接从持久化 JSON 还原等待态摘要，供快照 fallback 使用。

@@ -330,35 +330,8 @@ func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string
 			return fmt.Errorf("recover room %s: room full", roomID)
 		}
 	}
-	switch domainroom.State(fsmState) {
-	case "", domainroom.StateWaiting:
-	case domainroom.StateReady:
-		if err := r.FSM.Transition(domainroom.StateReady); err != nil {
-			return err
-		}
-	case domainroom.StatePlaying:
-		if err := r.FSM.Transition(domainroom.StateReady); err != nil {
-			return err
-		}
-		if err := r.FSM.Transition(domainroom.StatePlaying); err != nil {
-			return err
-		}
-	case domainroom.StateSettling:
-		if err := r.FSM.Transition(domainroom.StateReady); err != nil {
-			return err
-		}
-		if err := r.FSM.Transition(domainroom.StatePlaying); err != nil {
-			return err
-		}
-		if err := r.FSM.Transition(domainroom.StateSettling); err != nil {
-			return err
-		}
-	case domainroom.StateClosed:
-		if err := r.FSM.Transition(domainroom.StateClosed); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unknown room state: %s", fsmState)
+	if err := restoreFSMForRecover(r, fsmState); err != nil {
+		return fmt.Errorf("recover room %s: %w", roomID, err)
 	}
 	if err := s.lobby.CreateRoom(roomID, r); err != nil {
 		return err
@@ -375,6 +348,21 @@ func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string
 	}
 	s.startActorLocked(roomID, r, initialRound)
 	return nil
+}
+
+// restoreFSMForRecover 把 RecoverRoom 提供的 fsmState 字符串映射为 FSM 直接置位。
+//
+// 空字符串与 "waiting" 视为新房刚建好（NewRoom 默认 idle，等价 waiting），无需置位；
+// 其他可识别状态走 FSM.Restore 一次性置位；未知字符串视为持久化错误。
+func restoreFSMForRecover(r *domainroom.Room, fsmState string) error {
+	switch domainroom.State(fsmState) {
+	case "", domainroom.StateWaiting:
+		return nil
+	case domainroom.StateReady, domainroom.StatePlaying, domainroom.StateSettling, domainroom.StateClosed:
+		return r.FSM.Restore(domainroom.State(fsmState))
+	default:
+		return fmt.Errorf("unknown room state: %q", fsmState)
+	}
 }
 
 // RoomSnapshot 返回当前内存房间的玩家列表与 FSM 状态字符串，供快照与 Redis 元数据写入。
