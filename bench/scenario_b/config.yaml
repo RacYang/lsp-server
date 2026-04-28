@@ -1,0 +1,8 @@
+scenario: "b"
+version: "phase6-local"
+ws_url: "ws://127.0.0.1:18080/ws"
+metrics_url: "http://127.0.0.1:18081/metrics"
+room_id_prefix: "bench-b"
+rooms: 16
+players_per_room: 4
+round_count: 1

@@ -12,3 +12,4 @@ negative_test: .build/negatives/git_hooks_parity_missing.yml.neg
 - `git.ci_parity.pre_commit_target`：当前为 `verify-pre-commit`（内含 `verify-git-local` 与 `verify-fast`）。
 - `git.ci_parity.pre_push_target`：当前为 `verify`，且 `pre-push` 须先执行 `verify-git-push`。
 - `git.ci_parity.ci_target`：当前为 `verify`。
+- GitHub Actions 的 `integration` 作业须显式执行 `RUN_INTEGRATION=1 make verify-test-integration-nodocker`，覆盖不依赖外部 Docker 容器的重连、幂等、限流与托管超时链路。

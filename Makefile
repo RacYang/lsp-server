@@ -1,15 +1,15 @@
-SHELL := /bin/bash
-
 ROOT_DIR := $(CURDIR)
 GO_BIN := $(shell go env GOPATH)/bin
-export PATH := $(PATH):$(GO_BIN)
+SHELL := /usr/bin/env PATH=$(GO_BIN):$(PATH) /bin/bash
 GENERATED_FILES := .golangci.yml .go-arch-lint.yml .markdownlint.yaml .yamllint.yml .commitlintrc.json
 FILE ?=
+SCENARIO ?= a
+DOCKER ?= docker
 
 HAS_GO := $(shell find . -type f -name '*.go' -not -path './.build/negatives/*' -not -path '*/gen/*' -print -quit 2>/dev/null)
 HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 
-.PHONY: bootstrap generate fix fix-file verify verify-fast verify-pre-commit \
+.PHONY: bootstrap generate fix fix-file verify verify-fast verify-pre-commit verify-image verify-bench \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
 	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang \
@@ -52,6 +52,14 @@ verify-git-push:
 	@bash scripts/verify-git-push.sh
 
 verify-pre-commit: verify-git-local verify-fast
+
+verify-image:
+	@$(DOCKER) build -f deploy/docker/gate.Dockerfile -t lsp-gate:local .
+	@$(DOCKER) build -f deploy/docker/room.Dockerfile -t lsp-room:local .
+	@$(DOCKER) build -f deploy/docker/lobby.Dockerfile -t lsp-lobby:local .
+
+verify-bench:
+	@SCENARIO="$(SCENARIO)" bash bench/scripts/run.sh
 
 verify-fmt:
 	@files="$$(find . -type f -name '*.go' ! -path '*/gen/*' ! -path './.build/negatives/*')"; \

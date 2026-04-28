@@ -9,9 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Signed commit trial
+        continue-on-error: true
+        run: bash scripts/verify-signed-commit-trial.sh
       - run: make bootstrap
       - run: make verify
   integration:

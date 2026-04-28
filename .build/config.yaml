@@ -24,15 +24,16 @@ coverage:
     internal/mahjong/wall: 65
     internal/mahjong/...: 90
     internal/domain/...: 80
-    internal/app: 34
+    internal/app: 41
     internal/handler: 75
     internal/service/room: 67
     cmd/all: 45
     cmd/gate: 45
     cmd/lobby: 55
-    cmd/room: 40
+    cmd/room: 48
     default: 60
-  extra_exclude: []
+  extra_exclude:
+    - "cmd/loadgen/**"
 
 lint:
   golangci:

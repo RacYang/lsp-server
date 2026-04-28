@@ -20,6 +20,6 @@ runtime:
     ws_rate_limit_burst: 40
     ws_idempotency_cache: 4096
   room:
-    mailbox_capacity: 64
+    mailbox_capacity: 96
   redis:
     idempotency_ttl: 10m

@@ -8,7 +8,7 @@
 - Phase 4：交互式房间主循环与多候选抢答（[ADR-0015](adr/0015-phase4-interactive-room-loop.md)）。
 - Phase 5：血战规则补完、room 引擎拆分与可观测性最小集合（[ADR-0017](adr/0017-room-engine-and-settlement-boundary.md)、[ADR-0019](adr/0019-phase5-observability-metrics.md)）。
 - Phase 5.3 / 5.4 / 5.5：规则深化、庄家与高阶番种、运行时参数与存储弹性（[ADR-0020](adr/0020-phase5-rules-deepening.md)、[ADR-0021](adr/0021-phase5-4-dealer-and-advanced-fans.md)、[ADR-0022](adr/0022-phase5-5-runtime-knobs-and-storage-resilience.md)）。
-- Phase 6：生产部署、SLO、压测与容量基线（范围见 [ADR-0023](adr/0023-phase6-scope-and-roadmap.md)）。
+- Phase 6：生产部署、SLO、压测与容量基线（范围见 [ADR-0023](adr/0023-phase6-scope-and-roadmap.md)，部署与 SLO 见 [ADR-0024](adr/0024-phase6-deployment-and-slo.md)，压测容量见 [ADR-0025](adr/0025-phase6-load-and-capacity.md)，备份与凭据见 [ADR-0026](adr/0026-postgres-backup-and-restore.md)、[ADR-0027](adr/0027-secret-and-credential-management.md)）。
 
 ## 运行时拓扑
 
@@ -25,6 +25,10 @@ flowchart LR
     Lobby -.-> PG["PostgreSQL"]
     Room -.-> PG
 ```
+
+## 部署与可观测
+
+Phase 6 生产交付工件集中在 `deploy/`：`docker/` 提供三服务镜像定义，`k8s/base/` 提供基础清单，`k8s/overlays/example/` 展示托管 Secret placeholder overlay，`observability/` 提供 Prometheus recording/alerting rules，`ops/postgres-restore.md` 记录 PostgreSQL 恢复演练 runbook。
 
 ## 边界
 

@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lsp-config
+data:
+  gate.yaml: |
+    server:
+      addr: ":18080"
+    rule:
+      default_id: "sichuan_xzdd"
+    cluster:
+      lobby_addr: "lsp-lobby:19081"
+      room_addr: "lsp-room:19082"
+    redis:
+      addr: "redis:6379"
+    postgres:
+      dsn: ""
+    obs:
+      addr: ":18081"
+    etcd:
+      endpoints: "etcd:2379"
+    runtime:
+      gate:
+        ws_rate_limit_per_second: 20
+        ws_rate_limit_burst: 40
+        ws_idempotency_cache: 4096
+      room:
+        mailbox_capacity: 96
+      redis:
+        idempotency_ttl: 10m
+  room.yaml: |
+    server:
+      addr: ":19082"
+    rule:
+      default_id: "sichuan_xzdd"
+    cluster:
+      lobby_addr: "lsp-lobby:19081"
+      room_addr: "lsp-room:19082"
+    redis:
+      addr: "redis:6379"
+    postgres:
+      dsn: "postgres://lsp:CHANGE_ME@postgres:5432/lsp?sslmode=disable"
+    obs:
+      addr: ":19083"
+    etcd:
+      endpoints: "etcd:2379"
+    runtime:
+      gate:
+        ws_rate_limit_per_second: 20
+        ws_rate_limit_burst: 40
+        ws_idempotency_cache: 4096
+      room:
+        mailbox_capacity: 96
+      redis:
+        idempotency_ttl: 10m
+  lobby.yaml: |
+    server:
+      addr: ":19081"
+    rule:
+      default_id: "sichuan_xzdd"
+    cluster:
+      lobby_addr: "lsp-lobby:19081"
+      room_addr: "lsp-room:19082"
+    redis:
+      addr: ""
+    postgres:
+      dsn: ""
+    obs:
+      addr: ":19084"
+    etcd:
+      endpoints: "etcd:2379"
+    runtime:
+      gate:
+        ws_rate_limit_per_second: 20
+        ws_rate_limit_burst: 40
+        ws_idempotency_cache: 4096
+      room:
+        mailbox_capacity: 96
+      redis:
+        idempotency_ttl: 10m

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lsp-room
+  labels:
+    app.kubernetes.io/name: lsp-room
+    app.kubernetes.io/part-of: lsp
+spec:
+  selector:
+    app.kubernetes.io/name: lsp-room
+  ports:
+    - name: grpc
+      port: 19082
+      targetPort: grpc
+    - name: obs
+      port: 19083
+      targetPort: obs

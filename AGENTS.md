@@ -11,3 +11,5 @@
 7. Phase 2 集群相关 ADR：[ADR-0008](docs/adr/0008-cluster-topology-control-data-plane.md) 集群拓扑与控制面/数据面、[ADR-0009](docs/adr/0009-inter-service-communication.md) 服务间通信、[ADR-0010](docs/adr/0010-redis-key-layout.md) Redis 键规范、[ADR-0011](docs/adr/0011-room-affinity-routing.md) 房间亲和与事件循环、[ADR-0012](docs/adr/0012-proto-baseline-and-versioning.md) Proto 基线与版本策略。
 8. Phase 3 持久化与重连 ADR：[ADR-0013](docs/adr/0013-persistence-model-and-event-cursor.md) 持久化模型与事件游标、[ADR-0014](docs/adr/0014-reconnect-session-and-snapshot-cutover.md) 断线重连与会话校验、快照回放切点。
 9. Phase 4 交互房间 ADR：[ADR-0015](docs/adr/0015-phase4-interactive-room-loop.md)；当前主链路包含换三张/定缺确认、碰/杠抢答提示、重连快照等待态与 `HeartbeatReq` / `LeaveRoomReq` 基础处理。
+10. Phase 6+ 运维深化 ADR：[ADR-0026](docs/adr/0026-postgres-backup-and-restore.md) PostgreSQL 备份与恢复、[ADR-0027](docs/adr/0027-secret-and-credential-management.md) 密钥与凭据管理、[ADR-0028](docs/adr/0028-multi-region-topology.md) 跨地域多活、[ADR-0029](docs/adr/0029-signed-commit-required.md) 签名提交升级评估。
+11. 除非人类维护者明确要求，本仓库未来规划不得引入第二套规则集或相关 ADR。

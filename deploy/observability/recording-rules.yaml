@@ -1,0 +1,28 @@
+groups:
+  - name: lsp-slo-recording
+    interval: 30s
+    rules:
+      - record: lsp:slo_actor_mailbox_usage:p95_5m
+        expr: quantile_over_time(0.95, lsp_actor_queue_depth[5m]) / 96
+      - record: lsp:slo_claim_window_completed:ratio_5m
+        expr: |
+          sum(rate(lsp_claim_window_total{result="completed"}[5m]))
+          /
+          clamp_min(sum(rate(lsp_claim_window_total[5m])), 1)
+      - record: lsp:slo_reconnect_ok:ratio_5m
+        expr: |
+          sum(rate(lsp_reconnect_total{result="ok"}[5m]))
+          /
+          clamp_min(sum(rate(lsp_reconnect_total[5m])), 1)
+      - record: lsp:slo_postgres_append_event:p99_5m
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le, service, build_sha) (
+              rate(lsp_storage_op_seconds_bucket{store="postgres",op="append_event"}[5m])
+            )
+          )
+      - record: lsp:slo_ws_rate_limited:rate_5m
+        expr: sum by (service, build_sha) (rate(lsp_rate_limited_total{layer="ws"}[5m]))
+      - record: lsp:slo_unknown_msg:rate_5m
+        expr: sum by (service, build_sha) (rate(lsp_unknown_msg_total[5m]))

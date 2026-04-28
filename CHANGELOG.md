@@ -6,8 +6,21 @@
 
 ### 治理与文档
 
+- 文档：Phase 6 收尾补齐预发压测基线、PostgreSQL 恢复演练 runbook、Secret overlay 示例与签名提交试运行说明，ADR-0026/0027/0029 升级为已采纳。
 - 治理：新增工作树副本目录拦截 enforcer，扩展 `git.repo_hygiene` 增加 `workspace_space_dirs_blocked` 与 `workspace_scan_excludes`，补独立规则与负例。
 - 文档：补齐 ADR-0023 Phase 6 范围与路线，README 与 ARCHITECTURE 阶段同步更新到 Phase 5.5。
+- 文档：新增 ADR-0026～0029，覆盖 PostgreSQL 备份恢复、密钥管理、跨地域多活与签名提交升级评估；明确未来规划默认不引入第二套规则集。
+
+### Phase 6（[ADR-0024](docs/adr/0024-phase6-deployment-and-slo.md)、[ADR-0025](docs/adr/0025-phase6-load-and-capacity.md)）
+
+- 压测：新增 `bench/phase6-preprod-20260428` 作为预发首轮基线记录，ADR-0024/0025 指向该执行编号。
+- 运维：新增 `deploy/ops/postgres-restore.md` 与 `bench/restore-phase6-preprod-20260428`，记录 PostgreSQL 恢复演练路径与 RPO/RTO 结果。
+- 凭据：新增 `deploy/k8s/overlays/example`，展示托管 Secret placeholder overlay 与 Redis/PostgreSQL/etcd 轮换周期。
+- CI：新增签名提交试运行步骤，未签名提交与未受信公钥仅输出 warning，不修改 `git.signing.policy`。
+- 部署：新增三服务 distroless 多阶段镜像、Kubernetes base 清单、ConfigMap/Secret 模板与灰度/回滚脚本。
+- SLO：新增 Prometheus recording/alerting rules，抢答完成率、重连成功率与结算延迟 p99 作为对外承诺子集。
+- 压测：新增 `cmd/loadgen` 与 `bench/scenario_{a,b,c}`，通过 `make verify-bench` 独立触发，默认不进入 `make verify`。
+- 容量：首轮本地基线将 `runtime.room.mailbox_capacity` 从 64 保守上调到 96。
 
 ### Phase 5.5（[ADR-0022](docs/adr/0022-phase5-5-runtime-knobs-and-storage-resilience.md)）
 

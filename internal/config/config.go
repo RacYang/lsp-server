@@ -46,21 +46,29 @@ type RuntimeConfig struct {
 	RedisIdempotencyTTL      time.Duration
 }
 
+const (
+	defaultGateWSRateLimitPerSecond = 20
+	defaultGateWSRateLimitBurst     = 40
+	defaultGateWSIdempotencyCache   = 4096
+	defaultRoomMailboxCapacity      = 96
+	defaultRedisIdempotencyTTL      = 10 * time.Minute
+)
+
 func (cfg RuntimeConfig) withDefaults() RuntimeConfig {
 	if cfg.GateWSRateLimitPerSecond <= 0 {
-		cfg.GateWSRateLimitPerSecond = 20
+		cfg.GateWSRateLimitPerSecond = defaultGateWSRateLimitPerSecond
 	}
 	if cfg.GateWSRateLimitBurst <= 0 {
-		cfg.GateWSRateLimitBurst = 40
+		cfg.GateWSRateLimitBurst = defaultGateWSRateLimitBurst
 	}
 	if cfg.GateWSIdempotencyCache <= 0 {
-		cfg.GateWSIdempotencyCache = 4096
+		cfg.GateWSIdempotencyCache = defaultGateWSIdempotencyCache
 	}
 	if cfg.RoomMailboxCapacity <= 0 {
-		cfg.RoomMailboxCapacity = 64
+		cfg.RoomMailboxCapacity = defaultRoomMailboxCapacity
 	}
 	if cfg.RedisIdempotencyTTL <= 0 {
-		cfg.RedisIdempotencyTTL = 10 * time.Minute
+		cfg.RedisIdempotencyTTL = defaultRedisIdempotencyTTL
 	}
 	return cfg
 }

@@ -1,0 +1,135 @@
+groups:
+  - name: lsp-slo-alerting
+    rules:
+      - alert: LSPActorMailboxHighWatermarkWarn
+        expr: lsp:slo_actor_mailbox_usage:p95_5m > 0.8
+        for: 5m
+        labels:
+          severity: warn
+          service: '{{ $labels.service }}'
+          room_id: '{{ $labels.room }}'
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 房间 actor mailbox 水位持续偏高
+          description: room={{ $labels.room }} p95 水位超过 80%，可能需要扩容或拆分房间分片。
+      - alert: LSPActorMailboxHighWatermarkPage
+        expr: lsp:slo_actor_mailbox_usage:p95_5m > 0.9
+        for: 30m
+        labels:
+          severity: page
+          service: '{{ $labels.service }}'
+          room_id: '{{ $labels.room }}'
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 房间 actor mailbox 水位触发分页告警
+          description: room={{ $labels.room }} p95 水位超过 90% 且持续 30 分钟。
+      - alert: LSPClaimWindowCompletionWarn
+        expr: lsp:slo_claim_window_completed:ratio_5m < 0.95
+        for: 5m
+        labels:
+          severity: warn
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 抢答窗口完成率低于阈值
+          description: 5 分钟抢答窗口完成率低于 95%，需要检查托管和房间事件循环。
+      - alert: LSPClaimWindowCompletionPage
+        expr: lsp:slo_claim_window_completed:ratio_5m < 0.9
+        for: 30m
+        labels:
+          severity: page
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 抢答窗口完成率持续异常
+          description: 抢答窗口完成率持续低于 90%，可能影响对局体验。
+      - alert: LSPReconnectSuccessWarn
+        expr: lsp:slo_reconnect_ok:ratio_5m < 0.95
+        for: 5m
+        labels:
+          severity: warn
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 重连成功率低于阈值
+          description: 5 分钟重连成功率低于 95%，需要检查 gate 会话和 Redis。
+      - alert: LSPReconnectSuccessPage
+        expr: lsp:slo_reconnect_ok:ratio_5m < 0.9
+        for: 30m
+        labels:
+          severity: page
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 重连成功率持续异常
+          description: 重连成功率持续低于 90%，需要触发发布冻结或回滚评估。
+      - alert: LSPSettlementLatencyWarn
+        expr: lsp:slo_postgres_append_event:p99_5m > 0.5
+        for: 5m
+        labels:
+          severity: warn
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 结算持久化 p99 偏高
+          description: PostgreSQL append_event p99 超过 500ms。
+      - alert: LSPSettlementLatencyPage
+        expr: lsp:slo_postgres_append_event:p99_5m > 1
+        for: 30m
+        labels:
+          severity: page
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 结算持久化 p99 持续异常
+          description: PostgreSQL append_event p99 超过 1s 且持续 30 分钟。
+      - alert: LSPWebSocketRateLimitedWarn
+        expr: lsp:slo_ws_rate_limited:rate_5m > 1
+        for: 5m
+        labels:
+          severity: warn
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: WebSocket 入站限流增多
+          description: ws 限流速率超过 1/s，需要检查客户端风暴或默认限流值。
+      - alert: LSPWebSocketRateLimitedPage
+        expr: lsp:slo_ws_rate_limited:rate_5m > 10
+        for: 30m
+        labels:
+          severity: page
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: WebSocket 入站限流持续异常
+          description: ws 限流速率超过 10/s 且持续 30 分钟。
+      - alert: LSPUnknownMessageWarn
+        expr: lsp:slo_unknown_msg:rate_5m > 0.1
+        for: 5m
+        labels:
+          severity: warn
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 未知消息率升高
+          description: 未知消息速率超过 0.1/s，需要检查客户端协议版本。
+      - alert: LSPUnknownMessagePage
+        expr: lsp:slo_unknown_msg:rate_5m > 1
+        for: 30m
+        labels:
+          severity: page
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 未知消息持续异常
+          description: 未知消息速率超过 1/s 且持续 30 分钟。

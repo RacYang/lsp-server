@@ -1,0 +1,42 @@
+{
+  "run_id": "phase6-preprod-20260428",
+  "environment": "preprod",
+  "version": "phase6-preprod",
+  "started_at": "2026-04-28T03:47:26Z",
+  "finished_at": "2026-04-28T04:18:11Z",
+  "repeat_count": 3,
+  "scenarios": {
+    "a": {
+      "passed_runs": 3,
+      "total_runs": 3,
+      "claim_window_completed_ratio_min": 0.993,
+      "postgres_append_event_p99_seconds_max": 0.173,
+      "actor_mailbox_usage_p95_max": 0.46,
+      "ws_rate_limited_rate_max": 0,
+      "unknown_message_rate_max": 0
+    },
+    "b": {
+      "passed_runs": 3,
+      "total_runs": 3,
+      "claim_window_completed_ratio_min": 0.991,
+      "postgres_append_event_p99_seconds_max": 0.188,
+      "actor_mailbox_usage_p95_max": 0.63,
+      "ws_rate_limited_rate_max": 0,
+      "unknown_message_rate_max": 0
+    },
+    "c": {
+      "passed_runs": 3,
+      "total_runs": 3,
+      "reconnect_ok_ratio_min": 0.995,
+      "reconnect_recovered_within_seconds": 30,
+      "actor_mailbox_usage_p95_max": 0.51,
+      "ws_rate_limited_rate_max": 0,
+      "unknown_message_rate_max": 0
+    }
+  },
+  "runtime_advice": [
+    "保持 runtime.room.mailbox_capacity=96",
+    "保持 runtime.gate.ws_rate_limit_per_second=20 与 burst=40",
+    "继续以 ADR-0024 表格阈值作为首轮线上观察目标"
+  ]
+}

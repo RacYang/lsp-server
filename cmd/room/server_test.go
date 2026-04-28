@@ -184,6 +184,33 @@ func TestSnapshotRoomIncludesRoundView(t *testing.T) {
 	require.Contains(t, snap.GetAvailableActions(), "exchange_three")
 }
 
+func TestClusterToClientConverters(t *testing.T) {
+	t.Parallel()
+
+	scores := clusterSeatScoresToClient([]*clusterv1.SeatScore{{SeatIndex: 1, UserId: "u1", TotalFan: 8, Skipped: true}})
+	require.Equal(t, "u1", scores[0].GetUserId())
+	require.EqualValues(t, 8, scores[0].GetTotalFan())
+	require.True(t, scores[0].GetSkipped())
+
+	penalties := clusterPenaltiesToClient([]*clusterv1.PenaltyItem{{Reason: "查大叫", FromSeat: 0, ToSeat: 2, Amount: 16}})
+	require.Equal(t, "查大叫", penalties[0].GetReason())
+	require.EqualValues(t, 16, penalties[0].GetAmount())
+}
+
+func TestMapPGRowToEvent(t *testing.T) {
+	t.Parallel()
+
+	payload, err := proto.Marshal(&clientv1.Envelope{
+		Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{DealerSeat: 2}},
+	})
+	require.NoError(t, err)
+
+	evt, err := mapPGRowToEvent("r-pg", postgres.RoomEventRow{Seq: 7, Kind: string(roomsvc.KindStartGame), Payload: payload})
+	require.NoError(t, err)
+	require.Equal(t, "r-pg:7", evt.GetCursor())
+	require.EqualValues(t, 2, evt.GetStartGame().GetDealerSeat())
+}
+
 func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 	t.Parallel()
 

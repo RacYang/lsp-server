@@ -19,7 +19,7 @@ Phase 5 已引入 WebSocket 限流、幂等重放去重、room actor 有界 mail
 - `runtime.gate.ws_rate_limit_per_second`: 20。
 - `runtime.gate.ws_rate_limit_burst`: 40。
 - `runtime.gate.ws_idempotency_cache`: 4096。
-- `runtime.room.mailbox_capacity`: 64。
+- `runtime.room.mailbox_capacity`: 96（Phase 6 首轮本地基线后由 64 保守上调）。
 - `runtime.redis.idempotency_ttl`: 10 分钟。
 
 ### 2. 存储弹性

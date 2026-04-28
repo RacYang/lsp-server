@@ -56,3 +56,10 @@ Phase 4 起，Redis `snapmeta` 追加 `round_json`，保存进行中牌局的最
 2. 停止分配新房间。
 3. 排空活跃房间。
 4. 从服务发现注销。
+
+## Phase 6 部署入口
+
+- Kubernetes 基线清单位于 `deploy/k8s/base/`，三服务仍保持 `gate` / `lobby` / `room` 边界。
+- 托管 Secret 示例位于 `deploy/k8s/overlays/example/`，仅保留 placeholder；真实凭据由 KMS 或托管 Secret Manager 投递。
+- SLO recording 与 alerting rules 位于 `deploy/observability/`，对外承诺项与 ADR-0024 保持一致。
+- PostgreSQL 恢复演练 runbook 位于 `deploy/ops/postgres-restore.md`，用于校验 `SnapshotRoom` 与 `StreamEvents` 的恢复可读性。

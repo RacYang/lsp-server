@@ -222,3 +222,30 @@ func TestRetryGRPC(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
+func TestRemoteRoomGatewayNilReceiverMethods(t *testing.T) {
+	t.Parallel()
+
+	var g *remoteRoomGateway
+	ctx := context.Background()
+
+	_, err := g.Join(ctx, "room", "user")
+	require.Error(t, err)
+	_, err = g.Ready(ctx, "room", "user")
+	require.Error(t, err)
+	_, err = g.Leave(ctx, "room", "user")
+	require.Error(t, err)
+	_, err = g.Discard(ctx, "room", "user", "m1")
+	require.Error(t, err)
+	_, err = g.Pong(ctx, "room", "user")
+	require.Error(t, err)
+	_, err = g.Gang(ctx, "room", "user", "m1")
+	require.Error(t, err)
+	_, err = g.Hu(ctx, "room", "user")
+	require.Error(t, err)
+	_, err = g.ExchangeThree(ctx, "room", "user", []string{"m1", "m2", "m3"}, 1)
+	require.Error(t, err)
+	_, err = g.QueMen(ctx, "room", "user", 0)
+	require.Error(t, err)
+	require.Error(t, g.EnsureRoomEventSubscription(ctx, "room", ""))
+}
