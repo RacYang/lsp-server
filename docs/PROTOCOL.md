@@ -63,6 +63,11 @@
 
 ## 业务错误码（ErrorCode 节选）
 
+- `UNAUTHORIZED`：登录、会话或鉴权失败。
+- `ROOM_NOT_FOUND`：目标房间不存在。
+- `ROOM_FULL`：房间已满，无法加入。
+- `INVALID_STATE`：请求与当前房间阶段、座位或等待态不匹配。
+- `NOT_YOUR_TURN`：出牌或动作请求不属于当前可操作座位。
 - `ROUTE_REDIRECT`：客户端应按 `RouteRedirectNotify` 切换连接。
 - `RATE_LIMITED`：请求过频，应退避重试。
 - `RECONNECTING`：断线重连中（Phase 3 完整会话恢复前可作占位）。
@@ -76,3 +81,11 @@
 - `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions` 与 `claim_candidates`，用于重连后恢复当前等待态。
 - 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。
 - WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。
+
+## Phase 5 协议与观测补充
+
+- `Envelope.idempotency_key` 会随所有请求载荷传递，WS 入口只对会改变房间状态的已知请求做进程内快速去重；跨进程幂等仍以 `RoomService.ApplyEvent.idempotency_key` 与 Redis 为准。
+- `SnapshotNotify.claim_candidates` 与 `ActionNotify.action` 的 `hu_choice` / `qiang_gang_choice` / `pong_choice` / `gang_choice` 共同描述抢答窗口，重连客户端应优先以快照中的等待态恢复 UI。
+- `SettlementNotify.per_winner_breakdown` 透传每个赢家的结构化分摊结果；包牌、退税、查花猪与查大叫等罚分仍通过结算字段表达，不依赖客户端重新推导。
+- 未知 `msg_id` 不进入幂等缓存，也不会分配新的 `ErrorCode`；服务端以 `lsp_unknown_msg_total` 计数供观测。
+- 幂等重放、限流与 actor 队列满分别进入 `lsp_idempotent_replay_total`、`lsp_rate_limited_total` 与 `lsp_actor_queue_depth`，客户端可见错误码仍只使用本页枚举。

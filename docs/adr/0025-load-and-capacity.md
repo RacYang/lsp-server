@@ -1,3 +1,9 @@
+---
+title: Phase 6 压测剧本与容量基线
+status: accepted
+date: 2026-04-28
+---
+
 # ADR-0025 Phase 6 压测剧本与容量基线
 
 ## 状态

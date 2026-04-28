@@ -3,7 +3,8 @@
 ## 阶段划分
 
 - Phase 2 先引入 **etcd + Redis**：前者负责控制面，后者负责易失数据面。
-- 后续引入 **PostgreSQL** 承载持久记录。
+- Phase 3 起引入 **PostgreSQL** 承载房间事件、对局摘要与结算历史。
+- Phase 6 增加 PostgreSQL 备份恢复演练与 SLO 观测基线。
 
 ## etcd 职责
 
@@ -27,10 +28,10 @@
 
 ## PostgreSQL 职责
 
-- 用户资料（后续）
 - 对局摘要 `game_summaries`
 - 房间事件日志 `room_events`（append-only，`seq` 单调递增）
 - 结算历史 `settlements`
+- 备份恢复演练入口见 [ADR-0026](adr/0026-postgres-backup-and-restore.md) 与 `deploy/ops/postgres-restore.md`。
 
 ### 事件游标（Phase 3）
 
@@ -51,3 +52,9 @@
 - `snapmeta.round_json` 带 `schema_version`；恢复遇到未来版本时不继续反序列化进行中局面，而是降级到重新准备，避免启动阻断。
 - WS 入口的进程内幂等缓存只保护当前进程快速重放；跨进程 `ApplyEvent.idempotency_key` 仍以 Redis 为准。
 - Redis 与 PostgreSQL 关键操作会记录到 `lsp_storage_op_seconds{store,op,result}`，用于观察 p99 尾延迟。
+
+## Phase 6 运维约定
+
+- PostgreSQL 备份恢复演练的目标为 RPO 不超过 15 分钟、RTO 不超过 60 分钟。
+- 恢复后需通过 `SnapshotRoom` 与 `StreamEvents` 校验目标房间可读性。
+- 恢复报告只保留执行编号、耗时与校验结论，真实 DSN、对象存储签名 URL 与临时凭据不得进入 Git。

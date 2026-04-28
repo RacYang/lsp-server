@@ -1,4 +1,4 @@
-# 房间 FSM（Phase 5）
+# 房间 FSM（Phase 5/6）
 
 ## 状态
 
@@ -33,3 +33,4 @@
 - `room` 冷启动可基于 `snapmeta.round_json` 恢复进行中的局面；`round_json.schema_version` 高于当前版本时降级到重新准备。
 - 过牌后的 `claim_window_open=false` 不会再凭 `LastDiscard` 重新打开抢答窗口。
 - 幂等仍以 `ApplyEvent.idempotency_key` 为入口，Redis 只记录请求是否已成功落地，不重放业务副作用。
+- Phase 6 恢复演练以 `SnapshotRoom` 和 `StreamEvents` 可读性作为 PostgreSQL 恢复后的核心校验点。

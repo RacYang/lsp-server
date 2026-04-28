@@ -6,12 +6,13 @@
 
 ### 治理与文档
 
+- 治理：统一 ADR 状态格式、Phase 5/6 索引、文档交叉引用与命名约定，补齐 bench/scripts 命名说明。
 - 文档：Phase 6 收尾补齐预发压测基线、PostgreSQL 恢复演练 runbook、Secret overlay 示例与签名提交试运行说明，ADR-0026/0027/0029 升级为已采纳。
 - 治理：新增工作树副本目录拦截 enforcer，扩展 `git.repo_hygiene` 增加 `workspace_space_dirs_blocked` 与 `workspace_scan_excludes`，补独立规则与负例。
 - 文档：补齐 ADR-0023 Phase 6 范围与路线，README 与 ARCHITECTURE 阶段同步更新到 Phase 5.5。
 - 文档：新增 ADR-0026～0029，覆盖 PostgreSQL 备份恢复、密钥管理、跨地域多活与签名提交升级评估；明确未来规划默认不引入第二套规则集。
 
-### Phase 6（[ADR-0024](docs/adr/0024-phase6-deployment-and-slo.md)、[ADR-0025](docs/adr/0025-phase6-load-and-capacity.md)）
+### Phase 6（[ADR-0024](docs/adr/0024-deployment-and-slo.md)、[ADR-0025](docs/adr/0025-load-and-capacity.md)）
 
 - 压测：新增 `bench/phase6-preprod-20260428` 作为预发首轮基线记录，ADR-0024/0025 指向该执行编号。
 - 运维：新增 `deploy/ops/postgres-restore.md` 与 `bench/restore-phase6-preprod-20260428`，记录 PostgreSQL 恢复演练路径与 RPO/RTO 结果。
@@ -22,19 +23,19 @@
 - 压测：新增 `cmd/loadgen` 与 `bench/scenario_{a,b,c}`，通过 `make verify-bench` 独立触发，默认不进入 `make verify`。
 - 容量：首轮本地基线将 `runtime.room.mailbox_capacity` 从 64 保守上调到 96。
 
-### Phase 5.5（[ADR-0022](docs/adr/0022-phase5-5-runtime-knobs-and-storage-resilience.md)）
+### Phase 5.5（[ADR-0022](docs/adr/0022-runtime-knobs-and-storage-resilience.md)）
 
 - 运行时参数：`runtime.gate.ws_rate_limit_*`、`runtime.gate.ws_idempotency_cache`、`runtime.room.mailbox_capacity`、`runtime.redis.idempotency_ttl` 由进程 YAML 与 `internal/config.Config` 管理，默认值保持 Phase 5 行为不变。
 - 存储弹性：Redis 与 PostgreSQL 通过统一 helper 标注可重试错误、包裹超时并对幂等操作执行有限退避；非幂等写入仅加超时与错误分类。
 - 指标兼容：`lsp_storage_op_seconds{store,op,result}` 保留 `ok/error` 语义；重试次数以新 counter 表达，避免破坏既有大盘。
 
-### Phase 5.4（[ADR-0021](docs/adr/0021-phase5-4-dealer-and-advanced-fans.md)）
+### Phase 5.4（[ADR-0021](docs/adr/0021-dealer-and-advanced-fans.md)）
 
 - 计分上下文：`rules.ScoreContext` 增加 `HuSeat`、`DealerSeat`、`IsOpeningDraw`、`IsDealerFirstDiscard`，房间引擎填充字段，规则包只消费结构化上下文。
 - 高阶番种：新增天胡、地胡、龙七对与十八罗汉，开局窗口按胡牌动作的发生时刻判定。
 - 持久化：`round_json` schema 升级到 v3，旧版本在缺少庄家与开局窗口字段时按"开局窗口已关闭"恢复。
 
-### Phase 5.3（[ADR-0020](docs/adr/0020-phase5-rules-deepening.md)）
+### Phase 5.3（[ADR-0020](docs/adr/0020-rules-deepening.md)）
 
 - 血战规则深化，新增听牌检测、查大叫精准化、score ledger 结算流水、自摸/点炮/抢杠胡分摊、杠分退税、包牌标记、`per_winner_breakdown` 客户端透传与将对/暗刻/暗杠等番种。
 

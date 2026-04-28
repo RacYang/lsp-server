@@ -1,3 +1,9 @@
+---
+title: Phase 6 范围与路线
+status: accepted
+date: 2026-04-28
+---
+
 # ADR-0023 Phase 6 范围与路线
 
 ## 状态
@@ -10,7 +16,7 @@ Phase 5 完成血战规则深化（ADR-0020）、庄家与高阶番种（ADR-002
 
 但仍缺少把仓库交付到生产所需的几项能力：
 
-1. 部署形态没有官方决定。仓库目前只有本地 `go run` 与 `make` 流水，没有 Dockerfile、容器镜像、k8s 清单或灰度策略。
+1. 部署形态没有官方决定。仓库目前只有本地 `go run` 与 `make` 流水，没有 Dockerfile、容器镜像、Kubernetes 清单或灰度策略。
 2. SLO 与告警规则缺位。已有的 `lsp_*` 指标只覆盖排障最小集合（ADR-0019），没有把"房间事件循环可用性"、"重连成功率"、"结算延迟"等维度提炼为对外承诺。
 3. 容量基线不可知。actor 队列水位、room/gate 进程峰值并发、PostgreSQL 写入吞吐都没有可重复执行的压测剧本。
 
@@ -20,8 +26,8 @@ Phase 5 完成血战规则深化（ADR-0020）、庄家与高阶番种（ADR-002
 
 本轮 Phase 6 **仅** 含以下三类议题：
 
-- 部署形态与 SLO（[ADR-0024](0024-phase6-deployment-and-slo.md)）。
-- 压测剧本与容量基线（[ADR-0025](0025-phase6-load-and-capacity.md)）。
+- 部署形态与 SLO（[ADR-0024](0024-deployment-and-slo.md)）。
+- 压测剧本与容量基线（[ADR-0025](0025-load-and-capacity.md)）。
 - 灰度与发布策略：在 ADR-0024 内一并讨论。
 
 ### 2. 暂缓项

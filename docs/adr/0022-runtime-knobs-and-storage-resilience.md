@@ -1,3 +1,9 @@
+---
+title: Phase 5.5 运行时参数与存储弹性
+status: accepted
+date: 2026-04-27
+---
+
 # ADR-0022 Phase 5.5 运行时参数与存储弹性
 
 ## 状态

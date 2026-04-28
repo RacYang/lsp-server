@@ -1,3 +1,9 @@
+---
+title: Phase 6 部署形态、SLO 与灰度策略
+status: accepted
+date: 2026-04-28
+---
+
 # ADR-0024 Phase 6 部署形态、SLO 与灰度策略
 
 ## 状态
@@ -9,7 +15,7 @@
 仓库已具备生产级核心能力（ADR-0008 集群拓扑、ADR-0011 房间亲和、ADR-0019 可观测最小指标、ADR-0022 运行时参数与存储弹性），但当前所有部署仍依赖本地 `go run` 与 `make verify`。把仓库交付到任何在线环境需要：
 
 1. 容器化形态（Dockerfile / 镜像 / 入口）。
-2. 编排形态（k8s manifest 或等价物）与依赖项（Redis、PostgreSQL、etcd）的拓扑。
+2. 编排形态（Kubernetes manifest 或等价物）与依赖项（Redis、PostgreSQL、etcd）的拓扑。
 3. SLO 与告警：在 ADR-0019 指标基础上凝练对外承诺，避免运维侧靠"看大盘"判断健康。
 4. 灰度策略：发版时如何在 gate 与 room 节点上做小流量验证、回滚与冻结。
 
@@ -30,7 +36,7 @@ ADR-0023 已经把上述议题划入 Phase 6 范围，本 ADR 给出具体决策
 
 #### 1.2 编排形态
 
-k8s 是首选；不强制 k8s 之外的形态。每个服务给出独立 Deployment：
+Kubernetes 是首选；不强制 Kubernetes 之外的形态。每个服务给出独立 Deployment：
 
 | 服务 | 副本起步 | 关键资源 | 端口 |
 | --- | --- | --- | --- |
@@ -96,7 +102,7 @@ SLO 的"对外承诺"选定为抢答完成率、重连成功率、结算延迟 p
 
 ## 后果
 
-- Phase 6 首批工件包括 Dockerfile、k8s 清单、recording rules、alert rules 与灰度脚本。
+- Phase 6 首批工件包括 Dockerfile、Kubernetes 清单、recording rules、alert rules 与灰度脚本。
 - SLO 数值已按 `phase6-preprod-20260428` 预发基线收口；在线上跑稳后继续以 follow-up 修订，避免首轮基线长期漂移。
 - 任何未来引入新部署形态（如 ECS、Nomad）需补独立 ADR，避免 drift。
 - 与 ADR-0019 的关系：ADR-0019 决定"采集什么"，本 ADR 决定"承诺什么"；两者通过 SLO 表对齐。

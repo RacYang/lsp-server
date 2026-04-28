@@ -1,3 +1,9 @@
+---
+title: Phase 5.4 庄家与高阶番种
+status: accepted
+date: 2026-04-27
+---
+
 # ADR-0021 Phase 5.4 庄家与高阶番种
 
 ## 状态

@@ -6,6 +6,10 @@ date: 2026-04-22
 
 # ADR-0004 语言与书写策略
 
+## 状态
+
+已采纳。
+
 ## 决策
 
 仓库内面向人类阅读的说明性文字以**简体中文**为主，包括：设计文档、ADR、规则（`.mdc`）正文、技能说明（`SKILL.md`）、`README`、Go 源码注释、以及通过统一日志门面输出的**日志 message 文案**。
@@ -23,7 +27,7 @@ date: 2026-04-22
 - Go 标识符、包名、导入路径、文件名、命令行与配置键名。
 - 技术关键词（示例：`Goroutine`、`Channel`、`Context`、`Redis`、`PostgreSQL`、`gRPC`、`Protobuf`、`WebSocket`、`etcd`、`Prometheus`、`pprof`），以及业界通用缩写（`HTTP`、`TCP`、`JSON` 等）。
 - `errors.New` / `fmt.Errorf` 返回给调用方的 **error 字符串**：保持英文小写、无尾标点，便于错误链与监控聚合（与 [docs/CODING-STYLE.md](../CODING-STYLE.md) 一致）。
-- 结构化日志的 **字段名（key）**：使用英文 `snake_case`（见 [ADR-0006](./0006-logging-system-and-facade.md)）。
+- 结构化日志的 **字段名（key）**：使用英文 `snake_case`（见 [ADR-0006](0006-logging-system-and-facade.md)）。
 - 代码块内的示例代码、命令输出、路径、版本号、URL。
 
 ## 硬约束与 SSOT
@@ -32,8 +36,8 @@ date: 2026-04-22
 
 ## 注释体系与日志体系
 
-- 注释「写什么、写在哪一层」由 [ADR-0005](./0005-comment-system.md) 约束（以规范为主，硬编码风格检查为辅）。
-- 日志门面、禁止直调底层 logger、字段与级别约定由 [ADR-0006](./0006-logging-system-and-facade.md) 约束。
+- 注释「写什么、写在哪一层」由 [ADR-0005](0005-comment-system.md) 约束（以规范为主，硬编码风格检查为辅）。
+- 日志门面、禁止直调底层 logger、字段与级别约定由 [ADR-0006](0006-logging-system-and-facade.md) 约束。
 
 ## 后果
 

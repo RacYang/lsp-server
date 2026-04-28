@@ -35,7 +35,7 @@ Phase 4 之前，项目存在两套相似的牌局引擎：
 - `PenaltyItem`
 - 可读摘要
 
-Phase 5.3.0 扩展 `HuContext` / `ScoreContext`，把以下字段纳入规则接口：
+Phase 5.3 扩展 `HuContext` / `ScoreContext`，把以下字段纳入规则接口：
 
 - `HuSource`：`tsumo` / `discard` / `qiang_gang` / `bu_gang`。
 - `GangRecord`：杠牌座位、杠类型、牌、来源座位、责任座位与步骤。

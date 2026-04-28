@@ -6,6 +6,10 @@ date: 2026-04-22
 
 # ADR-0007 Git 工作流策略
 
+## 状态
+
+已采纳。
+
 ## 背景
 
 仓库已具备提交信息、语言与治理流水线等约束，但分支、推送、标签与 hook 与 CI 的一致性尚未纳入单一事实源。需要把 Git 操作纳入与 `.build/config.yaml`、ADR、规则、enforcer、负例相同的治理闭环。
@@ -31,6 +35,6 @@ date: 2026-04-22
 
 ## 相关
 
-- [ADR-0000](./0000-engineering-charter.md) 工程宪章
-- [ADR-0004](./0004-language-and-writing-policy.md) 语言与书写策略
+- [ADR-0000](0000-engineering-charter.md) 工程宪章
+- [ADR-0004](0004-language-and-writing-policy.md) 语言与书写策略
 - `.cursor/rules/git-*.mdc` 可执行规则

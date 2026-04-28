@@ -11,7 +11,7 @@
 - Phase 4：交互式房间主循环基线，补齐 `HeartbeatReq` / `LeaveRoomReq`、换三张/定缺确认链路，以及碰/杠多候选抢答提示、确定性裁决与托管推进。
 - Phase 5：血战规则补完、room 引擎拆分、proto baseline 重置、可注入时钟、双层限流、WS 幂等与最小可观测指标集合。
 - Phase 5.3 / 5.4 / 5.5：规则深化、庄家与高阶番种、运行时参数与存储弹性。
-- Phase 6：生产部署、SLO、压测与容量基线（范围见 [docs/adr/0023](docs/adr/0023-phase6-scope-and-roadmap.md)，部署/SLO 与容量见 [docs/adr/0024](docs/adr/0024-phase6-deployment-and-slo.md)、[docs/adr/0025](docs/adr/0025-phase6-load-and-capacity.md)，备份与凭据见 [docs/adr/0026](docs/adr/0026-postgres-backup-and-restore.md)、[docs/adr/0027](docs/adr/0027-secret-and-credential-management.md)）。新规则集议题暂缓。
+- Phase 6：生产部署、SLO、压测与容量基线（范围见 [docs/adr/0023](docs/adr/0023-scope-and-roadmap.md)，部署/SLO 与容量见 [docs/adr/0024](docs/adr/0024-deployment-and-slo.md)、[docs/adr/0025](docs/adr/0025-load-and-capacity.md)，备份、凭据、跨地域评估与签名提交见 [docs/adr/0026](docs/adr/0026-postgres-backup-and-restore.md)、[docs/adr/0027](docs/adr/0027-secret-and-credential-management.md)、[docs/adr/0028](docs/adr/0028-multi-region-topology.md)、[docs/adr/0029](docs/adr/0029-signed-commit-required.md)，其中 ADR-0028 仍为草案）。新规则集议题暂缓。
 
 ## 快速启动
 

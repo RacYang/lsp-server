@@ -1,3 +1,9 @@
+---
+title: PostgreSQL 备份与恢复策略
+status: accepted
+date: 2026-04-28
+---
+
 # ADR-0026 PostgreSQL 备份与恢复策略
 
 ## 状态

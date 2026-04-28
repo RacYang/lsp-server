@@ -1,8 +1,14 @@
+---
+title: Phase 5 可观测性指标最小集合
+status: accepted
+date: 2026-04-27
+---
+
 # ADR-0019 Phase 5 可观测性指标最小集合
 
 ## 状态
 
-Accepted
+已采纳。
 
 ## 背景
 
