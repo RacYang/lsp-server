@@ -73,6 +73,15 @@ services:
     networks: [lsp]
     environment:
       LSP_CONFIG: /etc/lsp/lobby.yaml
+      # 显式置空 docker CLI ~/.docker/config.json 的 proxies 段在运行时注入的代理变量
+      # 否则 grpc/http 客户端会用 http.ProxyFromEnvironment 把 etcd/redis/lobby/room 等
+      # 容器内部 dial 路由到外部代理，导致永久阻塞（详见 ADR-0030）
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      NO_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      no_proxy: ""
     volumes:
       - lsp_config:/etc/lsp:ro
     ports:
@@ -92,6 +101,12 @@ services:
     networks: [lsp]
     environment:
       LSP_CONFIG: /etc/lsp/room.yaml
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      NO_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      no_proxy: ""
     volumes:
       - lsp_config:/etc/lsp:ro
     ports:
@@ -115,6 +130,12 @@ services:
     networks: [lsp]
     environment:
       LSP_CONFIG: /etc/lsp/gate.yaml
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      NO_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      no_proxy: ""
     volumes:
       - lsp_config:/etc/lsp:ro
     ports:
