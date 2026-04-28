@@ -8,6 +8,7 @@
 
 - 文档：新增 [ADR-0030](docs/adr/0030-single-host-compose-deploy.md)，与 [ADR-0024](docs/adr/0024-deployment-and-slo.md) 并存，限定单机 / 小规模 / 单租户场景的 Docker Compose 部署形态。
 - 部署：新增 `deploy/compose/`，含三服务 + Redis + PostgreSQL + 单节点 etcd 的 compose.yaml、`.env.example`、配置模板与一次性 envsubst 渲染容器；业务镜像保持 distroless 不变。
+- 修复：将 compose 形态的 etcd 镜像由 `bitnami/etcd:3.5` 切换到上游 `quay.io/coreos/etcd:v3.5.16`，规避 Bitnami 旧镜像下架风险，命令行参数改为官方上游 flag 形态。
 - 治理：统一 ADR 状态格式、Phase 5/6 索引、文档交叉引用与命名约定，补齐 bench/scripts 命名说明；重整 `bench/` 为「剧本 + 脚本 + 临时产物」，把预发基线与恢复演练归档迁入 `docs/baselines/` 与 `docs/drills/`。
 - 治理：第二轮统一 rules/skills/AGENTS.md，新增 ADR 索引页、中文化总览、规则 frontmatter schema、Redis key/指标命名 enforcer 与相关负例。
 - 文档：Phase 6 收尾补齐预发压测基线、PostgreSQL 恢复演练 runbook、Secret overlay 示例与签名提交试运行说明，ADR-0026/0027/0029 升级为已采纳。

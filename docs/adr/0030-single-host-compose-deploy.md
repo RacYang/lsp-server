@@ -44,7 +44,7 @@ Compose 形态采用「拟生产三进程 + 同机依赖」拓扑：
 | `lobby` | 大厅 / 房间分配 | `19081` gRPC、`19084` obs | 否 |
 | `redis` | 会话、幂等、快照元数据 | `6379` | named volume |
 | `postgres` | 事件日志与结算 | `5432` | named volume |
-| `etcd` | 控制面（单节点） | `2379` | named volume |
+| `etcd` | 控制面（单节点） | `2379` | named volume；镜像使用上游 `quay.io/coreos/etcd` 而非 `bitnami/*` |
 | `gate-config-render`、`room-config-render`、`lobby-config-render` | 一次性 YAML 渲染容器 | 无 | 共享 named volume |
 
 应用容器镜像沿用 [ADR-0024](0024-deployment-and-slo.md) §1.1 的 distroless 基线，**不得**为 Compose 形态偏离镜像约束。
