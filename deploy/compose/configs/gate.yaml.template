@@ -1,0 +1,24 @@
+server:
+  addr: ":18080"
+rule:
+  default_id: "sichuan_xzdd"
+cluster:
+  lobby_addr: "lobby:19081"
+  room_addr: "room:19082"
+redis:
+  addr: "redis:6379"
+postgres:
+  dsn: ""
+obs:
+  addr: ":18081"
+etcd:
+  endpoints: "etcd:2379"
+runtime:
+  gate:
+    ws_rate_limit_per_second: 20
+    ws_rate_limit_burst: 40
+    ws_idempotency_cache: 4096
+  room:
+    mailbox_capacity: 96
+  redis:
+    idempotency_ttl: 10m

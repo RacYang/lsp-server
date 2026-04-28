@@ -1,0 +1,139 @@
+name: lsp-compose
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [lsp]
+    volumes:
+      - lsp_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks: [lsp]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER 必填}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必填}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB 必填}
+    volumes:
+      - lsp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  etcd:
+    image: bitnami/etcd:3.5
+    restart: unless-stopped
+    networks: [lsp]
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_NAME: lsp-etcd
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+    volumes:
+      - lsp_etcd_data:/bitnami/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  config-render:
+    image: alpine:3.20
+    restart: "no"
+    networks: [lsp]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER 必填}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必填}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB 必填}
+    volumes:
+      - ./configs:/templates:ro
+      - ./render/entrypoint.sh:/entrypoint.sh:ro
+      - lsp_config:/rendered
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+
+  lobby:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/lobby.Dockerfile
+    image: lsp-lobby:${LOBBY_IMAGE_TAG:-local}
+    restart: unless-stopped
+    networks: [lsp]
+    environment:
+      LSP_CONFIG: /etc/lsp/lobby.yaml
+    volumes:
+      - lsp_config:/etc/lsp:ro
+    ports:
+      - "127.0.0.1:${LOBBY_OBS_HOST_PORT:-19084}:19084"
+    depends_on:
+      etcd:
+        condition: service_healthy
+      config-render:
+        condition: service_completed_successfully
+
+  room:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/room.Dockerfile
+    image: lsp-room:${ROOM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    networks: [lsp]
+    environment:
+      LSP_CONFIG: /etc/lsp/room.yaml
+    volumes:
+      - lsp_config:/etc/lsp:ro
+    ports:
+      - "127.0.0.1:${ROOM_OBS_HOST_PORT:-19083}:19083"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      config-render:
+        condition: service_completed_successfully
+
+  gate:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/gate.Dockerfile
+    image: lsp-gate:${GATE_IMAGE_TAG:-local}
+    restart: unless-stopped
+    networks: [lsp]
+    environment:
+      LSP_CONFIG: /etc/lsp/gate.yaml
+    volumes:
+      - lsp_config:/etc/lsp:ro
+    ports:
+      - "${GATE_WS_HOST_PORT:-18080}:18080"
+      - "127.0.0.1:${GATE_OBS_HOST_PORT:-18081}:18081"
+    depends_on:
+      redis:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      lobby:
+        condition: service_started
+      room:
+        condition: service_started
+      config-render:
+        condition: service_completed_successfully
+
+networks:
+  lsp:
+    driver: bridge
+
+volumes:
+  lsp_redis_data:
+  lsp_postgres_data:
+  lsp_etcd_data:
+  lsp_config:

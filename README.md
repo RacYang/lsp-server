@@ -35,6 +35,22 @@
    - `LSP_CONFIG=path/to/gate.yaml go run ./cmd/gate`
 3. 客户端连接 `gate` 的 WebSocket 地址；内部 gRPC 协作对客户端透明。
 
+### 单机 Docker Compose
+
+仅适用于单机 / 小规模 / 单租户上线，详见 [ADR-0030](docs/adr/0030-single-host-compose-deploy.md) 与 [`deploy/compose/README.md`](deploy/compose/README.md)：
+
+```bash
+cd deploy/compose
+cp .env.example .env
+
+vim .env
+
+docker compose build
+docker compose up -d
+```
+
+跨副本高可用、跨地域多活请回到 Kubernetes 形态（见 [ADR-0024](docs/adr/0024-deployment-and-slo.md) 与 `deploy/k8s/`）。
+
 协议见 [docs/PROTOCOL.md](docs/PROTOCOL.md)，集群分工见 [docs/CLUSTER.md](docs/CLUSTER.md)。
 
 ## 命令

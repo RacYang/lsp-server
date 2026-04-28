@@ -2,3 +2,4 @@ coverage.out
 dist/
 .DS_Store
 bench/runs/
+deploy/compose/.env
