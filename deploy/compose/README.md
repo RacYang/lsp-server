@@ -18,7 +18,7 @@
 | `lobby` | 本地 build `lsp-lobby` | 仅 obs 端口绑定 `127.0.0.1` | 沿用 distroless 镜像 |
 | `redis` | `redis:7-alpine` | 仅 compose 内网 | named volume 持久化 |
 | `postgres` | `postgres:16-alpine` | 仅 compose 内网 | named volume 持久化 |
-| `etcd` | `bitnami/etcd:3.5` | 仅 compose 内网 | 单节点；不满足 ADR-0008 高可用建议 |
+| `etcd` | `quay.io/coreos/etcd:v3.5.16` | 仅 compose 内网 | 单节点；不满足 ADR-0008 高可用建议 |
 | `config-render` | `alpine:3.20` | 一次性 | envsubst 渲染 YAML 到共享卷 |
 
 ## 初次启动
