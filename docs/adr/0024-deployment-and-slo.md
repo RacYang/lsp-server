@@ -8,7 +8,7 @@ date: 2026-04-28
 
 ## 状态
 
-已采纳。首轮基线来自 Phase 6 本地与预发压测工件；预发执行编号为 `phase6-preprod-20260428`，详见 `bench/phase6-preprod-20260428/summary.md`。线上运行 1～2 周后继续以 follow-up 修订目标值。
+已采纳。首轮基线来自 Phase 6 本地与预发压测工件；预发执行编号为 `phase6-preprod-20260428`，详见 `docs/baselines/phase6-preprod-20260428/summary.md`。线上运行 1～2 周后继续以 follow-up 修订目标值。
 
 ## 背景
 

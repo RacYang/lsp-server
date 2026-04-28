@@ -8,7 +8,7 @@ date: 2026-04-28
 
 ## 状态
 
-已采纳。预发环境恢复演练已完成，执行编号为 `restore-phase6-preprod-20260428`，详见 `bench/restore-phase6-preprod-20260428/summary.md`。
+已采纳。预发环境恢复演练已完成，执行编号为 `restore-phase6-preprod-20260428`，详见 `docs/drills/phase6-preprod-20260428/summary.md`。
 
 ## 背景
 

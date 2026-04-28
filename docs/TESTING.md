@@ -30,10 +30,10 @@
 
 ## 压测
 
-`cmd/loadgen` 与 `bench/scenario_*` 提供 Phase 6 压测入口，默认不进入 `make verify`：
+`cmd/loadgen` 与 `bench/scenarios/scenario_*` 提供 Phase 6 压测入口，默认不进入 `make verify`：
 
 - `SCENARIO=a make verify-bench`：单房间稳态。
 - `SCENARIO=b make verify-bench`：大会话压力。
 - `SCENARIO=c make verify-bench`：重连冲击。
 
-预发基线结果归档在 `bench/phase6-preprod-20260428`；容量与 SLO 回写口径见 [ADR-0025](adr/0025-load-and-capacity.md)。
+每次执行的临时产物落在 `bench/runs/<run_id>/`（不入 Git）。预发基线结果归档在 `docs/baselines/phase6-preprod-20260428`；容量与 SLO 回写口径见 [ADR-0025](adr/0025-load-and-capacity.md)。

@@ -4,17 +4,17 @@ version: "phase6-preprod"
 repeat_count: 3
 scenarios:
   - name: "a"
-    config: "bench/scenario_a/config.yaml"
+    config: "bench/scenarios/scenario_a/config.yaml"
     rooms: 1
     players_per_room: 4
     round_count: 100
   - name: "b"
-    config: "bench/scenario_b/config.yaml"
+    config: "bench/scenarios/scenario_b/config.yaml"
     rooms: 16
     players_per_room: 4
     round_count: 1
   - name: "c"
-    config: "bench/scenario_c/config.yaml"
+    config: "bench/scenarios/scenario_c/config.yaml"
     rooms: 4
     players_per_room: 4
     round_count: 1

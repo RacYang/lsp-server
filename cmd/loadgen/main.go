@@ -43,8 +43,8 @@ type scenarioSummary struct {
 func main() {
 	var (
 		scenario = flag.String("scenario", "a", "压测场景：a/b/c")
-		cfgPath  = flag.String("config", "bench/scenario_a/config.yaml", "场景配置路径")
-		outDir   = flag.String("out", "", "输出目录，空值时自动生成 bench/<run_id>")
+		cfgPath  = flag.String("config", "bench/scenarios/scenario_a/config.yaml", "场景配置路径")
+		outDir   = flag.String("out", "", "输出目录，空值时自动生成 bench/runs/<run_id>")
 	)
 	flag.Parse()
 
@@ -57,7 +57,7 @@ func main() {
 		cfg.Scenario = *scenario
 	}
 	if *outDir == "" {
-		*outDir = filepath.Join("bench", time.Now().UTC().Format("20060102T150405Z")+"-"+cfg.Scenario)
+		*outDir = filepath.Join("bench", "runs", time.Now().UTC().Format("20060102T150405Z")+"-"+cfg.Scenario)
 	}
 	if err := os.MkdirAll(*outDir, 0o750); err != nil {
 		fmt.Fprintf(os.Stderr, "创建输出目录失败: %v\n", err)
