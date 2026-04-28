@@ -96,6 +96,52 @@ run_proto_negative() {
   fi
 }
 
+run_proto_breaking_negative() {
+  local negative_file="$1"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' RETURN
+  mkdir -p "${tmp_dir}/api/proto/client/v1"
+  cp "${ROOT_DIR}/buf.yaml" "${tmp_dir}/buf.yaml"
+  cat >"${tmp_dir}/api/proto/client/v1/sample.proto" <<EOF
+syntax = "proto3";
+
+package client.v1;
+
+option go_package = "negative.test/api/gen/go/client/v1;clientv1";
+
+message BreakingSample {
+  string stable_field = 1;
+}
+EOF
+  (cd "${tmp_dir}" && git init -q && git add . && git -c user.name=negative -c user.email=negative@example.invalid commit -qm baseline)
+  cp "${negative_file}" "${tmp_dir}/api/proto/client/v1/sample.proto"
+  if (cd "${tmp_dir}" && buf breaking --against ".git#ref=HEAD") >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
+run_deps_negative() {
+  local negative_file="$1"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' RETURN
+  mkdir -p "${tmp_dir}/.build" "${tmp_dir}/cmd/negative" "${tmp_dir}/internal" "${tmp_dir}/pkg"
+  cp "${ROOT_DIR}/.build/config.yaml" "${tmp_dir}/.build/config.yaml"
+  cat >"${tmp_dir}/go.mod" <<EOF
+module negative.test/sample
+
+go 1.26.2
+
+require github.com/topfreegames/pitaya v0.0.0
+EOF
+  touch "${tmp_dir}/go.sum"
+  cp "${negative_file}" "${tmp_dir}/cmd/negative/main.go"
+  if LSP_ROOT="${tmp_dir}" bash "${ROOT_DIR}/scripts/dep-guard.sh" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
 run_commit_negative() {
   local negative_file="$1"
   if python3 "${ROOT_DIR}/scripts/verify-commit-msg.py" "${negative_file}" >/dev/null 2>&1; then
@@ -166,6 +212,20 @@ run_git_hooks_parity_negative() {
   fi
 }
 
+run_redis_keys_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-redis-keys.py" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
+run_metrics_naming_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-metrics-naming.py" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
 for rule in "${RULES_DIR}"/*.mdc; do
   [[ -f "${rule}" ]] || continue
   kind="$(extract_field "${rule}" "kind")"
@@ -180,8 +240,14 @@ for rule in "${RULES_DIR}"/*.mdc; do
   fi
 
   case "${negative_rel}" in
+    *proto_breaking_change*.proto.neg)
+      run_proto_breaking_negative "${negative_file}"
+      ;;
     *.proto.neg)
       run_proto_negative "${negative_file}"
+      ;;
+    *deps_forbidden_dependency*.go.neg)
+      run_deps_negative "${negative_file}"
       ;;
     *commit*.neg)
       run_commit_negative "${negative_file}"
@@ -218,6 +284,12 @@ for rule in "${RULES_DIR}"/*.mdc; do
       ;;
     *git_hooks_parity*.yml.neg|*git_hooks_parity*.yaml.neg)
       run_git_hooks_parity_negative "${negative_file}"
+      ;;
+    *redis_keys*.go.neg)
+      run_redis_keys_negative "${negative_file}"
+      ;;
+    *metrics_bad_prefix*.go.neg)
+      run_metrics_naming_negative "${negative_file}"
       ;;
     *.go.neg)
       run_golangci_negative "${negative_file}" "${enforcer}"

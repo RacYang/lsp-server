@@ -1,0 +1,7 @@
+package negative
+
+func useRedisKey(client interface {
+	Get(ctx any, key string) any
+}) {
+	client.Get(nil, "bad:session:user-1")
+}

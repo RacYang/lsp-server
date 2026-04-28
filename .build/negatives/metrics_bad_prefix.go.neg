@@ -1,0 +1,11 @@
+package negative
+
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var BadMetric = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "room_events",
+	Help: "bad metric",
+})

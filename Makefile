@@ -12,7 +12,7 @@ HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 .PHONY: bootstrap generate fix fix-file verify verify-fast verify-pre-commit verify-image verify-bench \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
-	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang \
+	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang verify-domain verify-redis-keys verify-metrics-naming \
 	verify-git-repo verify-git-local verify-git-push
 
 bootstrap:
@@ -37,9 +37,9 @@ fix:
 fix-file:
 	@if [[ -n "$(FILE)" && -f "$(FILE)" && "$(FILE)" == *.go ]]; then gofmt -w "$(FILE)"; goimports -w "$(FILE)"; fi
 
-verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-tools verify-determinism verify-git-repo verify-lang
+verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-tools verify-determinism verify-git-repo verify-lang verify-domain
 
-verify-fast: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-test-fast verify-secrets verify-meta verify-config verify-tools verify-determinism verify-git-repo verify-lang
+verify-fast: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-test-fast verify-secrets verify-meta verify-config verify-tools verify-determinism verify-git-repo verify-lang verify-domain
 
 verify-git-repo:
 	@python3 scripts/verify-repo-hygiene.py
@@ -218,3 +218,11 @@ verify-lang:
 	@python3 scripts/verify-lang-comments.py
 	@python3 scripts/verify-no-direct-logging.py
 	@python3 scripts/verify-log-calls.py
+
+verify-domain: verify-redis-keys verify-metrics-naming
+
+verify-redis-keys:
+	@python3 scripts/verify-redis-keys.py
+
+verify-metrics-naming:
+	@python3 scripts/verify-metrics-naming.py

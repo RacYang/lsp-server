@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CursorRuleFrontmatter",
+  "type": "object",
+  "required": ["kind", "description", "adr"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["constraint", "norm"]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "alwaysApply": {
+      "type": "boolean",
+      "const": true
+    },
+    "globs": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adr": {
+      "type": "string",
+      "pattern": "^docs/adr/[0-9]{4}-[a-z0-9-]+\\.md$"
+    },
+    "enforcer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "negative_test": {
+      "type": "string",
+      "pattern": "^\\.build/negatives/.+\\.neg$"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "const": "constraint" } }
+      },
+      "then": {
+        "required": ["enforcer", "negative_test"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "norm" } }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            { "required": ["globs"] },
+            { "required": ["enforcer"] },
+            { "required": ["negative_test"] }
+          ]
+        }
+      }
+    },
+    {
+      "not": {
+        "required": ["alwaysApply", "globs"]
+      }
+    }
+  ]
+}

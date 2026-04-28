@@ -272,6 +272,22 @@ logging:
     - user_id
     - room_id
 
+redis:
+  key_prefix: "lsp:"
+  key_constructors:
+    - "internal/store/redis/keys.go"
+
+metrics:
+  name_prefix: "lsp_"
+  allowed_suffixes:
+    - "_seconds"
+    - "_total"
+    - "_bytes"
+    - "_count"
+    - "_ratio"
+    - "_info"
+    - "_depth"
+
 stage_gates:
   bootstrap:
     cover_strict: false

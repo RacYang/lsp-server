@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: "Redis 键必须集中构造并使用 lsp: 前缀"
+globs: "internal/store/redis/**/*.go"
+adr: docs/adr/0010-redis-key-layout.md
+enforcer: scripts/verify-redis-keys.py
+negative_test: .build/negatives/redis_keys_bad_prefix.go.neg
+---
+
+# Redis 键命名
+
+Redis 键名必须通过 `internal/store/redis/keys.go` 中的构造函数生成，前缀与构造器清单由 `.build/config.yaml` 的 `redis` 节管理。
+
+业务代码不得在 Redis 操作调用处直接写键名字面量，避免键空间分散与 TTL 语义漂移。

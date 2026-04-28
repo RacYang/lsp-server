@@ -9,4 +9,4 @@ negative_test: .build/negatives/lang_code_english_comment.go.neg
 
 # 注释语言约束
 
-见 ADR-0004 与 ADR-0005；阈值与关键字白名单见 SSOT `commenting` 节。
+见 ADR-0004、ADR-0005 与 `docs/LANGUAGE-POLICY.md`；阈值与关键字白名单见 SSOT `commenting` 节。

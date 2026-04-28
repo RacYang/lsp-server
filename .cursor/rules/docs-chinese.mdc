@@ -9,4 +9,4 @@ negative_test: .build/negatives/lang_docs_full_english.md.neg
 
 # 文档中文约束
 
-见 ADR-0004；阈值与路径由 `.build/config.yaml` 的 `language` 节配置。
+见 ADR-0004 与 `docs/LANGUAGE-POLICY.md`；阈值与路径由 `.build/config.yaml` 的 `language` 节配置。

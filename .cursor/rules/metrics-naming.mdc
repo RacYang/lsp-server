@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: Prometheus 指标必须使用 lsp_ 前缀与约定后缀
+globs: "internal/metrics/**/*.go"
+adr: docs/adr/0019-observability-metrics.md
+enforcer: scripts/verify-metrics-naming.py
+negative_test: .build/negatives/metrics_bad_prefix.go.neg
+---
+
+# 指标命名
+
+Prometheus 指标统一落在 `lsp_` 命名空间下，并使用 `.build/config.yaml` 中 `metrics.allowed_suffixes` 列出的后缀。
+
+新增指标时优先放入 `internal/metrics` 集中注册，避免各层重复注册或出现无法聚合的异名指标。

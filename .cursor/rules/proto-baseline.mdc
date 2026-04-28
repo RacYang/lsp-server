@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: Proto 契约必须相对 proto-baseline 保持向后兼容
+globs: "api/proto/**/*.proto"
+adr: docs/adr/0012-proto-baseline-and-versioning.md
+enforcer: buf.yaml
+negative_test: .build/negatives/proto_breaking_change.proto.neg
+---
+
+# Proto 基线
+
+`proto.baseline_ref` 当前指向 `refs/tags/proto-baseline`；`make verify` 通过 `buf breaking` 校验对外契约不被无意破坏。
+
+客户端与集群 proto 在 Phase 2 默认保持单模块基线。若必须不兼容，应新增 v2 包或补独立 ADR，而不是改动既有编号语义。

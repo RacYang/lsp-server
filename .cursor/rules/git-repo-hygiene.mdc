@@ -12,4 +12,4 @@ negative_test: .build/negatives/git_repo_hygiene_dsstore.txt.neg
 - 被跟踪文件大小不得超过 `git.repo_hygiene.max_tracked_file_bytes`。
 - `git.repo_hygiene.forbidden_basenames` 不得出现在跟踪路径中。
 - `binary_blocked` 为真时，非白名单路径不得跟踪疑似二进制内容；白名单见 `allow_binary_globs` / `allow_large_file_globs`。
-- `workspace_space_dirs_blocked` 为真时，工作树中（含未跟踪）禁止出现以「空格 + 数字」结尾命名的目录或文件，避免 macOS Finder 副本污染；扫描排除列表见 `workspace_scan_excludes`。
+- 工作树中 macOS Finder 副本路径的专项规则见 `git-workspace-hygiene.mdc`；两者复用同一 enforcer，但负例分开维护。

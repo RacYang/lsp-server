@@ -9,4 +9,4 @@ negative_test: .build/negatives/lang_log_english_message.go.neg
 
 # 日志 message 与字段
 
-同时受 ADR-0004（语言）与 ADR-0006（门面与字段）约束；实现见 `scripts/verify-log-calls.py`。
+同时受 ADR-0004（语言）、ADR-0006（门面与字段）与 `docs/LANGUAGE-POLICY.md` 约束；实现见 `scripts/verify-log-calls.py`。

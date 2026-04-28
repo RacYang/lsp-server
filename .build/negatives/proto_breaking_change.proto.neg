@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package client.v1;
+
+option go_package = "negative.test/api/gen/go/client/v1;clientv1";
+
+message BreakingSample {
+}
