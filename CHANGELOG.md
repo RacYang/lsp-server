@@ -6,6 +6,7 @@
 
 ### 治理与文档
 
+- 文档：新增 [ADR-0030](docs/adr/0030-single-host-compose-deploy.md)，与 [ADR-0024](docs/adr/0024-deployment-and-slo.md) 并存，限定单机 / 小规模 / 单租户场景的 Docker Compose 部署形态。
 - 治理：统一 ADR 状态格式、Phase 5/6 索引、文档交叉引用与命名约定，补齐 bench/scripts 命名说明；重整 `bench/` 为「剧本 + 脚本 + 临时产物」，把预发基线与恢复演练归档迁入 `docs/baselines/` 与 `docs/drills/`。
 - 治理：第二轮统一 rules/skills/AGENTS.md，新增 ADR 索引页、中文化总览、规则 frontmatter schema、Redis key/指标命名 enforcer 与相关负例。
 - 文档：Phase 6 收尾补齐预发压测基线、PostgreSQL 恢复演练 runbook、Secret overlay 示例与签名提交试运行说明，ADR-0026/0027/0029 升级为已采纳。

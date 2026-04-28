@@ -52,3 +52,4 @@
 - [ADR-0027 密钥与凭据管理](0027-secret-and-credential-management.md)：已采纳；定义 Secret 不入仓、轮换与 overlay 示例。
 - [ADR-0028 跨地域多活](0028-multi-region-topology.md)：草案；评估多地域拓扑、成本与暂缓边界。
 - [ADR-0029 签名提交升级评估](0029-signed-commit-required.md)：已采纳；定义签名提交试运行与升级路径。
+- [ADR-0030 单机 Docker Compose 部署形态](0030-single-host-compose-deploy.md)：已采纳；与 ADR-0024 并存，限定单机 / 小规模 / 单租户场景。
