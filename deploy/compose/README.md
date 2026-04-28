@@ -11,15 +11,17 @@
 
 ## 拓扑
 
-| 容器 | 镜像 | 网络位置 | 备注 |
-| --- | --- | --- | --- |
-| `gate` | 本地 build `lsp-gate` | 仅 WebSocket 端口暴露宿主机 | 沿用 distroless 镜像 |
-| `room` | 本地 build `lsp-room` | 仅 obs 端口绑定 `127.0.0.1` | 沿用 distroless 镜像 |
-| `lobby` | 本地 build `lsp-lobby` | 仅 obs 端口绑定 `127.0.0.1` | 沿用 distroless 镜像 |
-| `redis` | `redis:7-alpine` | 仅 compose 内网 | named volume 持久化 |
-| `postgres` | `postgres:16-alpine` | 仅 compose 内网 | named volume 持久化 |
-| `etcd` | `quay.io/coreos/etcd:v3.5.16` | 仅 compose 内网 | 单节点；不满足 ADR-0008 高可用建议 |
-| `config-render` | `alpine:3.20` | 一次性 | envsubst 渲染 YAML 到共享卷 |
+
+| 容器              | 镜像                            | 网络位置                   | 备注                     |
+| --------------- | ----------------------------- | ---------------------- | ---------------------- |
+| `gate`          | 本地 build `lsp-gate`           | 仅 WebSocket 端口暴露宿主机    | 沿用 distroless 镜像       |
+| `room`          | 本地 build `lsp-room`           | 仅 obs 端口绑定 `127.0.0.1` | 沿用 distroless 镜像       |
+| `lobby`         | 本地 build `lsp-lobby`          | 仅 obs 端口绑定 `127.0.0.1` | 沿用 distroless 镜像       |
+| `redis`         | `redis:7-alpine`              | 仅 compose 内网           | named volume 持久化       |
+| `postgres`      | `postgres:16-alpine`          | 仅 compose 内网           | named volume 持久化       |
+| `etcd`          | `quay.io/coreos/etcd:v3.5.16` | 仅 compose 内网           | 单节点；不满足 ADR-0008 高可用建议 |
+| `config-render` | `alpine:3.20`                 | 一次性                    | envsubst 渲染 YAML 到共享卷  |
+
 
 ## 初次启动
 
@@ -87,3 +89,15 @@ bash deploy/compose/ops/postgres-dump.sh
 - 单节点 etcd：不满足 [ADR-0008](../../docs/adr/0008-cluster-topology-control-data-plane.md) 「≥3 节点」建议，仅作为本地控制面占位。
 - 无 WAL 归档：默认 `postgres:16-alpine` 不启用归档，RPO 可能差于 [ADR-0026](../../docs/adr/0026-postgres-backup-and-restore.md) 目标；如需达成 RPO ≤ 15 分钟，请在 `postgres` 服务上额外挂载 `archive_command` 配置。
 - 无对外告警：本 Compose 不内置 Prometheus / Alertmanager；外部监控由部署侧自行接入。
+
+## 出口代理与运行时隔离
+
+如果宿主机配置了 `~/.docker/config.json` 的 `proxies` 段（例如离线机房或镜像受限网络下需要让 `docker compose build` 走代理拉 `proxy.golang.org`），docker CLI 会**同时把 `HTTP_PROXY` / `HTTPS_PROXY` 注入到运行时容器**。
+
+应用进程内部用 `google.golang.org/grpc` 与 `etcd` / `lobby` / `room` 等内部依赖通信时，grpc 会经 `http.ProxyFromEnvironment` 把所有内网 dial 路由到外部代理，造成：
+
+- 容器进程在 `etcd` 注册阶段永久阻塞，无任何日志输出；
+- `docker compose ps` 显示容器 `Up` 但 `gate` / `lobby` / `room` 内部不监听任何端口；
+- `/healthz` / `/readyz` 报 `Connection reset by peer` 或 `Empty reply`。
+
+`compose.yaml` 中 `gate` / `room` / `lobby` 三个 service 已在 `environment` 段显式将 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`（含小写）置为空字符串，覆盖 docker CLI 注入。**请勿移除这段配置**；构建期需要走代理与运行期不走代理共存的语义靠它保证。
