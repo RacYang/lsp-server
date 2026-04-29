@@ -1,0 +1,12 @@
+---
+kind: constraint
+description: 已存在的日志边界文件须向 Context 注入追踪字段
+globs: "**/*.go"
+adr: docs/adr/0006-logging-system-and-facade.md
+enforcer: scripts/verify-log-boundaries.py
+negative_test: .build/negatives/lang_log_missing_boundary.go.neg
+---
+
+# 日志上下文边界
+
+边界文件一旦存在，应调用 `logx.WithTraceID`、`logx.WithUserID` 与 `logx.WithRoomID`，由门面统一注入日志字段。

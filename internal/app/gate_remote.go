@@ -154,7 +154,8 @@ func (g *remoteRoomGateway) Join(ctx context.Context, roomID, userID string) (in
 		return -1, errors.New(resp.GetError())
 	}
 	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
-		logx.Warn(ctx, "首次进房订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", userID, "room_id", roomID, "err", err.Error())
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "首次进房订阅房间事件流失败稍后重试", "err", err.Error())
 	}
 	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
 	return int(resp.GetSeatIndex()), nil
@@ -203,7 +204,8 @@ func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string
 	}
 	roomID := resp.GetRoomId()
 	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
-		logx.Warn(ctx, "自动匹配后订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", userID, "room_id", roomID, "err", err.Error())
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "自动匹配后订阅房间事件流失败稍后重试", "err", err.Error())
 	}
 	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
 	return roomID, int(resp.GetSeatIndex()), nil
@@ -232,7 +234,8 @@ func (g *remoteRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName 
 	}
 	roomID := resp.GetRoomId()
 	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
-		logx.Warn(ctx, "创建房间后订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", userID, "room_id", roomID, "err", err.Error())
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "创建房间后订阅房间事件流失败稍后重试", "err", err.Error())
 	}
 	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
 	return roomID, int(resp.GetSeatIndex()), nil
@@ -244,7 +247,8 @@ func (g *remoteRoomGateway) Ready(ctx context.Context, roomID, userID string) (f
 		return nil, fmt.Errorf("nil remote room gateway")
 	}
 	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
-		logx.Warn(ctx, "准备前订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", userID, "room_id", roomID, "err", err.Error())
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "准备前订阅房间事件流失败稍后重试", "err", err.Error())
 	}
 	roomClient, _, err := g.roomClientForRoom(ctx, roomID)
 	if err != nil {
@@ -337,7 +341,8 @@ func (g *remoteRoomGateway) applyRoomEvent(ctx context.Context, req *clusterv1.A
 		return nil, fmt.Errorf("nil apply event request")
 	}
 	if err := g.EnsureRoomEventSubscription(ctx, req.GetRoomId(), ""); err != nil {
-		logx.Warn(ctx, "动作前订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", req.GetUserId(), "room_id", req.GetRoomId(), "err", err.Error())
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, req.GetUserId()), req.GetRoomId())
+		logx.Warn(logCtx, "动作前订阅房间事件流失败稍后重试", "err", err.Error())
 	}
 	roomClient, _, err := g.roomClientForRoom(ctx, req.GetRoomId())
 	if err != nil {
@@ -625,7 +630,8 @@ func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerS
 		}
 		msgID, payload, err := encodeClusterRoomEvent(evt)
 		if err != nil {
-			logx.Warn(context.Background(), "房间事件转客户端推送失败", "trace_id", "", "user_id", "", "room_id", roomID, "err", err.Error())
+			logCtx := logx.WithRoomID(context.Background(), roomID)
+			logx.Warn(logCtx, "房间事件转客户端推送失败", "err", err.Error())
 			continue
 		}
 		var delivered []string

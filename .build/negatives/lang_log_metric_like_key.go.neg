@@ -1,0 +1,7 @@
+package sample
+
+import "racoo.cn/lsp/pkg/logx"
+
+func Run(ctx interface{}) {
+	logx.Info(ctx, "玩家进入房间", "mailbox_depth", 42)
+}

@@ -30,9 +30,12 @@ func main() {
 
 func run(ctx context.Context, stop context.CancelFunc) int {
 	defer stop()
+	ctx = logx.WithTraceID(ctx, "process")
+	ctx = logx.WithUserID(ctx, "")
+	ctx = logx.WithRoomID(ctx, "")
 	cfg, err := config.Load(os.Getenv("LSP_CONFIG"))
 	if err != nil {
-		logx.Error(ctx, "大厅服务配置加载失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "大厅服务配置加载失败", "err", err.Error())
 		return 1
 	}
 	svc := lobbysvc.New()
@@ -43,7 +46,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			DialTimeout: 5 * time.Second,
 		})
 		if err != nil {
-			logx.Error(ctx, "大厅服务 etcd 客户端初始化失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+			logx.Error(ctx, "大厅服务 etcd 客户端初始化失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
@@ -53,7 +56,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			Version:       "phase3",
 		}, 10*time.Second)
 		if err != nil {
-			logx.Error(ctx, "大厅节点注册到 etcd 失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+			logx.Error(ctx, "大厅节点注册到 etcd 失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
@@ -63,18 +66,18 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		registerLobbyService(s, newLobbyGRPCServer(svc, claimer, defaultRoomNodeID))
 	})
 	if err != nil {
-		logx.Error(ctx, "大厅服务装配失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "大厅服务装配失败", "err", err.Error())
 		return 1
 	}
 	obsStop, err := app.StartObsHTTP(cfg.ObsAddr, nil)
 	if err != nil {
-		logx.Error(ctx, "可观测性 HTTP 启动失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "可观测性 HTTP 启动失败", "err", err.Error())
 		return 1
 	}
 	defer obsStop()
-	logx.Info(ctx, "大厅服务启动", "trace_id", "", "user_id", "", "room_id", "", "addr", cfg.ServerAddr)
+	logx.Info(ctx, "大厅服务启动", "addr", cfg.ServerAddr)
 	if err := a.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		logx.Error(ctx, "大厅服务退出异常", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "大厅服务退出异常", "err", err.Error())
 		return 1
 	}
 	return 0

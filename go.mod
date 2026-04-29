@@ -18,6 +18,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	go.etcd.io/etcd/client/v3 v3.6.10
 	go.etcd.io/etcd/server/v3 v3.6.10
+	go.opentelemetry.io/otel/trace v1.41.0
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
@@ -115,7 +116,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
-	go.opentelemetry.io/otel/trace v1.41.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

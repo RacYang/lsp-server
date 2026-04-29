@@ -26,16 +26,19 @@ func main() {
 
 func run(ctx context.Context, stop context.CancelFunc) int {
 	defer stop()
+	ctx = logx.WithTraceID(ctx, "process")
+	ctx = logx.WithUserID(ctx, "")
+	ctx = logx.WithRoomID(ctx, "")
 	cfgPath := os.Getenv("LSP_CONFIG")
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		logx.Error(ctx, "网关服务配置加载失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "网关服务配置加载失败", "err", err.Error())
 		return 1
 	}
 	if cfg.EtcdEndpoints != "" {
 		cli, err := clientv3.New(clientv3.Config{Endpoints: splitEtcdEndpoints(cfg.EtcdEndpoints), DialTimeout: 5 * time.Second})
 		if err != nil {
-			logx.Error(ctx, "网关服务 etcd 客户端初始化失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+			logx.Error(ctx, "网关服务 etcd 客户端初始化失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
@@ -45,19 +48,19 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			Version:       "phase3",
 		}, 10*time.Second)
 		if err != nil {
-			logx.Error(ctx, "网关节点注册到 etcd 失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+			logx.Error(ctx, "网关节点注册到 etcd 失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
 	}
 	a, err := app.NewGate(cfg)
 	if err != nil {
-		logx.Error(ctx, "网关服务装配失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "网关服务装配失败", "err", err.Error())
 		return 1
 	}
-	logx.Info(ctx, "网关服务启动", "trace_id", "", "user_id", "", "room_id", "", "addr", cfg.ServerAddr)
+	logx.Info(ctx, "网关服务启动", "addr", cfg.ServerAddr)
 	if err := a.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		logx.Error(ctx, "网关服务退出异常", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "网关服务退出异常", "err", err.Error())
 		return 1
 	}
 	return 0

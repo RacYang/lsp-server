@@ -272,6 +272,56 @@ logging:
     - trace_id
     - user_id
     - room_id
+  field_naming:
+    pattern: "^[a-z][a-z0-9_]*$"
+    max_length: 32
+  field_schema_core:
+    - trace_id
+    - span_id
+    - user_id
+    - room_id
+    - rule_id
+    - op
+    - err
+    - elapsed_ms
+    - shard
+    - region
+  forbidden_field_keys:
+    - qps
+    - requests_per_second
+    - mailbox_depth
+    - active_connections
+    - concurrent_users
+  pii_redact_keys:
+    - token
+    - password
+    - secret
+    - mobile
+    - email
+    - ip
+  forbidden_literal_keys_in_calls:
+    - trace_id
+    - user_id
+    - room_id
+  context_boundaries:
+    require_with_calls_when_file_exists: true
+    globs:
+      - "internal/transport/grpc/**/interceptor*.go"
+      - "internal/transport/ws/**/handler*.go"
+      - "internal/room/**/actor*.go"
+      - "cmd/**/main.go"
+  sampling:
+    enabled: false
+    initial: 0
+    thereafter: 0
+    tick: 1s
+    error_never_sampled: true
+  dynamic_level:
+    enabled: false
+    http_endpoint: ""
+  otel:
+    enabled: false
+    bridge_package: "go.opentelemetry.io/contrib/bridges/otelslog"
 
 redis:
   key_prefix: "lsp:"

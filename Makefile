@@ -238,6 +238,7 @@ verify-lang:
 	@python3 scripts/verify-lang-comments.py
 	@python3 scripts/verify-no-direct-logging.py
 	@python3 scripts/verify-log-calls.py
+	@python3 scripts/verify-log-boundaries.py
 
 verify-domain: verify-redis-keys verify-metrics-naming
 

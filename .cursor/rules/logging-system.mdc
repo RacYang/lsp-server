@@ -7,4 +7,4 @@ adr: docs/adr/0006-logging-system-and-facade.md
 
 # 日志体系
 
-门面路径、禁止项与字段约定见 ADR-0006 与 `docs/LOGGING.md`。
+门面路径、Context 自动注入、字段命名、敏感键、采样边界与 OTel 预留路径见 ADR-0006、ADR-0033、ADR-0034、ADR-0035 与 `docs/LOGGING.md`。

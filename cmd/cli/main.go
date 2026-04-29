@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"racoo.cn/lsp/pkg/logx"
 )
 
 var (
@@ -43,6 +45,9 @@ func run() int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx = logx.WithTraceID(ctx, "cli")
+	ctx = logx.WithUserID(ctx, *name)
+	ctx = logx.WithRoomID(ctx, *roomID)
 
 	state := NewAppState(*name)
 	state.Mutate(func(v *RoomView) { v.ServerURL = *wsURL })

@@ -23,3 +23,14 @@ runtime:
     mailbox_capacity: 96
   redis:
     idempotency_ttl: 10m
+  logging:
+    level: info
+    format: json
+    otel_enabled: false
+    otel_endpoint: ""
+    dynamic_level: false
+    sample:
+      initial: 0
+      thereafter: 0
+      tick: 1s
+      error_never: true

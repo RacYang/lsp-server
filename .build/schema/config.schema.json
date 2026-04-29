@@ -344,7 +344,16 @@
         "facade_impl_paths",
         "forbidden_packages",
         "message_min_cjk_ratio",
-        "required_keys"
+        "required_keys",
+        "field_naming",
+        "field_schema_core",
+        "forbidden_field_keys",
+        "pii_redact_keys",
+        "forbidden_literal_keys_in_calls",
+        "context_boundaries",
+        "sampling",
+        "dynamic_level",
+        "otel"
       ],
       "properties": {
         "facade_packages": {
@@ -363,6 +372,73 @@
         "required_keys": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "field_naming": {
+          "type": "object",
+          "required": ["pattern", "max_length"],
+          "properties": {
+            "pattern": { "type": "string", "minLength": 1 },
+            "max_length": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "field_schema_core": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "forbidden_field_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "pii_redact_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "forbidden_literal_keys_in_calls": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "context_boundaries": {
+          "type": "object",
+          "required": ["require_with_calls_when_file_exists", "globs"],
+          "properties": {
+            "require_with_calls_when_file_exists": { "type": "boolean" },
+            "globs": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "sampling": {
+          "type": "object",
+          "required": ["enabled", "initial", "thereafter", "tick", "error_never_sampled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "initial": { "type": "integer", "minimum": 0 },
+            "thereafter": { "type": "integer", "minimum": 0 },
+            "tick": { "type": "string", "minLength": 1 },
+            "error_never_sampled": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "dynamic_level": {
+          "type": "object",
+          "required": ["enabled", "http_endpoint"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "http_endpoint": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "otel": {
+          "type": "object",
+          "required": ["enabled", "bridge_package"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "bridge_package": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

@@ -6,8 +6,8 @@ import (
 	"os"
 )
 
-// newJSONSlogLogger 构造 JSON 输出的 slog.Logger；仅在本包内使用标准库 slog。
-func newJSONSlogLogger(w io.Writer, min Level) *slog.Logger {
+// newJSONSlogHandler 构造 JSON 输出 Handler；仅在本包内使用标准库 slog。
+func newJSONSlogHandler(w io.Writer, min Level, addSource bool) slog.Handler {
 	if w == nil {
 		w = os.Stdout
 	}
@@ -24,6 +24,5 @@ func newJSONSlogLogger(w io.Writer, min Level) *slog.Logger {
 	default:
 		lv = slog.LevelInfo
 	}
-	h := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: lv})
-	return slog.New(h)
+	return slog.NewJSONHandler(w, &slog.HandlerOptions{Level: lv, AddSource: addSource})
 }

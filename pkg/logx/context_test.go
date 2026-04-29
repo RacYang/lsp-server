@@ -26,3 +26,11 @@ func TestWithRoomID(t *testing.T) {
 		t.Fatalf("RoomIDFromContext = %q, want r-3", got)
 	}
 }
+
+func TestWithFields(t *testing.T) {
+	ctx := WithFields(context.Background(), "rule_id", "sichuan_xzdd")
+	fields := FieldsFromContext(ctx)
+	if len(fields) != 1 || fields[0].Key != "rule_id" || fields[0].Value.String() != "sichuan_xzdd" {
+		t.Fatalf("fields = %#v", fields)
+	}
+}

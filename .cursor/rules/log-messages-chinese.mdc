@@ -1,6 +1,6 @@
 ---
 kind: constraint
-description: 经日志门面输出的 message 以中文为主并携带必带字段
+description: 经日志门面输出的 message 以中文为主并符合字段治理
 globs: "**/*.go"
 adr: docs/adr/0004-language-and-writing-policy.md
 enforcer: scripts/verify-log-calls.py

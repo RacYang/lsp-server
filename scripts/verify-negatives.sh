@@ -177,6 +177,13 @@ run_log_calls_negative() {
   fi
 }
 
+run_log_boundaries_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-log-boundaries.py" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
 run_git_branch_negative() {
   local negative_file="$1"
   if python3 "${ROOT_DIR}/scripts/verify-branch-name.py" --file "${negative_file}" >/dev/null 2>&1; then
@@ -271,8 +278,11 @@ for rule in "${RULES_DIR}"/*.mdc; do
     *lang_direct_slog*.go.neg)
       run_no_direct_logging_negative "${negative_file}"
       ;;
-    *lang_log_english_message*.go.neg)
+    *lang_log_english_message*.go.neg|*lang_log_literal_required_key*.go.neg|*lang_log_unknown_field_key*.go.neg|*lang_log_metric_like_key*.go.neg|*lang_log_pii_field_key*.go.neg)
       run_log_calls_negative "${negative_file}"
+      ;;
+    *lang_log_missing_boundary*.go.neg)
+      run_log_boundaries_negative "${negative_file}"
       ;;
     *lang_code_english_comment*.go.neg)
       run_lang_comments_negative "${negative_file}"

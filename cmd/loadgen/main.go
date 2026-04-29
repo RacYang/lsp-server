@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 type scenarioConfig struct {
@@ -66,6 +67,9 @@ func main() {
 
 	started := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx = logx.WithTraceID(ctx, "loadgen")
+	ctx = logx.WithUserID(ctx, "")
+	ctx = logx.WithRoomID(ctx, cfg.RoomIDPrefix)
 
 	var summary scenarioSummary
 	switch cfg.Scenario {

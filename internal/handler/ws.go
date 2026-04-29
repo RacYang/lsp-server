@@ -59,7 +59,7 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logx.Error(ctx, "连接升级为 WebSocket 时失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "连接升级为 WebSocket 时失败", "err", err.Error())
 		return
 	}
 	state := wsConnState{}
@@ -77,8 +77,9 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 		}
 		h, err := frame.ReadFrame(bytes.NewReader(data))
 		if err != nil {
-			logx.Warn(ctx, "二进制帧解析失败请检查客户端版本",
-				"trace_id", "", "user_id", state.userID, "room_id", state.roomID, "err", err.Error())
+			logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)
+			logx.Warn(logCtx, "二进制帧解析失败请检查客户端版本",
+				"err", err.Error())
 			continue
 		}
 		if deps.Hub != nil {

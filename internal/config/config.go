@@ -44,6 +44,25 @@ type RuntimeConfig struct {
 	GateWSIdempotencyCache   int
 	RoomMailboxCapacity      int
 	RedisIdempotencyTTL      time.Duration
+	Logging                  LoggingConfig
+}
+
+// LoggingConfig 定义日志门面的运行时开关。
+type LoggingConfig struct {
+	Level        string
+	Format       string
+	Sample       LoggingSamplingConfig
+	OTelEnabled  bool
+	OTelEndpoint string
+	DynamicLevel bool
+}
+
+// LoggingSamplingConfig 定义日志采样参数；默认关闭。
+type LoggingSamplingConfig struct {
+	Initial    int
+	Thereafter int
+	Tick       time.Duration
+	ErrorNever bool
 }
 
 const (
@@ -52,6 +71,9 @@ const (
 	defaultGateWSIdempotencyCache   = 4096
 	defaultRoomMailboxCapacity      = 96
 	defaultRedisIdempotencyTTL      = 10 * time.Minute
+	defaultLoggingLevel             = "info"
+	defaultLoggingFormat            = "json"
+	defaultLoggingSamplingTick      = time.Second
 )
 
 func (cfg RuntimeConfig) withDefaults() RuntimeConfig {
@@ -70,6 +92,21 @@ func (cfg RuntimeConfig) withDefaults() RuntimeConfig {
 	if cfg.RedisIdempotencyTTL <= 0 {
 		cfg.RedisIdempotencyTTL = defaultRedisIdempotencyTTL
 	}
+	cfg.Logging = cfg.Logging.withDefaults()
+	return cfg
+}
+
+func (cfg LoggingConfig) withDefaults() LoggingConfig {
+	if strings.TrimSpace(cfg.Level) == "" {
+		cfg.Level = defaultLoggingLevel
+	}
+	if strings.TrimSpace(cfg.Format) == "" {
+		cfg.Format = defaultLoggingFormat
+	}
+	if cfg.Sample.Tick <= 0 {
+		cfg.Sample.Tick = defaultLoggingSamplingTick
+	}
+	cfg.Sample.ErrorNever = true
 	return cfg
 }
 
@@ -107,6 +144,19 @@ func Load(path string) (Config, error) {
 			GateWSIdempotencyCache:   v.GetInt("runtime.gate.ws_idempotency_cache"),
 			RoomMailboxCapacity:      v.GetInt("runtime.room.mailbox_capacity"),
 			RedisIdempotencyTTL:      v.GetDuration("runtime.redis.idempotency_ttl"),
+			Logging: LoggingConfig{
+				Level:        v.GetString("runtime.logging.level"),
+				Format:       v.GetString("runtime.logging.format"),
+				OTelEnabled:  v.GetBool("runtime.logging.otel_enabled"),
+				OTelEndpoint: v.GetString("runtime.logging.otel_endpoint"),
+				DynamicLevel: v.GetBool("runtime.logging.dynamic_level"),
+				Sample: LoggingSamplingConfig{
+					Initial:    v.GetInt("runtime.logging.sample.initial"),
+					Thereafter: v.GetInt("runtime.logging.sample.thereafter"),
+					Tick:       v.GetDuration("runtime.logging.sample.tick"),
+					ErrorNever: v.GetBool("runtime.logging.sample.error_never"),
+				},
+			},
 		}.withDefaults(),
 	}
 	return cfg, nil

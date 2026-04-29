@@ -53,8 +53,8 @@ func dispatchFrame(
 		handleHu(ctx, deps, conn, state, h.MsgID, h.Payload)
 	default:
 		unknownMsgTotal.Inc()
-		logx.Info(ctx, "收到尚未实现的消息编号已跳过",
-			"trace_id", "", "user_id", state.userID, "room_id", state.roomID,
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)
+		logx.Info(logCtx, "收到尚未实现的消息编号已跳过",
 			"msg_id", fmt.Sprintf("%d", h.MsgID))
 	}
 }

@@ -21,20 +21,23 @@ func main() {
 
 func run(ctx context.Context, stop context.CancelFunc) int {
 	defer stop()
+	ctx = logx.WithTraceID(ctx, "process")
+	ctx = logx.WithUserID(ctx, "")
+	ctx = logx.WithRoomID(ctx, "")
 	cfgPath := os.Getenv("LSP_CONFIG")
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		logx.Error(ctx, "聚合入口配置加载失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "聚合入口配置加载失败", "err", err.Error())
 		return 1
 	}
 	a, err := app.NewAllInProcess(cfg)
 	if err != nil {
-		logx.Error(ctx, "聚合入口装配失败", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "聚合入口装配失败", "err", err.Error())
 		return 1
 	}
-	logx.Info(ctx, "聚合入口启动", "trace_id", "", "user_id", "", "room_id", "", "addr", cfg.ServerAddr)
+	logx.Info(ctx, "聚合入口启动", "addr", cfg.ServerAddr)
 	if err := a.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		logx.Error(ctx, "聚合入口退出异常", "trace_id", "", "user_id", "", "room_id", "", "err", err.Error())
+		logx.Error(ctx, "聚合入口退出异常", "err", err.Error())
 		return 1
 	}
 	return 0

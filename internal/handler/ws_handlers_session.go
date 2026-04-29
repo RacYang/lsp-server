@@ -80,8 +80,8 @@ func handleLoginResume(
 			sinceCursor = state.roomID + ":0"
 		}
 		if err := deps.Rooms.EnsureRoomEventSubscription(ctx, state.roomID, sinceCursor); err != nil {
-			logx.Warn(ctx, "恢复后订阅房间事件流失败",
-				"trace_id", "", "user_id", state.userID, "room_id", state.roomID, "err", err.Error())
+			logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)
+			logx.Warn(logCtx, "恢复后订阅房间事件流失败", "err", err.Error())
 		}
 	}
 
@@ -124,8 +124,8 @@ func handleLoginIssue(
 		var err error
 		plainTok, err = deps.Session.Issue(ctx, state.userID, r.Host)
 		if err != nil {
-			logx.Warn(ctx, "签发会话令牌失败继续无令牌模式",
-				"trace_id", "", "user_id", state.userID, "room_id", "", "err", err.Error())
+			logCtx := logx.WithUserID(ctx, state.userID)
+			logx.Warn(logCtx, "签发会话令牌失败继续无令牌模式", "err", err.Error())
 		}
 	}
 	login := &clientv1.LoginResponse{UserId: state.userID, SessionToken: plainTok, Resumed: false}

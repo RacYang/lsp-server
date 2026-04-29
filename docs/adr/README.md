@@ -55,3 +55,6 @@
 - [ADR-0030 单机 Docker Compose 部署形态](0030-single-host-compose-deploy.md)：已采纳；与 ADR-0024 并存，限定单机 / 小规模 / 单租户场景。
 - [ADR-0031 大厅列表与自动匹配协议](0031-lobby-list-and-matchmaking.md)：已采纳；定义客户端可见的房间列表、自动匹配与创建房间契约。
 - [ADR-0032 lsp-cli 二进制分发](0032-cli-binary-distribution.md)：已采纳；定义五平台二进制、GoReleaser 与发布目标 SSOT。
+- [ADR-0033 日志采样与 PII 脱敏策略](0033-logging-sampling-and-pii-redaction.md)：已采纳；定义默认关闭采样、Error 永不采样与键名层 PII 边界。
+- [ADR-0034 日志动态级别管控](0034-logging-dynamic-level-control.md)：已采纳；限定 Phase 1 仅提供 AtomicLevel Go API，不开放未鉴权 HTTP 写端点。
+- [ADR-0035 OTel Logs Bridge 评估](0035-otel-logs-bridge.md)：已采纳；默认关闭 OTel 日志桥接，以 build tag 预留 trace/span 注入路径。
