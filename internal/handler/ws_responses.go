@@ -97,6 +97,8 @@ func joinRoomErrorCode(err error) clientv1.ErrorCode {
 
 func outboundMsgID(kind roomsvc.Kind) (uint16, bool) {
 	switch kind {
+	case roomsvc.KindInitialDeal:
+		return msgid.InitialDealNotify, true
 	case roomsvc.KindExchangeThreeDone:
 		return msgid.ExchangeThreeDone, true
 	case roomsvc.KindQueMenDone:

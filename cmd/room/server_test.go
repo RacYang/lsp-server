@@ -265,10 +265,10 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 		WithArgs("r-batch").
 		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(0)))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("r-batch", int64(1), string(roomsvc.KindDrawTile), []byte("draw")).
+		WithArgs("r-batch", int64(1), string(roomsvc.KindDrawTile), []byte("draw"), int32(-1)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("r-batch", int64(2), string(roomsvc.KindAction), []byte("action")).
+		WithArgs("r-batch", int64(2), string(roomsvc.KindAction), []byte("action"), int32(-1)).
 		WillReturnError(context.DeadlineExceeded)
 	mock.ExpectRollback()
 
@@ -278,8 +278,8 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 	srv.streams["r-batch"] = []chan *clusterv1.RoomServiceStreamEventsResponse{ch}
 
 	resp, err := srv.applyNotifications(context.Background(), "r-batch", "", []roomsvc.Notification{
-		{Kind: roomsvc.KindDrawTile, Payload: []byte("draw")},
-		{Kind: roomsvc.KindAction, Payload: []byte("action")},
+		{Kind: roomsvc.KindDrawTile, Payload: []byte("draw"), TargetSeat: roomsvc.BroadcastSeat},
+		{Kind: roomsvc.KindAction, Payload: []byte("action"), TargetSeat: roomsvc.BroadcastSeat},
 	}, nil)
 	require.NoError(t, err)
 	require.False(t, resp.GetAccepted())

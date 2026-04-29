@@ -46,7 +46,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	if err != nil {
 		return nil, err
 	}
-	out = append(out, Notification{Kind: KindExchangeThreeDone, Payload: exchangePayload})
+	out = append(out, Notification{Kind: KindExchangeThreeDone, Payload: exchangePayload, TargetSeat: BroadcastSeat})
 
 	queBySeat := make([]int32, 4)
 	for seat := 0; seat < 4; seat++ {
@@ -61,7 +61,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	if err != nil {
 		return nil, err
 	}
-	out = append(out, Notification{Kind: KindQueMenDone, Payload: quePayload})
+	out = append(out, Notification{Kind: KindQueMenDone, Payload: quePayload, TargetSeat: BroadcastSeat})
 
 	startPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "start",
@@ -72,7 +72,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	if err != nil {
 		return nil, err
 	}
-	out = append(out, Notification{Kind: KindStartGame, Payload: startPayload})
+	out = append(out, Notification{Kind: KindStartGame, Payload: startPayload, TargetSeat: BroadcastSeat})
 
 	ledger := make([]sichuanxzdd.ScoreEntry, 0, 8)
 	winnerSeat := -1
@@ -92,7 +92,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, Notification{Kind: KindDrawTile, Payload: drawPayload})
+		out = append(out, Notification{Kind: KindDrawTile, Payload: drawPayload, TargetSeat: BroadcastSeat})
 
 		if result, ok := rule.CheckHu(hands[turn], drawn, rules.HuContext{}); ok {
 			breakdown := rule.ScoreFans(result, rules.ScoreContext{
@@ -117,7 +117,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, Notification{Kind: KindAction, Payload: huPayload})
+			out = append(out, Notification{Kind: KindAction, Payload: huPayload, TargetSeat: BroadcastSeat})
 			break
 		}
 
@@ -135,7 +135,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, Notification{Kind: KindAction, Payload: actionPayload})
+		out = append(out, Notification{Kind: KindAction, Payload: actionPayload, TargetSeat: BroadcastSeat})
 		turn = (turn + 1) % 4
 	}
 
@@ -148,6 +148,6 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	if err != nil {
 		return nil, err
 	}
-	out = append(out, Notification{Kind: KindSettlement, Payload: settlementPayload})
+	out = append(out, Notification{Kind: KindSettlement, Payload: settlementPayload, TargetSeat: BroadcastSeat})
 	return out, nil
 }

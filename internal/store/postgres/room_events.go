@@ -21,10 +21,11 @@ type roomEventPool interface {
 
 // RoomEventRow 为单条持久化房间事件。
 type RoomEventRow struct {
-	RoomID  string
-	Seq     int64
-	Kind    string
-	Payload []byte
+	RoomID     string
+	Seq        int64
+	Kind       string
+	Payload    []byte
+	TargetSeat int32
 }
 
 // RoomEventStore 追加并查询房间事件日志。
@@ -42,7 +43,7 @@ func NewRoomEventStore(pool roomEventPool) *RoomEventStore {
 
 // AppendEvent 在事务内分配 seq 并写入；返回新 seq 与游标字符串。
 func (s *RoomEventStore) AppendEvent(ctx context.Context, roomID, kind string, payload []byte) (seq int64, cursor string, err error) {
-	rows, err := s.AppendEvents(ctx, roomID, []RoomEventRow{{Kind: kind, Payload: payload}})
+	rows, err := s.AppendEvents(ctx, roomID, []RoomEventRow{{Kind: kind, Payload: payload, TargetSeat: -1}})
 	if err != nil {
 		return 0, "", err
 	}
@@ -97,15 +98,20 @@ func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events
 
 	out := make([]RoomEventRow, 0, len(events))
 	for _, event := range events {
-		if _, err := tx.Exec(ctx, `INSERT INTO room_events (room_id, seq, kind, payload) VALUES ($1, $2, $3, $4)`, roomID, next, event.Kind, event.Payload); err != nil {
+		if event.TargetSeat < -1 || event.TargetSeat > 3 {
+			opErr = fmt.Errorf("invalid target seat: %d", event.TargetSeat)
+			return nil, opErr
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO room_events (room_id, seq, kind, payload, target_seat) VALUES ($1, $2, $3, $4, $5)`, roomID, next, event.Kind, event.Payload, event.TargetSeat); err != nil {
 			opErr = fmt.Errorf("insert event: %w", err)
 			return nil, opErr
 		}
 		out = append(out, RoomEventRow{
-			RoomID:  roomID,
-			Seq:     next,
-			Kind:    event.Kind,
-			Payload: append([]byte(nil), event.Payload...),
+			RoomID:     roomID,
+			Seq:        next,
+			Kind:       event.Kind,
+			Payload:    append([]byte(nil), event.Payload...),
+			TargetSeat: event.TargetSeat,
 		})
 		next++
 	}
@@ -128,7 +134,7 @@ func (s *RoomEventStore) ListEventsAfter(ctx context.Context, roomID string, aft
 	var rows pgx.Rows
 	err := storex.Retry(ctx, "postgres", "list_events_after", 2, func(opCtx context.Context) error {
 		var err error
-		rows, err = s.pool.Query(opCtx, `SELECT room_id, seq, kind, payload FROM room_events WHERE room_id = $1 AND seq > $2 ORDER BY seq ASC`, roomID, afterSeq)
+		rows, err = s.pool.Query(opCtx, `SELECT room_id, seq, kind, payload, target_seat FROM room_events WHERE room_id = $1 AND seq > $2 ORDER BY seq ASC`, roomID, afterSeq)
 		return err
 	})
 	if err != nil {
@@ -139,7 +145,7 @@ func (s *RoomEventStore) ListEventsAfter(ctx context.Context, roomID string, aft
 	var out []RoomEventRow
 	for rows.Next() {
 		var r RoomEventRow
-		if err := rows.Scan(&r.RoomID, &r.Seq, &r.Kind, &r.Payload); err != nil {
+		if err := rows.Scan(&r.RoomID, &r.Seq, &r.Kind, &r.Payload, &r.TargetSeat); err != nil {
 			opErr = err
 			return nil, err
 		}

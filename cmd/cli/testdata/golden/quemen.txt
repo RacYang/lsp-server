@@ -1,0 +1,5 @@
+stage=quemen
+缺=m
+缺=s
+缺=p
+牌桌中心

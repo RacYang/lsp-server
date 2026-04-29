@@ -64,7 +64,7 @@ func (e *Engine) ApplyExchangeThree(_ context.Context, rs *RoundState, seat int,
 		return nil, err
 	}
 	rs.waitingQueMen = true
-	out := []Notification{{Kind: KindExchangeThreeDone, Payload: exchangePayload}}
+	out := []Notification{{Kind: KindExchangeThreeDone, Payload: exchangePayload, TargetSeat: BroadcastSeat}}
 	return append(out, rs.promptSeatActions("que_men")...), nil
 }
 
@@ -86,7 +86,7 @@ func (rs *RoundState) promptSeatActions(action string) []Notification {
 		if err != nil {
 			continue
 		}
-		out = append(out, Notification{Kind: KindAction, Payload: payload})
+		out = append(out, Notification{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat})
 	}
 	return out
 }

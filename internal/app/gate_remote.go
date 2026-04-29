@@ -59,6 +59,8 @@ type remoteRoomGateway struct {
 	streamCtx   context.Context
 	streamMu    sync.Mutex
 	roomStreams map[string]*roomStreamHandle
+	seatMu      sync.Mutex
+	roomSeats   map[string]map[int32]string
 
 	connMu      sync.Mutex
 	roomConnMap map[string]*grpc.ClientConn
@@ -107,6 +109,7 @@ func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Man
 		currentGateAdvertiseAddr: currentGateAdvertiseAddr,
 		streamCtx:                streamCtx,
 		roomStreams:              make(map[string]*roomStreamHandle),
+		roomSeats:                make(map[string]map[int32]string),
 		roomConnMap:              map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
 		roomClients:              map[string]clusterv1.RoomServiceClient{cfg.ClusterRoomAddr: clusterv1.NewRoomServiceClient(roomConn)},
 	}
@@ -153,6 +156,7 @@ func (g *remoteRoomGateway) Join(ctx context.Context, roomID, userID string) (in
 	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
 		logx.Warn(ctx, "首次进房订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", userID, "room_id", roomID, "err", err.Error())
 	}
+	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
 	return int(resp.GetSeatIndex()), nil
 }
 
@@ -370,7 +374,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 	var snapResp *clusterv1.SnapshotRoomResponse
 	err = retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
-		snapResp, callErr = roomClient.SnapshotRoom(withOutgoingTrace(callCtx), &clusterv1.SnapshotRoomRequest{RoomId: srec.RoomID})
+		snapResp, callErr = roomClient.SnapshotRoom(withOutgoingTrace(callCtx), &clusterv1.SnapshotRoomRequest{RoomId: srec.RoomID, UserId: uid})
 		return callErr
 	})
 	if err != nil {
@@ -400,7 +404,11 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		PendingTile:      snapResp.GetPendingTile(),
 		AvailableActions: append([]string(nil), snapResp.GetAvailableActions()...),
 		ClaimCandidates:  clusterClaimCandidatesToClient(snapResp.GetClaimCandidates()),
+		YourHandTiles:    append([]string(nil), snapResp.GetYourHandTiles()...),
+		DiscardsBySeat:   clusterSeatTilesToClient(snapResp.GetDiscardsBySeat()),
+		MeldsBySeat:      clusterSeatTilesToClient(snapResp.GetMeldsBySeat()),
 	}
+	g.rememberRoomPlayers(srec.RoomID, snapResp.GetPlayerIds())
 	if snap.GetState() == "closed" {
 		if fallback, ok, ferr := g.loadSettlementFallback(ctx, uid, srec.RoomID); ferr != nil {
 			return nil, ferr
@@ -418,12 +426,51 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 	}, nil
 }
 
+func (g *remoteRoomGateway) rememberRoomSeat(roomID string, seat int32, userID string) {
+	if g == nil || roomID == "" || userID == "" || seat < 0 || seat > 3 {
+		return
+	}
+	g.seatMu.Lock()
+	defer g.seatMu.Unlock()
+	if g.roomSeats[roomID] == nil {
+		g.roomSeats[roomID] = make(map[int32]string)
+	}
+	g.roomSeats[roomID][seat] = userID
+}
+
+func (g *remoteRoomGateway) rememberRoomPlayers(roomID string, players []string) {
+	for seat, userID := range players {
+		g.rememberRoomSeat(roomID, int32(seat), userID) //nolint:gosec // 座位范围来自 room 快照
+	}
+}
+
+func (g *remoteRoomGateway) userForSeat(roomID string, seat int32) (string, bool) {
+	if g == nil || seat < 0 {
+		return "", false
+	}
+	g.seatMu.Lock()
+	defer g.seatMu.Unlock()
+	userID := g.roomSeats[roomID][seat]
+	return userID, userID != ""
+}
+
 func clusterClaimCandidatesToClient(candidates []*clusterv1.ClaimCandidate) []*clientv1.ClaimCandidate {
 	out := make([]*clientv1.ClaimCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		out = append(out, &clientv1.ClaimCandidate{
 			SeatIndex: candidate.GetSeatIndex(),
 			Actions:   append([]string(nil), candidate.GetActions()...),
+		})
+	}
+	return out
+}
+
+func clusterSeatTilesToClient(items []*clusterv1.SeatTiles) []*clientv1.SeatTiles {
+	out := make([]*clientv1.SeatTiles, 0, len(items))
+	for _, item := range items {
+		out = append(out, &clientv1.SeatTiles{
+			SeatIndex: item.GetSeatIndex(),
+			Tiles:     append([]string(nil), item.GetTiles()...),
 		})
 	}
 	return out
@@ -489,7 +536,14 @@ func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerS
 		}
 		var delivered []string
 		if g.hub != nil {
-			delivered = g.hub.BroadcastDeliveredUsers(roomID, frame.Encode(msgID, payload))
+			encoded := frame.Encode(msgID, payload)
+			if evt.GetTargetSeat() < 0 {
+				delivered = g.hub.BroadcastDeliveredUsers(roomID, encoded)
+			} else if targetUserID, ok := g.userForSeat(roomID, evt.GetTargetSeat()); ok {
+				if g.hub.SendToUser(targetUserID, encoded) {
+					delivered = []string{targetUserID}
+				}
+			}
 		}
 		if g.sess != nil && evt.GetCursor() != "" {
 			cur := evt.GetCursor()
@@ -638,6 +692,14 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 		return 0, nil, fmt.Errorf("nil room event")
 	}
 	switch body := evt.Body.(type) {
+	case *clusterv1.RoomServiceStreamEventsResponse_InitialDeal:
+		return marshalClientEnvelope(msgid.InitialDealNotify, &clientv1.Envelope{
+			ReqId: evt.GetCursor(),
+			Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
+				SeatIndex: body.InitialDeal.GetSeatIndex(),
+				Tiles:     append([]string(nil), body.InitialDeal.GetTiles()...),
+			}},
+		})
 	case *clusterv1.RoomServiceStreamEventsResponse_StartGame:
 		return marshalClientEnvelope(msgid.StartGame, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),

@@ -41,6 +41,7 @@ func TestOutboundMsgIDMappings(t *testing.T) {
 		kind roomsvc.Kind
 		want uint16
 	}{
+		{roomsvc.KindInitialDeal, msgid.InitialDealNotify},
 		{roomsvc.KindExchangeThreeDone, msgid.ExchangeThreeDone},
 		{roomsvc.KindQueMenDone, msgid.QueMenDone},
 		{roomsvc.KindStartGame, msgid.StartGame},
@@ -118,21 +119,21 @@ func TestActionErrEnvelopeShapes(t *testing.T) {
 
 // TestConfigureRuntime 校验运行时入口的限流与幂等缓存可被外部覆盖：传入非正值时应回退到默认参数，正值则按入参重建。
 func TestConfigureRuntime(t *testing.T) {
-	prevLimiter := defaultWSRateLimiter
-	prevIdem := defaultWSIdemCache
+	prevLimiter := defaultWSRateLimiter.Load()
+	prevIdem := defaultWSIdemCache.Load()
 	t.Cleanup(func() {
-		defaultWSRateLimiter = prevLimiter
-		defaultWSIdemCache = prevIdem
+		defaultWSRateLimiter.Store(prevLimiter)
+		defaultWSIdemCache.Store(prevIdem)
 	})
 
 	ConfigureRuntime(0, 0, 0)
-	require.NotNil(t, defaultWSRateLimiter)
-	require.InDelta(t, float64(20), defaultWSRateLimiter.rate, 1e-9)
-	require.InDelta(t, float64(40), defaultWSRateLimiter.burst, 1e-9)
-	require.Equal(t, 4096, defaultWSIdemCache.capacity)
+	require.NotNil(t, defaultWSRateLimiter.Load())
+	require.InDelta(t, float64(20), defaultWSRateLimiter.Load().rate, 1e-9)
+	require.InDelta(t, float64(40), defaultWSRateLimiter.Load().burst, 1e-9)
+	require.Equal(t, 4096, defaultWSIdemCache.Load().capacity)
 
 	ConfigureRuntime(5, 10, 32)
-	require.InDelta(t, float64(5), defaultWSRateLimiter.rate, 1e-9)
-	require.InDelta(t, float64(10), defaultWSRateLimiter.burst, 1e-9)
-	require.Equal(t, 32, defaultWSIdemCache.capacity)
+	require.InDelta(t, float64(5), defaultWSRateLimiter.Load().rate, 1e-9)
+	require.InDelta(t, float64(10), defaultWSRateLimiter.Load().burst, 1e-9)
+	require.Equal(t, 32, defaultWSIdemCache.Load().capacity)
 }

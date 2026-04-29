@@ -60,8 +60,8 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat int, suit
 		return nil, err
 	}
 	out := []Notification{
-		{Kind: KindQueMenDone, Payload: quePayload},
-		{Kind: KindStartGame, Payload: startPayload},
+		{Kind: KindQueMenDone, Payload: quePayload, TargetSeat: BroadcastSeat},
+		{Kind: KindStartGame, Payload: startPayload, TargetSeat: BroadcastSeat},
 	}
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {

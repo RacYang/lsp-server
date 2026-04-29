@@ -21,6 +21,20 @@
 2. 执行：`LSP_CONFIG=configs/dev.yaml go run ./cmd/all`
 3. WebSocket 地址：`ws://<ServerAddr>/ws`
 
+### 玩家终端客户端
+
+服务端启动后，可用 `lsp-cli` 连接 `gate` 的 WebSocket 地址：
+
+```bash
+go run ./cmd/cli \
+  --ws ws://127.0.0.1:18080/ws \
+  --name "我自己" \
+  --room demo-1 \
+  --auto-ready
+```
+
+`lsp-cli` 使用俯视牌桌 TUI，自己固定在南家；默认 ASCII 牌面保证 SSH 与常见终端对齐，中文牌面可通过 `--cjk-tiles` 开启。更多参数见 [`cmd/cli/README.md`](cmd/cli/README.md)。
+
 ### 本地三进程基线
 
 1. 为 `gate`、`lobby`、`room` 分别准备配置文件，并设置：

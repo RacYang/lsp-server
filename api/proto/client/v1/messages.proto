@@ -58,6 +58,8 @@ message Envelope {
     PongResponse pong_resp = 29;
     GangResponse gang_resp = 30;
     HuResponse hu_resp = 31;
+    // Phase 6 玩家客户端：开局发牌仅定向下发给对应座位。
+    InitialDealNotify initial_deal = 33;
   }
 }
 
@@ -132,6 +134,12 @@ message HuResponse {
 message StartGameNotify {
   string room_id = 1;
   int32 dealer_seat = 2;
+}
+
+// InitialDealNotify 表示开局发给当前座位的 13 张初始手牌。
+message InitialDealNotify {
+  int32 seat_index = 1;
+  repeated string tiles = 2;
 }
 
 // DrawTileNotify 表示某座位摸牌。
@@ -262,6 +270,12 @@ message SnapshotNotify {
   string pending_tile = 8;
   repeated string available_actions = 9;
   repeated ClaimCandidate claim_candidates = 10;
+  // your_hand_tiles 仅包含当前连接所属座位的手牌，不广播给其它座位。
+  repeated string your_hand_tiles = 11;
+  // discards_by_seat 按座位返回弃牌历史，用于重连后恢复牌桌。
+  repeated SeatTiles discards_by_seat = 12;
+  // melds_by_seat 按座位返回副露文本编码，用于重连后恢复牌桌。
+  repeated SeatTiles melds_by_seat = 13;
 }
 
 // ClaimCandidate 表示快照中仍然有效的抢答候选。

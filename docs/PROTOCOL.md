@@ -54,12 +54,13 @@
 | 28 | 碰响应 | `pong_resp` | S→C |
 | 29 | 杠响应 | `gang_resp` | S→C |
 | 30 | 胡响应 | `hu_resp` | S→C |
+| 31 | 开局手牌通知 | `initial_deal` | S→C |
 
 ## Phase 3 登录与重连（节选）
 
 - `LoginRequest.session_token` 非空时表示尝试恢复；服务端校验 Redis 中的令牌摘要与会话记录。
 - `LoginResponse.session_token` 为新签发或沿用（重连成功时与请求相同）的不透明令牌；`resumed` 表示是否恢复上下文；`resume_cursor` 为建议保存的事件游标。
-- 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`。
+- 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`；其中 `your_hand_tiles` 仅包含当前连接所属座位的手牌，`discards_by_seat` 与 `melds_by_seat` 用于恢复弃牌堆与副露展示。
 
 ## 业务错误码（ErrorCode 节选）
 
@@ -79,6 +80,7 @@
 - `pong_req` / `gang_req` / `hu_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口。服务端会向可抢座位分别下发 `hu_choice` / `qiang_gang_choice` / `pong_choice` / `gang_choice`，并按“胡优先于杠、杠优先于碰、同优先级按出牌座位下家顺序”的规则裁决。
 - 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端随后可发送 `hu_req`，也可直接对该摸到的牌发送 `discard_req` 继续轮转。
 - `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions` 与 `claim_candidates`，用于重连后恢复当前等待态。
+- `InitialDealNotify` 由 `room` 在完成开局发牌后按座位定向下发，每个连接只会收到自己座位的 13 张初始手牌；集群模式通过 `cluster.v1.RoomServiceStreamEventsResponse.target_seat` 传递定向语义，`-1` 表示广播。
 - 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。
 - WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。
 

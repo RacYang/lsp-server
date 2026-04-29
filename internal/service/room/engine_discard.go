@@ -60,7 +60,8 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat int, til
 	if err != nil {
 		return nil, err
 	}
-	out := []Notification{{Kind: KindAction, Payload: actionPayload}}
+	rs.recordDiscard(seat, discard)
+	out := []Notification{{Kind: KindAction, Payload: actionPayload, TargetSeat: BroadcastSeat}}
 	rs.step++
 	if rs.shouldFinishRound() {
 		settlement, err := rs.finishRound()
@@ -176,7 +177,7 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 	if err != nil {
 		return nil, err
 	}
-	out := []Notification{{Kind: KindAction, Payload: huPayload}}
+	out := []Notification{{Kind: KindAction, Payload: huPayload, TargetSeat: BroadcastSeat}}
 	if rs.shouldFinishRound() {
 		settlement, err := rs.finishRound()
 		if err != nil {
@@ -245,7 +246,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		return nil, err
 	}
 	rs.currentDraw = drawn
-	out := []Notification{{Kind: KindDrawTile, Payload: drawPayload}}
+	out := []Notification{{Kind: KindDrawTile, Payload: drawPayload, TargetSeat: BroadcastSeat}}
 	if _, ok := rs.rule.CheckHu(rs.hands[rs.turn], drawn, rules.HuContext{}); ok {
 		rs.pendingDraw = drawn
 		rs.waitingTsumo = true
@@ -259,7 +260,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		if err != nil {
 			return nil, err
 		}
-		return append(out, Notification{Kind: KindAction, Payload: choicePayload}), nil
+		return append(out, Notification{Kind: KindAction, Payload: choicePayload, TargetSeat: BroadcastSeat}), nil
 	}
 	rs.hands[rs.turn].Add(drawn)
 	rs.waitingDiscard = true

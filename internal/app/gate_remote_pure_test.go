@@ -96,6 +96,16 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		wantID uint16
 	}{
 		{
+			name: "initial_deal",
+			evt: &clusterv1.RoomServiceStreamEventsResponse{
+				Cursor: "deal-0",
+				Body: &clusterv1.RoomServiceStreamEventsResponse_InitialDeal{
+					InitialDeal: &clusterv1.InitialDealEvent{SeatIndex: 0, Tiles: []string{"m1", "m2"}},
+				},
+			},
+			wantID: msgid.InitialDealNotify,
+		},
+		{
 			name: "start_game",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				RoomId: "r1",
@@ -221,6 +231,27 @@ func TestRetryGRPC(t *testing.T) {
 		return status.Error(codes.Unavailable, "unavail")
 	})
 	require.Error(t, err)
+}
+
+func TestRemoteRoomGatewaySeatMemoryAndSeatTiles(t *testing.T) {
+	t.Parallel()
+	g := &remoteRoomGateway{roomSeats: make(map[string]map[int32]string)}
+	g.rememberRoomSeat("r1", 2, "u2")
+	got, ok := g.userForSeat("r1", 2)
+	require.True(t, ok)
+	require.Equal(t, "u2", got)
+	_, ok = g.userForSeat("r1", 1)
+	require.False(t, ok)
+
+	g.rememberRoomPlayers("r2", []string{"u0", "u1", "u2", "u3"})
+	got, ok = g.userForSeat("r2", 3)
+	require.True(t, ok)
+	require.Equal(t, "u3", got)
+
+	items := clusterSeatTilesToClient([]*clusterv1.SeatTiles{{SeatIndex: 1, Tiles: []string{"m1", "p2"}}})
+	require.Len(t, items, 1)
+	require.Equal(t, int32(1), items[0].GetSeatIndex())
+	require.Equal(t, []string{"m1", "p2"}, items[0].GetTiles())
 }
 
 func TestRemoteRoomGatewayNilReceiverMethods(t *testing.T) {

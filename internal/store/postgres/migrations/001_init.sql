@@ -5,9 +5,13 @@ CREATE TABLE IF NOT EXISTS room_events (
     seq BIGINT NOT NULL,
     kind TEXT NOT NULL,
     payload BYTEA NOT NULL,
+    target_seat INT NOT NULL DEFAULT -1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (room_id, seq)
 );
+
+ALTER TABLE room_events
+    ADD COLUMN IF NOT EXISTS target_seat INT NOT NULL DEFAULT -1;
 
 CREATE INDEX IF NOT EXISTS idx_room_events_room_seq ON room_events (room_id, seq);
 

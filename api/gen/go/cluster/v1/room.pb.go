@@ -312,8 +312,10 @@ func (x *StreamEventsRequest) GetSinceCursor() string {
 }
 
 type SnapshotRoomRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RoomId        string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	RoomId string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	// user_id 用于生成仅当前连接可见的手牌快照。
+	UserId        string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -355,6 +357,13 @@ func (x *SnapshotRoomRequest) GetRoomId() string {
 	return ""
 }
 
+func (x *SnapshotRoomRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
 // SnapshotRoomResponse.cursor 即快照游标 snapshot_cursor，与 room_events.seq 对齐。
 type SnapshotRoomResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -368,6 +377,9 @@ type SnapshotRoomResponse struct {
 	PendingTile      string                 `protobuf:"bytes,8,opt,name=pending_tile,json=pendingTile,proto3" json:"pending_tile,omitempty"`
 	AvailableActions []string               `protobuf:"bytes,9,rep,name=available_actions,json=availableActions,proto3" json:"available_actions,omitempty"`
 	ClaimCandidates  []*ClaimCandidate      `protobuf:"bytes,10,rep,name=claim_candidates,json=claimCandidates,proto3" json:"claim_candidates,omitempty"`
+	YourHandTiles    []string               `protobuf:"bytes,11,rep,name=your_hand_tiles,json=yourHandTiles,proto3" json:"your_hand_tiles,omitempty"`
+	DiscardsBySeat   []*SeatTiles           `protobuf:"bytes,12,rep,name=discards_by_seat,json=discardsBySeat,proto3" json:"discards_by_seat,omitempty"`
+	MeldsBySeat      []*SeatTiles           `protobuf:"bytes,13,rep,name=melds_by_seat,json=meldsBySeat,proto3" json:"melds_by_seat,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -472,6 +484,27 @@ func (x *SnapshotRoomResponse) GetClaimCandidates() []*ClaimCandidate {
 	return nil
 }
 
+func (x *SnapshotRoomResponse) GetYourHandTiles() []string {
+	if x != nil {
+		return x.YourHandTiles
+	}
+	return nil
+}
+
+func (x *SnapshotRoomResponse) GetDiscardsBySeat() []*SeatTiles {
+	if x != nil {
+		return x.DiscardsBySeat
+	}
+	return nil
+}
+
+func (x *SnapshotRoomResponse) GetMeldsBySeat() []*SeatTiles {
+	if x != nil {
+		return x.MeldsBySeat
+	}
+	return nil
+}
+
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
 type RoomServiceStreamEventsResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
@@ -485,8 +518,11 @@ type RoomServiceStreamEventsResponse struct {
 	//	*RoomServiceStreamEventsResponse_ExchangeThreeDone
 	//	*RoomServiceStreamEventsResponse_QueMenDone
 	//	*RoomServiceStreamEventsResponse_RouteRedirect
-	Body          isRoomServiceStreamEventsResponse_Body `protobuf_oneof:"body"`
-	Cursor        string                                 `protobuf:"bytes,9,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	//	*RoomServiceStreamEventsResponse_InitialDeal
+	Body   isRoomServiceStreamEventsResponse_Body `protobuf_oneof:"body"`
+	Cursor string                                 `protobuf:"bytes,9,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	// target_seat 为 -1 时广播；0..3 时仅发送给指定座位。
+	TargetSeat    int32 `protobuf:"varint,11,opt,name=target_seat,json=targetSeat,proto3" json:"target_seat,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -598,11 +634,27 @@ func (x *RoomServiceStreamEventsResponse) GetRouteRedirect() *RouteRedirectEvent
 	return nil
 }
 
+func (x *RoomServiceStreamEventsResponse) GetInitialDeal() *InitialDealEvent {
+	if x != nil {
+		if x, ok := x.Body.(*RoomServiceStreamEventsResponse_InitialDeal); ok {
+			return x.InitialDeal
+		}
+	}
+	return nil
+}
+
 func (x *RoomServiceStreamEventsResponse) GetCursor() string {
 	if x != nil {
 		return x.Cursor
 	}
 	return ""
+}
+
+func (x *RoomServiceStreamEventsResponse) GetTargetSeat() int32 {
+	if x != nil {
+		return x.TargetSeat
+	}
+	return 0
 }
 
 type isRoomServiceStreamEventsResponse_Body interface {
@@ -637,6 +689,10 @@ type RoomServiceStreamEventsResponse_RouteRedirect struct {
 	RouteRedirect *RouteRedirectEvent `protobuf:"bytes,8,opt,name=route_redirect,json=routeRedirect,proto3,oneof"`
 }
 
+type RoomServiceStreamEventsResponse_InitialDeal struct {
+	InitialDeal *InitialDealEvent `protobuf:"bytes,10,opt,name=initial_deal,json=initialDeal,proto3,oneof"`
+}
+
 func (*RoomServiceStreamEventsResponse_StartGame) isRoomServiceStreamEventsResponse_Body() {}
 
 func (*RoomServiceStreamEventsResponse_DrawTile) isRoomServiceStreamEventsResponse_Body() {}
@@ -650,6 +706,8 @@ func (*RoomServiceStreamEventsResponse_ExchangeThreeDone) isRoomServiceStreamEve
 func (*RoomServiceStreamEventsResponse_QueMenDone) isRoomServiceStreamEventsResponse_Body() {}
 
 func (*RoomServiceStreamEventsResponse_RouteRedirect) isRoomServiceStreamEventsResponse_Body() {}
+
+func (*RoomServiceStreamEventsResponse_InitialDeal) isRoomServiceStreamEventsResponse_Body() {}
 
 type ReadyEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -988,6 +1046,58 @@ func (x *StartGameEvent) GetDealerSeat() int32 {
 	return 0
 }
 
+type InitialDealEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
+	Tiles         []string               `protobuf:"bytes,2,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InitialDealEvent) Reset() {
+	*x = InitialDealEvent{}
+	mi := &file_cluster_v1_room_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InitialDealEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InitialDealEvent) ProtoMessage() {}
+
+func (x *InitialDealEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_cluster_v1_room_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InitialDealEvent.ProtoReflect.Descriptor instead.
+func (*InitialDealEvent) Descriptor() ([]byte, []int) {
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *InitialDealEvent) GetSeatIndex() int32 {
+	if x != nil {
+		return x.SeatIndex
+	}
+	return 0
+}
+
+func (x *InitialDealEvent) GetTiles() []string {
+	if x != nil {
+		return x.Tiles
+	}
+	return nil
+}
+
 type DrawTileEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
@@ -998,7 +1108,7 @@ type DrawTileEvent struct {
 
 func (x *DrawTileEvent) Reset() {
 	*x = DrawTileEvent{}
-	mi := &file_cluster_v1_room_proto_msgTypes[14]
+	mi := &file_cluster_v1_room_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1010,7 +1120,7 @@ func (x *DrawTileEvent) String() string {
 func (*DrawTileEvent) ProtoMessage() {}
 
 func (x *DrawTileEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[14]
+	mi := &file_cluster_v1_room_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1023,7 +1133,7 @@ func (x *DrawTileEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrawTileEvent.ProtoReflect.Descriptor instead.
 func (*DrawTileEvent) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{14}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DrawTileEvent) GetSeatIndex() int32 {
@@ -1051,7 +1161,7 @@ type ActionEvent struct {
 
 func (x *ActionEvent) Reset() {
 	*x = ActionEvent{}
-	mi := &file_cluster_v1_room_proto_msgTypes[15]
+	mi := &file_cluster_v1_room_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1063,7 +1173,7 @@ func (x *ActionEvent) String() string {
 func (*ActionEvent) ProtoMessage() {}
 
 func (x *ActionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[15]
+	mi := &file_cluster_v1_room_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1076,7 +1186,7 @@ func (x *ActionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionEvent.ProtoReflect.Descriptor instead.
 func (*ActionEvent) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{15}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ActionEvent) GetSeatIndex() int32 {
@@ -1114,7 +1224,7 @@ type SettlementEvent struct {
 
 func (x *SettlementEvent) Reset() {
 	*x = SettlementEvent{}
-	mi := &file_cluster_v1_room_proto_msgTypes[16]
+	mi := &file_cluster_v1_room_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1126,7 +1236,7 @@ func (x *SettlementEvent) String() string {
 func (*SettlementEvent) ProtoMessage() {}
 
 func (x *SettlementEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[16]
+	mi := &file_cluster_v1_room_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1139,7 +1249,7 @@ func (x *SettlementEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettlementEvent.ProtoReflect.Descriptor instead.
 func (*SettlementEvent) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{16}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SettlementEvent) GetWinnerUserIds() []string {
@@ -1193,7 +1303,7 @@ type ExchangeThreeDoneEvent struct {
 
 func (x *ExchangeThreeDoneEvent) Reset() {
 	*x = ExchangeThreeDoneEvent{}
-	mi := &file_cluster_v1_room_proto_msgTypes[17]
+	mi := &file_cluster_v1_room_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1205,7 +1315,7 @@ func (x *ExchangeThreeDoneEvent) String() string {
 func (*ExchangeThreeDoneEvent) ProtoMessage() {}
 
 func (x *ExchangeThreeDoneEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[17]
+	mi := &file_cluster_v1_room_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1218,7 +1328,7 @@ func (x *ExchangeThreeDoneEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExchangeThreeDoneEvent.ProtoReflect.Descriptor instead.
 func (*ExchangeThreeDoneEvent) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{17}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ExchangeThreeDoneEvent) GetSeatTiles() []*SeatTiles {
@@ -1237,7 +1347,7 @@ type QueMenDoneEvent struct {
 
 func (x *QueMenDoneEvent) Reset() {
 	*x = QueMenDoneEvent{}
-	mi := &file_cluster_v1_room_proto_msgTypes[18]
+	mi := &file_cluster_v1_room_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1249,7 +1359,7 @@ func (x *QueMenDoneEvent) String() string {
 func (*QueMenDoneEvent) ProtoMessage() {}
 
 func (x *QueMenDoneEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[18]
+	mi := &file_cluster_v1_room_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1262,7 +1372,7 @@ func (x *QueMenDoneEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueMenDoneEvent.ProtoReflect.Descriptor instead.
 func (*QueMenDoneEvent) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{18}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *QueMenDoneEvent) GetQueSuitBySeat() []int32 {
@@ -1282,7 +1392,7 @@ type RouteRedirectEvent struct {
 
 func (x *RouteRedirectEvent) Reset() {
 	*x = RouteRedirectEvent{}
-	mi := &file_cluster_v1_room_proto_msgTypes[19]
+	mi := &file_cluster_v1_room_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1294,7 +1404,7 @@ func (x *RouteRedirectEvent) String() string {
 func (*RouteRedirectEvent) ProtoMessage() {}
 
 func (x *RouteRedirectEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[19]
+	mi := &file_cluster_v1_room_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1307,7 +1417,7 @@ func (x *RouteRedirectEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteRedirectEvent.ProtoReflect.Descriptor instead.
 func (*RouteRedirectEvent) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{19}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RouteRedirectEvent) GetWsUrl() string {
@@ -1334,7 +1444,7 @@ type SeatTiles struct {
 
 func (x *SeatTiles) Reset() {
 	*x = SeatTiles{}
-	mi := &file_cluster_v1_room_proto_msgTypes[20]
+	mi := &file_cluster_v1_room_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1346,7 +1456,7 @@ func (x *SeatTiles) String() string {
 func (*SeatTiles) ProtoMessage() {}
 
 func (x *SeatTiles) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[20]
+	mi := &file_cluster_v1_room_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1359,7 +1469,7 @@ func (x *SeatTiles) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeatTiles.ProtoReflect.Descriptor instead.
 func (*SeatTiles) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{20}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SeatTiles) GetSeatIndex() int32 {
@@ -1386,7 +1496,7 @@ type ClaimCandidate struct {
 
 func (x *ClaimCandidate) Reset() {
 	*x = ClaimCandidate{}
-	mi := &file_cluster_v1_room_proto_msgTypes[21]
+	mi := &file_cluster_v1_room_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1398,7 +1508,7 @@ func (x *ClaimCandidate) String() string {
 func (*ClaimCandidate) ProtoMessage() {}
 
 func (x *ClaimCandidate) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[21]
+	mi := &file_cluster_v1_room_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1411,7 +1521,7 @@ func (x *ClaimCandidate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimCandidate.ProtoReflect.Descriptor instead.
 func (*ClaimCandidate) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{21}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ClaimCandidate) GetSeatIndex() int32 {
@@ -1440,7 +1550,7 @@ type SeatScore struct {
 
 func (x *SeatScore) Reset() {
 	*x = SeatScore{}
-	mi := &file_cluster_v1_room_proto_msgTypes[22]
+	mi := &file_cluster_v1_room_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1452,7 +1562,7 @@ func (x *SeatScore) String() string {
 func (*SeatScore) ProtoMessage() {}
 
 func (x *SeatScore) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[22]
+	mi := &file_cluster_v1_room_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1465,7 +1575,7 @@ func (x *SeatScore) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeatScore.ProtoReflect.Descriptor instead.
 func (*SeatScore) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{22}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SeatScore) GetSeatIndex() int32 {
@@ -1508,7 +1618,7 @@ type PenaltyItem struct {
 
 func (x *PenaltyItem) Reset() {
 	*x = PenaltyItem{}
-	mi := &file_cluster_v1_room_proto_msgTypes[23]
+	mi := &file_cluster_v1_room_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1520,7 +1630,7 @@ func (x *PenaltyItem) String() string {
 func (*PenaltyItem) ProtoMessage() {}
 
 func (x *PenaltyItem) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[23]
+	mi := &file_cluster_v1_room_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1533,7 +1643,7 @@ func (x *PenaltyItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PenaltyItem.ProtoReflect.Descriptor instead.
 func (*PenaltyItem) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{23}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PenaltyItem) GetReason() string {
@@ -1576,7 +1686,7 @@ type WinnerBreakdown struct {
 
 func (x *WinnerBreakdown) Reset() {
 	*x = WinnerBreakdown{}
-	mi := &file_cluster_v1_room_proto_msgTypes[24]
+	mi := &file_cluster_v1_room_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1588,7 +1698,7 @@ func (x *WinnerBreakdown) String() string {
 func (*WinnerBreakdown) ProtoMessage() {}
 
 func (x *WinnerBreakdown) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_room_proto_msgTypes[24]
+	mi := &file_cluster_v1_room_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1601,7 +1711,7 @@ func (x *WinnerBreakdown) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WinnerBreakdown.ProtoReflect.Descriptor instead.
 func (*WinnerBreakdown) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_room_proto_rawDescGZIP(), []int{24}
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *WinnerBreakdown) GetSeatIndex() int32 {
@@ -1656,9 +1766,10 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"Q\n" +
 	"\x13StreamEventsRequest\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12!\n" +
-	"\fsince_cursor\x18\x02 \x01(\tR\vsinceCursor\".\n" +
+	"\fsince_cursor\x18\x02 \x01(\tR\vsinceCursor\"G\n" +
 	"\x13SnapshotRoomRequest\x12\x17\n" +
-	"\aroom_id\x18\x01 \x01(\tR\x06roomId\"\x81\x03\n" +
+	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\"\xa5\x04\n" +
 	"\x14SnapshotRoomResponse\x12\x16\n" +
 	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12\x1d\n" +
 	"\n" +
@@ -1672,7 +1783,10 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\fpending_tile\x18\b \x01(\tR\vpendingTile\x12+\n" +
 	"\x11available_actions\x18\t \x03(\tR\x10availableActions\x12E\n" +
 	"\x10claim_candidates\x18\n" +
-	" \x03(\v2\x1a.cluster.v1.ClaimCandidateR\x0fclaimCandidates\"\xa3\x04\n" +
+	" \x03(\v2\x1a.cluster.v1.ClaimCandidateR\x0fclaimCandidates\x12&\n" +
+	"\x0fyour_hand_tiles\x18\v \x03(\tR\ryourHandTiles\x12?\n" +
+	"\x10discards_by_seat\x18\f \x03(\v2\x15.cluster.v1.SeatTilesR\x0ediscardsBySeat\x129\n" +
+	"\rmelds_by_seat\x18\r \x03(\v2\x15.cluster.v1.SeatTilesR\vmeldsBySeat\"\x87\x05\n" +
 	"\x1fRoomServiceStreamEventsResponse\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12;\n" +
 	"\n" +
@@ -1685,8 +1799,12 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\x13exchange_three_done\x18\x06 \x01(\v2\".cluster.v1.ExchangeThreeDoneEventH\x00R\x11exchangeThreeDone\x12?\n" +
 	"\fque_men_done\x18\a \x01(\v2\x1b.cluster.v1.QueMenDoneEventH\x00R\n" +
 	"queMenDone\x12G\n" +
-	"\x0eroute_redirect\x18\b \x01(\v2\x1e.cluster.v1.RouteRedirectEventH\x00R\rrouteRedirect\x12\x16\n" +
-	"\x06cursor\x18\t \x01(\tR\x06cursorB\x06\n" +
+	"\x0eroute_redirect\x18\b \x01(\v2\x1e.cluster.v1.RouteRedirectEventH\x00R\rrouteRedirect\x12A\n" +
+	"\finitial_deal\x18\n" +
+	" \x01(\v2\x1c.cluster.v1.InitialDealEventH\x00R\vinitialDeal\x12\x16\n" +
+	"\x06cursor\x18\t \x01(\tR\x06cursor\x12\x1f\n" +
+	"\vtarget_seat\x18\v \x01(\x05R\n" +
+	"targetSeatB\x06\n" +
 	"\x04body\"\f\n" +
 	"\n" +
 	"ReadyEvent\"\"\n" +
@@ -1703,7 +1821,11 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\x04suit\x18\x01 \x01(\x05R\x04suit\"1\n" +
 	"\x0eStartGameEvent\x12\x1f\n" +
 	"\vdealer_seat\x18\x01 \x01(\x05R\n" +
-	"dealerSeat\"B\n" +
+	"dealerSeat\"G\n" +
+	"\x10InitialDealEvent\x12\x1d\n" +
+	"\n" +
+	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x14\n" +
+	"\x05tiles\x18\x02 \x03(\tR\x05tiles\"B\n" +
 	"\rDrawTileEvent\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x12\n" +
@@ -1773,7 +1895,7 @@ func file_cluster_v1_room_proto_rawDescGZIP() []byte {
 	return file_cluster_v1_room_proto_rawDescData
 }
 
-var file_cluster_v1_room_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_cluster_v1_room_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_cluster_v1_room_proto_goTypes = []any{
 	(*ApplyEventRequest)(nil),               // 0: cluster.v1.ApplyEventRequest
 	(*ApplyEventResponse)(nil),              // 1: cluster.v1.ApplyEventResponse
@@ -1789,17 +1911,18 @@ var file_cluster_v1_room_proto_goTypes = []any{
 	(*ExchangeThreeEvent)(nil),              // 11: cluster.v1.ExchangeThreeEvent
 	(*QueMenEvent)(nil),                     // 12: cluster.v1.QueMenEvent
 	(*StartGameEvent)(nil),                  // 13: cluster.v1.StartGameEvent
-	(*DrawTileEvent)(nil),                   // 14: cluster.v1.DrawTileEvent
-	(*ActionEvent)(nil),                     // 15: cluster.v1.ActionEvent
-	(*SettlementEvent)(nil),                 // 16: cluster.v1.SettlementEvent
-	(*ExchangeThreeDoneEvent)(nil),          // 17: cluster.v1.ExchangeThreeDoneEvent
-	(*QueMenDoneEvent)(nil),                 // 18: cluster.v1.QueMenDoneEvent
-	(*RouteRedirectEvent)(nil),              // 19: cluster.v1.RouteRedirectEvent
-	(*SeatTiles)(nil),                       // 20: cluster.v1.SeatTiles
-	(*ClaimCandidate)(nil),                  // 21: cluster.v1.ClaimCandidate
-	(*SeatScore)(nil),                       // 22: cluster.v1.SeatScore
-	(*PenaltyItem)(nil),                     // 23: cluster.v1.PenaltyItem
-	(*WinnerBreakdown)(nil),                 // 24: cluster.v1.WinnerBreakdown
+	(*InitialDealEvent)(nil),                // 14: cluster.v1.InitialDealEvent
+	(*DrawTileEvent)(nil),                   // 15: cluster.v1.DrawTileEvent
+	(*ActionEvent)(nil),                     // 16: cluster.v1.ActionEvent
+	(*SettlementEvent)(nil),                 // 17: cluster.v1.SettlementEvent
+	(*ExchangeThreeDoneEvent)(nil),          // 18: cluster.v1.ExchangeThreeDoneEvent
+	(*QueMenDoneEvent)(nil),                 // 19: cluster.v1.QueMenDoneEvent
+	(*RouteRedirectEvent)(nil),              // 20: cluster.v1.RouteRedirectEvent
+	(*SeatTiles)(nil),                       // 21: cluster.v1.SeatTiles
+	(*ClaimCandidate)(nil),                  // 22: cluster.v1.ClaimCandidate
+	(*SeatScore)(nil),                       // 23: cluster.v1.SeatScore
+	(*PenaltyItem)(nil),                     // 24: cluster.v1.PenaltyItem
+	(*WinnerBreakdown)(nil),                 // 25: cluster.v1.WinnerBreakdown
 }
 var file_cluster_v1_room_proto_depIdxs = []int32{
 	6,  // 0: cluster.v1.ApplyEventRequest.ready:type_name -> cluster.v1.ReadyEvent
@@ -1809,29 +1932,32 @@ var file_cluster_v1_room_proto_depIdxs = []int32{
 	10, // 4: cluster.v1.ApplyEventRequest.hu:type_name -> cluster.v1.HuEvent
 	11, // 5: cluster.v1.ApplyEventRequest.exchange_three:type_name -> cluster.v1.ExchangeThreeEvent
 	12, // 6: cluster.v1.ApplyEventRequest.que_men:type_name -> cluster.v1.QueMenEvent
-	21, // 7: cluster.v1.SnapshotRoomResponse.claim_candidates:type_name -> cluster.v1.ClaimCandidate
-	13, // 8: cluster.v1.RoomServiceStreamEventsResponse.start_game:type_name -> cluster.v1.StartGameEvent
-	14, // 9: cluster.v1.RoomServiceStreamEventsResponse.draw_tile:type_name -> cluster.v1.DrawTileEvent
-	15, // 10: cluster.v1.RoomServiceStreamEventsResponse.action:type_name -> cluster.v1.ActionEvent
-	16, // 11: cluster.v1.RoomServiceStreamEventsResponse.settlement:type_name -> cluster.v1.SettlementEvent
-	17, // 12: cluster.v1.RoomServiceStreamEventsResponse.exchange_three_done:type_name -> cluster.v1.ExchangeThreeDoneEvent
-	18, // 13: cluster.v1.RoomServiceStreamEventsResponse.que_men_done:type_name -> cluster.v1.QueMenDoneEvent
-	19, // 14: cluster.v1.RoomServiceStreamEventsResponse.route_redirect:type_name -> cluster.v1.RouteRedirectEvent
-	22, // 15: cluster.v1.SettlementEvent.seat_scores:type_name -> cluster.v1.SeatScore
-	23, // 16: cluster.v1.SettlementEvent.penalties:type_name -> cluster.v1.PenaltyItem
-	24, // 17: cluster.v1.SettlementEvent.per_winner_breakdown:type_name -> cluster.v1.WinnerBreakdown
-	20, // 18: cluster.v1.ExchangeThreeDoneEvent.seat_tiles:type_name -> cluster.v1.SeatTiles
-	0,  // 19: cluster.v1.RoomService.ApplyEvent:input_type -> cluster.v1.ApplyEventRequest
-	2,  // 20: cluster.v1.RoomService.StreamEvents:input_type -> cluster.v1.StreamEventsRequest
-	3,  // 21: cluster.v1.RoomService.SnapshotRoom:input_type -> cluster.v1.SnapshotRoomRequest
-	1,  // 22: cluster.v1.RoomService.ApplyEvent:output_type -> cluster.v1.ApplyEventResponse
-	5,  // 23: cluster.v1.RoomService.StreamEvents:output_type -> cluster.v1.RoomServiceStreamEventsResponse
-	4,  // 24: cluster.v1.RoomService.SnapshotRoom:output_type -> cluster.v1.SnapshotRoomResponse
-	22, // [22:25] is the sub-list for method output_type
-	19, // [19:22] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	22, // 7: cluster.v1.SnapshotRoomResponse.claim_candidates:type_name -> cluster.v1.ClaimCandidate
+	21, // 8: cluster.v1.SnapshotRoomResponse.discards_by_seat:type_name -> cluster.v1.SeatTiles
+	21, // 9: cluster.v1.SnapshotRoomResponse.melds_by_seat:type_name -> cluster.v1.SeatTiles
+	13, // 10: cluster.v1.RoomServiceStreamEventsResponse.start_game:type_name -> cluster.v1.StartGameEvent
+	15, // 11: cluster.v1.RoomServiceStreamEventsResponse.draw_tile:type_name -> cluster.v1.DrawTileEvent
+	16, // 12: cluster.v1.RoomServiceStreamEventsResponse.action:type_name -> cluster.v1.ActionEvent
+	17, // 13: cluster.v1.RoomServiceStreamEventsResponse.settlement:type_name -> cluster.v1.SettlementEvent
+	18, // 14: cluster.v1.RoomServiceStreamEventsResponse.exchange_three_done:type_name -> cluster.v1.ExchangeThreeDoneEvent
+	19, // 15: cluster.v1.RoomServiceStreamEventsResponse.que_men_done:type_name -> cluster.v1.QueMenDoneEvent
+	20, // 16: cluster.v1.RoomServiceStreamEventsResponse.route_redirect:type_name -> cluster.v1.RouteRedirectEvent
+	14, // 17: cluster.v1.RoomServiceStreamEventsResponse.initial_deal:type_name -> cluster.v1.InitialDealEvent
+	23, // 18: cluster.v1.SettlementEvent.seat_scores:type_name -> cluster.v1.SeatScore
+	24, // 19: cluster.v1.SettlementEvent.penalties:type_name -> cluster.v1.PenaltyItem
+	25, // 20: cluster.v1.SettlementEvent.per_winner_breakdown:type_name -> cluster.v1.WinnerBreakdown
+	21, // 21: cluster.v1.ExchangeThreeDoneEvent.seat_tiles:type_name -> cluster.v1.SeatTiles
+	0,  // 22: cluster.v1.RoomService.ApplyEvent:input_type -> cluster.v1.ApplyEventRequest
+	2,  // 23: cluster.v1.RoomService.StreamEvents:input_type -> cluster.v1.StreamEventsRequest
+	3,  // 24: cluster.v1.RoomService.SnapshotRoom:input_type -> cluster.v1.SnapshotRoomRequest
+	1,  // 25: cluster.v1.RoomService.ApplyEvent:output_type -> cluster.v1.ApplyEventResponse
+	5,  // 26: cluster.v1.RoomService.StreamEvents:output_type -> cluster.v1.RoomServiceStreamEventsResponse
+	4,  // 27: cluster.v1.RoomService.SnapshotRoom:output_type -> cluster.v1.SnapshotRoomResponse
+	25, // [25:28] is the sub-list for method output_type
+	22, // [22:25] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_cluster_v1_room_proto_init() }
@@ -1856,6 +1982,7 @@ func file_cluster_v1_room_proto_init() {
 		(*RoomServiceStreamEventsResponse_ExchangeThreeDone)(nil),
 		(*RoomServiceStreamEventsResponse_QueMenDone)(nil),
 		(*RoomServiceStreamEventsResponse_RouteRedirect)(nil),
+		(*RoomServiceStreamEventsResponse_InitialDeal)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1863,7 +1990,7 @@ func file_cluster_v1_room_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cluster_v1_room_proto_rawDesc), len(file_cluster_v1_room_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

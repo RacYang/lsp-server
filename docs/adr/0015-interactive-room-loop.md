@@ -66,8 +66,15 @@ Phase 5 起，换三张与定缺请求中的客户端意图进入服务端裁决
 - `QueMenReq.suit` 在 `0..2` 范围内时优先生效；只有非法值或超时托管才回退到服务端 `chooseQueSuit` 启发式。
 - 玩家可自行选择手中持有量较大的花色作为缺门，服务端不拒绝该选择。该策略保留玩家自由度，后续可通过指标观察是否需要产品层约束。
 
+### 5. 玩家客户端私有视图
+
+Phase 6 起，`RoundState` 在开局发牌后为四个座位各生成一条 `InitialDealNotify`，通过 `Notification.TargetSeat` 定向到对应玩家。广播通知沿用 `TargetSeat = -1`；集群模式下该字段映射为 `cluster.v1.RoomServiceStreamEventsResponse.target_seat`，由 `gate` 按本地座位映射发送到目标用户连接。
+
+`RoundView` 同时暴露四家手牌、弃牌与副露摘要；`SnapshotNotify` 只填充当前玩家自己的 `your_hand_tiles`，但完整返回 `discards_by_seat` 与 `melds_by_seat`。这样真实客户端不再依赖服务端托管的 `chooseExchangeTiles` fallback，也能在重连后恢复可继续操作的牌桌。
+
 ## 后果
 
 - 端到端测试从“只等结算”改为“在收到 `draw_tile` 后由对应座位回发 `discard_req`”。
 - `room` 冷启动恢复能力显著增强，`pong` / `gang` 的抢答候选窗口已纳入最小恢复承诺。
 - 超时策略目前提供 actor 内串行执行的托管入口；后台定时器调度可在此基础上接入。
+- 玩家客户端可以在不读取服务端内部状态的前提下获得自己的完整手牌；其它玩家手牌仍不通过广播泄露。

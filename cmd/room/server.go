@@ -95,8 +95,9 @@ func (s *roomGRPCServer) persistNotifications(ctx context.Context, roomID string
 		rows := make([]postgres.RoomEventRow, 0, len(notifications))
 		for _, notification := range notifications {
 			rows = append(rows, postgres.RoomEventRow{
-				Kind:    string(notification.Kind),
-				Payload: append([]byte(nil), notification.Payload...),
+				Kind:       string(notification.Kind),
+				Payload:    append([]byte(nil), notification.Payload...),
+				TargetSeat: notification.TargetSeat,
 			})
 		}
 		persistedRows, err := s.ev.AppendEvents(ctx, roomID, rows)
@@ -216,6 +217,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 						cur = fmt.Sprintf("%s:%d", roomID, m)
 					}
 				}
+				mySeat := seatIndexForUser(meta.PlayerIDs, req.GetUserId())
 				return &clusterv1.SnapshotRoomResponse{
 					Cursor:           cur,
 					PlayerIds:        append([]string(nil), meta.PlayerIDs...),
@@ -226,6 +228,9 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					PendingTile:      view.PendingTile,
 					AvailableActions: append([]string(nil), view.AvailableActions...),
 					ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
+					YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
+					DiscardsBySeat:   stringMatrixToClusterSeatTiles(view.DiscardsBySeat),
+					MeldsBySeat:      stringMatrixToClusterSeatTiles(view.MeldsBySeat),
 				}, nil
 			}
 		}
@@ -243,6 +248,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	}
 	qs := pickLastQueSuits(ctx, s, roomID)
 	view, _, _ := s.rooms.RoundView(ctx, roomID)
+	mySeat := seatIndexForUser(players, req.GetUserId())
 	return &clusterv1.SnapshotRoomResponse{
 		Cursor:           cur,
 		PlayerIds:        players,
@@ -253,7 +259,41 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),
 		ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
+		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
+		DiscardsBySeat:   stringMatrixToClusterSeatTiles(view.DiscardsBySeat),
+		MeldsBySeat:      stringMatrixToClusterSeatTiles(view.MeldsBySeat),
 	}, nil
+}
+
+func seatIndexForUser(players []string, userID string) int {
+	for seat, current := range players {
+		if current == userID {
+			return seat
+		}
+	}
+	return -1
+}
+
+func handForSeat(hands [][]string, seat int) []string {
+	if seat < 0 || seat >= len(hands) {
+		return nil
+	}
+	return append([]string(nil), hands[seat]...)
+}
+
+func stringMatrixToClusterSeatTiles(items [][]string) []*clusterv1.SeatTiles {
+	out := make([]*clusterv1.SeatTiles, 0, 4)
+	for seat := 0; seat < 4; seat++ {
+		var tiles []string
+		if seat < len(items) {
+			tiles = append([]string(nil), items[seat]...)
+		}
+		out = append(out, &clusterv1.SeatTiles{
+			SeatIndex: int32(seat), //nolint:gosec // 座位范围固定
+			Tiles:     tiles,
+		})
+	}
+	return out
 }
 
 func pickLastQueSuits(ctx context.Context, s *roomGRPCServer, roomID string) []int32 {
@@ -401,7 +441,7 @@ func (s *roomGRPCServer) removeStream(roomID string, target chan *clusterv1.Room
 }
 
 func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*clusterv1.RoomServiceStreamEventsResponse, error) {
-	n := roomsvc.Notification{Kind: roomsvc.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...)}
+	n := roomsvc.Notification{Kind: roomsvc.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...), TargetSeat: row.TargetSeat}
 	cur := fmt.Sprintf("%s:%d", roomID, row.Seq)
 	return mapNotificationToEvent(roomID, cur, n)
 }
@@ -413,10 +453,18 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 		return nil, fmt.Errorf("unmarshal room notification: %w", err)
 	}
 	resp := &clusterv1.RoomServiceStreamEventsResponse{
-		RoomId: roomID,
-		Cursor: cursor,
+		RoomId:     roomID,
+		Cursor:     cursor,
+		TargetSeat: notification.TargetSeat,
 	}
 	switch notification.Kind {
+	case roomsvc.KindInitialDeal:
+		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_InitialDeal{
+			InitialDeal: &clusterv1.InitialDealEvent{
+				SeatIndex: env.GetInitialDeal().GetSeatIndex(),
+				Tiles:     append([]string(nil), env.GetInitialDeal().GetTiles()...),
+			},
+		}
 	case roomsvc.KindExchangeThreeDone:
 		perSeat := env.GetExchangeThreeDone().GetPerSeat()
 		seatTiles := make([]*clusterv1.SeatTiles, 0, len(perSeat))

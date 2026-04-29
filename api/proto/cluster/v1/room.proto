@@ -39,6 +39,8 @@ message StreamEventsRequest {
 
 message SnapshotRoomRequest {
   string room_id = 1;
+  // user_id 用于生成仅当前连接可见的手牌快照。
+  string user_id = 2;
 }
 
 // SnapshotRoomResponse.cursor 即快照游标 snapshot_cursor，与 room_events.seq 对齐。
@@ -53,6 +55,9 @@ message SnapshotRoomResponse {
   string pending_tile = 8;
   repeated string available_actions = 9;
   repeated ClaimCandidate claim_candidates = 10;
+  repeated string your_hand_tiles = 11;
+  repeated SeatTiles discards_by_seat = 12;
+  repeated SeatTiles melds_by_seat = 13;
 }
 
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
@@ -66,8 +71,11 @@ message RoomServiceStreamEventsResponse {
     ExchangeThreeDoneEvent exchange_three_done = 6;
     QueMenDoneEvent que_men_done = 7;
     RouteRedirectEvent route_redirect = 8;
+    InitialDealEvent initial_deal = 10;
   }
   string cursor = 9;
+  // target_seat 为 -1 时广播；0..3 时仅发送给指定座位。
+  int32 target_seat = 11;
 }
 
 message ReadyEvent {}
@@ -96,6 +104,11 @@ message QueMenEvent {
 
 message StartGameEvent {
   int32 dealer_seat = 1;
+}
+
+message InitialDealEvent {
+  int32 seat_index = 1;
+  repeated string tiles = 2;
 }
 
 message DrawTileEvent {

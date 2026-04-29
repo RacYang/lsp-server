@@ -39,4 +39,6 @@ const (
 	PongResp uint16 = 28
 	GangResp uint16 = 29
 	HuResp   uint16 = 30
+	// InitialDealNotify 为玩家客户端开局私有手牌通知。
+	InitialDealNotify uint16 = 31
 )

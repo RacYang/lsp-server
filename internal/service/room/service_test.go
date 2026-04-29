@@ -38,6 +38,25 @@ func (f *fakeBC) Broadcast(roomID string, msgID uint16, payload []byte) {
 	f.n++
 }
 
+func TestStartRoundEmitsTargetedInitialDeals(t *testing.T) {
+	e := NewEngine("sichuan_xzdd")
+	players := [4]string{"u0", "u1", "u2", "u3"}
+	_, notifications, err := e.StartRound(context.Background(), "room-initial-deal", players)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(notifications), 4)
+	for seat := 0; seat < 4; seat++ {
+		notification := notifications[seat]
+		require.Equal(t, KindInitialDeal, notification.Kind)
+		require.EqualValues(t, seat, notification.TargetSeat)
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		deal := env.GetInitialDeal()
+		require.NotNil(t, deal)
+		require.EqualValues(t, seat, deal.GetSeatIndex())
+		require.Len(t, deal.GetTiles(), 13)
+	}
+}
+
 func TestReadyTriggersBroadcast(t *testing.T) {
 	l := NewLobby()
 	f := &fakeBC{}

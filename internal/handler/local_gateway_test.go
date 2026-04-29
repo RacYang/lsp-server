@@ -110,6 +110,9 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 	require.NotNil(t, res.Snapshot)
 	require.Equal(t, "resume-room", res.Snapshot.GetRoomId())
 	require.Len(t, res.Snapshot.GetQueSuitBySeat(), 4)
+	require.NotEmpty(t, res.Snapshot.GetYourHandTiles())
+	require.Len(t, res.Snapshot.GetDiscardsBySeat(), 4)
+	require.Len(t, res.Snapshot.GetMeldsBySeat(), 4)
 }
 
 func TestLocalRoomGatewayReadyBroadcastSkippedWhenHubNil(t *testing.T) {

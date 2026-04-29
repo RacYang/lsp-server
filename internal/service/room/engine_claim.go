@@ -26,6 +26,7 @@ func (e *Engine) ApplyPong(_ context.Context, rs *RoundState, seat int) ([]Notif
 	}
 	metrics.ClaimWindowTotal.WithLabelValues("pong").Inc()
 	claimedTile := rs.lastDiscard
+	claimedFromSeat := rs.lastDiscardSeat
 	rs.clearClaimWindow()
 	rs.closeOpeningClaimWindow()
 	if err := rs.rewindInterruptedTurn(); err != nil {
@@ -36,6 +37,8 @@ func (e *Engine) ApplyPong(_ context.Context, rs *RoundState, seat int) ([]Notif
 			return nil, fmt.Errorf("consume pong tiles: %w", err)
 		}
 	}
+	rs.removeLastDiscard(claimedFromSeat, claimedTile)
+	rs.recordMeld(seat, "pong:"+claimedTile.String())
 	rs.turn = seat
 	rs.waitingDiscard = true
 	rs.waitingTsumo = false
@@ -53,7 +56,7 @@ func (e *Engine) ApplyPong(_ context.Context, rs *RoundState, seat int) ([]Notif
 	if err != nil {
 		return nil, err
 	}
-	out := []Notification{{Kind: KindAction, Payload: payload}}
+	out := []Notification{{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}}
 	discard := chooseDiscard(rs.hands[seat], tile.Suit(rs.queBySeat[seat]))
 	next, err := e.ApplyDiscard(context.Background(), rs, seat, discard.String())
 	if err != nil {
@@ -97,6 +100,8 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat int, tileText
 				return nil, fmt.Errorf("consume gang tiles: %w", err)
 			}
 		}
+		rs.removeLastDiscard(fromSeat, gangTile)
+		rs.recordMeld(seat, "gang:"+gangTile.String())
 		rs.lastDiscard = 0
 		rs.lastDiscardSeat = -1
 		appendGangEntries(rs, seat, gangTile, rules.GangKindMing, fromSeat)
@@ -119,6 +124,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat int, tileText
 				return nil, fmt.Errorf("consume self gang tiles: %w", err)
 			}
 		}
+		rs.recordMeld(seat, "gang:"+gangTile.String())
 		appendGangEntries(rs, seat, gangTile, rules.GangKindAn, -1)
 	}
 	rs.turn = seat
@@ -136,7 +142,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat int, tileText
 	if err != nil {
 		return nil, err
 	}
-	out = append(out, Notification{Kind: KindAction, Payload: payload})
+	out = append(out, Notification{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat})
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {
 		return nil, err
@@ -319,7 +325,7 @@ func (rs *RoundState) claimPromptNotifications(discard tile.Tile) ([]Notificatio
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, Notification{Kind: KindAction, Payload: claimPayload})
+		out = append(out, Notification{Kind: KindAction, Payload: claimPayload, TargetSeat: BroadcastSeat})
 	}
 	return out, nil
 }

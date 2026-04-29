@@ -23,7 +23,76 @@ func (rs *RoundState) SnapshotView() RoundView {
 		PendingTile:      pendingTile,
 		AvailableActions: append([]string(nil), available...),
 		ClaimCandidates:  rs.roundClaimCandidates(),
+		HandsBySeat:      rs.handStringsBySeat(),
+		DiscardsBySeat:   rs.discardStringsBySeat(),
+		MeldsBySeat:      cloneStringMatrix(rs.melds),
 	}
+}
+
+func (rs *RoundState) recordDiscard(seat int, t tile.Tile) {
+	if rs == nil || seat < 0 || seat > 3 {
+		return
+	}
+	if len(rs.discards) < 4 {
+		rs.discards = make([][]tile.Tile, 4)
+	}
+	rs.discards[seat] = append(rs.discards[seat], t)
+}
+
+func (rs *RoundState) removeLastDiscard(seat int, t tile.Tile) {
+	if rs == nil || seat < 0 || seat > 3 || seat >= len(rs.discards) {
+		return
+	}
+	ds := rs.discards[seat]
+	if len(ds) == 0 || ds[len(ds)-1] != t {
+		return
+	}
+	rs.discards[seat] = ds[:len(ds)-1]
+}
+
+func (rs *RoundState) recordMeld(seat int, meld string) {
+	if rs == nil || seat < 0 || seat > 3 || meld == "" {
+		return
+	}
+	if len(rs.melds) < 4 {
+		rs.melds = make([][]string, 4)
+	}
+	rs.melds[seat] = append(rs.melds[seat], meld)
+}
+
+func (rs *RoundState) handStringsBySeat() [][]string {
+	out := make([][]string, 4)
+	if rs == nil {
+		return out
+	}
+	for seat := 0; seat < 4; seat++ {
+		if seat >= len(rs.hands) || rs.hands[seat] == nil {
+			continue
+		}
+		ts := rs.hands[seat].Tiles()
+		sort.Slice(ts, func(i, j int) bool { return ts[i].Index() < ts[j].Index() })
+		out[seat] = tilesToStrings(ts)
+	}
+	return out
+}
+
+func (rs *RoundState) discardStringsBySeat() [][]string {
+	out := make([][]string, 4)
+	if rs == nil {
+		return out
+	}
+	for seat := 0; seat < 4 && seat < len(rs.discards); seat++ {
+		out[seat] = tilesToStrings(rs.discards[seat])
+	}
+	return out
+}
+
+func cloneStringMatrix(in [][]string) [][]string {
+	out := make([][]string, 4)
+	for i := 0; i < len(out) && i < len(in); i++ {
+		out[i] = append([]string(nil), in[i]...)
+	}
+	return out
 }
 
 func (rs *RoundState) roundClaimCandidates() []RoundClaimCandidate {
@@ -120,6 +189,8 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		LastGangFollowUp:       rs.lastGangFollowUp,
 		LastDiscardAfterGang:   rs.lastDiscardAfterGang,
 		Hands:                  make([][]string, 4),
+		Discards:               make([][]string, 4),
+		Melds:                  make([][]string, 4),
 		ExchangeTiles:          make([][]string, 4),
 	}
 	if rs.claimWindowOpen {
@@ -148,6 +219,12 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		}
 		sort.Slice(ts, func(i, j int) bool { return ts[i].Index() < ts[j].Index() })
 		rp.Hands[seat] = tilesToStrings(ts)
+		if seat < len(rs.discards) {
+			rp.Discards[seat] = tilesToStrings(rs.discards[seat])
+		}
+		if seat < len(rs.melds) {
+			rp.Melds[seat] = append([]string(nil), rs.melds[seat]...)
+		}
 		if seat < len(rs.exchangeSelection) {
 			rp.ExchangeTiles[seat] = tilesToStrings(rs.exchangeSelection[seat])
 		}
@@ -184,6 +261,9 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 		return nil, err
 	}
 	if err := decodeTileFieldsIntoRound(rs, &rp); err != nil {
+		return nil, err
+	}
+	if err := decodeDiscardsIntoRound(rs, &rp); err != nil {
 		return nil, err
 	}
 	if err := decodeClaimCandidatesIntoRound(rs, &rp); err != nil {
@@ -235,6 +315,8 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		rule:                   rule,
 		wall:                   wall.NewFromOrderedTiles(wallTiles),
 		hands:                  hands,
+		discards:               make([][]tile.Tile, 4),
+		melds:                  cloneStringMatrix(rp.Melds),
 		queBySeat:              append([]int32(nil), rp.QueBySeat...),
 		waitingExchange:        rp.WaitingExchange,
 		waitingQueMen:          rp.WaitingQueMen,
@@ -286,6 +368,25 @@ func decodeTileFieldsIntoRound(rs *RoundState, rp *roundPersist) error {
 		rs.lastDiscardSeat = rp.LastDiscardSeat
 	} else {
 		rs.lastDiscardSeat = -1
+	}
+	return nil
+}
+
+func decodeDiscardsIntoRound(rs *RoundState, rp *roundPersist) error {
+	if rs == nil {
+		return nil
+	}
+	if len(rs.discards) < 4 {
+		rs.discards = make([][]tile.Tile, 4)
+	}
+	for seat := 0; seat < len(rp.Discards) && seat < 4; seat++ {
+		for _, raw := range rp.Discards[seat] {
+			t, err := tile.Parse(raw)
+			if err != nil {
+				return fmt.Errorf("parse discard tile %q: %w", raw, err)
+			}
+			rs.discards[seat] = append(rs.discards[seat], t)
+		}
 	}
 	return nil
 }
@@ -348,6 +449,12 @@ func finalizeRoundInvariants(rs *RoundState) {
 	}
 	for len(rs.huedSeats) < 4 {
 		rs.huedSeats = append(rs.huedSeats, false)
+	}
+	for len(rs.discards) < 4 {
+		rs.discards = append(rs.discards, nil)
+	}
+	for len(rs.melds) < 4 {
+		rs.melds = append(rs.melds, nil)
 	}
 	for _, seat := range rs.winnerSeats {
 		if seat >= 0 && seat < 4 {

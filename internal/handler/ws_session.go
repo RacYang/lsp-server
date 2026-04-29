@@ -40,7 +40,7 @@ func shouldDropRequest(env *clientv1.Envelope, msgID uint16, userID string) bool
 	if env == nil {
 		return false
 	}
-	if !defaultWSRateLimiter.Allow(userID) {
+	if limiter := defaultWSRateLimiter.Load(); limiter != nil && !limiter.Allow(userID) {
 		rateLimitedTotal.WithLabelValues("gate").Inc()
 		return true
 	}
@@ -48,7 +48,7 @@ func shouldDropRequest(env *clientv1.Envelope, msgID uint16, userID string) bool
 	if key == "" {
 		return false
 	}
-	if defaultWSIdemCache.SeenOrStore("ws", msgID, userID, key) {
+	if cache := defaultWSIdemCache.Load(); cache != nil && cache.SeenOrStore("ws", msgID, userID, key) {
 		idempotentReplayTotal.Inc()
 		return true
 	}

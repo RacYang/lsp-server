@@ -1,0 +1,5 @@
+stage=discard
+错误: 重连中
+room=r1
+西家
+东家

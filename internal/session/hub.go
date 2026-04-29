@@ -71,6 +71,31 @@ func (h *Hub) Broadcast(roomID string, encoded []byte) {
 	_ = h.BroadcastDeliveredUsers(roomID, encoded)
 }
 
+// SendToUser 将已编码好的完整帧发送给指定用户；失败时会移除该用户连接。
+func (h *Hub) SendToUser(userID string, encoded []byte) bool {
+	if h == nil || userID == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.users[userID]
+	if c == nil {
+		return false
+	}
+	if err := WriteBinary(c, encoded); err != nil {
+		delete(h.users, userID)
+		delete(h.lastHeartbeat, userID)
+		for roomID, users := range h.rooms {
+			delete(users, userID)
+			if len(users) == 0 {
+				delete(h.rooms, roomID)
+			}
+		}
+		return false
+	}
+	return true
+}
+
 // BroadcastDeliveredUsers 广播并返回成功入队的用户 ID；失败连接会从房间注册表中移除。
 func (h *Hub) BroadcastDeliveredUsers(roomID string, encoded []byte) []string {
 	if h == nil {

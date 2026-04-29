@@ -23,7 +23,7 @@ func (rs *RoundState) finishRound() (Notification, error) {
 	rs.lastDiscard = 0
 	rs.lastDiscardSeat = -1
 	rs.clearClaimWindow()
-	return Notification{Kind: KindSettlement, Payload: settlementPayload}, nil
+	return Notification{Kind: KindSettlement, Payload: settlementPayload, TargetSeat: BroadcastSeat}, nil
 }
 
 func buildSettlementNotification(roomID string, playerIDs [4]string, winnerSeats []int, seatScores []*clientv1.SeatScore, penalties []*clientv1.PenaltyItem, breakdowns []*clientv1.WinnerBreakdown, detail string) ([]byte, error) {

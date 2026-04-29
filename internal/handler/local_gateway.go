@@ -45,15 +45,7 @@ func (g *LocalRoomGateway) Ready(ctx context.Context, roomID, userID string) (fu
 	if err != nil {
 		return nil, err
 	}
-	return func() {
-		for _, notification := range notifications {
-			outMsgID, ok := outboundMsgID(notification.Kind)
-			if !ok || g.hub == nil {
-				continue
-			}
-			g.hub.Broadcast(roomID, frame.Encode(outMsgID, notification.Payload))
-		}
-	}, nil
+	return g.broadcastAfter(roomID, notifications), nil
 }
 
 func (g *LocalRoomGateway) Leave(ctx context.Context, roomID, userID string) (func(), error) {
@@ -136,13 +128,27 @@ func (g *LocalRoomGateway) QueMen(ctx context.Context, roomID, userID string, su
 func (g *LocalRoomGateway) broadcastAfter(roomID string, notifications []roomsvc.Notification) func() {
 	return func() {
 		for _, notification := range notifications {
-			outMsgID, ok := outboundMsgID(notification.Kind)
-			if !ok || g.hub == nil {
-				continue
-			}
-			g.hub.Broadcast(roomID, frame.Encode(outMsgID, notification.Payload))
+			g.sendNotification(roomID, notification)
 		}
 	}
+}
+
+func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.Notification) {
+	outMsgID, ok := outboundMsgID(notification.Kind)
+	if !ok || g == nil || g.hub == nil {
+		return
+	}
+	encoded := frame.Encode(outMsgID, notification.Payload)
+	if notification.TargetSeat == roomsvc.BroadcastSeat {
+		g.hub.Broadcast(roomID, encoded)
+		return
+	}
+	players, _, ok := g.rooms.RoomSnapshot(roomID)
+	targetSeat := int(notification.TargetSeat)
+	if !ok || targetSeat >= len(players) || targetSeat < 0 {
+		return
+	}
+	g.hub.SendToUser(players[targetSeat], encoded)
 }
 
 // EnsureRoomEventSubscription 本地进程内无 gRPC 事件流，由 Hub 广播承担。
@@ -170,6 +176,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		return nil, fmt.Errorf("房间不存在或已回收")
 	}
 	view, _, _ := g.rooms.RoundView(ctx, srec.RoomID)
+	mySeat := seatIndexForUser(players, uid)
 	var queSuits []int32
 	if roundJSON, err := g.rooms.RoundPersistSnapshot(ctx, srec.RoomID); err == nil && len(roundJSON) > 0 {
 		queSuits, _ = roomsvc.QueSuitsFromPersistJSON(roundJSON)
@@ -185,6 +192,9 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),
 		ClaimCandidates:  roomClaimCandidatesToClient(view.ClaimCandidates),
+		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
+		DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
+		MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
 	}
 	return &ResumeResult{
 		UserID:              uid,
@@ -193,6 +203,37 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		Snapshot:            snap,
 		SnapshotSinceCursor: srec.LastCursor,
 	}, nil
+}
+
+func seatIndexForUser(players []string, userID string) int {
+	for seat, current := range players {
+		if current == userID {
+			return seat
+		}
+	}
+	return -1
+}
+
+func handForSeat(hands [][]string, seat int) []string {
+	if seat < 0 || seat >= len(hands) {
+		return nil
+	}
+	return append([]string(nil), hands[seat]...)
+}
+
+func stringMatrixToClientSeatTiles(items [][]string) []*clientv1.SeatTiles {
+	out := make([]*clientv1.SeatTiles, 0, 4)
+	for seat := 0; seat < 4; seat++ {
+		var tiles []string
+		if seat < len(items) {
+			tiles = append([]string(nil), items[seat]...)
+		}
+		out = append(out, &clientv1.SeatTiles{
+			SeatIndex: int32(seat), //nolint:gosec // 座位范围固定
+			Tiles:     tiles,
+		})
+	}
+	return out
 }
 
 func roomClaimCandidatesToClient(candidates []roomsvc.RoundClaimCandidate) []*clientv1.ClaimCandidate {

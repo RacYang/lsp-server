@@ -44,7 +44,7 @@ func TestRoomEventStoreAppendEventSuccess(t *testing.T) {
 		WithArgs("room-a").
 		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(0)))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("room-a", int64(1), "deal", []byte("{}")).
+		WithArgs("room-a", int64(1), "deal", []byte("{}"), int32(-1)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectCommit()
 
@@ -67,7 +67,7 @@ func TestRoomEventStoreAppendEventInsertFails(t *testing.T) {
 		WithArgs("room-a").
 		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(0)))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("room-a", int64(1), "deal", []byte("{}")).
+		WithArgs("room-a", int64(1), "deal", []byte("{}"), int32(-1)).
 		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
 
@@ -88,17 +88,17 @@ func TestRoomEventStoreAppendEventsSuccess(t *testing.T) {
 		WithArgs("room-b").
 		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(4)))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("room-b", int64(5), "draw", []byte("a")).
+		WithArgs("room-b", int64(5), "draw", []byte("a"), int32(-1)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("room-b", int64(6), "action", []byte("b")).
+		WithArgs("room-b", int64(6), "action", []byte("b"), int32(2)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectCommit()
 
 	s := postgres.NewRoomEventStore(mock)
 	rows, err := s.AppendEvents(context.Background(), "room-b", []postgres.RoomEventRow{
-		{Kind: "draw", Payload: []byte("a")},
-		{Kind: "action", Payload: []byte("b")},
+		{Kind: "draw", Payload: []byte("a"), TargetSeat: -1},
+		{Kind: "action", Payload: []byte("b"), TargetSeat: 2},
 	})
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
@@ -118,17 +118,17 @@ func TestRoomEventStoreAppendEventsRollbackOnFailure(t *testing.T) {
 		WithArgs("room-c").
 		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(1)))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("room-c", int64(2), "draw", []byte("a")).
+		WithArgs("room-c", int64(2), "draw", []byte("a"), int32(-1)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("room-c", int64(3), "action", []byte("b")).
+		WithArgs("room-c", int64(3), "action", []byte("b"), int32(3)).
 		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
 
 	s := postgres.NewRoomEventStore(mock)
 	_, err = s.AppendEvents(context.Background(), "room-c", []postgres.RoomEventRow{
-		{Kind: "draw", Payload: []byte("a")},
-		{Kind: "action", Payload: []byte("b")},
+		{Kind: "draw", Payload: []byte("a"), TargetSeat: -1},
+		{Kind: "action", Payload: []byte("b"), TargetSeat: 3},
 	})
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -140,10 +140,10 @@ func TestRoomEventStoreListEventsAfter(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { mock.Close() })
 
-	rows := pgxmock.NewRows([]string{"room_id", "seq", "kind", "payload"}).
-		AddRow("r1", int64(1), "k1", []byte("a")).
-		AddRow("r1", int64(2), "k2", []byte("b"))
-	mock.ExpectQuery("SELECT room_id, seq, kind, payload FROM room_events").
+	rows := pgxmock.NewRows([]string{"room_id", "seq", "kind", "payload", "target_seat"}).
+		AddRow("r1", int64(1), "k1", []byte("a"), int32(-1)).
+		AddRow("r1", int64(2), "k2", []byte("b"), int32(2))
+	mock.ExpectQuery("SELECT room_id, seq, kind, payload, target_seat FROM room_events").
 		WithArgs("r1", int64(0)).
 		WillReturnRows(rows)
 
@@ -152,6 +152,7 @@ func TestRoomEventStoreListEventsAfter(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out, 2)
 	require.Equal(t, int64(2), out[1].Seq)
+	require.Equal(t, int32(2), out[1].TargetSeat)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

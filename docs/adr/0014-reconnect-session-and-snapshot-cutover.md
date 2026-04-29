@@ -30,6 +30,7 @@ date: 2026-04-22
 - `gate` 恢复流程：**先** `SnapshotRoom`，**再** `StreamEvents(since_cursor = snapshot_cursor)`。  
 - `room` 侧 `StreamEvents`：先按 `since_cursor` 从 PG `ListEventsSince` 重放历史事件，再注册 live 订阅并按 cursor 去重接续内存尾流；保证 `snapshot_cursor` 之后的事件在 replay/live cutover 中不重复、不漏发。  
 - 若客户端本地 `last_client_cursor` 已晚于 `snapshot_cursor`，`gate` 可对下游推送按 `req_id`/cursor 去重。
+- `SnapshotRoomRequest.user_id` 用于生成当前连接的私有恢复视图；`SnapshotNotify.your_hand_tiles` 仅填入该用户所在座位的手牌，`discards_by_seat` 与 `melds_by_seat` 则返回四家可见历史，供终端或图形客户端重建牌桌。
 
 ### 3. room 进程重启与最小牌局恢复
 
@@ -41,7 +42,7 @@ date: 2026-04-22
 
 ### 4. 客户端可见结果
 
-- `resumed=true`：下发快照通知 + 后续事件流。  
+- `resumed=true`：下发快照通知（含当前玩家手牌、弃牌堆与副露）+ 后续事件流。  
 - `resumed=false` 且局已结：可下发结算摘要（以 PG 为准）。  
 - 无法恢复：`ERROR_CODE_RECONNECTING` 或 `RouteRedirectNotify`（与 [client.v1 ErrorCode](../../api/proto/client/v1/messages.proto) 一致）。
 

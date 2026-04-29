@@ -223,8 +223,8 @@ func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 }
 
 func TestHandleWebSocketIdempotencyKeyDropsReplay(t *testing.T) {
-	defaultWSRateLimiter = newUserRateLimiter(1000, 1000)
-	defaultWSIdemCache = newIdemCache(16)
+	defaultWSRateLimiter.Store(newUserRateLimiter(1000, 1000))
+	defaultWSIdemCache.Store(newIdemCache(16))
 	gateway := &joinStubGateway{joinSeat: 0}
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: gateway, Hub: hub})

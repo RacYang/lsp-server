@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -89,9 +90,14 @@ func (c *idemCache) SeenOrStore(scope string, msgID uint16, userID, key string) 
 }
 
 var (
-	defaultWSRateLimiter = newUserRateLimiter(20, 40)
-	defaultWSIdemCache   = newIdemCache(4096)
+	defaultWSRateLimiter atomic.Pointer[userRateLimiter]
+	defaultWSIdemCache   atomic.Pointer[idemCache]
 )
+
+func init() {
+	defaultWSRateLimiter.Store(newUserRateLimiter(20, 40))
+	defaultWSIdemCache.Store(newIdemCache(4096))
+}
 
 // ConfigureRuntime 覆盖 WebSocket 入口限流与幂等缓存容量；非正值保留默认值。
 func ConfigureRuntime(rate, burst float64, idemCacheSize int) {
@@ -104,6 +110,6 @@ func ConfigureRuntime(rate, burst float64, idemCacheSize int) {
 	if idemCacheSize <= 0 {
 		idemCacheSize = 4096
 	}
-	defaultWSRateLimiter = newUserRateLimiter(rate, burst)
-	defaultWSIdemCache = newIdemCache(idemCacheSize)
+	defaultWSRateLimiter.Store(newUserRateLimiter(rate, burst))
+	defaultWSIdemCache.Store(newIdemCache(idemCacheSize))
 }
