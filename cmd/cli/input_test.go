@@ -31,6 +31,29 @@ func TestCommandHandlerExchangeMutatesLocalHandBeforeSend(t *testing.T) {
 	require.Equal(t, []string{"p9"}, view.Players[0].Hand)
 }
 
+func TestSuitFromShortCodeMatchesTilePackage(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int32
+		ok   bool
+	}{
+		{"m", 0, true},
+		{"p", 1, true},
+		{"s", 2, true},
+		{"P", 1, true},
+		{" S ", 2, true},
+		{"x", 0, false},
+		{"", 0, false},
+	}
+	for _, tc := range cases {
+		got, ok := suitFromShortCode(tc.in)
+		require.Equal(t, tc.ok, ok, tc.in)
+		if tc.ok {
+			require.Equal(t, tc.want, got, tc.in)
+		}
+	}
+}
+
 func TestDiscardIndexIgnoresOutOfRange(t *testing.T) {
 	state := NewAppState("我")
 	state.Mutate(func(v *RoomView) {

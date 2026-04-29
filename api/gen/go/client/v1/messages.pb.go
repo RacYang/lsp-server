@@ -2327,7 +2327,7 @@ func (x *SeatTiles) GetTiles() []string {
 // QueMenRequest/Notify 定缺：玩家声明一门为缺门。
 type QueMenRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 0=万 1=条 2=筒（与服务器 tile 包约定一致）
+	// 0=万 1=筒 2=条（与服务器 tile 包 SuitCharacters/SuitDots/SuitBamboo 约定一致）
 	Suit          int32 `protobuf:"varint,1,opt,name=suit,proto3" json:"suit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

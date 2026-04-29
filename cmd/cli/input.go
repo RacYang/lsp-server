@@ -9,15 +9,18 @@ import (
 	"racoo.cn/lsp/internal/net/msgid"
 )
 
+// CommandHandler 把命令栏文本与快捷键映射为对服务器的请求帧。
 type CommandHandler struct {
 	client *WSClient
 	state  *AppState
 }
 
+// NewCommandHandler 绑定 WSClient 与 AppState，便于命令既能发送也能写本地视图。
 func NewCommandHandler(client *WSClient, state *AppState) *CommandHandler {
 	return &CommandHandler{client: client, state: state}
 }
 
+// Handle 解析单行命令并调度具体处理；返回 false 表示请求退出 TUI。
 func (h *CommandHandler) Handle(ctx context.Context, line string) bool {
 	fields := strings.Fields(strings.TrimSpace(line))
 	if len(fields) == 0 {
@@ -61,6 +64,7 @@ func (h *CommandHandler) Handle(ctx context.Context, line string) bool {
 	return true
 }
 
+// join 入房：先把房间号写入本地视图再发出 JoinRoomRequest，便于失败重试时仍可见上下文。
 func (h *CommandHandler) join(ctx context.Context, fields []string) error {
 	if len(fields) < 2 {
 		return fmt.Errorf("用法: join <room_id>")
@@ -73,6 +77,7 @@ func (h *CommandHandler) join(ctx context.Context, fields []string) error {
 	})
 }
 
+// discard 出牌：用户必须显式给出牌名，避免在多手牌情况下误打。
 func (h *CommandHandler) discard(ctx context.Context, fields []string) error {
 	if len(fields) < 2 {
 		return fmt.Errorf("用法: d <tile>")
@@ -85,6 +90,7 @@ func (h *CommandHandler) discard(ctx context.Context, fields []string) error {
 	})
 }
 
+// gang 杠牌：自杠时由用户指定牌名，抢杠场景下牌名会被服务端忽略。
 func (h *CommandHandler) gang(ctx context.Context, fields []string) error {
 	tile := ""
 	if len(fields) > 1 {
@@ -97,6 +103,7 @@ func (h *CommandHandler) gang(ctx context.Context, fields []string) error {
 	})
 }
 
+// exchange 换三张：本地先把三张从手牌移除以便立即更新 UI，待 ExchangeThreeDone 再补回新牌。
 func (h *CommandHandler) exchange(ctx context.Context, fields []string) error {
 	if len(fields) < 4 {
 		return fmt.Errorf("用法: ex <t1> <t2> <t3> [direction]")
@@ -132,7 +139,10 @@ func (h *CommandHandler) que(ctx context.Context, fields []string) error {
 	if len(fields) < 2 {
 		return fmt.Errorf("用法: que <m|p|s>")
 	}
-	suit := map[string]int32{"m": 0, "p": 2, "s": 1}[strings.ToLower(fields[1])]
+	suit, ok := suitFromShortCode(fields[1])
+	if !ok {
+		return fmt.Errorf("未知花色 %q，仅支持 m/p/s", fields[1])
+	}
 	return h.client.Send(ctx, msgid.QueMenReq, &clientv1.Envelope{
 		ReqId:          newReqID("que"),
 		IdempotencyKey: newReqID("idem-que"),
@@ -140,6 +150,26 @@ func (h *CommandHandler) que(ctx context.Context, fields []string) error {
 	})
 }
 
+// suitFromShortCode 把命令行的 m/p/s 短码映射为协议层 suit 值。
+//
+// 与服务端 internal/mahjong/tile.Suit 严格对齐：
+// m=SuitCharacters(0=万)、p=SuitDots(1=筒)、s=SuitBamboo(2=条)。
+// 历史上曾因为 proto 注释把 1/2 写反，导致客户端把"筒"发成了"条"，
+// 这里集中维护一处映射避免再次发散。
+func suitFromShortCode(raw string) (int32, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "m":
+		return 0, true
+	case "p":
+		return 1, true
+	case "s":
+		return 2, true
+	default:
+		return 0, false
+	}
+}
+
+// DiscardIndex 通过手牌索引出牌，用于命令栏数字快捷键；越界静默忽略，避免误触。
 func (h *CommandHandler) DiscardIndex(ctx context.Context, idx int) {
 	view := h.state.Snapshot()
 	if view.SeatIndex < 0 || view.SeatIndex > 3 {
