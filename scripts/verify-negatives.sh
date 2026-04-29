@@ -226,6 +226,13 @@ run_metrics_naming_negative() {
   fi
 }
 
+run_cli_release_targets_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-cli-release-targets.py" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
 for rule in "${RULES_DIR}"/*.mdc; do
   [[ -f "${rule}" ]] || continue
   kind="$(extract_field "${rule}" "kind")"
@@ -290,6 +297,9 @@ for rule in "${RULES_DIR}"/*.mdc; do
       ;;
     *metrics_bad_prefix*.go.neg)
       run_metrics_naming_negative "${negative_file}"
+      ;;
+    *release_cli_targets*.yaml.neg)
+      run_cli_release_targets_negative "${negative_file}"
       ;;
     *.go.neg)
       run_golangci_negative "${negative_file}" "${enforcer}"

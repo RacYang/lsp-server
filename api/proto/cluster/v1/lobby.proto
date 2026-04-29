@@ -9,18 +9,24 @@ service LobbyService {
   rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
   rpc JoinRoom(JoinRoomRequest) returns (JoinRoomResponse);
   rpc GetRoom(GetRoomRequest) returns (GetRoomResponse);
+  rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+  rpc AutoMatch(AutoMatchRequest) returns (AutoMatchResponse);
 }
 
 message CreateRoomRequest {
   string room_id = 1;
   string rule_id = 2;
   string idempotency_key = 3;
+  string display_name = 4;
+  bool private = 5;
+  string creator_user_id = 6;
 }
 
 message CreateRoomResponse {
   string room_id = 1;
   string room_node_id = 2;
   string error = 3;
+  int32 seat_index = 4;
 }
 
 message JoinRoomRequest {
@@ -42,4 +48,38 @@ message GetRoomResponse {
   string room_id = 1;
   string room_node_id = 2;
   string error = 3;
+}
+
+// RoomMeta 是 lobby 对外提供的公开房间摘要。
+message RoomMeta {
+  string room_id = 1;
+  string rule_id = 2;
+  string display_name = 3;
+  int32 seat_count = 4;
+  int32 max_seats = 5;
+  int64 created_at_ms = 6;
+  string stage = 7;
+}
+
+message ListRoomsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListRoomsResponse {
+  repeated RoomMeta rooms = 1;
+  string next_page_token = 2;
+  string error = 3;
+}
+
+message AutoMatchRequest {
+  string rule_id = 1;
+  string user_id = 2;
+}
+
+message AutoMatchResponse {
+  string room_id = 1;
+  string room_node_id = 2;
+  int32 seat_index = 3;
+  string error = 4;
 }

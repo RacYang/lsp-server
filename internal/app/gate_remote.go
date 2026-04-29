@@ -160,6 +160,84 @@ func (g *remoteRoomGateway) Join(ctx context.Context, roomID, userID string) (in
 	return int(resp.GetSeatIndex()), nil
 }
 
+func (g *remoteRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error) {
+	if g == nil {
+		return nil, "", fmt.Errorf("nil remote room gateway")
+	}
+	var resp *clusterv1.ListRoomsResponse
+	err := retryGRPC(ctx, func(callCtx context.Context) error {
+		var callErr error
+		resp, callErr = g.lobby.ListRooms(withOutgoingTrace(callCtx), &clusterv1.ListRoomsRequest{
+			PageSize:  pageSize,
+			PageToken: pageToken,
+		})
+		return callErr
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.GetError() != "" {
+		return nil, "", errors.New(resp.GetError())
+	}
+	return clusterRoomMetasToClient(resp.GetRooms()), resp.GetNextPageToken(), nil
+}
+
+func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string) (string, int, error) {
+	if g == nil {
+		return "", -1, fmt.Errorf("nil remote room gateway")
+	}
+	var resp *clusterv1.AutoMatchResponse
+	err := retryGRPC(ctx, func(callCtx context.Context) error {
+		var callErr error
+		resp, callErr = g.lobby.AutoMatch(withOutgoingTrace(callCtx), &clusterv1.AutoMatchRequest{
+			RuleId: ruleID,
+			UserId: userID,
+		})
+		return callErr
+	})
+	if err != nil {
+		return "", -1, err
+	}
+	if resp.GetError() != "" {
+		return "", -1, errors.New(resp.GetError())
+	}
+	roomID := resp.GetRoomId()
+	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
+		logx.Warn(ctx, "自动匹配后订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", userID, "room_id", roomID, "err", err.Error())
+	}
+	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
+	return roomID, int(resp.GetSeatIndex()), nil
+}
+
+func (g *remoteRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error) {
+	if g == nil {
+		return "", -1, fmt.Errorf("nil remote room gateway")
+	}
+	var resp *clusterv1.CreateRoomResponse
+	err := retryGRPC(ctx, func(callCtx context.Context) error {
+		var callErr error
+		resp, callErr = g.lobby.CreateRoom(withOutgoingTrace(callCtx), &clusterv1.CreateRoomRequest{
+			RuleId:        ruleID,
+			DisplayName:   displayName,
+			Private:       private,
+			CreatorUserId: userID,
+		})
+		return callErr
+	})
+	if err != nil {
+		return "", -1, err
+	}
+	if resp.GetError() != "" {
+		return "", -1, errors.New(resp.GetError())
+	}
+	roomID := resp.GetRoomId()
+	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
+		logx.Warn(ctx, "创建房间后订阅房间事件流失败稍后重试", "trace_id", logx.TraceIDFromContext(ctx), "user_id", userID, "room_id", roomID, "err", err.Error())
+	}
+	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
+	return roomID, int(resp.GetSeatIndex()), nil
+}
+
 // Ready 将准备命令发给 RoomService；实际推送由后台事件流转发到客户端。
 func (g *remoteRoomGateway) Ready(ctx context.Context, roomID, userID string) (func(), error) {
 	if g == nil {
@@ -471,6 +549,22 @@ func clusterSeatTilesToClient(items []*clusterv1.SeatTiles) []*clientv1.SeatTile
 		out = append(out, &clientv1.SeatTiles{
 			SeatIndex: item.GetSeatIndex(),
 			Tiles:     append([]string(nil), item.GetTiles()...),
+		})
+	}
+	return out
+}
+
+func clusterRoomMetasToClient(rooms []*clusterv1.RoomMeta) []*clientv1.RoomMeta {
+	out := make([]*clientv1.RoomMeta, 0, len(rooms))
+	for _, room := range rooms {
+		out = append(out, &clientv1.RoomMeta{
+			RoomId:      room.GetRoomId(),
+			RuleId:      room.GetRuleId(),
+			DisplayName: room.GetDisplayName(),
+			SeatCount:   room.GetSeatCount(),
+			MaxSeats:    room.GetMaxSeats(),
+			CreatedAtMs: room.GetCreatedAtMs(),
+			Stage:       room.GetStage(),
 		})
 	}
 	return out

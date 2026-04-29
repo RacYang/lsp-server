@@ -17,6 +17,7 @@
     "logging",
     "redis",
     "metrics",
+    "release",
     "stage_gates"
   ],
   "properties": {
@@ -386,6 +387,19 @@
         "allowed_suffixes": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "required": ["cli_targets"],
+      "properties": {
+        "cli_targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[a-z0-9]+/[a-z0-9]+$" },
+          "uniqueItems": true
         }
       },
       "additionalProperties": false

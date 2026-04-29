@@ -50,6 +50,23 @@ func (c *WSClient) Events() <-chan *clientv1.Envelope {
 	return c.events
 }
 
+func (c *WSClient) SetConfig(wsURL, name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if wsURL != "" {
+		c.wsURL = wsURL
+	}
+	if name != "" {
+		c.name = name
+	}
+}
+
+func (c *WSClient) Config() (string, string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.wsURL, c.name
+}
+
 func (c *WSClient) Run(ctx context.Context) {
 	backoff := time.Second
 	for ctx.Err() == nil {
@@ -75,19 +92,34 @@ func (c *WSClient) Run(ctx context.Context) {
 }
 
 func (c *WSClient) connectOnce(ctx context.Context) error {
+	conn, err := c.Dial(ctx)
+	if err != nil {
+		return err
+	}
+	return c.RunOnConn(ctx, conn)
+}
+
+func (c *WSClient) Dial(ctx context.Context) (*websocket.Conn, error) {
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	opts, err := c.dialOptions()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	conn, resp, err := websocket.Dial(dialCtx, c.wsURL, opts)
+	c.mu.Lock()
+	wsURL := c.wsURL
+	c.mu.Unlock()
+	conn, resp, err := websocket.Dial(dialCtx, wsURL, opts)
 	if resp != nil && resp.Body != nil {
 		_ = resp.Body.Close()
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
+	return conn, nil
+}
+
+func (c *WSClient) RunOnConn(ctx context.Context, conn *websocket.Conn) error {
 	c.mu.Lock()
 	c.conn = conn
 	c.mu.Unlock()
@@ -120,14 +152,19 @@ func (c *WSClient) connectOnce(ctx context.Context) error {
 
 func (c *WSClient) dialOptions() (*websocket.DialOptions, error) {
 	opts := &websocket.DialOptions{}
-	if c.origin != "" {
-		opts.HTTPHeader = http.Header{"Origin": []string{c.origin}}
+	c.mu.Lock()
+	origin := c.origin
+	wsURL := c.wsURL
+	insecureSkipVerify := c.insecureSkipVerify
+	c.mu.Unlock()
+	if origin != "" {
+		opts.HTTPHeader = http.Header{"Origin": []string{origin}}
 	}
-	u, err := url.Parse(c.wsURL)
+	u, err := url.Parse(wsURL)
 	if err != nil {
 		return nil, err
 	}
-	if u.Scheme == "wss" && c.insecureSkipVerify {
+	if u.Scheme == "wss" && insecureSkipVerify {
 		opts.HTTPClient = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // 仅由显式调试参数启用。
 	}
 	return opts, nil
@@ -135,10 +172,13 @@ func (c *WSClient) dialOptions() (*websocket.DialOptions, error) {
 
 func (c *WSClient) login(ctx context.Context) error {
 	token := readToken(c.tokenFile)
+	c.mu.Lock()
+	name := c.name
+	c.mu.Unlock()
 	return c.Send(ctx, msgid.LoginReq, &clientv1.Envelope{
 		ReqId: newReqID("login"),
 		Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{
-			Nickname:     c.name,
+			Nickname:     name,
 			SessionToken: token,
 		}},
 	})

@@ -41,4 +41,11 @@ const (
 	HuResp   uint16 = 30
 	// InitialDealNotify 为玩家客户端开局私有手牌通知。
 	InitialDealNotify uint16 = 31
+	// 大厅交互消息：房间列表、自动匹配与显式创建。
+	ListRoomsReq   uint16 = 32
+	ListRoomsResp  uint16 = 33
+	AutoMatchReq   uint16 = 34
+	AutoMatchResp  uint16 = 35
+	CreateRoomReq  uint16 = 36
+	CreateRoomResp uint16 = 37
 )

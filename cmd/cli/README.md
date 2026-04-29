@@ -1,29 +1,31 @@
 # lsp-cli 玩家终端客户端
 
-`lsp-cli` 是纯终端玩家客户端，连接 `gate` 的 WebSocket 地址并渲染俯视牌桌。自己固定显示为南家，北家整行在上，东/西家夹住中央牌桌信息。
+`lsp-cli` 是纯终端玩家客户端，连接 `gate` 的 WebSocket 地址后先进入登录页，再进入大厅页，最后渲染俯视牌桌。自己固定显示为南家，北家整行在上，东/西家夹住中央牌桌信息。
 
 ## 启动
 
 ```bash
-go run ./cmd/cli \
-  --ws ws://127.0.0.1:18080/ws \
-  --name "我自己" \
-  --room demo-1 \
-  --auto-ready \
-  --token-file ~/.lsp/session.token
+make build-cli
+./dist/lsp-cli --ws wss://racoo.cn/ws --name "我自己" --token-file ~/.lsp/session.token
 ```
 
-云服务器若通过反向代理提供 TLS，使用：
+开发时也可以继续使用 `go run ./cmd/cli`；发布包中可通过 `scripts/lsp-cli.sh` 或 `scripts/lsp-cli.ps1` 启动，默认连接 `wss://racoo.cn/ws`。
 
-```bash
-go run ./cmd/cli --ws wss://example.com/ws --origin https://example.com
-```
+启动后在登录页确认昵称和服务器，进入大厅后可以：
+
+- 按 `m` 自动匹配公开空房。
+- 按 `n` 打开创建房间表单，可选择私密房。
+- 在房间列表上按 Enter 加入选中房间。
+- 输入 `join <room_id>` 手动加入私密或已知房号。
 
 自签证书调试时可加 `--insecure-skip-verify`，该参数只用于本地排障，不建议生产使用。
 
 ## 命令
 
 - `login [昵称]`：重新登录。
+- `list` / `refresh`：刷新公开房间列表。
+- `match [rule]`：自动匹配；规则为空时使用服务端默认规则。
+- `create [rule] [name] [--private]`：创建房间并直接入座。
 - `join <room_id>`：加入房间。
 - `ready`：准备。
 - `d <tile>` / `discard <tile>`：出牌，例如 `d m3`。
@@ -38,6 +40,9 @@ go run ./cmd/cli --ws wss://example.com/ws --origin https://example.com
 
 快捷键：
 
+- 大厅页 `m`：自动匹配。
+- 大厅页 `n`：打开创建房间表单。
+- 大厅列表 Enter：加入选中房间。
 - `1..9`：打出自己手牌第 1 到第 9 张。
 - `0`：打出第 10 张。
 - `q`：在命令栏未聚焦时退出。

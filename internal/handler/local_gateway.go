@@ -6,6 +6,7 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/net/frame"
+	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 )
@@ -13,13 +14,14 @@ import (
 // LocalRoomGateway 适配进程内房间服务，供 `cmd/all` 与本地 gate 冒烟复用。
 type LocalRoomGateway struct {
 	rooms *roomsvc.Service
+	lobby *lobbysvc.Service
 	hub   *session.Hub
 	sess  *session.Manager
 }
 
 // NewLocalRoomGateway 创建进程内房间网关；sess 可为 nil 表示不启用 Redis 会话。
 func NewLocalRoomGateway(rooms *roomsvc.Service, hub *session.Hub, sess *session.Manager) *LocalRoomGateway {
-	g := &LocalRoomGateway{rooms: rooms, hub: hub, sess: sess}
+	g := &LocalRoomGateway{rooms: rooms, lobby: lobbysvc.New(), hub: hub, sess: sess}
 	if rooms != nil {
 		rooms.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []roomsvc.Notification) {
 			g.broadcastAfter(roomID, notifications)()
@@ -33,7 +35,53 @@ func (g *LocalRoomGateway) Join(ctx context.Context, roomID, userID string) (int
 	if g == nil || g.rooms == nil {
 		return -1, fmt.Errorf("nil local room gateway")
 	}
+	if g.lobby != nil {
+		if _, err := g.lobby.JoinRoom(ctx, roomID, userID); err != nil {
+			return -1, err
+		}
+	}
 	return g.rooms.Join(ctx, roomID, userID)
+}
+
+func (g *LocalRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error) {
+	if g == nil || g.lobby == nil {
+		return nil, "", fmt.Errorf("nil local lobby gateway")
+	}
+	rooms, next, err := g.lobby.ListRooms(ctx, pageSize, pageToken)
+	if err != nil {
+		return nil, "", err
+	}
+	return lobbyRoomMetasToClient(rooms), next, nil
+}
+
+func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string) (string, int, error) {
+	if g == nil || g.lobby == nil || g.rooms == nil {
+		return "", -1, fmt.Errorf("nil local lobby gateway")
+	}
+	roomID, _, err := g.lobby.AutoMatch(ctx, ruleID, userID)
+	if err != nil {
+		return "", -1, err
+	}
+	seat, err := g.rooms.Join(ctx, roomID, userID)
+	if err != nil {
+		return "", -1, err
+	}
+	return roomID, seat, nil
+}
+
+func (g *LocalRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error) {
+	if g == nil || g.lobby == nil || g.rooms == nil {
+		return "", -1, fmt.Errorf("nil local lobby gateway")
+	}
+	roomID, _, err := g.lobby.CreateRoomWithMeta(ctx, ruleID, displayName, private, userID)
+	if err != nil {
+		return "", -1, err
+	}
+	seat, err := g.rooms.Join(ctx, roomID, userID)
+	if err != nil {
+		return "", -1, err
+	}
+	return roomID, seat, nil
 }
 
 // Ready 触发本地 worker，并返回一个在 ReadyResp 之后执行的广播回调。
@@ -242,6 +290,22 @@ func roomClaimCandidatesToClient(candidates []roomsvc.RoundClaimCandidate) []*cl
 		out = append(out, &clientv1.ClaimCandidate{
 			SeatIndex: candidate.Seat,
 			Actions:   append([]string(nil), candidate.Actions...),
+		})
+	}
+	return out
+}
+
+func lobbyRoomMetasToClient(rooms []lobbysvc.RoomMeta) []*clientv1.RoomMeta {
+	out := make([]*clientv1.RoomMeta, 0, len(rooms))
+	for _, room := range rooms {
+		out = append(out, &clientv1.RoomMeta{
+			RoomId:      room.RoomID,
+			RuleId:      room.RuleID,
+			DisplayName: room.DisplayName,
+			SeatCount:   room.SeatCount,
+			MaxSeats:    room.MaxSeats,
+			CreatedAtMs: room.CreatedAtMs,
+			Stage:       room.Stage,
 		})
 	}
 	return out

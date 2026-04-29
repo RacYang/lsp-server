@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/net/frame"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
@@ -34,6 +35,9 @@ type RoomGateway interface {
 	Pong(ctx context.Context, roomID, userID string) (func(), error)
 	Gang(ctx context.Context, roomID, userID, tile string) (func(), error)
 	Hu(ctx context.Context, roomID, userID string) (func(), error)
+	ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error)
+	AutoMatch(ctx context.Context, ruleID, userID string) (string, int, error)
+	CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error)
 	Resume(ctx context.Context, sessionToken string) (*ResumeResult, error)
 	EnsureRoomEventSubscription(ctx context.Context, roomID, sinceCursor string) error
 }

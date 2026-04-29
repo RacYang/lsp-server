@@ -11,13 +11,19 @@ import (
 	"time"
 )
 
+var (
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
+)
+
 func main() {
 	os.Exit(run())
 }
 
 func run() int {
 	var (
-		wsURL              = flag.String("ws", "ws://127.0.0.1:18080/ws", "gate WebSocket 地址")
+		wsURL              = flag.String("ws", "wss://racoo.cn/ws", "gate WebSocket 地址")
 		name               = flag.String("name", "终端玩家", "登录昵称")
 		roomID             = flag.String("room", "", "启动后自动加入的房间")
 		autoReady          = flag.Bool("auto-ready", false, "进房后自动发送 ready")
@@ -27,13 +33,19 @@ func run() int {
 		cjkTiles           = flag.Bool("cjk-tiles", false, "使用中文花色牌面（需要等宽 CJK 字体）")
 		noColor            = flag.Bool("no-color", false, "关闭牌张颜色")
 		smokeDuration      = flag.Duration("smoke-duration", 0, "非交互冒烟时长，例如 5s；为 0 时启动 TUI")
+		showVersion        = flag.Bool("version", false, "打印版本信息后退出")
 	)
 	flag.Parse()
+	if *showVersion {
+		fmt.Printf("lsp-cli %s commit=%s date=%s\n", version, commit, buildDate)
+		return 0
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	state := NewAppState(*name)
+	state.Mutate(func(v *RoomView) { v.ServerURL = *wsURL })
 	client := NewWSClient(*wsURL, *name, *tokenFile, *origin, *insecureSkipVerify, state)
 	handler := NewCommandHandler(client, state)
 	if *smokeDuration > 0 {
@@ -43,9 +55,11 @@ func run() int {
 		}
 		return 0
 	}
-	ui := NewUI(state, handler, RenderOptions{Width: 120, Height: 36, CJKTiles: *cjkTiles, NoColor: *noColor})
+	ui := NewUI(state, client, handler, RenderOptions{Width: 120, Height: 36, CJKTiles: *cjkTiles, NoColor: *noColor})
 
-	go client.Run(ctx)
+	if *roomID != "" {
+		go client.Run(ctx)
+	}
 	go func() {
 		for {
 			select {
@@ -55,8 +69,10 @@ func run() int {
 				state.Apply(env)
 				if env.GetLoginResp() != nil && *roomID != "" {
 					_ = handler.Handle(ctx, "join "+*roomID)
+				} else if env.GetLoginResp() != nil {
+					_ = handler.Handle(ctx, "list")
 				}
-				if env.GetJoinRoomResp() != nil && *autoReady {
+				if (env.GetJoinRoomResp() != nil || env.GetAutoMatchResp() != nil || env.GetCreateRoomResp() != nil) && *autoReady {
 					_ = handler.Handle(ctx, "ready")
 				}
 			}

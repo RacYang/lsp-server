@@ -1,0 +1,71 @@
+version: 2
+
+project_name: lsp-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: lsp-cli
+    main: ./cmd/cli
+    binary: lsp-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.buildDate={{ .Date }}
+
+archives:
+  - id: lsp-cli
+    ids:
+      - lsp-cli
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - cmd/cli/README.md
+      - scripts/lsp-cli.sh
+      - scripts/lsp-cli.ps1
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+  groups:
+    - title: 功能
+      regexp: "^feat"
+      order: 0
+    - title: 修复
+      regexp: "^fix"
+      order: 1
+    - title: 其它
+      order: 999
+
+release:
+  draft: true

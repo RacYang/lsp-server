@@ -27,6 +27,12 @@ func dispatchFrame(
 		handleLogin(ctx, deps, conn, r, state, h.Payload)
 	case msgid.JoinRoomReq:
 		handleJoinRoom(ctx, deps, conn, state, h.Payload)
+	case msgid.ListRoomsReq:
+		handleListRooms(ctx, deps, conn, state, h.Payload)
+	case msgid.AutoMatchReq:
+		handleAutoMatch(ctx, deps, conn, state, h.MsgID, h.Payload)
+	case msgid.CreateRoomReq:
+		handleCreateRoom(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.ReadyReq:
 		handleReady(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.HeartbeatReq:

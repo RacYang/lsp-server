@@ -29,7 +29,16 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 			v.Players[v.SeatIndex].Nickname = v.Nickname
 			v.Players[v.SeatIndex].UserID = v.UserID
 		}
+		if body.JoinRoomResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+			v.Phase = phaseTable
+		}
 		appendLog(v, fmt.Sprintf("已入座 %d", v.SeatIndex))
+	case *clientv1.Envelope_ListRoomsResp:
+		applyListRooms(v, body.ListRoomsResp)
+	case *clientv1.Envelope_AutoMatchResp:
+		applyAutoMatch(v, body.AutoMatchResp)
+	case *clientv1.Envelope_CreateRoomResp:
+		applyCreateRoom(v, body.CreateRoomResp)
 	case *clientv1.Envelope_ReadyResp:
 		appendResponseLog(v, "准备", body.ReadyResp.GetErrorCode(), body.ReadyResp.GetErrorMessage())
 	case *clientv1.Envelope_InitialDeal:
@@ -58,6 +67,11 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		// RTT 由连接层根据本地发送时间更新，这里只记录可见事件。
 	case *clientv1.Envelope_LeaveRoomResp:
 		appendResponseLog(v, "离房", body.LeaveRoomResp.GetErrorCode(), body.LeaveRoomResp.GetErrorMessage())
+		if body.LeaveRoomResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+			v.Phase = phaseLobby
+			v.RoomID = ""
+			v.SeatIndex = -1
+		}
 	case *clientv1.Envelope_RouteRedirect:
 		appendLog(v, "收到路由重定向: "+body.RouteRedirect.GetWsUrl())
 	case *clientv1.Envelope_ExchangeThreeResp:
@@ -93,7 +107,50 @@ func applyLogin(v *RoomView, resp *clientv1.LoginResponse) {
 	}
 	v.UserID = resp.GetUserId()
 	v.SessionToken = resp.GetSessionToken()
+	v.Phase = phaseLobby
 	appendLog(v, "登录成功: "+v.UserID)
+}
+
+func applyListRooms(v *RoomView, resp *clientv1.ListRoomsResponse) {
+	if resp.GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		v.LastError = resp.GetErrorMessage()
+		appendLog(v, "刷新房间列表失败: "+resp.GetErrorMessage())
+		return
+	}
+	v.RoomList = cloneRoomMetas(resp.GetRooms())
+	v.NextRoomPage = resp.GetNextPageToken()
+	v.Phase = phaseLobby
+	appendLog(v, fmt.Sprintf("刷新房间列表: %d 间", len(v.RoomList)))
+}
+
+func applyAutoMatch(v *RoomView, resp *clientv1.AutoMatchResponse) {
+	if resp.GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		v.LastError = resp.GetErrorMessage()
+		appendLog(v, "自动匹配失败: "+resp.GetErrorMessage())
+		return
+	}
+	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex())
+	appendLog(v, fmt.Sprintf("自动匹配成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
+}
+
+func applyCreateRoom(v *RoomView, resp *clientv1.CreateRoomResponse) {
+	if resp.GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		v.LastError = resp.GetErrorMessage()
+		appendLog(v, "创建房间失败: "+resp.GetErrorMessage())
+		return
+	}
+	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex())
+	appendLog(v, fmt.Sprintf("创建房间成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
+}
+
+func applyLobbySeat(v *RoomView, roomID string, seat int32) {
+	v.RoomID = roomID
+	v.SeatIndex = seat
+	v.Phase = phaseTable
+	if seat >= 0 && seat < 4 {
+		v.Players[seat].Nickname = v.Nickname
+		v.Players[seat].UserID = v.UserID
+	}
 }
 
 func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {

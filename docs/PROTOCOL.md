@@ -55,6 +55,12 @@
 | 29 | 杠响应 | `gang_resp` | S→C |
 | 30 | 胡响应 | `hu_resp` | S→C |
 | 31 | 开局手牌通知 | `initial_deal` | S→C |
+| 32 | 房间列表请求 | `list_rooms_req` | C→S |
+| 33 | 房间列表响应 | `list_rooms_resp` | S→C |
+| 34 | 自动匹配请求 | `auto_match_req` | C→S |
+| 35 | 自动匹配响应 | `auto_match_resp` | S→C |
+| 36 | 创建房间请求 | `create_room_req` | C→S |
+| 37 | 创建房间响应 | `create_room_resp` | S→C |
 
 ## Phase 3 登录与重连（节选）
 
@@ -83,6 +89,13 @@
 - `InitialDealNotify` 由 `room` 在完成开局发牌后按座位定向下发，每个连接只会收到自己座位的 13 张初始手牌；集群模式通过 `cluster.v1.RoomServiceStreamEventsResponse.target_seat` 传递定向语义，`-1` 表示广播。
 - 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。
 - WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。
+
+## Phase 7 大厅列表与匹配
+
+- `ListRoomsRequest` 返回 `RoomMeta` 列表，仅包含公开、未满且可加入的等待房间；私密房不出现在列表中。
+- `AutoMatchRequest.rule_id` 为空时使用默认规则。服务端会选择最早创建的可加入公开房；没有候选时创建一个公开房并直接返回 `room_id` 与 `seat_index`。
+- `CreateRoomRequest` 会创建房间并让创建者直接占座。`private=true` 时房间只能凭 `room_id` 手动加入。
+- `RoomMeta.stage` 当前仅表达 lobby 视角的 `waiting`，不承载局内细分状态；重连与局内视图仍以 `SnapshotNotify` 为准。
 
 ## Phase 5 协议与观测补充
 

@@ -62,6 +62,15 @@ func (g *actionStubGateway) Gang(_ context.Context, _, _, _ string) (func(), err
 func (g *actionStubGateway) Hu(_ context.Context, _, _ string) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
+func (g *actionStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
+	return nil, "", nil
+}
+func (g *actionStubGateway) AutoMatch(_ context.Context, _, _ string) (string, int, error) {
+	return "", 0, nil
+}
+func (g *actionStubGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
+	return "", 0, nil
+}
 func (g *actionStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	return nil, fmt.Errorf("not implemented")
 }

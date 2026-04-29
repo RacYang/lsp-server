@@ -23,17 +23,14 @@
 
 ### 玩家终端客户端
 
-服务端启动后，可用 `lsp-cli` 连接 `gate` 的 WebSocket 地址：
+服务端启动后，可用 release 二进制或本地构建的 `lsp-cli` 连接 `gate` 的 WebSocket 地址：
 
 ```bash
-go run ./cmd/cli \
-  --ws ws://127.0.0.1:18080/ws \
-  --name "我自己" \
-  --room demo-1 \
-  --auto-ready
+make build-cli
+./dist/lsp-cli --ws wss://racoo.cn/ws --name "我自己"
 ```
 
-`lsp-cli` 使用俯视牌桌 TUI，自己固定在南家；默认 ASCII 牌面保证 SSH 与常见终端对齐，中文牌面可通过 `--cjk-tiles` 开启。更多参数见 [`cmd/cli/README.md`](cmd/cli/README.md)。
+`lsp-cli` 先进入登录页，再进入大厅页，可刷新房间列表、自动匹配、创建公开/私密房，入座后使用俯视牌桌 TUI。默认 ASCII 牌面保证 SSH 与常见终端对齐，中文牌面可通过 `--cjk-tiles` 开启。更多参数见 [`cmd/cli/README.md`](cmd/cli/README.md)。
 
 ### 本地三进程基线
 
@@ -71,6 +68,7 @@ docker compose up -d
 
 - `make bootstrap`
 - `make generate`
+- `make build-cli` / `make build-cli-all`（构建当前平台或五平台 `lsp-cli` 二进制）
 - `make verify`
 - `RUN_INTEGRATION=1 make verify-test-integration`（执行重连、幂等、限流与托管超时集成目标）
 - `SCENARIO=a make verify-bench`（独立运行 Phase 6 压测场景，不进入默认 `make verify`）

@@ -32,9 +32,15 @@ func (h *CommandHandler) Handle(ctx context.Context, line string) bool {
 	case "quit", "q", "exit":
 		return false
 	case "help":
-		h.state.AddLog("命令: login/join/ready/d <牌>/p/g [牌]/h/ex <3牌> [方向]/que <m|p|s>/leave/quit")
+		h.state.AddLog("命令: login/list/match/create/join/ready/d <牌>/p/g [牌]/h/ex <3牌>/que <m|p|s>/leave/quit")
 	case "login":
 		err = h.client.login(ctx)
+	case "list", "refresh":
+		err = h.listRooms(ctx)
+	case "match":
+		err = h.match(ctx, fields)
+	case "create":
+		err = h.createRoom(ctx, fields)
 	case "join":
 		err = h.join(ctx, fields)
 	case "ready":
@@ -62,6 +68,54 @@ func (h *CommandHandler) Handle(ctx context.Context, line string) bool {
 		h.state.AddLog("命令失败: " + err.Error())
 	}
 	return true
+}
+
+func (h *CommandHandler) listRooms(ctx context.Context) error {
+	return h.client.Send(ctx, msgid.ListRoomsReq, &clientv1.Envelope{
+		ReqId: newReqID("list"),
+		Body:  &clientv1.Envelope_ListRoomsReq{ListRoomsReq: &clientv1.ListRoomsRequest{PageSize: 20}},
+	})
+}
+
+func (h *CommandHandler) match(ctx context.Context, fields []string) error {
+	ruleID := ""
+	if len(fields) > 1 {
+		ruleID = fields[1]
+	}
+	return h.client.Send(ctx, msgid.AutoMatchReq, &clientv1.Envelope{
+		ReqId:          newReqID("match"),
+		IdempotencyKey: newReqID("idem-match"),
+		Body:           &clientv1.Envelope_AutoMatchReq{AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: ruleID}},
+	})
+}
+
+func (h *CommandHandler) createRoom(ctx context.Context, fields []string) error {
+	ruleID := ""
+	displayName := ""
+	private := false
+	if len(fields) > 1 {
+		ruleID = fields[1]
+	}
+	if len(fields) > 2 {
+		displayName = strings.Join(fields[2:], " ")
+	}
+	if strings.Contains(displayName, "--private") {
+		private = true
+		displayName = strings.TrimSpace(strings.ReplaceAll(displayName, "--private", ""))
+	}
+	return h.sendCreateRoom(ctx, ruleID, displayName, private)
+}
+
+func (h *CommandHandler) sendCreateRoom(ctx context.Context, ruleID, displayName string, private bool) error {
+	return h.client.Send(ctx, msgid.CreateRoomReq, &clientv1.Envelope{
+		ReqId:          newReqID("create"),
+		IdempotencyKey: newReqID("idem-create"),
+		Body: &clientv1.Envelope_CreateRoomReq{CreateRoomReq: &clientv1.CreateRoomRequest{
+			RuleId:      ruleID,
+			DisplayName: displayName,
+			Private:     private,
+		}},
+	})
 }
 
 // join 入房：先把房间号写入本地视图再发出 JoinRoomRequest，便于失败重试时仍可见上下文。

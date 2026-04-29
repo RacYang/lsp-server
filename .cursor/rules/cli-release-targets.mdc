@@ -1,0 +1,13 @@
+---
+kind: constraint
+description: lsp-cli 发布目标必须在 SSOT、Makefile 与 GoReleaser 中保持一致
+adr: docs/adr/0032-cli-binary-distribution.md
+enforcer: scripts/verify-cli-release-targets.py
+negative_test: .build/negatives/release_cli_targets_missing_windows.yaml.neg
+---
+
+# lsp-cli 发布目标
+
+`release.cli_targets` 是 lsp-cli 二进制分发平台列表的唯一事实源。
+
+新增或删除发布平台时，必须同时更新 `.build/config.yaml`、`Makefile` 的 `build-cli-all` 目标与 `.goreleaser.yaml` 的构建矩阵，并让 `scripts/verify-cli-release-targets.py` 通过。

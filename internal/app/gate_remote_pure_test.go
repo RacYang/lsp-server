@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -48,6 +49,7 @@ func TestClusterToClientConverters(t *testing.T) {
 	require.Empty(t, clusterSeatScoresToClient(nil))
 	require.Empty(t, clusterPenaltiesToClient(nil))
 	require.Empty(t, clusterWinnerBreakdownsToClient(nil))
+	require.Empty(t, clusterRoomMetasToClient(nil))
 
 	candidates := []*clusterv1.ClaimCandidate{{SeatIndex: 1, Actions: []string{"pong", "gang"}}}
 	got := clusterClaimCandidatesToClient(candidates)
@@ -68,6 +70,11 @@ func TestClusterToClientConverters(t *testing.T) {
 	breakdowns := []*clusterv1.WinnerBreakdown{{SeatIndex: 3, UserId: "w", Fan: 6, FanNames: []string{"清一色"}}}
 	gotBreakdowns := clusterWinnerBreakdownsToClient(breakdowns)
 	require.Equal(t, []string{"清一色"}, gotBreakdowns[0].GetFanNames())
+
+	rooms := []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xzdd", DisplayName: "公开桌", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}
+	gotRooms := clusterRoomMetasToClient(rooms)
+	require.Equal(t, "ROOM01", gotRooms[0].GetRoomId())
+	require.Equal(t, int32(1), gotRooms[0].GetSeatCount())
 }
 
 // TestMarshalClientEnvelope 校验 marshal 失败与成功两条路径；空 envelope 不会引发错误。
@@ -278,5 +285,67 @@ func TestRemoteRoomGatewayNilReceiverMethods(t *testing.T) {
 	require.Error(t, err)
 	_, err = g.QueMen(ctx, "room", "user", 0)
 	require.Error(t, err)
+	_, _, err = g.ListRooms(ctx, 20, "")
+	require.Error(t, err)
+	_, _, err = g.AutoMatch(ctx, "", "user")
+	require.Error(t, err)
+	_, _, err = g.CreateRoom(ctx, "", "", false, "user")
+	require.Error(t, err)
 	require.Error(t, g.EnsureRoomEventSubscription(ctx, "room", ""))
+}
+
+func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
+	t.Parallel()
+	g := &remoteRoomGateway{
+		lobby:           &fakeLobbyClient{},
+		roomSeats:       make(map[string]map[int32]string),
+		defaultRoomAddr: "",
+	}
+	ctx := context.Background()
+
+	rooms, next, err := g.ListRooms(ctx, 10, "")
+	require.NoError(t, err)
+	require.Equal(t, "next", next)
+	require.Equal(t, "ROOM01", rooms[0].GetRoomId())
+
+	roomID, seat, err := g.AutoMatch(ctx, "sichuan_xzdd", "u2")
+	require.NoError(t, err)
+	require.Equal(t, "ROOM01", roomID)
+	require.Equal(t, 1, seat)
+	gotUser, ok := g.userForSeat("ROOM01", 1)
+	require.True(t, ok)
+	require.Equal(t, "u2", gotUser)
+
+	roomID, seat, err = g.CreateRoom(ctx, "sichuan_xzdd", "新桌", true, "u3")
+	require.NoError(t, err)
+	require.Equal(t, "ROOM02", roomID)
+	require.Equal(t, 0, seat)
+	gotUser, ok = g.userForSeat("ROOM02", 0)
+	require.True(t, ok)
+	require.Equal(t, "u3", gotUser)
+}
+
+type fakeLobbyClient struct{}
+
+func (f *fakeLobbyClient) CreateRoom(_ context.Context, _ *clusterv1.CreateRoomRequest, _ ...grpc.CallOption) (*clusterv1.CreateRoomResponse, error) {
+	return &clusterv1.CreateRoomResponse{RoomId: "ROOM02", SeatIndex: 0}, nil
+}
+
+func (f *fakeLobbyClient) JoinRoom(_ context.Context, _ *clusterv1.JoinRoomRequest, _ ...grpc.CallOption) (*clusterv1.JoinRoomResponse, error) {
+	return &clusterv1.JoinRoomResponse{SeatIndex: 0}, nil
+}
+
+func (f *fakeLobbyClient) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequest, _ ...grpc.CallOption) (*clusterv1.GetRoomResponse, error) {
+	return &clusterv1.GetRoomResponse{RoomId: "ROOM01", RoomNodeId: "room-local"}, nil
+}
+
+func (f *fakeLobbyClient) ListRooms(_ context.Context, _ *clusterv1.ListRoomsRequest, _ ...grpc.CallOption) (*clusterv1.ListRoomsResponse, error) {
+	return &clusterv1.ListRoomsResponse{
+		Rooms:         []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xzdd", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}},
+		NextPageToken: "next",
+	}, nil
+}
+
+func (f *fakeLobbyClient) AutoMatch(_ context.Context, _ *clusterv1.AutoMatchRequest, _ ...grpc.CallOption) (*clusterv1.AutoMatchResponse, error) {
+	return &clusterv1.AutoMatchResponse{RoomId: "ROOM01", SeatIndex: 1}, nil
 }

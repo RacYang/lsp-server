@@ -289,6 +289,14 @@ metrics:
     - "_info"
     - "_depth"
 
+release:
+  cli_targets:
+    - darwin/arm64
+    - darwin/amd64
+    - linux/amd64
+    - linux/arm64
+    - windows/amd64
+
 stage_gates:
   bootstrap:
     cover_strict: false

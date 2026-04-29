@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 )
 
@@ -17,6 +18,12 @@ const (
 	stageSettlement = "settlement"
 )
 
+const (
+	phaseLogin = "login"
+	phaseLobby = "lobby"
+	phaseTable = "table"
+)
+
 // AppState 以互斥锁保护 TUI 渲染所需的牌桌快照。
 type AppState struct {
 	mu   sync.RWMutex
@@ -27,6 +34,8 @@ type AppState struct {
 type RoomView struct {
 	UserID       string
 	Nickname     string
+	ServerURL    string
+	Phase        string
 	RoomID       string
 	SessionToken string
 	SeatIndex    int32
@@ -41,6 +50,8 @@ type RoomView struct {
 	Players         [4]PlayerView
 
 	LastSettlement *clientv1.SettlementNotify
+	RoomList       []*clientv1.RoomMeta
+	NextRoomPage   string
 	Log            []LogEntry
 	LastError      string
 	RTTms          int64
@@ -73,6 +84,7 @@ func NewAppState(name string) *AppState {
 	st.view.SeatIndex = -1
 	st.view.ActingSeat = -1
 	st.view.Stage = stageIdle
+	st.view.Phase = phaseLogin
 	st.view.ClaimCandidates = make(map[int32][]string)
 	for i := range st.view.QueBySeat {
 		st.view.QueBySeat[i] = -1
@@ -118,6 +130,7 @@ func cloneRoomView(in RoomView) RoomView {
 	for i := range in.Players {
 		out.Players[i] = clonePlayerView(in.Players[i])
 	}
+	out.RoomList = cloneRoomMetas(in.RoomList)
 	out.Log = append([]LogEntry(nil), in.Log...)
 	return out
 }
@@ -127,5 +140,16 @@ func clonePlayerView(in PlayerView) PlayerView {
 	out.Hand = append([]string(nil), in.Hand...)
 	out.Melds = append([]string(nil), in.Melds...)
 	out.Discards = append([]string(nil), in.Discards...)
+	return out
+}
+
+func cloneRoomMetas(in []*clientv1.RoomMeta) []*clientv1.RoomMeta {
+	out := make([]*clientv1.RoomMeta, 0, len(in))
+	for _, room := range in {
+		if room == nil {
+			continue
+		}
+		out = append(out, proto.Clone(room).(*clientv1.RoomMeta))
+	}
 	return out
 }

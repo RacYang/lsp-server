@@ -75,6 +75,16 @@ func TestRegisterLobbyService_RoundTrip(t *testing.T) {
 	missing, err := cli.GetRoom(ctx, &clusterv1.GetRoomRequest{RoomId: "missing"})
 	require.NoError(t, err)
 	require.NotEmpty(t, missing.GetError(), "未知房间应返回业务错误而非 RPC 错误")
+
+	createdLobbyRoom, err := cli.CreateRoom(ctx, &clusterv1.CreateRoomRequest{CreatorUserId: "u2", DisplayName: "大厅桌"})
+	require.NoError(t, err)
+	require.NotEmpty(t, createdLobbyRoom.GetRoomId())
+	listResp, err := cli.ListRooms(ctx, &clusterv1.ListRoomsRequest{PageSize: 20})
+	require.NoError(t, err)
+	require.NotEmpty(t, listResp.GetRooms())
+	matchResp, err := cli.AutoMatch(ctx, &clusterv1.AutoMatchRequest{UserId: "u3"})
+	require.NoError(t, err)
+	require.NotEmpty(t, matchResp.GetRoomId())
 }
 
 // TestLobbyHandlersDecodeFailure 直接调用 method handler，校验解码失败时返回 dec 抛出的错误。
@@ -90,6 +100,10 @@ func TestLobbyHandlersDecodeFailure(t *testing.T) {
 	_, err = lobbyJoinRoomHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
 	_, err = lobbyGetRoomHandler(srv, context.Background(), failingDec, nil)
+	require.ErrorContains(t, err, "decode boom")
+	_, err = lobbyListRoomsHandler(srv, context.Background(), failingDec, nil)
+	require.ErrorContains(t, err, "decode boom")
+	_, err = lobbyAutoMatchHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
 }
 
@@ -126,7 +140,7 @@ func TestRegisterLobbyServiceAcceptsArbitraryRegistrar(t *testing.T) {
 	registerLobbyService(captured, newLobbyGRPCServer(lobbysvc.New(), nil, "room-r"))
 	require.Equal(t, 1, captured.calls)
 	require.Equal(t, "cluster.v1.LobbyService", captured.serviceName)
-	require.Len(t, captured.methods, 3)
+	require.ElementsMatch(t, []string{"CreateRoom", "JoinRoom", "GetRoom", "ListRooms", "AutoMatch"}, captured.methods)
 }
 
 // captureRegistrar 仅用于断言 registerLobbyService 写入的 ServiceDesc 元数据，不真正运行 RPC：

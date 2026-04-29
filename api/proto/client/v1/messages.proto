@@ -60,6 +60,13 @@ message Envelope {
     HuResponse hu_resp = 31;
     // Phase 6 玩家客户端：开局发牌仅定向下发给对应座位。
     InitialDealNotify initial_deal = 33;
+    // Phase 7 大厅交互：房间列表、自动匹配与显式创建。
+    ListRoomsRequest list_rooms_req = 34;
+    ListRoomsResponse list_rooms_resp = 35;
+    AutoMatchRequest auto_match_req = 36;
+    AutoMatchResponse auto_match_resp = 37;
+    CreateRoomRequest create_room_req = 38;
+    CreateRoomResponse create_room_resp = 39;
   }
 }
 
@@ -89,6 +96,56 @@ message JoinRoomResponse {
   int32 seat_index = 1;
   ErrorCode error_code = 2;
   string error_message = 3;
+}
+
+// RoomMeta 是大厅页展示的公开房间摘要；私密房不会出现在列表中。
+message RoomMeta {
+  string room_id = 1;
+  string rule_id = 2;
+  string display_name = 3;
+  int32 seat_count = 4;
+  int32 max_seats = 5;
+  int64 created_at_ms = 6;
+  string stage = 7;
+}
+
+// ListRoomsRequest 查询当前可加入的公开等待房间。
+message ListRoomsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListRoomsResponse {
+  repeated RoomMeta rooms = 1;
+  string next_page_token = 2;
+  ErrorCode error_code = 3;
+  string error_message = 4;
+}
+
+// AutoMatchRequest 让大厅选择一个可加入房间；没有空位时会创建公开房间。
+message AutoMatchRequest {
+  string rule_id = 1;
+}
+
+message AutoMatchResponse {
+  string room_id = 1;
+  int32 seat_index = 2;
+  ErrorCode error_code = 3;
+  string error_message = 4;
+}
+
+// CreateRoomRequest 创建一个房间并直接让创建者占座；private=true 时不出现在大厅列表。
+message CreateRoomRequest {
+  string rule_id = 1;
+  string display_name = 2;
+  bool private = 3;
+}
+
+message CreateRoomResponse {
+  string room_id = 1;
+  int32 seat_index = 2;
+  ErrorCode error_code = 3;
+  string error_message = 4;
 }
 
 message ReadyRequest {}

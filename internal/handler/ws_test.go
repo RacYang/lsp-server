@@ -55,6 +55,15 @@ func (f *fakeResumeGateway) Gang(_ context.Context, _, _, _ string) (func(), err
 func (f *fakeResumeGateway) Hu(_ context.Context, _, _ string) (func(), error) {
 	return nil, nil
 }
+func (f *fakeResumeGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
+	return nil, "", nil
+}
+func (f *fakeResumeGateway) AutoMatch(_ context.Context, _, _ string) (string, int, error) {
+	return "", 0, nil
+}
+func (f *fakeResumeGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
+	return "", 0, nil
+}
 func (f *fakeResumeGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	if f.resumeErr != nil {
 		return nil, f.resumeErr
@@ -100,6 +109,15 @@ func (g *joinStubGateway) Gang(_ context.Context, _, _, _ string) (func(), error
 }
 func (g *joinStubGateway) Hu(_ context.Context, _, _ string) (func(), error) {
 	return nil, nil
+}
+func (g *joinStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
+	return nil, "", nil
+}
+func (g *joinStubGateway) AutoMatch(_ context.Context, _, _ string) (string, int, error) {
+	return "", 0, nil
+}
+func (g *joinStubGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
+	return "", 0, nil
 }
 func (g *joinStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	return nil, fmt.Errorf("not implemented")
