@@ -125,6 +125,45 @@ func TestAtomicLevel(t *testing.T) {
 	}
 }
 
+func TestLoggerSourceLocatesCaller(t *testing.T) {
+	var buf bytes.Buffer
+	log := New(&buf, LevelInfo)
+	log.Info(context.Background(), "源码定位")
+	var m map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &m); err != nil {
+		t.Fatalf("json: %v, raw=%s", err, buf.String())
+	}
+	src, ok := m["source"].(map[string]any)
+	if !ok {
+		t.Fatalf("source missing or wrong type: %#v", m["source"])
+	}
+	file, _ := src["file"].(string)
+	if !strings.HasSuffix(file, "logger_test.go") {
+		t.Fatalf("source.file = %q; want suffix logger_test.go", file)
+	}
+	fn, _ := src["function"].(string)
+	if !strings.Contains(fn, "TestLoggerSourceLocatesCaller") {
+		t.Fatalf("source.function = %q; want TestLoggerSourceLocatesCaller", fn)
+	}
+}
+
+func TestPackageLevelInfoSource(t *testing.T) {
+	var buf bytes.Buffer
+	old := Default()
+	SetDefault(New(&buf, LevelInfo))
+	t.Cleanup(func() { SetDefault(old) })
+	Info(context.Background(), "包级源码定位")
+	var m map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &m); err != nil {
+		t.Fatalf("json: %v, raw=%s", err, buf.String())
+	}
+	src, _ := m["source"].(map[string]any)
+	file, _ := src["file"].(string)
+	if !strings.HasSuffix(file, "logger_test.go") {
+		t.Fatalf("source.file = %q; want suffix logger_test.go", file)
+	}
+}
+
 func TestObserverConcurrent(t *testing.T) {
 	obs, log := NewObserver()
 	var wg sync.WaitGroup

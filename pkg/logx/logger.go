@@ -5,7 +5,9 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"runtime"
 	"sync"
+	"time"
 )
 
 // Level 表示日志级别，供门面配置使用。
@@ -101,42 +103,61 @@ func (l *Logger) Named(name string) *Logger {
 	return l.With("logger", name)
 }
 
+// callDepthFromExportedMethod 是从导出方法（Debug/Info/Warn/Error 或包级同名函数）
+// 到 runtime.Callers 之间的栈帧数：[Callers, log, 导出层]，因此 skip=3 落到调用方。
+const callDepthFromExportedMethod = 3
+
+// log 手动构造 slog.Record，绕过 slog.Logger.Log 的 PC 捕获，避免门面包装
+// 将 source 永远定位在 pkg/logx/logger.go。
+//
+//go:noinline
+func (l *Logger) log(ctx context.Context, level slog.Level, calldepth int, msg string, args ...any) {
+	if !l.lg.Enabled(ctx, level) {
+		return
+	}
+	var pcs [1]uintptr
+	runtime.Callers(calldepth, pcs[:])
+	rec := slog.NewRecord(time.Now(), level, msg, pcs[0])
+	rec.Add(args...)
+	_ = l.lg.Handler().Handle(ctx, rec)
+}
+
 // Debug 输出 Debug 级别日志。
 func (l *Logger) Debug(ctx context.Context, msg string, args ...any) {
-	l.lg.Log(ctx, slog.LevelDebug, msg, args...)
+	l.log(ctx, slog.LevelDebug, callDepthFromExportedMethod, msg, args...)
 }
 
 // Info 输出 Info 级别日志。
 func (l *Logger) Info(ctx context.Context, msg string, args ...any) {
-	l.lg.Log(ctx, slog.LevelInfo, msg, args...)
+	l.log(ctx, slog.LevelInfo, callDepthFromExportedMethod, msg, args...)
 }
 
 // Warn 输出 Warn 级别日志。
 func (l *Logger) Warn(ctx context.Context, msg string, args ...any) {
-	l.lg.Log(ctx, slog.LevelWarn, msg, args...)
+	l.log(ctx, slog.LevelWarn, callDepthFromExportedMethod, msg, args...)
 }
 
 // Error 输出 Error 级别日志。
 func (l *Logger) Error(ctx context.Context, msg string, args ...any) {
-	l.lg.Log(ctx, slog.LevelError, msg, args...)
+	l.log(ctx, slog.LevelError, callDepthFromExportedMethod, msg, args...)
 }
 
 // Debug 使用默认 Logger。
 func Debug(ctx context.Context, msg string, args ...any) {
-	Default().Debug(ctx, msg, args...)
+	Default().log(ctx, slog.LevelDebug, callDepthFromExportedMethod, msg, args...)
 }
 
 // Info 使用默认 Logger。
 func Info(ctx context.Context, msg string, args ...any) {
-	Default().Info(ctx, msg, args...)
+	Default().log(ctx, slog.LevelInfo, callDepthFromExportedMethod, msg, args...)
 }
 
 // Warn 使用默认 Logger。
 func Warn(ctx context.Context, msg string, args ...any) {
-	Default().Warn(ctx, msg, args...)
+	Default().log(ctx, slog.LevelWarn, callDepthFromExportedMethod, msg, args...)
 }
 
 // Error 使用默认 Logger。
 func Error(ctx context.Context, msg string, args ...any) {
-	Default().Error(ctx, msg, args...)
+	Default().log(ctx, slog.LevelError, callDepthFromExportedMethod, msg, args...)
 }
