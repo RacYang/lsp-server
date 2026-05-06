@@ -25,7 +25,7 @@ func (r *Room) SeatOf(seat int) string {
 	return r.PlayerIDs[seat]
 }
 
-// JoinAutoSeat 将玩家放入第一个空座位；满座返回 false。
+// JoinAutoSeat 将玩家放入第一个空座位；开局后不允许普通入座。
 func (r *Room) JoinAutoSeat(userID string) (int, bool) {
 	if r == nil {
 		return -1, false
@@ -33,6 +33,12 @@ func (r *Room) JoinAutoSeat(userID string) (int, bool) {
 	for i := 0; i < 4; i++ {
 		if r.PlayerIDs[i] == userID && userID != "" {
 			return i, true
+		}
+	}
+	if r.FSM != nil {
+		switch r.FSM.State() {
+		case StatePlaying, StateSettling, StateClosed:
+			return -1, false
 		}
 	}
 	for i := 0; i < 4; i++ {

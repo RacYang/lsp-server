@@ -29,6 +29,7 @@ func TestJoinRoomErrorCodeAllBranches(t *testing.T) {
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, joinRoomErrorCode(nil))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_ROOM_FULL, joinRoomErrorCode(errors.New("Room full: 4/4")))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND, joinRoomErrorCode(errors.New("room not found: r1")))
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, joinRoomErrorCode(errors.New("room already started")))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, joinRoomErrorCode(errors.New("invalid argument: empty")))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, joinRoomErrorCode(errors.New("connection refused")))
 }

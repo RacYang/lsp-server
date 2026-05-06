@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
@@ -77,6 +78,7 @@ func (r *Runner) runOnce(ctx context.Context) error {
 			r.state.Apply(env)
 			if err := r.afterEvent(ctx, client, env); err != nil {
 				logx.Warn(ctx, "机器人处理事件失败", "name", r.cfg.Name, "err", err.Error())
+				return err
 			}
 		}
 	}
@@ -85,6 +87,9 @@ func (r *Runner) runOnce(ctx context.Context) error {
 func (r *Runner) afterEvent(ctx context.Context, client *wsclient.Client, env *clientv1.Envelope) error {
 	if login := env.GetLoginResp(); login != nil {
 		if login.GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+			if staleLoginSession(login) {
+				client.ClearToken()
+			}
 			return fmt.Errorf("登录失败: %s", login.GetErrorMessage())
 		}
 		return r.sendJoin(ctx, client)
@@ -117,6 +122,15 @@ func (r *Runner) afterEvent(ctx context.Context, client *wsclient.Client, env *c
 	return r.decideAndSend(ctx, client, view)
 }
 
+func staleLoginSession(login *clientv1.LoginResponse) bool {
+	if login == nil {
+		return false
+	}
+	return login.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED ||
+		login.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND ||
+		strings.Contains(login.GetErrorMessage(), "room not found")
+}
+
 func (r *Runner) decideAndSend(ctx context.Context, client *wsclient.Client, view BotView) error {
 	r.sleepForWaiting(ctx, view.WaitingAction)
 	action, err := r.cfg.Strategy.Decide(ctx, view)
@@ -131,7 +145,9 @@ func shouldDecide(view BotView) bool {
 		return false
 	}
 	switch view.WaitingAction {
-	case "exchange_three", "que_men", "discard", "tsumo_window":
+	case "exchange_three":
+		return len(view.HandTiles) >= 3
+	case "que_men", "discard", "tsumo_window":
 		return view.ActingSeat == view.SeatIndex || view.WaitingAction == "exchange_three" || view.WaitingAction == "que_men"
 	case "claim_window":
 		actions := view.ClaimCandidates[view.SeatIndex]

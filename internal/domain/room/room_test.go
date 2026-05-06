@@ -47,6 +47,25 @@ func TestJoinAutoSeatSameUserKeepsSeat(t *testing.T) {
 	}
 }
 
+func TestJoinAutoSeatRejectsAfterPlaying(t *testing.T) {
+	r := NewRoom("r-playing")
+	if _, ok := r.JoinAutoSeat("u1"); !ok {
+		t.Fatal("first join failed")
+	}
+	if err := r.FSM.Transition(StateReady); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.StartPlaying(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.JoinAutoSeat("u2"); ok {
+		t.Fatal("playing room must reject new player")
+	}
+	if seat, ok := r.JoinAutoSeat("u1"); !ok || seat != 0 {
+		t.Fatalf("playing room should keep existing player seat, got seat=%d ok=%v", seat, ok)
+	}
+}
+
 func TestLeaveMovesReadyRoomBackToWaiting(t *testing.T) {
 	r := NewRoom("r3")
 	for i := 0; i < 4; i++ {

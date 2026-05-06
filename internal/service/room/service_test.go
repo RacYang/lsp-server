@@ -91,6 +91,28 @@ func TestReadyTriggersBroadcast(t *testing.T) {
 	}
 }
 
+func TestJoinRejectsAfterRoundStarted(t *testing.T) {
+	svc := NewService(NewLobby())
+	ctx := context.Background()
+	const roomID = "room-started"
+	for _, uid := range []string{"p0", "p1", "p2", "p3"} {
+		_, err := svc.Join(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"p0", "p1", "p2", "p3"} {
+		_, err := svc.Ready(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+
+	_, err := svc.Join(ctx, roomID, "late-player")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already started")
+
+	seat, err := svc.Join(ctx, roomID, "p0")
+	require.NoError(t, err)
+	require.Zero(t, seat)
+}
+
 func TestEnsureRoomConcurrentFirstJoin(t *testing.T) {
 	t.Parallel()
 

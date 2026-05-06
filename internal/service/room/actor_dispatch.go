@@ -11,6 +11,17 @@ func (a *roomActor) doJoin(userID string) (int, error) {
 	if a.room == nil {
 		return -1, fmt.Errorf("nil room")
 	}
+	if a.room.FSM != nil {
+		switch a.room.FSM.State() {
+		case domainroom.StatePlaying, domainroom.StateSettling, domainroom.StateClosed:
+			for seat := 0; seat < 4; seat++ {
+				if a.room.PlayerIDs[seat] == userID && userID != "" {
+					return seat, nil
+				}
+			}
+			return -1, fmt.Errorf("room already started")
+		}
+	}
 	seat, ok := a.room.JoinAutoSeat(userID)
 	if !ok {
 		return -1, fmt.Errorf("room full")

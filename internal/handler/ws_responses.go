@@ -98,6 +98,8 @@ func joinRoomErrorCode(err error) clientv1.ErrorCode {
 		return clientv1.ErrorCode_ERROR_CODE_ROOM_FULL
 	case strings.Contains(msg, "room not found"):
 		return clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND
+	case strings.Contains(msg, "already started"):
+		return clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 	case strings.Contains(msg, "invalid argument"):
 		return clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 	default:

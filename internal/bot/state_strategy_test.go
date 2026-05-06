@@ -56,6 +56,32 @@ func TestBotStateSnapshotClosed(t *testing.T) {
 	require.Equal(t, []string{"m1", "m2"}, view.HandTiles)
 }
 
+func TestStaleLoginSession(t *testing.T) {
+	require.True(t, staleLoginSession(&clientv1.LoginResponse{
+		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_RECONNECTING,
+		ErrorMessage: "快照房间失败: room not found",
+	}))
+	require.True(t, staleLoginSession(&clientv1.LoginResponse{
+		ErrorCode: clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND,
+	}))
+	require.False(t, staleLoginSession(&clientv1.LoginResponse{
+		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_RECONNECTING,
+		ErrorMessage: "temporary reconnecting",
+	}))
+}
+
+func TestShouldDecideWaitsForExchangeHand(t *testing.T) {
+	view := BotView{
+		SeatIndex:       1,
+		WaitingAction:   "exchange_three",
+		AvailableAction: []string{"exchange_three"},
+	}
+	require.False(t, shouldDecide(view))
+
+	view.HandTiles = []string{"m1", "m2", "m3"}
+	require.True(t, shouldDecide(view))
+}
+
 func TestRuleStrategyProducesAllowedActions(t *testing.T) {
 	strategy := NewRuleStrategy(RuleStrategyConfig{
 		Difficulty: DifficultyNormal,

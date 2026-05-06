@@ -52,6 +52,13 @@ func (c *Client) Events() <-chan *clientv1.Envelope {
 	return c.events
 }
 
+// ClearToken 清除本地会话令牌，下一次重连会按新玩家登录。
+func (c *Client) ClearToken() {
+	if c.tokenFile != "" {
+		_ = os.Remove(c.tokenFile)
+	}
+}
+
 // Connect 建立连接并发送登录请求。
 func (c *Client) Connect(ctx context.Context) error {
 	conn, err := c.dial(ctx)
