@@ -73,12 +73,13 @@ const (
 type TableLayout struct {
 	Width, Height int
 
-	TopArea    Region // 北家（对家）信息块
-	LeftArea   Region // 西家（上家）信息块
-	RightArea  Region // 东家（下家）信息块
-	CenterArea Region // 中央提示语/浮窗区
-	HandArea   Region // 自己手牌字符画
-	HintArea   Region // 自己手牌下方的操作提示行
+	TopArea       Region // 北家（对家）信息块
+	LeftArea      Region // 西家（上家）信息块
+	RightArea     Region // 东家（下家）信息块
+	CenterArea    Region // 中央提示语/浮窗区
+	SelfMeldsArea Region // 自己鸣牌（碰/杠/吃）展示行,与其他三家鸣牌信息对齐
+	HandArea      Region // 自己手牌字符画
+	HintArea      Region // 自己手牌下方的操作提示行
 }
 
 // Region 是屏幕上的一个矩形区域。
@@ -98,11 +99,12 @@ func (r Region) Empty() bool { return r.Width <= 0 || r.Height <= 0 }
 //	行 4      间隔
 //	行 5..9   左右上下家信息(高 5)
 //	行 10..12 中央提示/浮窗(高 3)
-//	行 13     间隔
-//	行 14..18 你的手牌+提示(高 5,其中 4 行字符画+1 行提示)
-//	行 19     兜底
+//	行 13     自己的鸣牌行
+//	行 14     凸起预留(光标选中时,手牌顶端会上移 1 行到此处)
+//	行 15..18 你的手牌(高 4)
+//	行 19     提示行
 //
-// 实际实现保留少量自适应：屏幕越大,中央区与下方手牌区按比例向下放。
+// 实际实现保留少量自适应：屏幕越大,中央区会按比例向下放。
 func CalcLayout(width, height int) (TableLayout, bool) {
 	if width < MinTableWidth || height < MinTableHeight {
 		return TableLayout{}, false
@@ -115,12 +117,20 @@ func CalcLayout(width, height int) (TableLayout, bool) {
 	l.LeftArea = Region{X: 0, Y: 5, Width: leftWidth, Height: 5}
 	l.RightArea = Region{X: rightX, Y: 5, Width: rightWidth, Height: 5}
 	centerY := 10
-	centerHeight := height - centerY - TileArtHeight - 2
+	// -3 = 自己鸣牌(1) + 凸起预留(1) + hintArea(1)；总高减去手牌字符画(TileArtHeight)。
+	centerHeight := height - centerY - TileArtHeight - 3
 	if centerHeight < 1 {
 		centerHeight = 1
 	}
 	l.CenterArea = Region{X: 0, Y: centerY, Width: width, Height: centerHeight}
 	handY := height - TileArtHeight - 1
+	// SelfMeldsArea 紧贴中央区下方;凸起预留行(handY-1)在它下面,
+	// 凸起的牌头位于 handY-1,不会覆盖 SelfMeldsArea。
+	selfMeldsY := handY - 2
+	if selfMeldsY < centerY+centerHeight {
+		selfMeldsY = centerY + centerHeight
+	}
+	l.SelfMeldsArea = Region{X: 0, Y: selfMeldsY, Width: width, Height: 1}
 	l.HandArea = Region{X: 0, Y: handY, Width: width, Height: TileArtHeight}
 	l.HintArea = Region{X: 0, Y: height - 1, Width: width, Height: 1}
 	return l, true

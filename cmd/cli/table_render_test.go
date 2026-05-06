@@ -7,14 +7,17 @@ import (
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/uniseg"
 	"github.com/stretchr/testify/require"
 )
 
 // dumpScreen 把 SimulationScreen 当前内容转成可读多行字符串。
 //
-// CJK 双宽字符的尾部 cell 会被 tcell 标记为空 runes，渲染时占用 2 列；
-// dumpScreen 输出时跳过尾部 cell，让字符串长度更直观。空 cell 用空格代替。
-// 末尾空白会被裁剪以稳定 golden（避免行末空白带来 noisy diff）。
+// 双宽字符（CJK 表意、全角标点、Emoji 等）会占用 2 个 cell；tcell 在第二个
+// cell 留空 rune,我们按 uniseg.RuneWidth 判定首 cell 的宽度后跳过紧随的尾 cell,
+// 保持与生产渲染（drawText / visualWidth）完全一致的 cell 占用判定,
+// 避免出现"老 dumpScreen 只识别 CJK 表意,新生产代码识别全角标点"的偏差。
+// 空 cell 用空格代替。末尾空白会被裁剪以稳定 golden（避免行末空白噪声）。
 func dumpScreen(scr tcell.SimulationScreen) string {
 	cells, w, h := scr.GetContents()
 	var out strings.Builder
@@ -34,7 +37,7 @@ func dumpScreen(scr tcell.SimulationScreen) string {
 				r = ' '
 			}
 			line = append(line, r)
-			if r >= 0x2E80 && r <= 0x9FFF {
+			if uniseg.StringWidth(string(r)) >= 2 {
 				skipTail = true
 			}
 		}
@@ -156,6 +159,21 @@ func TestRenderFrameMyTurnDiscardUnicode(t *testing.T) {
 	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeUnicode})
 	scr.Show()
 	requireGolden(t, "table_my_turn_discard_unicode", dumpScreen(scr))
+}
+
+func TestRenderFrameSelfMeldsRendered(t *testing.T) {
+	// 自己也有碰/杠时,SelfMeldsArea 应该把它们渲染在手牌上方,
+	// 与对家/上家/下家的"鸣: ..."区块对齐,避免玩家看不到自己的鸣牌。
+	scr := makeSimScreen(t, MinTableWidth, MinTableHeight)
+	view := newWaitingTableView()
+	view.ActingSeat = view.SeatIndex
+	view.WaitingAction = "discard"
+	view.Players[view.SeatIndex].Melds = []string{"pong:p5", "gang:m9"}
+	layout, ok := CalcLayout(MinTableWidth, MinTableHeight)
+	require.True(t, ok)
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeASCII})
+	scr.Show()
+	requireGolden(t, "table_self_melds_ascii", dumpScreen(scr))
 }
 
 func TestCentralPromptStates(t *testing.T) {

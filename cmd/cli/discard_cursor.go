@@ -158,11 +158,32 @@ func (c *HandCursor) Reset() {
 }
 
 // SyncMode 在阶段切换时把 Mode 更新为最新派生值；如果 Mode 改变则 Reset 清除旧索引。
+//
+// 两个目标:
+//  1. 切入单选出牌模式时,默认把光标定到最后一张牌（即刚摸到的牌）,
+//     让玩家直接按 Enter 即可顺手出牌；多选换三张模式仍保持 -1 让玩家自行标记。
+//  2. 同回合内手牌长度变化（如自杠后摸新牌、自摸阶段补牌）时,把已越界的索引
+//     clamp 回最后一张,避免 cursor.Index >= len(hand) 让 Enter 静默 no-op。
 func (c *HandCursor) SyncMode(view RoomView) {
 	mode := DeriveCursorMode(view)
+	handLen := 0
+	if view.SeatIndex >= 0 && view.SeatIndex < 4 {
+		handLen = len(view.Players[view.SeatIndex].Hand)
+	}
 	if mode != c.Mode {
 		c.Reset()
 		c.Mode = mode
+		if mode == CursorModeSingle && handLen > 0 {
+			c.Index = handLen - 1
+		}
+		return
+	}
+	if mode == CursorModeSingle && c.Index >= 0 && c.Index >= handLen {
+		if handLen > 0 {
+			c.Index = handLen - 1
+		} else {
+			c.Index = -1
+		}
 	}
 }
 
