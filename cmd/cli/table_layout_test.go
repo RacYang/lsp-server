@@ -53,6 +53,20 @@ func TestCalcLayoutMinimum(t *testing.T) {
 	require.Greater(t, l.RightArea.X, l.LeftArea.X)
 }
 
+func TestCalcLayoutSelfBlocksOrderedAboveHand(t *testing.T) {
+	// 自家"打 / 鸣 / protrusion / hand"四块在垂直方向必须按距离手牌从远到近排列,
+	// 且互不重叠;protrusion 行紧贴 HandArea 上方,鸣行紧贴 protrusion 上方,
+	// 牌河行再紧贴鸣行上方。这样光标凸起不会盖住自家鸣牌,鸣牌又不会盖住牌河。
+	l, ok := CalcLayout(MinTableWidth, MinTableHeight)
+	require.True(t, ok)
+	require.Equal(t, l.HandArea.Y-1, l.SelfMeldsArea.Y+l.SelfMeldsArea.Height,
+		"protrusion 缓冲必须夹在 SelfMeldsArea 与 HandArea 之间")
+	require.Equal(t, l.SelfMeldsArea.Y, l.SelfDiscardsArea.Y+l.SelfDiscardsArea.Height,
+		"SelfMeldsArea 必须紧贴 SelfDiscardsArea 下方,无空隙也无重叠")
+	require.GreaterOrEqual(t, l.SelfDiscardsArea.Y, l.CenterArea.Y+l.CenterArea.Height,
+		"SelfDiscardsArea 不应回侵 CenterArea")
+}
+
 func TestCalcLayoutLargeTerminalGrowsCenterArea(t *testing.T) {
 	smallL, _ := CalcLayout(MinTableWidth, MinTableHeight)
 	bigL, ok := CalcLayout(MinTableWidth, MinTableHeight+10)

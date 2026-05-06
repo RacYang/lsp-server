@@ -128,12 +128,17 @@ func TestHandCursorCancelClearsButNotPending(t *testing.T) {
 }
 
 func TestHandCursorSyncModeResetsOnChange(t *testing.T) {
-	c := &HandCursor{Mode: CursorModeSingle, Index: 2}
+	// 模式切换时旧索引必须先 Reset,然后按新模式的预选规则重新派生。
+	// 这里从 Single(Index=2) 切到 Multi3, Reset 清掉旧 Marked 与 Pending,
+	// 再由 Multi3 预选规则把 Index 落到 0,避免出现"换模式后 Index 残留越位"。
+	c := &HandCursor{Mode: CursorModeSingle, Index: 2, Marked: []int{0, 1}, Pending: true}
 	v := makeMyTurnDiscardView()
 	v.WaitingAction = "exchange_three"
 	c.SyncMode(v)
 	require.Equal(t, CursorModeMulti3, c.Mode)
-	require.Equal(t, -1, c.Index, "模式切换后旧索引必须清掉,避免错位")
+	require.Equal(t, 0, c.Index, "切到 Multi3 应按新模式预选第一张,而不是残留旧 Index")
+	require.Empty(t, c.Marked, "Reset 必须清空旧 Marked")
+	require.False(t, c.Pending, "Reset 必须清掉 Pending")
 }
 
 func TestHandCursorSyncModeIntoSinglePreselectsLastTile(t *testing.T) {
@@ -147,15 +152,18 @@ func TestHandCursorSyncModeIntoSinglePreselectsLastTile(t *testing.T) {
 	require.True(t, c.CanSubmit(), "进入出牌阶段后无需先按方向键即可提交")
 }
 
-func TestHandCursorSyncModeIntoMulti3DoesNotPreselect(t *testing.T) {
-	// 多选换三张模式不应预选,留给玩家手动用 Space 标记 3 张。
+func TestHandCursorSyncModeIntoMulti3PreselectsFirstTile(t *testing.T) {
+	// 多选换三张模式: Index 必须落在合法位置,否则 Space (ToggleMark) 会因
+	// Index<0 静默无效,玩家会以为 Space 也"没反应"。
+	// 但仍然不能替玩家自动 Mark,Mark 操作必须由玩家显式触发。
 	c := &HandCursor{}
 	v := makeMyTurnDiscardView()
 	v.WaitingAction = "exchange_three"
 	c.SyncMode(v)
 	require.Equal(t, CursorModeMulti3, c.Mode)
-	require.Equal(t, -1, c.Index)
-	require.False(t, c.CanSubmit())
+	require.Equal(t, 0, c.Index, "Multi3 切入应让光标落在第一张,Space 立刻可用")
+	require.Empty(t, c.Marked, "切入 Multi3 时不应自动标记任何牌")
+	require.False(t, c.CanSubmit(), "未标记 3 张时不能提交")
 }
 
 func TestHandCursorSyncModeClampsIndexWhenHandShrinks(t *testing.T) {

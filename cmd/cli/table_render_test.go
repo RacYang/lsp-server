@@ -176,6 +176,22 @@ func TestRenderFrameSelfMeldsRendered(t *testing.T) {
 	requireGolden(t, "table_self_melds_ascii", dumpScreen(scr))
 }
 
+func TestRenderFrameSelfDiscardsRendered(t *testing.T) {
+	// 自己也已经打过牌时,SelfDiscardsArea 应该把"打: ..."渲染在自家鸣牌正上方,
+	// 与对家/上家/下家的"打: ..."区块对称,避免界面在 self 这一侧"少一行"。
+	scr := makeSimScreen(t, MinTableWidth, MinTableHeight)
+	view := newWaitingTableView()
+	view.ActingSeat = view.SeatIndex
+	view.WaitingAction = "discard"
+	view.Players[view.SeatIndex].Melds = []string{"pong:p5"}
+	view.Players[view.SeatIndex].Discards = []string{"m9", "s2", "p3", "m1", "s7", "z5"}
+	layout, ok := CalcLayout(MinTableWidth, MinTableHeight)
+	require.True(t, ok)
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeASCII})
+	scr.Show()
+	requireGolden(t, "table_self_discards_ascii", dumpScreen(scr))
+}
+
 func TestCentralPromptStates(t *testing.T) {
 	v := newWaitingTableView()
 	require.Equal(t, "已自动准备,等待其他玩家就位", centralPrompt(v, nil))

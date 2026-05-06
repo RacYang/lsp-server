@@ -25,6 +25,7 @@ func RenderFrame(scr tcell.Screen, inputs FrameInputs) {
 	drawTopArea(scr, inputs)
 	drawLeftRightAreas(scr, inputs)
 	drawCenterArea(scr, inputs)
+	drawSelfDiscardsArea(scr, inputs)
 	drawSelfMeldsArea(scr, inputs)
 	drawHandArea(scr, inputs)
 	drawHintArea(scr, inputs)
@@ -142,6 +143,24 @@ func drawSelfMeldsArea(scr tcell.Screen, in FrameInputs) {
 		return
 	}
 	drawText(scr, region.X, region.Y, defaultStyle(), centerVisual("鸣: "+mLine, region.Width))
+}
+
+// drawSelfDiscardsArea 在自家鸣牌行正上方渲染玩家自己的牌河（最近若干弃张）,
+// 与其他三家"打: ..."信息保持一致;没有弃张时整行留空,layout 占位仍保留以避免重排版。
+func drawSelfDiscardsArea(scr tcell.Screen, in FrameInputs) {
+	region := in.Layout.SelfDiscardsArea
+	if region.Empty() {
+		return
+	}
+	if in.View.SeatIndex < 0 || in.View.SeatIndex > 3 {
+		return
+	}
+	discards := in.View.Players[in.View.SeatIndex].Discards
+	dLine := formatDiscards(discards)
+	if dLine == "" {
+		return
+	}
+	drawText(scr, region.X, region.Y, defaultStyle(), centerVisual("打: "+dLine, region.Width))
 }
 
 // 自己的手牌：用 tile_art 渲染每张牌，光标处的牌整体上移一行（凸起）。
