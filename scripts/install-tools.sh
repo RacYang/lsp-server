@@ -73,8 +73,16 @@ install_golangci_lint_binary() {
   trap 'rm -rf "${tmp_dir}"' RETURN
   curl -sSfL "https://github.com/golangci/golangci-lint/releases/download/v${version}/${asset}" -o "${tmp_dir}/golangci-lint.tar.gz"
   tar -xzf "${tmp_dir}/golangci-lint.tar.gz" -C "${tmp_dir}"
-  if [[ -f "${tmp_dir}/golangci-lint" ]]; then
-    install "${tmp_dir}/golangci-lint" "${GO_BIN}/golangci-lint"
+  # golangci-lint 官方 release 的 tarball 把二进制放在 golangci-lint-${version}-${os}-${arch}/ 子目录里,
+  # 老脚本只看 ${tmp_dir}/golangci-lint 直接退出,导致 CI 上 bootstrap 始终失败。
+  # 用 find 兜底,优先匹配子目录,再退到根目录;两条路径都覆盖,以后 release 改动结构也不致再崩。
+  local binary
+  binary="$(find "${tmp_dir}" -maxdepth 3 -type f -name golangci-lint -perm -u+x -print -quit 2>/dev/null || true)"
+  if [[ -z "${binary}" ]]; then
+    binary="$(find "${tmp_dir}" -maxdepth 3 -type f -name golangci-lint -print -quit 2>/dev/null || true)"
+  fi
+  if [[ -n "${binary}" && -f "${binary}" ]]; then
+    install "${binary}" "${GO_BIN}/golangci-lint"
   else
     echo "golangci-lint binary not found in archive ${asset}" >&2
     exit 1
