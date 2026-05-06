@@ -90,8 +90,12 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		}
 		defer func() { _ = cli.Close() }()
 		disco := discovery.NewEtcd(cli, "/lsp", 30)
+		advertiseAddr := strings.TrimSpace(cfg.ClusterAdvertiseAddr)
+		if advertiseAddr == "" {
+			advertiseAddr = cfg.ServerAddr
+		}
 		reg, err := disco.RegisterAndKeepAlive(ctx, nodeid.KindRoom, defaultRoomNodeID, discovery.NodeMeta{
-			AdvertiseAddr: cfg.ServerAddr,
+			AdvertiseAddr: advertiseAddr,
 			Version:       "phase3",
 		}, 10*time.Second)
 		if err != nil {

@@ -10,7 +10,7 @@ import (
 func TestLoadTempFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "c.yaml")
-	content := "server:\n  addr: \":19999\"\n  ws_allowed_origins:\n    - \"https://trusted.example\"\nrule:\n  default_id: \"sichuan_xzdd\"\nruntime:\n  gate:\n    ws_rate_limit_per_second: 7\n    ws_rate_limit_burst: 9\n    ws_idempotency_cache: 11\n  room:\n    mailbox_capacity: 13\n  redis:\n    idempotency_ttl: 2m\n  logging:\n    level: debug\n    format: console\n    otel_enabled: true\n    otel_endpoint: \"localhost:4317\"\n    dynamic_level: true\n    sample:\n      initial: 3\n      thereafter: 5\n      tick: 2s\n      error_never: true\n"
+	content := "server:\n  addr: \":19999\"\n  ws_allowed_origins:\n    - \"https://trusted.example\"\nrule:\n  default_id: \"sichuan_xzdd\"\ncluster:\n  advertise_addr: \"room:19082\"\nruntime:\n  gate:\n    ws_rate_limit_per_second: 7\n    ws_rate_limit_burst: 9\n    ws_idempotency_cache: 11\n  room:\n    mailbox_capacity: 13\n  redis:\n    idempotency_ttl: 2m\n  logging:\n    level: debug\n    format: console\n    otel_enabled: true\n    otel_endpoint: \"localhost:4317\"\n    dynamic_level: true\n    sample:\n      initial: 3\n      thereafter: 5\n      tick: 2s\n      error_never: true\n"
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -19,6 +19,9 @@ func TestLoadTempFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.ServerAddr != ":19999" || cfg.RuleID != "sichuan_xzdd" {
+		t.Fatalf("%+v", cfg)
+	}
+	if cfg.ClusterAdvertiseAddr != "room:19082" {
 		t.Fatalf("%+v", cfg)
 	}
 	if len(cfg.WSAllowedOrigins) != 1 || cfg.WSAllowedOrigins[0] != "https://trusted.example" {

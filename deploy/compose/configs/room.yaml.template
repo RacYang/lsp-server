@@ -5,6 +5,7 @@ rule:
 cluster:
   lobby_addr: "lobby:19081"
   room_addr: "room:19082"
+  advertise_addr: "room:19082"
 redis:
   addr: "redis:6379"
 postgres:

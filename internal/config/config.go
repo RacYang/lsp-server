@@ -16,6 +16,8 @@ type Config struct {
 	RuleID           string
 	ClusterLobbyAddr string
 	ClusterRoomAddr  string
+	// ClusterAdvertiseAddr 是当前节点对其它集群进程公布的可连接地址。
+	ClusterAdvertiseAddr string
 	// RedisAddr 非空时启用会话、快照元数据等数据面（Phase 3）。
 	RedisAddr string
 	// PostgresDSN 非空时启用对局事件与结算持久化（Phase 3）。
@@ -122,15 +124,16 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}
 	cfg := Config{
-		ServerAddr:       v.GetString("server.addr"),
-		WSAllowedOrigins: v.GetStringSlice("server.ws_allowed_origins"),
-		RuleID:           v.GetString("rule.default_id"),
-		ClusterLobbyAddr: v.GetString("cluster.lobby_addr"),
-		ClusterRoomAddr:  v.GetString("cluster.room_addr"),
-		RedisAddr:        v.GetString("redis.addr"),
-		PostgresDSN:      v.GetString("postgres.dsn"),
-		ObsAddr:          v.GetString("obs.addr"),
-		EtcdEndpoints:    v.GetString("etcd.endpoints"),
+		ServerAddr:           v.GetString("server.addr"),
+		WSAllowedOrigins:     v.GetStringSlice("server.ws_allowed_origins"),
+		RuleID:               v.GetString("rule.default_id"),
+		ClusterLobbyAddr:     v.GetString("cluster.lobby_addr"),
+		ClusterRoomAddr:      v.GetString("cluster.room_addr"),
+		ClusterAdvertiseAddr: v.GetString("cluster.advertise_addr"),
+		RedisAddr:            v.GetString("redis.addr"),
+		PostgresDSN:          v.GetString("postgres.dsn"),
+		ObsAddr:              v.GetString("obs.addr"),
+		EtcdEndpoints:        v.GetString("etcd.endpoints"),
 		RoomTimeouts: RoomTimeouts{
 			ExchangeThree: v.GetDuration("room.timeout.exchange_three"),
 			QueMen:        v.GetDuration("room.timeout.que_men"),
