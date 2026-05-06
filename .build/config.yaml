@@ -21,13 +21,18 @@ tools:
 
 coverage:
   thresholds:
+    internal/mahjong/analysis: 70
     internal/mahjong/wall: 65
     internal/mahjong/...: 90
     internal/domain/...: 80
     internal/app: 41
     internal/handler: 75
     internal/service/room: 67
+    internal/bot: 40
+    internal/bot/advisor: 0
+    internal/bot/wsclient: 0
     cmd/all: 45
+    cmd/bot: 0
     cmd/gate: 45
     cmd/lobby: 55
     cmd/room: 48
@@ -66,6 +71,8 @@ lint:
       mahjong_hand: internal/mahjong/hand/**
       mahjong_hu: internal/mahjong/hu/**
       mahjong_fan: internal/mahjong/fan/**
+      mahjong_analysis: internal/mahjong/analysis/**
+      bot: internal/bot/**
       domain: internal/domain/**
       app: internal/app/**
       net: internal/net/**
@@ -83,25 +90,27 @@ lint:
       apigen: api/gen/**
     deny:
       - from: mahjong_xzdd
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_rules
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_tile
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_wall
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_hand
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_hu
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_fan
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+      - from: mahjong_analysis
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: domain
-        to: [net, cluster, handler, store, service, app, clock, metrics, cmd]
+        to: [net, cluster, handler, store, service, app, clock, metrics, bot, cmd]
       - from: handler
         to: [store]
       - from: service
-        to: [net, handler, cluster, cmd]
+        to: [net, handler, cluster, bot, cmd]
       - from: pkg
         to:
           - mahjong_xzdd
@@ -111,6 +120,8 @@ lint:
           - mahjong_hand
           - mahjong_hu
           - mahjong_fan
+          - mahjong_analysis
+          - bot
           - domain
           - app
           - net
@@ -134,6 +145,8 @@ lint:
           - mahjong_hand
           - mahjong_hu
           - mahjong_fan
+          - mahjong_analysis
+          - bot
           - domain
           - app
           - net

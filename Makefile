@@ -13,7 +13,7 @@ CLI_LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main
 HAS_GO := $(shell find . -type f -name '*.go' -not -path './.build/negatives/*' -not -path '*/gen/*' -print -quit 2>/dev/null)
 HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 
-.PHONY: bootstrap generate fix fix-file build-cli build-cli-all verify verify-fast verify-pre-commit verify-image verify-bench \
+.PHONY: bootstrap generate fix fix-file build-cli build-bot build-cli-all verify verify-fast verify-pre-commit verify-image verify-bench \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
 	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang verify-domain verify-redis-keys verify-metrics-naming verify-gate-session-routing \
@@ -44,6 +44,10 @@ fix-file:
 build-cli:
 	@mkdir -p dist
 	@go build -trimpath -ldflags="$(CLI_LDFLAGS)" -o dist/lsp-cli ./cmd/cli
+
+build-bot:
+	@mkdir -p dist
+	@go build -trimpath -o dist/lsp-bot ./cmd/bot
 
 build-cli-all:
 	@mkdir -p dist

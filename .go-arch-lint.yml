@@ -21,6 +21,10 @@ components:
     in: internal/mahjong/hu/**
   mahjong_fan:
     in: internal/mahjong/fan/**
+  mahjong_analysis:
+    in: internal/mahjong/analysis/**
+  bot:
+    in: internal/bot/**
   domain:
     in: internal/domain/**
   app:
@@ -60,6 +64,7 @@ deps:
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
       - domain
       - config
       - log
@@ -73,6 +78,7 @@ deps:
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
       - domain
       - config
       - log
@@ -86,6 +92,7 @@ deps:
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
       - domain
       - config
       - log
@@ -99,6 +106,7 @@ deps:
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
       - domain
       - config
       - log
@@ -112,6 +120,7 @@ deps:
       - mahjong_wall
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
       - domain
       - config
       - log
@@ -125,6 +134,7 @@ deps:
       - mahjong_wall
       - mahjong_hand
       - mahjong_fan
+      - mahjong_analysis
       - domain
       - config
       - log
@@ -138,11 +148,28 @@ deps:
       - mahjong_wall
       - mahjong_hand
       - mahjong_hu
+      - mahjong_analysis
       - domain
       - config
       - log
       - pkg
       - apigen
+  mahjong_analysis:
+    mayDependOn:
+      - mahjong_xzdd
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  bot:
+    anyProjectDeps: true
   domain:
     mayDependOn:
       - mahjong_xzdd
@@ -152,6 +179,7 @@ deps:
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
       - session
       - config
       - log
@@ -172,6 +200,8 @@ deps:
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
+      - bot
       - domain
       - app
       - net
@@ -196,6 +226,7 @@ deps:
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
+      - mahjong_analysis
       - domain
       - app
       - store
