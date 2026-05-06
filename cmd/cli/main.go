@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -80,6 +81,23 @@ func run() int {
 	ctx = logx.WithRoomID(ctx, "")
 
 	client := NewWSClient(cfg.ServerURL, cfg.Nickname, tokenPath, *origin, *insecureSkipVerify, state)
+	var cfgMu sync.Mutex
+	client.SetRedirectHandler(func(url string) error {
+		cfgMu.Lock()
+		defer cfgMu.Unlock()
+		cfg.ServerURL = url
+		client.SetConfig(url, "")
+		state.Mutate(func(v *RoomView) {
+			v.ServerURL = url
+			v.Connected = false
+			v.Reconnecting = true
+			v.LastError = "服务端要求切换网关"
+		})
+		if *configPath != "" {
+			return SaveConfig(*configPath, cfg)
+		}
+		return nil
+	})
 
 	if *smokeDuration > 0 {
 		handler := NewCommandHandler(client, state)

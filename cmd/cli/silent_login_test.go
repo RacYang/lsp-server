@@ -51,6 +51,16 @@ func TestEvaluateLoginEnvelopeRouteRedirect(t *testing.T) {
 	require.Equal(t, "wss://other.example/ws", v.redirectURL)
 }
 
+func TestEvaluateLoginEnvelopeRouteRedirectLoginRespAwaitsNotify(t *testing.T) {
+	env := &clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT,
+		ErrorMessage: "moved",
+	}}}
+	v := evaluateLoginEnvelope(env, true)
+	require.Equal(t, loginDecisionAwaitRedirect, v.decision)
+	require.Equal(t, "moved", v.errorMessage)
+}
+
 func TestEvaluateLoginEnvelopeIgnoresUnrelated(t *testing.T) {
 	env := &clientv1.Envelope{Body: &clientv1.Envelope_HeartbeatResp{HeartbeatResp: &clientv1.HeartbeatResponse{}}}
 	v := evaluateLoginEnvelope(env, false)
@@ -168,6 +178,57 @@ func TestSilentLoginFollowsRouteRedirect(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "wss://b/ws", serverURL)
 	require.Equal(t, "u3", res.UserID)
+}
+
+func TestSilentLoginFollowsLoginRespThenRouteRedirect(t *testing.T) {
+	runner := &fakeRunner{
+		scripts: [][]*clientv1.Envelope{
+			{
+				{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+					ErrorCode:    clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT,
+					ErrorMessage: "会话迁移",
+				}}},
+				{Body: &clientv1.Envelope_RouteRedirect{RouteRedirect: &clientv1.RouteRedirectNotify{
+					WsUrl: "wss://b/ws",
+				}}},
+			},
+			{{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+				UserId:       "u4",
+				SessionToken: "tok-b",
+			}}}},
+		},
+	}
+	var serverURL string
+	res, err := silentLoginCore(context.Background(), silentLoginOptions{
+		runner:       runner,
+		hasTokenNow:  func() bool { return true },
+		clearToken:   func() {},
+		updateServer: func(s string) { serverURL = s },
+	})
+	require.NoError(t, err)
+	require.Equal(t, "wss://b/ws", serverURL)
+	require.Equal(t, "u4", res.UserID)
+}
+
+func TestSilentLoginRouteRedirectWithoutURLFailsClearly(t *testing.T) {
+	runner := &fakeRunner{
+		scripts: [][]*clientv1.Envelope{
+			{{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT,
+				ErrorMessage: "会话迁移",
+			}}}},
+		},
+	}
+	_, err := silentLoginCore(context.Background(), silentLoginOptions{
+		runner:       runner,
+		maxAttempts:  1,
+		loginTimeout: 50 * time.Millisecond,
+		hasTokenNow:  func() bool { return true },
+		clearToken:   func() {},
+		updateServer: func(string) {},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "服务端要求重连但未给出地址")
 }
 
 func TestSilentLoginGivesUpAfterMaxAttempts(t *testing.T) {

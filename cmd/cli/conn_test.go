@@ -108,3 +108,93 @@ func TestConnectOnceSendsLoginAndReadsResponse(t *testing.T) {
 	}
 	require.Equal(t, "tok-new", readToken(tokenPath))
 }
+
+func TestConnectOnceReturnsRouteRedirectError(t *testing.T) {
+	errCh := make(chan error, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
+		if _, _, err := conn.Read(r.Context()); err != nil {
+			errCh <- err
+			return
+		}
+		redirect, err := proto.Marshal(&clientv1.Envelope{
+			ReqId: "route",
+			Body: &clientv1.Envelope_RouteRedirect{RouteRedirect: &clientv1.RouteRedirectNotify{
+				WsUrl:  "wss://next.example/ws",
+				Reason: "迁移入口",
+			}},
+		})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		if err := conn.Write(r.Context(), websocket.MessageBinary, frame.Encode(msgid.RouteRedirectNotify, redirect)); err != nil {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	client := NewWSClient(wsURL, "测试玩家", "", "", false, NewAppState("测试玩家"))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err := client.connectOnce(ctx)
+	var redirectErr *routeRedirectError
+	require.ErrorAs(t, err, &redirectErr)
+	require.Equal(t, "wss://next.example/ws", redirectErr.url)
+	require.NoError(t, <-errCh)
+	select {
+	case env := <-client.Events():
+		require.Equal(t, "wss://next.example/ws", env.GetRouteRedirect().GetWsUrl())
+	case <-time.After(time.Second):
+		t.Fatal("未收到路由重定向事件")
+	}
+}
+
+func TestRunAppliesRouteRedirectWithoutBackoff(t *testing.T) {
+	calls := make(chan string, 2)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
+		calls <- r.URL.String()
+		if _, _, err := conn.Read(r.Context()); err != nil {
+			return
+		}
+		redirect, _ := proto.Marshal(&clientv1.Envelope{
+			Body: &clientv1.Envelope_RouteRedirect{RouteRedirect: &clientv1.RouteRedirectNotify{
+				WsUrl: "ws://" + r.Host + "/ws-next",
+			}},
+		})
+		_ = conn.Write(r.Context(), websocket.MessageBinary, frame.Encode(msgid.RouteRedirectNotify, redirect))
+	}))
+	defer srv.Close()
+
+	initialURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+	client := NewWSClient(initialURL, "测试玩家", "", "", false, NewAppState("测试玩家"))
+	redirected := make(chan string, 10)
+	client.SetRedirectHandler(func(url string) error {
+		redirected <- url
+		client.SetConfig(url, "")
+		return nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go client.Run(ctx)
+
+	select {
+	case url := <-redirected:
+		require.Contains(t, url, "/ws-next")
+	case <-time.After(2 * time.Second):
+		t.Fatal("未触发重定向")
+	}
+}

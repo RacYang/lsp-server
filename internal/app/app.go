@@ -80,7 +80,7 @@ func NewGate(cfg config.Config) (*App, error) {
 			pgCleanup = pool.Close
 		}
 		var gwCleanup func()
-		gateway, gwCleanup, err = newRemoteRoomGateway(cfg, hub, sessMgr, redisClient, settlements, ln.Addr().String())
+		gateway, gwCleanup, err = newRemoteRoomGateway(cfg, hub, sessMgr, redisClient, settlements)
 		if err != nil {
 			if redisCleanup != nil {
 				redisCleanup()

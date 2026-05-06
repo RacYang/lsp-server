@@ -240,6 +240,13 @@ run_cli_release_targets_negative() {
   fi
 }
 
+run_gate_session_routing_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-gate-session-routing.py" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
 for rule in "${RULES_DIR}"/*.mdc; do
   [[ -f "${rule}" ]] || continue
   kind="$(extract_field "${rule}" "kind")"
@@ -310,6 +317,9 @@ for rule in "${RULES_DIR}"/*.mdc; do
       ;;
     *release_cli_targets*.yaml.neg)
       run_cli_release_targets_negative "${negative_file}"
+      ;;
+    *gate_session_routing*.go.neg)
+      run_gate_session_routing_negative "${negative_file}"
       ;;
     *.go.neg)
       run_golangci_negative "${negative_file}" "${enforcer}"

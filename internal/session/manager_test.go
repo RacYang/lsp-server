@@ -24,7 +24,7 @@ func TestManagerIssueResumeBind(t *testing.T) {
 	ctx := context.Background()
 
 	const uid = "user-aaa"
-	tok, err := mgr.Issue(ctx, uid, ":18080")
+	tok, err := mgr.Issue(ctx, uid)
 	require.NoError(t, err)
 	require.NotEmpty(t, tok)
 
@@ -56,7 +56,7 @@ func TestManagerResumeRejectsSessionVersionMismatch(t *testing.T) {
 	ctx := context.Background()
 
 	const uid = "user-bbb"
-	tok, err := mgr.Issue(ctx, uid, ":18080")
+	tok, err := mgr.Issue(ctx, uid)
 	require.NoError(t, err)
 
 	srec, ok, err := store.GetSession(ctx, uid)

@@ -80,7 +80,7 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 	gw := NewLocalRoomGateway(svc, hub, mgr)
 
 	ctx := context.Background()
-	tok, err := mgr.Issue(ctx, "resume-user", "127.0.0.1:9")
+	tok, err := mgr.Issue(ctx, "resume-user")
 	require.NoError(t, err)
 
 	_, err = gw.Join(ctx, "resume-room", "resume-user")
@@ -150,10 +150,33 @@ func TestLocalRoomGatewayResumeRoomMissing(t *testing.T) {
 	gw := NewLocalRoomGateway(svc, session.NewHub(), mgr)
 	ctx := context.Background()
 
-	tok, err := mgr.Issue(ctx, "orphan", "127.0.0.1:1")
+	tok, err := mgr.Issue(ctx, "orphan")
 	require.NoError(t, err)
 	require.NoError(t, mgr.BindRoom(ctx, "orphan", "never-created-room"))
 
 	_, err = gw.Resume(ctx, tok)
 	require.Error(t, err)
+}
+
+func TestLocalRoomGatewayResumeLobbySession(t *testing.T) {
+	t.Parallel()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rcli := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rcli.Close() })
+	cli := redis.NewClientFromUniversal(rcli)
+	mgr := session.NewManager(cli)
+
+	gw := NewLocalRoomGateway(roomsvc.NewService(roomsvc.NewLobby()), session.NewHub(), mgr)
+	ctx := context.Background()
+
+	tok, err := mgr.Issue(ctx, "lobby-user")
+	require.NoError(t, err)
+	res, err := gw.Resume(ctx, tok)
+	require.NoError(t, err)
+	require.Equal(t, "lobby-user", res.UserID)
+	require.Empty(t, res.RoomID)
+	require.False(t, res.Resumed)
+	require.Nil(t, res.Snapshot)
 }

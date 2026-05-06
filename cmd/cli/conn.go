@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -32,6 +33,8 @@ type WSClient struct {
 	conn   *websocket.Conn
 	events chan *clientv1.Envelope
 	state  *AppState
+
+	onRedirect func(string) error
 }
 
 func NewWSClient(wsURL string, name string, tokenFile string, origin string, insecureSkipVerify bool, state *AppState) *WSClient {
@@ -61,6 +64,12 @@ func (c *WSClient) SetConfig(wsURL, name string) {
 	}
 }
 
+func (c *WSClient) SetRedirectHandler(fn func(string) error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onRedirect = fn
+}
+
 func (c *WSClient) Config() (string, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -71,6 +80,16 @@ func (c *WSClient) Run(ctx context.Context) {
 	backoff := time.Second
 	for ctx.Err() == nil {
 		if err := c.connectOnce(ctx); err != nil {
+			var redirectErr *routeRedirectError
+			if errors.As(err, &redirectErr) && redirectErr != nil {
+				if applyErr := c.applyRedirect(redirectErr.url); applyErr != nil {
+					c.state.AddLog("切换网关失败: " + applyErr.Error())
+				} else {
+					c.state.AddLog("收到路由重定向，切换到 " + redirectErr.url)
+				}
+				backoff = time.Second
+				continue
+			}
 			c.state.Mutate(func(v *RoomView) {
 				v.Connected = false
 				v.Reconnecting = true
@@ -89,6 +108,35 @@ func (c *WSClient) Run(ctx context.Context) {
 			backoff *= 2
 		}
 	}
+}
+
+func (c *WSClient) applyRedirect(wsURL string) error {
+	if wsURL == "" {
+		return nil
+	}
+	c.mu.Lock()
+	fn := c.onRedirect
+	c.mu.Unlock()
+	if fn != nil {
+		return fn(wsURL)
+	}
+	c.SetConfig(wsURL, "")
+	return nil
+}
+
+type routeRedirectError struct {
+	url    string
+	reason string
+}
+
+func (e *routeRedirectError) Error() string {
+	if e == nil {
+		return "路由重定向"
+	}
+	if e.reason != "" {
+		return fmt.Sprintf("路由重定向到 %s: %s", e.url, e.reason)
+	}
+	return "路由重定向到 " + e.url
 }
 
 func (c *WSClient) connectOnce(ctx context.Context) error {
@@ -204,10 +252,14 @@ func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn) error {
 		if login := env.GetLoginResp(); login != nil && login.GetSessionToken() != "" {
 			_ = writeToken(c.tokenFile, login.GetSessionToken())
 		}
+		route := env.GetRouteRedirect()
 		select {
 		case c.events <- &env:
 		case <-ctx.Done():
 			return ctx.Err()
+		}
+		if route != nil && route.GetWsUrl() != "" {
+			return &routeRedirectError{url: route.GetWsUrl(), reason: route.GetReason()}
 		}
 	}
 	return ctx.Err()

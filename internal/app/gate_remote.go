@@ -45,16 +45,15 @@ type roomStreamHandle struct {
 }
 
 type remoteRoomGateway struct {
-	lobby                    clusterv1.LobbyServiceClient
-	defaultRoomAddr          string
-	defaultRoomClient        clusterv1.RoomServiceClient
-	hub                      *session.Hub
-	sess                     *session.Manager
-	routeCache               *redis.Client
-	settlementStore          *postgres.SettlementStore
-	router                   *router.Etcd
-	discovery                *discovery.Etcd
-	currentGateAdvertiseAddr string
+	lobby             clusterv1.LobbyServiceClient
+	defaultRoomAddr   string
+	defaultRoomClient clusterv1.RoomServiceClient
+	hub               *session.Hub
+	sess              *session.Manager
+	routeCache        *redis.Client
+	settlementStore   *postgres.SettlementStore
+	router            *router.Etcd
+	discovery         *discovery.Etcd
 
 	streamCtx   context.Context
 	streamMu    sync.Mutex
@@ -67,7 +66,7 @@ type remoteRoomGateway struct {
 	roomClients map[string]clusterv1.RoomServiceClient
 }
 
-func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache *redis.Client, settlementStore *postgres.SettlementStore, currentGateAdvertiseAddr string) (handler.RoomGateway, func(), error) {
+func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache *redis.Client, settlementStore *postgres.SettlementStore) (handler.RoomGateway, func(), error) {
 	lobbyConn, err := grpc.NewClient(cfg.ClusterLobbyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, fmt.Errorf("dial lobby grpc: %w", err)
@@ -97,21 +96,20 @@ func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Man
 	}
 	streamCtx, cancel := context.WithCancel(context.Background())
 	gateway := &remoteRoomGateway{
-		lobby:                    clusterv1.NewLobbyServiceClient(lobbyConn),
-		defaultRoomAddr:          cfg.ClusterRoomAddr,
-		defaultRoomClient:        clusterv1.NewRoomServiceClient(roomConn),
-		hub:                      hub,
-		sess:                     sess,
-		routeCache:               routeCache,
-		settlementStore:          settlementStore,
-		router:                   roomRoute,
-		discovery:                roomDisc,
-		currentGateAdvertiseAddr: currentGateAdvertiseAddr,
-		streamCtx:                streamCtx,
-		roomStreams:              make(map[string]*roomStreamHandle),
-		roomSeats:                make(map[string]map[int32]string),
-		roomConnMap:              map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
-		roomClients:              map[string]clusterv1.RoomServiceClient{cfg.ClusterRoomAddr: clusterv1.NewRoomServiceClient(roomConn)},
+		lobby:             clusterv1.NewLobbyServiceClient(lobbyConn),
+		defaultRoomAddr:   cfg.ClusterRoomAddr,
+		defaultRoomClient: clusterv1.NewRoomServiceClient(roomConn),
+		hub:               hub,
+		sess:              sess,
+		routeCache:        routeCache,
+		settlementStore:   settlementStore,
+		router:            roomRoute,
+		discovery:         roomDisc,
+		streamCtx:         streamCtx,
+		roomStreams:       make(map[string]*roomStreamHandle),
+		roomSeats:         make(map[string]map[int32]string),
+		roomConnMap:       map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
+		roomClients:       map[string]clusterv1.RoomServiceClient{cfg.ClusterRoomAddr: clusterv1.NewRoomServiceClient(roomConn)},
 	}
 	cleanup := func() {
 		cancel()
@@ -447,16 +445,8 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 	if err != nil {
 		return nil, err
 	}
-	if srec.AdvertiseAddr != "" && g.currentGateAdvertiseAddr != "" && srec.AdvertiseAddr != g.currentGateAdvertiseAddr {
-		return &handler.ResumeResult{
-			UserID:   uid,
-			RoomID:   srec.RoomID,
-			Resumed:  false,
-			Redirect: &clientv1.RouteRedirectNotify{WsUrl: "ws://" + srec.AdvertiseAddr + "/ws", Reason: "会话绑定在其他网关节点"},
-		}, nil
-	}
 	if srec.RoomID == "" {
-		return nil, fmt.Errorf("会话未绑定房间")
+		return &handler.ResumeResult{UserID: uid, Resumed: false}, nil
 	}
 	roomClient, _, err := g.roomClientForRoom(ctx, srec.RoomID)
 	if err != nil {

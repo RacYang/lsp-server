@@ -22,7 +22,17 @@ func handleListRooms(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		return
 	}
 	req := env.GetListRoomsReq()
-	if req == nil || state.userID == "" {
+	if req == nil {
+		return
+	}
+	if state.userID == "" {
+		writeLobbyResponse(conn, msgid.ListRoomsResp, &clientv1.Envelope{
+			ReqId: env.ReqId,
+			Body: &clientv1.Envelope_ListRoomsResp{ListRoomsResp: &clientv1.ListRoomsResponse{
+				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
+				ErrorMessage: "尚未登录",
+			}},
+		})
 		return
 	}
 	rooms, next, err := deps.Rooms.ListRooms(ctx, req.GetPageSize(), req.GetPageToken())
@@ -44,7 +54,17 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		return
 	}
 	req := env.GetAutoMatchReq()
-	if req == nil || state.userID == "" {
+	if req == nil {
+		return
+	}
+	if state.userID == "" {
+		writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
+			ReqId: env.ReqId,
+			Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
+				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
+				ErrorMessage: "尚未登录",
+			}},
+		})
 		return
 	}
 	if shouldDropRequest(&env, msgID, state.userID) {
@@ -89,7 +109,17 @@ func handleCreateRoom(ctx context.Context, deps Deps, conn *websocket.Conn, stat
 		return
 	}
 	req := env.GetCreateRoomReq()
-	if req == nil || state.userID == "" {
+	if req == nil {
+		return
+	}
+	if state.userID == "" {
+		writeLobbyResponse(conn, msgid.CreateRoomResp, &clientv1.Envelope{
+			ReqId: env.ReqId,
+			Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
+				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
+				ErrorMessage: "尚未登录",
+			}},
+		})
 		return
 	}
 	if shouldDropRequest(&env, msgID, state.userID) {

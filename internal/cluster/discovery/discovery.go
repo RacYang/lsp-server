@@ -10,6 +10,8 @@ import (
 type NodeMeta struct {
 	// AdvertiseAddr 为对端可连接的 gRPC 或 HTTP 地址（如 host:port）。
 	AdvertiseAddr string
+	// ExternalWSURL 为可选的客户端可达 WebSocket 完整 URL，仅用于观测或跨入口重定向。
+	ExternalWSURL string
 	// Version 为进程构建版本，便于灰度观察。
 	Version string
 }

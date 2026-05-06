@@ -22,6 +22,8 @@ Phase 2 已从单进程演进为可拆分的 `gate` / `lobby` / `room` 三进程
 
 房间亲和性基于房间 ID。权威归属由 etcd 控制面维护，`gate` 可使用 Redis 做只读路由缓存，但缓存 miss 或冲突时必须回源 etcd。
 
+`gate` 在同一集群内是无状态、可互换的 WebSocket 接入层。`session_token` 只绑定用户会话，不绑定具体 `gate` 副本；断线后客户端落到任意 `gate`，都应由该 `gate` 校验 Redis 会话并通过 `SnapshotRoom` / `StreamEvents` 恢复大厅或牌桌视图。`RouteRedirectNotify` 仅保留给跨入口、跨区域或运维切流场景，正常同集群恢复不应出现。
+
 ## 本地与测试
 
 - `cmd/all`：单进程聚合模式，便于开发期快速冒烟。
@@ -31,7 +33,7 @@ Phase 2 已从单进程演进为可拆分的 `gate` / `lobby` / `room` 三进程
 ## Phase 3 断线重连（概要）
 
 - `gate` 在启用 Redis 时签发 `session_token`，并在进房后绑定 `room_id` 与事件游标。
-- 客户端重连时携带 `session_token` 登录；`gate` 先 `SnapshotRoom` 再按快照游标订阅 `StreamEvents` 以补帧。
+- 客户端重连时携带 `session_token` 登录；若会话尚未绑定房间，`gate` 恢复到大厅态；若已绑定房间，`gate` 先 `SnapshotRoom` 再按快照游标订阅 `StreamEvents` 以补帧。
 - 详细契约见 [ADR-0014](adr/0014-reconnect-session-and-snapshot-cutover.md)。
 - 跨进程回归：`internal/app` 中 `TestClusterReconnectLoginWithSessionToken`（`gate` 启用 miniredis 对应 Redis、`session_token` 重连、`SnapshotNotify` 后继续四人结算）。
 

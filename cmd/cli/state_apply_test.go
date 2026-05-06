@@ -52,3 +52,40 @@ func TestApplyResponsesAndSettlement(t *testing.T) {
 	require.Equal(t, "不能碰", view.LastError)
 	require.NotNil(t, view.LastSettlement)
 }
+
+func TestApplyLoginResetsLobbyStateWhenNotResumed(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
+		RoomId:      "r1",
+		SeatIndex:   1,
+		RuleId:      "sichuan_xzdd",
+		DisplayName: "旧房间",
+	}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Settlement{Settlement: &clientv1.SettlementNotify{RoomId: "r1"}}})
+
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+		UserId:  "u0",
+		Resumed: false,
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, phaseLobby, view.Phase)
+	require.Empty(t, view.RoomID)
+	require.Equal(t, int32(-1), view.SeatIndex)
+	require.Empty(t, view.DisplayName)
+	require.Empty(t, view.RoomState)
+	require.Empty(t, view.WaitingAction)
+	require.Nil(t, view.AvailableActions)
+	require.Nil(t, view.LastSettlement)
+}
+
+func TestApplyRouteRedirectMarksReconnecting(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_RouteRedirect{RouteRedirect: &clientv1.RouteRedirectNotify{
+		WsUrl: "wss://next/ws",
+	}}})
+	view := st.Snapshot()
+	require.True(t, view.Reconnecting)
+	require.Equal(t, "服务端要求切换网关", view.LastError)
+}

@@ -23,7 +23,7 @@ func handleLogin(
 	ctx context.Context,
 	deps Deps,
 	conn *websocket.Conn,
-	r *http.Request,
+	_ *http.Request,
 	state *wsConnState,
 	payload []byte,
 ) {
@@ -39,7 +39,7 @@ func handleLogin(
 		handleLoginResume(ctx, deps, conn, state, &env, tok)
 		return
 	}
-	handleLoginIssue(ctx, deps, conn, r, state, &env)
+	handleLoginIssue(ctx, deps, conn, state, &env)
 }
 
 // handleLoginResume 处理带 session_token 的登录请求，覆盖错误、重定向与正常重连三种结果。
@@ -114,7 +114,6 @@ func handleLoginIssue(
 	ctx context.Context,
 	deps Deps,
 	conn *websocket.Conn,
-	r *http.Request,
 	state *wsConnState,
 	env *clientv1.Envelope,
 ) {
@@ -122,7 +121,7 @@ func handleLoginIssue(
 	var plainTok string
 	if deps.Session != nil {
 		var err error
-		plainTok, err = deps.Session.Issue(ctx, state.userID, r.Host)
+		plainTok, err = deps.Session.Issue(ctx, state.userID)
 		if err != nil {
 			logCtx := logx.WithUserID(ctx, state.userID)
 			logx.Warn(logCtx, "签发会话令牌失败继续无令牌模式", "err", err.Error())

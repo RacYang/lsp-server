@@ -68,6 +68,7 @@
 
 - `LoginRequest.session_token` 非空时表示尝试恢复；服务端校验 Redis 中的令牌摘要与会话记录。
 - `LoginResponse.session_token` 为新签发或沿用（重连成功时与请求相同）的不透明令牌；`resumed` 表示是否恢复上下文；`resume_cursor` 为建议保存的事件游标。
+- `session_token` 绑定用户会话，不绑定具体 `gate` 副本；同集群内任意 `gate` 都应能恢复大厅态或牌桌态。
 - 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`；其中 `your_hand_tiles` 仅包含当前连接所属座位的手牌，`discards_by_seat` 与 `melds_by_seat` 用于恢复弃牌堆与副露展示。
 
 ## 业务错误码（ErrorCode 节选）
@@ -77,7 +78,7 @@
 - `ROOM_FULL`：房间已满，无法加入。
 - `INVALID_STATE`：请求与当前房间阶段、座位或等待态不匹配。
 - `NOT_YOUR_TURN`：出牌或动作请求不属于当前可操作座位。
-- `ROUTE_REDIRECT`：客户端应按 `RouteRedirectNotify` 切换连接。
+- `ROUTE_REDIRECT`：客户端应按 `RouteRedirectNotify.ws_url` 中的完整 WebSocket URL 切换连接；正常同集群恢复不应触发。
 - `RATE_LIMITED`：请求过频，应退避重试。
 - `RECONNECTING`：断线重连中（Phase 3 完整会话恢复前可作占位）。
 

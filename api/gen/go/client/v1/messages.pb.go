@@ -2785,12 +2785,14 @@ func (x *LeaveRoomResponse) GetErrorMessage() string {
 	return ""
 }
 
-// RouteRedirectNotify 由 gate 告知客户端重连到新的接入地址或携带房间亲和提示。
+// RouteRedirectNotify 由 gate 告知客户端切换到跨入口或跨区域的完整 WebSocket URL。
+// 同集群 gate 副本间恢复不应依赖该消息。
 type RouteRedirectNotify struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WsUrl         string                 `protobuf:"bytes,1,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
-	RoomId        string                 `protobuf:"bytes,2,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
-	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ws_url 必须包含 ws/wss scheme、host、可选端口与路径，客户端应原样作为 Dial 目标。
+	WsUrl         string `protobuf:"bytes,1,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
+	RoomId        string `protobuf:"bytes,2,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

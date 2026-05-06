@@ -70,7 +70,11 @@ func TestEtcdRegisterWatchAndRevoke(t *testing.T) {
 	initial := <-ch
 	require.Empty(t, initial)
 
-	leaseID, err := d.Register(context.Background(), nodeid.KindGate, "gate-a", NodeMeta{AdvertiseAddr: "127.0.0.1:18080", Version: "v1"})
+	leaseID, err := d.Register(context.Background(), nodeid.KindGate, "gate-a", NodeMeta{
+		AdvertiseAddr: "127.0.0.1:18080",
+		ExternalWSURL: "wss://gate.example/ws",
+		Version:       "v1",
+	})
 	require.NoError(t, err)
 	require.Positive(t, leaseID)
 
@@ -82,6 +86,10 @@ func TestEtcdRegisterWatchAndRevoke(t *testing.T) {
 			return false
 		}
 	}, 5*time.Second, 20*time.Millisecond)
+	node, ok, err := d.ResolveNode(context.Background(), nodeid.KindGate, "gate-a")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "wss://gate.example/ws", node.Meta.ExternalWSURL)
 
 	require.NoError(t, d.KeepAlive(context.Background(), leaseID))
 	require.NoError(t, d.Revoke(context.Background(), leaseID))

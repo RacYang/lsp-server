@@ -579,6 +579,58 @@ func TestHandleWebSocketResumeRedirect(t *testing.T) {
 	require.Equal(t, "ws://gate-b/ws", redirect.GetRouteRedirect().GetWsUrl())
 }
 
+func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		reqMsgID  uint16
+		respMsgID uint16
+		env       *clientv1.Envelope
+		code      func(*clientv1.Envelope) clientv1.ErrorCode
+	}{
+		{
+			name:      "list_rooms",
+			reqMsgID:  msgid.ListRoomsReq,
+			respMsgID: msgid.ListRoomsResp,
+			env: &clientv1.Envelope{ReqId: "list", Body: &clientv1.Envelope_ListRoomsReq{
+				ListRoomsReq: &clientv1.ListRoomsRequest{},
+			}},
+			code: func(env *clientv1.Envelope) clientv1.ErrorCode { return env.GetListRoomsResp().GetErrorCode() },
+		},
+		{
+			name:      "auto_match",
+			reqMsgID:  msgid.AutoMatchReq,
+			respMsgID: msgid.AutoMatchResp,
+			env: &clientv1.Envelope{ReqId: "match", Body: &clientv1.Envelope_AutoMatchReq{
+				AutoMatchReq: &clientv1.AutoMatchRequest{},
+			}},
+			code: func(env *clientv1.Envelope) clientv1.ErrorCode { return env.GetAutoMatchResp().GetErrorCode() },
+		},
+		{
+			name:      "create_room",
+			reqMsgID:  msgid.CreateRoomReq,
+			respMsgID: msgid.CreateRoomResp,
+			env: &clientv1.Envelope{ReqId: "create", Body: &clientv1.Envelope_CreateRoomReq{
+				CreateRoomReq: &clientv1.CreateRoomRequest{},
+			}},
+			code: func(env *clientv1.Envelope) clientv1.ErrorCode { return env.GetCreateRoomResp().GetErrorCode() },
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{}})
+			defer srv.Close()
+			conn := dialWS(t, srv)
+			pb, _ := proto.Marshal(tc.env)
+			require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(tc.reqMsgID, pb)))
+			resp := readEnv(t, conn, tc.respMsgID)
+			require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED, tc.code(resp))
+		})
+	}
+}
+
 func TestHandleWebSocketResumeSettlementFallback(t *testing.T) {
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{resumeResult: &ResumeResult{

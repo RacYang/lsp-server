@@ -85,6 +85,8 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 			v.LastSettlement = nil
 		}
 	case *clientv1.Envelope_RouteRedirect:
+		v.Reconnecting = true
+		v.LastError = "服务端要求切换网关"
 		appendLog(v, "收到路由重定向: "+body.RouteRedirect.GetWsUrl())
 	case *clientv1.Envelope_ExchangeThreeResp:
 		appendResponseLog(v, "换三张", body.ExchangeThreeResp.GetErrorCode(), body.ExchangeThreeResp.GetErrorMessage())
@@ -125,6 +127,12 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 
 func applyLogin(v *RoomView, resp *clientv1.LoginResponse) {
 	if resp.GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		if resp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT {
+			v.Reconnecting = true
+			v.LastError = "服务端要求切换网关"
+			appendLog(v, "服务端要求切换网关: "+resp.GetErrorMessage())
+			return
+		}
 		v.LastError = resp.GetErrorMessage()
 		appendLog(v, "登录失败: "+resp.GetErrorMessage())
 		return
@@ -132,6 +140,14 @@ func applyLogin(v *RoomView, resp *clientv1.LoginResponse) {
 	v.UserID = resp.GetUserId()
 	v.SessionToken = resp.GetSessionToken()
 	v.Phase = phaseLobby
+	if !resp.GetResumed() {
+		v.RoomID = ""
+		v.DisplayName = ""
+		v.SeatIndex = -1
+		v.RoomState = ""
+		v.LastSettlement = nil
+		clearRoundFacts(v)
+	}
 	appendLog(v, "登录成功: "+v.UserID)
 }
 

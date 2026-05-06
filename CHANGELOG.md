@@ -6,6 +6,7 @@
 
 ### 治理与文档
 
+- 修复：`gate` 同集群内不再把会话绑定到具体副本，`session_token` 可在任意 `gate` 恢复大厅或牌桌态；`RouteRedirectNotify` 收敛为跨入口切换能力，CLI 会自动跟随完整 `ws_url`。
 - 文档：新增 [ADR-0030](docs/adr/0030-single-host-compose-deploy.md)，与 [ADR-0024](docs/adr/0024-deployment-and-slo.md) 并存，限定单机 / 小规模 / 单租户场景的 Docker Compose 部署形态。
 - 部署：新增 `deploy/compose/`，含三服务 + Redis + PostgreSQL + 单节点 etcd 的 compose.yaml、`.env.example`、配置模板与一次性 envsubst 渲染容器；业务镜像保持 distroless 不变。
 - 修复：将 compose 形态的 etcd 镜像由 `bitnami/etcd:3.5` 切换到上游 `quay.io/coreos/etcd:v3.5.16`，规避 Bitnami 旧镜像下架风险，命令行参数改为官方上游 flag 形态。

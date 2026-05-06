@@ -143,6 +143,7 @@ message QueMenDoneEvent {
 }
 
 message RouteRedirectEvent {
+  // ws_url 必须是客户端可直接拨号的完整 WebSocket URL；同集群 gate 副本间不应下发。
   string ws_url = 1;
   string reason = 2;
 }

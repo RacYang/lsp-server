@@ -23,6 +23,7 @@ date: 2026-04-22
 - 响应中返回明文 `session_token` 与 `user_id`；**Redis 仅存 hash，不存明文 token**。  
 - 重连：客户端提交 `session_token`；服务端根据 `user_id`（见下）取出 `SessionRecord`，比对 `token_hash` 与 `session_ver`；不匹配则拒绝恢复（`ERROR_CODE_UNAUTHORIZED` 或走新登录）。  
 - **user_id 与 token 的绑定**：除 `lsp:session:{user_id}` 存完整 `SessionRecord` 外，另设辅助键 `lsp:session:lookup:{token_hash}` → `user_id`（短 TTL 与会话一致），便于重连仅凭不透明 `session_token` 反查用户；校验流程为：对明文 token 求 hash → `GET lookup` 得 `user_id` → `GET session:{user_id}` 比对 `TokenHash` 一致后视为有效。
+- `session_token` 绑定用户会话，不绑定具体 `gate` 副本。同集群内任意 `gate` 都可校验该 token 并恢复大厅态或房间态；`SessionRecord` 中历史保留的 `gate_node_id` / `advertise_addr` 不得作为同集群恢复的拒绝或重定向依据。
 
 ### 2. 快照与回放切点（避免重复/漏帧）
 
@@ -42,9 +43,10 @@ date: 2026-04-22
 
 ### 4. 客户端可见结果
 
+- `resumed=false` 且 `room_id` 为空：表示 token 有效但当前用户处于大厅态，仅返回 `LoginResponse`，不下发快照。  
 - `resumed=true`：下发快照通知（含当前玩家手牌、弃牌堆与副露）+ 后续事件流。  
 - `resumed=false` 且局已结：可下发结算摘要（以 PG 为准）。  
-- 无法恢复：`ERROR_CODE_RECONNECTING` 或 `RouteRedirectNotify`（与 [client.v1 ErrorCode](../../api/proto/client/v1/messages.proto) 一致）。
+- 无法恢复：`ERROR_CODE_RECONNECTING`，或在跨入口 / 跨区域迁移时下发 `RouteRedirectNotify`（与 [client.v1 ErrorCode](../../api/proto/client/v1/messages.proto) 一致）。`RouteRedirectNotify.ws_url` 必须是客户端可直接拨号的完整 `ws://` / `wss://` URL；正常同集群 `gate` 副本恢复不应下发。
 
 ## 后果
 

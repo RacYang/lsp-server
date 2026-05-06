@@ -12,6 +12,7 @@ func TestNodeMeta_zero(t *testing.T) {
 	t.Parallel()
 	var m NodeMeta
 	require.Empty(t, m.AdvertiseAddr)
+	require.Empty(t, m.ExternalWSURL)
 }
 
 func TestNodeInfo_fields(t *testing.T) {

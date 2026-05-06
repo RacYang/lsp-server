@@ -114,7 +114,7 @@ SessionToken 也会同步写到 `~/.lsp/session.token`，便于底层 `WSClient.
 启动时 `SilentLogin` 自动用 token 续接：
 
 - `LoginResp UNAUTHORIZED` 且本地有 token → 清 token 后重试一次（最多 3 次）。
-- `RouteRedirectNotify` → 把 `ServerURL` 切到新地址并重连。
+- `LoginResp ROUTE_REDIRECT` 后等待同连接里的 `RouteRedirectNotify`；收到带完整 `ws_url` 的通知后，把 `ServerURL` 切到新地址并重连。正常同集群重连不应收到该通知。
 - 牌桌阶段断线 → 居中浮窗显示"网络异常,重连中..."；30 秒未恢复出现"返回大厅"按钮。
 - 局内菜单和网络离线浮窗返回大厅都会先发送 `LeaveRoomReq`，服务端确认后再回到 lobby。
 

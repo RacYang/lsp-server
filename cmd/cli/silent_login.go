@@ -18,6 +18,7 @@ const (
 	loginDecisionAccept
 	loginDecisionClearTokenAndRetry
 	loginDecisionRedirect
+	loginDecisionAwaitRedirect
 	loginDecisionFatal
 )
 
@@ -58,6 +59,9 @@ func evaluateLoginEnvelope(env *clientv1.Envelope, hadToken bool) loginVerdict {
 	// 仅当之前提交了 token 才有"清 token 再试"的语义；否则视为致命错误。
 	if resp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED && hadToken {
 		return loginVerdict{decision: loginDecisionClearTokenAndRetry, errorMessage: resp.GetErrorMessage()}
+	}
+	if resp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT {
+		return loginVerdict{decision: loginDecisionAwaitRedirect, errorMessage: resp.GetErrorMessage()}
 	}
 	return loginVerdict{decision: loginDecisionFatal, errorMessage: resp.GetErrorMessage()}
 }
@@ -145,6 +149,8 @@ func silentLoginCore(ctx context.Context, opts silentLoginOptions) (*silentLogin
 		case loginDecisionRedirect:
 			opts.updateServer(verdict.redirectURL)
 			opts.logf("收到路由重定向，切换到 %s 重试", verdict.redirectURL)
+		case loginDecisionAwaitRedirect:
+			lastErr = errors.New("服务端要求重连但未给出地址")
 		case loginDecisionFatal:
 			return nil, fmt.Errorf("登录失败: %s", verdict.errorMessage)
 		default:
@@ -237,19 +243,30 @@ func SilentLogin(ctx context.Context, client *WSClient, cfg *Config, configPath 
 func waitForLoginVerdict(ctx context.Context, envCh <-chan *clientv1.Envelope, runDone <-chan error, hadToken bool, timeout time.Duration) (loginVerdict, error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
+	awaitingRedirect := false
 	for {
 		select {
 		case <-ctx.Done():
 			return loginVerdict{}, ctx.Err()
 		case <-timer.C:
+			if awaitingRedirect {
+				return loginVerdict{}, errors.New("服务端要求重连但未给出地址")
+			}
 			return loginVerdict{}, errLoginTimeout
 		case err := <-runDone:
+			if awaitingRedirect {
+				return loginVerdict{}, errors.New("服务端要求重连但未给出地址")
+			}
 			if err == nil {
 				err = errors.New("连接在登录前断开")
 			}
 			return loginVerdict{}, err
 		case env := <-envCh:
 			v := evaluateLoginEnvelope(env, hadToken)
+			if v.decision == loginDecisionAwaitRedirect {
+				awaitingRedirect = true
+				continue
+			}
 			if v.decision == loginDecisionPending {
 				continue
 			}

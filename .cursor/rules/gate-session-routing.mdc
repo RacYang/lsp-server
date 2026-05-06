@@ -1,0 +1,14 @@
+---
+kind: constraint
+description: 同集群 gate 会话恢复不得绑定具体 gate 副本
+globs: "internal/{app,handler,session}/**/*.go"
+adr: docs/adr/0014-reconnect-session-and-snapshot-cutover.md
+enforcer: scripts/verify-gate-session-routing.py
+negative_test: .build/negatives/gate_session_routing_advertise_control.go.neg
+---
+
+# Gate 会话恢复
+
+`session_token` 绑定用户会话，不绑定具体 `gate` 副本。同集群内任意 `gate` 都应能通过 Redis 会话与 room 快照恢复大厅或牌桌态。
+
+禁止在 `Resume` 控制流中根据 `SessionRecord.AdvertiseAddr`、`r.Host` 或监听地址比较来拒绝或重定向同集群恢复；这些字段如保留，只能用于观测或跨入口迁移。

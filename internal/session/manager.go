@@ -23,17 +23,15 @@ func NewManager(c *redis.Client) *Manager {
 	return &Manager{c: c}
 }
 
-// Issue 为新用户签发不透明令牌并写入 Redis。
-func (m *Manager) Issue(ctx context.Context, userID, gateAdvertiseAddr string) (plainToken string, err error) {
+// Issue 为新用户签发不透明令牌并写入 Redis；会话只绑定用户，不绑定具体 gate 副本。
+func (m *Manager) Issue(ctx context.Context, userID string) (plainToken string, err error) {
 	if m == nil || m.c == nil {
 		return "", nil
 	}
 	sessionVer := int64(1)
 	plain := redis.FormatSessionToken(sessionVer, uuid.NewString()+"."+uuid.NewString())
 	rec := redis.SessionRecord{
-		GateNodeID:    "gate",
-		AdvertiseAddr: gateAdvertiseAddr,
-		SessionVer:    sessionVer,
+		SessionVer: sessionVer,
 	}
 	if err := m.c.SaveSessionWithPlainToken(ctx, userID, plain, rec, defaultSessionTTL); err != nil {
 		return "", err
@@ -43,11 +41,10 @@ func (m *Manager) Issue(ctx context.Context, userID, gateAdvertiseAddr string) (
 
 // Record 为重连解析后的会话视图（handler 层使用，避免直接依赖 Redis 类型）。
 type Record struct {
-	RoomID        string
-	LastCursor    string
-	TokenHash     string
-	SessionVer    int64
-	AdvertiseAddr string
+	RoomID     string
+	LastCursor string
+	TokenHash  string
+	SessionVer int64
 }
 
 // Resume 校验明文令牌并返回 user_id 与会话字段。
@@ -71,11 +68,10 @@ func (m *Manager) Resume(ctx context.Context, plainToken string) (userID string,
 		return "", Record{}, fmt.Errorf("会话版本校验失败")
 	}
 	return uid, Record{
-		RoomID:        srec.RoomID,
-		LastCursor:    srec.LastCursor,
-		TokenHash:     srec.TokenHash,
-		SessionVer:    srec.SessionVer,
-		AdvertiseAddr: srec.AdvertiseAddr,
+		RoomID:     srec.RoomID,
+		LastCursor: srec.LastCursor,
+		TokenHash:  srec.TokenHash,
+		SessionVer: srec.SessionVer,
 	}, nil
 }
 

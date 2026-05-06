@@ -228,7 +228,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		return nil, err
 	}
 	if srec.RoomID == "" {
-		return nil, fmt.Errorf("会话未绑定房间")
+		return &ResumeResult{UserID: uid, Resumed: false}, nil
 	}
 	players, state, ok := g.rooms.RoomSnapshot(srec.RoomID)
 	if !ok {

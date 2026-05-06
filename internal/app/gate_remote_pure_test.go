@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	miniredis "github.com/alicebob/miniredis/v2"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -17,6 +19,8 @@ import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
 	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/session"
+	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
 )
 
@@ -292,6 +296,35 @@ func TestRemoteRoomGatewayNilReceiverMethods(t *testing.T) {
 	_, _, err = g.CreateRoom(ctx, "", "", false, "user")
 	require.Error(t, err)
 	require.Error(t, g.EnsureRoomEventSubscription(ctx, "room", ""))
+}
+
+func TestRemoteRoomGatewayResumeLobbySessionIgnoresLegacyAdvertise(t *testing.T) {
+	t.Parallel()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rcli := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rcli.Close() })
+	store := redis.NewClientFromUniversal(rcli)
+	mgr := session.NewManager(store)
+	ctx := context.Background()
+
+	tok, err := mgr.Issue(ctx, "lobby-user")
+	require.NoError(t, err)
+	rec, ok, err := store.GetSession(ctx, "lobby-user")
+	require.NoError(t, err)
+	require.True(t, ok)
+	rec.AdvertiseAddr = "legacy-gate.example"
+	rec.GateNodeID = "legacy-gate"
+	require.NoError(t, store.PutSession(ctx, "lobby-user", rec, time.Minute))
+
+	g := &remoteRoomGateway{sess: mgr}
+	res, err := g.Resume(ctx, tok)
+	require.NoError(t, err)
+	require.Equal(t, "lobby-user", res.UserID)
+	require.Empty(t, res.RoomID)
+	require.False(t, res.Resumed)
+	require.Nil(t, res.Redirect)
 }
 
 func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {

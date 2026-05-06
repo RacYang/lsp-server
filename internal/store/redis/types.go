@@ -2,6 +2,7 @@ package redis
 
 // SessionRecord 为会话在线状态；Phase 3 起补充房间、游标与令牌摘要，供断线重连校验。
 type SessionRecord struct {
+	// GateNodeID 与 AdvertiseAddr 仅保留为历史观测字段；同集群 gate 恢复不得依赖它们做重定向或拒绝。
 	GateNodeID    string `json:"gate_node_id"`
 	AdvertiseAddr string `json:"advertise_addr,omitempty"`
 	RoomID        string `json:"room_id,omitempty"`

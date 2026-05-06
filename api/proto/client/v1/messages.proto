@@ -288,8 +288,10 @@ message LeaveRoomResponse {
   string error_message = 2;
 }
 
-// RouteRedirectNotify 由 gate 告知客户端重连到新的接入地址或携带房间亲和提示。
+// RouteRedirectNotify 由 gate 告知客户端切换到跨入口或跨区域的完整 WebSocket URL。
+// 同集群 gate 副本间恢复不应依赖该消息。
 message RouteRedirectNotify {
+  // ws_url 必须包含 ws/wss scheme、host、可选端口与路径，客户端应原样作为 Dial 目标。
   string ws_url = 1;
   string room_id = 2;
   string reason = 3;

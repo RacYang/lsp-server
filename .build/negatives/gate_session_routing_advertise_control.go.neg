@@ -1,0 +1,8 @@
+package negative
+
+func resume(srec struct{ AdvertiseAddr string }, currentGateAdvertiseAddr string) bool {
+	if srec.AdvertiseAddr != "" && currentGateAdvertiseAddr != "" && srec.AdvertiseAddr != currentGateAdvertiseAddr {
+		return false
+	}
+	return true
+}

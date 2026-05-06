@@ -1435,9 +1435,10 @@ func (x *QueMenDoneEvent) GetQueSuitBySeat() []int32 {
 }
 
 type RouteRedirectEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WsUrl         string                 `protobuf:"bytes,1,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ws_url 必须是客户端可直接拨号的完整 WebSocket URL；同集群 gate 副本间不应下发。
+	WsUrl         string `protobuf:"bytes,1,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
+	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
