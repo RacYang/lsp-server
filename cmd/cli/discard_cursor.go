@@ -158,11 +158,42 @@ func (c *HandCursor) Reset() {
 }
 
 // SyncMode 在阶段切换时把 Mode 更新为最新派生值；如果 Mode 改变则 Reset 清除旧索引。
+//
+// 维护一个共同的不变量:在任何"可操作"模式下,Index 都必须落在合法手牌范围内,
+// 否则 Space (ToggleMark) / Enter (Submit) 会因 Index<0 静默无效,反复出现"按
+// 键没反应"的疑惑。
+//
+// 派生策略:
+//  1. 切入 Single 出牌模式 → Index = handLen-1（顺手出最右,一般是刚摸到的牌）。
+//  2. 切入 Multi3 换三张模式 → Index = 0（光标立刻落在最左张,Space 即可标记）;
+//     仍然不替玩家自动 Mark,Mark 操作必须由玩家显式按 Space 触发。
+//  3. 同模式下手牌长度变化（如自杠后摸新牌、自摸阶段补牌）→ 把越界的旧 Index
+//     clamp 回末位;手牌瞬时为空 → 退到 -1。
 func (c *HandCursor) SyncMode(view RoomView) {
 	mode := DeriveCursorMode(view)
+	handLen := 0
+	if view.SeatIndex >= 0 && view.SeatIndex < 4 {
+		handLen = len(view.Players[view.SeatIndex].Hand)
+	}
 	if mode != c.Mode {
 		c.Reset()
 		c.Mode = mode
+		if handLen > 0 {
+			switch mode {
+			case CursorModeSingle:
+				c.Index = handLen - 1
+			case CursorModeMulti3:
+				c.Index = 0
+			}
+		}
+		return
+	}
+	if (mode == CursorModeSingle || mode == CursorModeMulti3) && c.Index >= 0 && c.Index >= handLen {
+		if handLen > 0 {
+			c.Index = handLen - 1
+		} else {
+			c.Index = -1
+		}
 	}
 }
 

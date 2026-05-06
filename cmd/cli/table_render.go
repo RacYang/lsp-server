@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/uniseg"
 )
 
 // FrameInputs 把渲染单帧需要的所有外部状态打包，便于在测试里固定成纯函数。
@@ -24,23 +25,33 @@ func RenderFrame(scr tcell.Screen, inputs FrameInputs) {
 	drawTopArea(scr, inputs)
 	drawLeftRightAreas(scr, inputs)
 	drawCenterArea(scr, inputs)
+	drawSelfDiscardsArea(scr, inputs)
+	drawSelfMeldsArea(scr, inputs)
 	drawHandArea(scr, inputs)
 	drawHintArea(scr, inputs)
 }
 
 // drawText 在 (x, y) 起始位置写入一行字符；返回写入后的下一列坐标。
 //
-// 自动处理 CJK 双宽字符：tcell.SetContent 接收 rune 时内部会判断 EastAsianWidth，
-// 但调用方必须知道下一个 cell 已经被该 CJK 占用，因此这里在双宽时跳 2 列。
+// 按 grapheme cluster 遍历并复用 uniseg 给出的 width:
+//   - 全角中日韩字符、全角标点（如「（」「：」）等宽字符占 2 列;
+//   - 普通 ASCII 与半角字符占 1 列;
+//   - 组合字符（width=0）会作为前一 cluster 的附加 rune 写入同一 cell,
+//     不再单独占列,避免老实现按 rune 计宽导致全角符号错位。
 func drawText(scr tcell.Screen, x, y int, style tcell.Style, s string) int {
 	col := x
-	for _, r := range s {
-		w := 1
-		if r >= 0x2E80 && r <= 0x9FFF {
-			w = 2
+	state := -1
+	rest := s
+	for len(rest) > 0 {
+		var cluster string
+		var width int
+		cluster, rest, width, state = uniseg.FirstGraphemeClusterInString(rest, state)
+		runes := []rune(cluster)
+		if len(runes) == 0 {
+			continue
 		}
-		scr.SetContent(col, y, r, nil, style)
-		col += w
+		scr.SetContent(col, y, runes[0], runes[1:], style)
+		col += width
 	}
 	return col
 }
@@ -114,6 +125,42 @@ func drawCenterArea(scr tcell.Screen, in FrameInputs) {
 	}
 	y := region.Y + region.Height/2
 	drawText(scr, region.X, y, defaultStyle(), centerVisual(prompt, region.Width))
+}
+
+// drawSelfMeldsArea 在手牌正上方渲染玩家自己的鸣牌（碰/杠/吃），
+// 与其他三家的"鸣: ..."信息保持一致；没有鸣牌时整行留空。
+func drawSelfMeldsArea(scr tcell.Screen, in FrameInputs) {
+	region := in.Layout.SelfMeldsArea
+	if region.Empty() {
+		return
+	}
+	if in.View.SeatIndex < 0 || in.View.SeatIndex > 3 {
+		return
+	}
+	melds := in.View.Players[in.View.SeatIndex].Melds
+	mLine := formatMelds(melds)
+	if mLine == "" {
+		return
+	}
+	drawText(scr, region.X, region.Y, defaultStyle(), centerVisual("鸣: "+mLine, region.Width))
+}
+
+// drawSelfDiscardsArea 在自家鸣牌行正上方渲染玩家自己的牌河（最近若干弃张）,
+// 与其他三家"打: ..."信息保持一致;没有弃张时整行留空,layout 占位仍保留以避免重排版。
+func drawSelfDiscardsArea(scr tcell.Screen, in FrameInputs) {
+	region := in.Layout.SelfDiscardsArea
+	if region.Empty() {
+		return
+	}
+	if in.View.SeatIndex < 0 || in.View.SeatIndex > 3 {
+		return
+	}
+	discards := in.View.Players[in.View.SeatIndex].Discards
+	dLine := formatDiscards(discards)
+	if dLine == "" {
+		return
+	}
+	drawText(scr, region.X, region.Y, defaultStyle(), centerVisual("打: "+dLine, region.Width))
 }
 
 // 自己的手牌：用 tile_art 渲染每张牌，光标处的牌整体上移一行（凸起）。

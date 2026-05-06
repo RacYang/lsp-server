@@ -82,3 +82,14 @@ func TestVisualWidthCJKDouble(t *testing.T) {
 	require.Equal(t, 2, visualWidth("ab"))
 	require.Equal(t, 4, visualWidth("a一b"))
 }
+
+func TestVisualWidthFullwidthPunctuation(t *testing.T) {
+	// 全角括号、冒号、感叹号都属于 EastAsian Fullwidth (W),应算作 2 列。
+	// 旧实现只看 0x2E80-0x9FFF 范围会把它们当成 1 列,造成对齐错位;
+	// 这里固化新实现的预期,防止回归。
+	require.Equal(t, 2, visualWidth("（"))
+	require.Equal(t, 2, visualWidth("）"))
+	require.Equal(t, 2, visualWidth("："))
+	require.Equal(t, 12, visualWidth("对家（空座）"))
+	require.Equal(t, 10, visualWidth("鸣：[s6]碰"))
+}

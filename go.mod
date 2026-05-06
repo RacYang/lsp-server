@@ -12,6 +12,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/redis/go-redis/v9 v9.18.0
+	github.com/rivo/uniseg v0.4.7
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
@@ -86,7 +87,6 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.3 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect

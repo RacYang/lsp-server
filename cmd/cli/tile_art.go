@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/rivo/uniseg"
 )
 
 // TileTheme 决定字符画牌的视觉风格：拟物 (中文 + Unicode 框线) 或 ASCII 简版。
@@ -206,20 +208,13 @@ func padCJK(s string, cells int) string {
 	return s + strings.Repeat(" ", cells-w)
 }
 
-// visualWidth 估算字符串的终端 cell 宽度：CJK 字符算 2,其他算 1。
+// visualWidth 估算字符串的终端 cell 宽度：CJK、全角标点、emoji 等宽字符算 2,其他算 1。
 //
-// 当前麻将牌渲染只用到中文与 ASCII，简化处理足够；如未来需要全面 grapheme/Emoji 支持
-// 再引入 rivo/uniseg 之类的库。
+// 直接复用 rivo/uniseg.StringWidth,它按 East Asian Width 与 grapheme cluster 计算,
+// 兼容全角符号（如「（」「：」）与组合字符,避免老实现把 0x2E80~0x9FFF 之外的全角符号
+// 当成单宽字符导致界面错位。
 func visualWidth(s string) int {
-	w := 0
-	for _, r := range s {
-		if r >= 0x2E80 && r <= 0x9FFF {
-			w += 2
-		} else {
-			w++
-		}
-	}
-	return w
+	return uniseg.StringWidth(s)
 }
 
 // renderASCII 输出 4 字符宽 × 4 行的 ASCII 拟物牌：

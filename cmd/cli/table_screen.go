@@ -228,7 +228,9 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		cursor.Move(-1, len(hand))
 	case tcell.KeyRight:
 		cursor.Move(1, len(hand))
-	case tcell.KeyEnter:
+	// KeyEnter (KeyCR=\r) 与 KeyCtrlJ (\n) 都视为提交,
+	// 兼容部分终端将回车映射为换行符的情况（如 stty icrnl 关闭、tmux 配置等）。
+	case tcell.KeyEnter, tcell.KeyCtrlJ:
 		if netOverlay != nil && netOverlay.Status == NetStatusOffline {
 			_ = gateway.LeaveRoom(ctx)
 			return tableEventResult{exit: &TableExit{Reason: TableExitLeaveRoom}}
@@ -266,7 +268,13 @@ func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, gateway TableGate
 				overlay.Close()
 			}
 		}
-	case tcell.KeyEnter:
+	case tcell.KeyEnter, tcell.KeyCtrlJ:
+		// 非菜单类浮窗（房间信息 / 玩家详情）只承载只读展示,
+		// Enter 在这里没有"选择"语义,直接当成"关闭"以避免 Enter 静默无效。
+		if overlay.Kind != OverlayMenu {
+			overlay.Close()
+			return tableEventResult{}
+		}
 		switch overlay.MenuSelect() {
 		case OverlayMenuActionToggleTheme:
 			if *theme == TileThemeUnicode {
