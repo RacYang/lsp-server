@@ -10,15 +10,6 @@ import (
 )
 
 const (
-	stageIdle       = "idle"
-	stageExchange   = "exchange"
-	stageQueMen     = "quemen"
-	stageDiscard    = "discard"
-	stageClaim      = "claim"
-	stageSettlement = "settlement"
-)
-
-const (
 	phaseLogin = "login"
 	phaseLobby = "lobby"
 	phaseTable = "table"
@@ -32,22 +23,25 @@ type AppState struct {
 
 // RoomView 是渲染层唯一读取的数据结构。
 type RoomView struct {
-	UserID       string
-	Nickname     string
-	ServerURL    string
-	Phase        string
-	RoomID       string
-	SessionToken string
-	SeatIndex    int32
-	Stage        string
+	UserID        string
+	Nickname      string
+	ServerURL     string
+	Phase         string
+	RoomID        string
+	RuleID        string
+	DisplayName   string
+	SessionToken  string
+	SeatIndex     int32
+	RoomState     string
+	WaitingAction string
 
-	DealerSeat      int32
-	ActingSeat      int32
-	PendingTile     string
-	AvailableAction []string
-	ClaimCandidates map[int32][]string
-	QueBySeat       [4]int32
-	Players         [4]PlayerView
+	DealerSeat       int32
+	ActingSeat       int32
+	PendingTile      string
+	AvailableActions []string
+	ClaimCandidates  map[int32][]string
+	QueBySeat        [4]int32
+	Players          [4]PlayerView
 
 	LastSettlement *clientv1.SettlementNotify
 	RoomList       []*clientv1.RoomMeta
@@ -83,7 +77,6 @@ func NewAppState(name string) *AppState {
 	st.view.Nickname = name
 	st.view.SeatIndex = -1
 	st.view.ActingSeat = -1
-	st.view.Stage = stageIdle
 	st.view.Phase = phaseLogin
 	st.view.ClaimCandidates = make(map[int32][]string)
 	for i := range st.view.QueBySeat {
@@ -122,7 +115,7 @@ func (s *AppState) addLogLocked(text string) {
 
 func cloneRoomView(in RoomView) RoomView {
 	out := in
-	out.AvailableAction = append([]string(nil), in.AvailableAction...)
+	out.AvailableActions = append([]string(nil), in.AvailableActions...)
 	out.ClaimCandidates = make(map[int32][]string, len(in.ClaimCandidates))
 	for seat, actions := range in.ClaimCandidates {
 		out.ClaimCandidates[seat] = append([]string(nil), actions...)

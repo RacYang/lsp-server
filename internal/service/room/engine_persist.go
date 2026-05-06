@@ -128,7 +128,10 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 		}
 	}
 	if seat := rs.claimSeat(); seat >= 0 {
-		actions := make([]string, 0, 2)
+		actions := make([]string, 0, 3)
+		if rs.hasClaimAction(seat, "hu") {
+			actions = append(actions, "hu")
+		}
 		if rs.hasClaimAction(seat, "gang") {
 			actions = append(actions, "gang")
 		}
@@ -136,11 +139,11 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 			actions = append(actions, "pong")
 		}
 		if len(actions) > 0 {
-			return int32(seat), "claim", rs.lastDiscard.String(), actions //nolint:gosec // 座位范围固定
+			return int32(seat), "claim_window", rs.lastDiscard.String(), actions //nolint:gosec // 座位范围固定
 		}
 	}
 	if rs.waitingTsumo {
-		return int32(rs.turn), "tsumo_choice", rs.pendingDraw.String(), []string{"hu", "discard"} //nolint:gosec // 座位范围固定
+		return int32(rs.turn), "tsumo_window", rs.pendingDraw.String(), []string{"hu", "pass"} //nolint:gosec // 座位范围固定
 	}
 	if rs.waitingDiscard {
 		actions := []string{"discard"}

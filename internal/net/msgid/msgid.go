@@ -48,4 +48,6 @@ const (
 	AutoMatchResp  uint16 = 35
 	CreateRoomReq  uint16 = 36
 	CreateRoomResp uint16 = 37
+	PassReq        uint16 = 38
+	PassResp       uint16 = 39
 )

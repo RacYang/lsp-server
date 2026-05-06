@@ -55,6 +55,9 @@ func (f *fakeResumeGateway) Gang(_ context.Context, _, _, _ string) (func(), err
 func (f *fakeResumeGateway) Hu(_ context.Context, _, _ string) (func(), error) {
 	return nil, nil
 }
+func (f *fakeResumeGateway) Pass(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
 func (f *fakeResumeGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
 }
@@ -108,6 +111,9 @@ func (g *joinStubGateway) Gang(_ context.Context, _, _, _ string) (func(), error
 	return nil, nil
 }
 func (g *joinStubGateway) Hu(_ context.Context, _, _ string) (func(), error) {
+	return nil, nil
+}
+func (g *joinStubGateway) Pass(_ context.Context, _, _ string) (func(), error) {
 	return nil, nil
 }
 func (g *joinStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {

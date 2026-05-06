@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
@@ -11,6 +12,8 @@ import (
 	"racoo.cn/lsp/internal/net/msgid"
 	"racoo.cn/lsp/internal/session"
 )
+
+const defaultClientRuleID = "sichuan_xzdd"
 
 // handleListRooms 返回大厅可加入的公开房间列表；查询不改变服务端状态，因此不走幂等缓存。
 func handleListRooms(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, payload []byte) {
@@ -71,8 +74,10 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 	writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
-			RoomId:    roomID,
-			SeatIndex: int32(seat), //nolint:gosec // 座位号固定为 0..3
+			RoomId:      roomID,
+			SeatIndex:   int32(seat), //nolint:gosec // 座位号固定为 0..3
+			RuleId:      normalizeClientRuleID(req.GetRuleId()),
+			DisplayName: roomID,
 		}},
 	})
 }
@@ -114,10 +119,28 @@ func handleCreateRoom(ctx context.Context, deps Deps, conn *websocket.Conn, stat
 	writeLobbyResponse(conn, msgid.CreateRoomResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
-			RoomId:    roomID,
-			SeatIndex: int32(seat), //nolint:gosec // 座位号固定为 0..3
+			RoomId:      roomID,
+			SeatIndex:   int32(seat), //nolint:gosec // 座位号固定为 0..3
+			RuleId:      normalizeClientRuleID(req.GetRuleId()),
+			DisplayName: normalizeClientDisplayName(req.GetDisplayName(), roomID),
 		}},
 	})
+}
+
+func normalizeClientRuleID(ruleID string) string {
+	ruleID = strings.TrimSpace(ruleID)
+	if ruleID == "" {
+		return defaultClientRuleID
+	}
+	return ruleID
+}
+
+func normalizeClientDisplayName(displayName, roomID string) string {
+	displayName = strings.TrimSpace(displayName)
+	if displayName != "" {
+		return displayName
+	}
+	return roomID
 }
 
 func bindJoinedRoom(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, roomID string) error {

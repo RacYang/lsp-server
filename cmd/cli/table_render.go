@@ -1,0 +1,325 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/gdamore/tcell/v2"
+)
+
+// FrameInputs 把渲染单帧需要的所有外部状态打包，便于在测试里固定成纯函数。
+type FrameInputs struct {
+	View   RoomView
+	Layout TableLayout
+	Theme  TileTheme
+	Cursor *HandCursor // 玩家当前选中的手牌；为 nil 表示未启用光标。
+}
+
+// RenderFrame 按 inputs 把整个牌桌画到 scr 上；调用方负责 scr.Show()。
+//
+// 这一层只做"幂等的位置→字符"映射，不维护任何状态；所有状态（光标、浮窗）
+// 都通过 FrameInputs 传入，让测试可以直接构造任意场景的 golden。
+func RenderFrame(scr tcell.Screen, inputs FrameInputs) {
+	scr.Clear()
+	drawTopArea(scr, inputs)
+	drawLeftRightAreas(scr, inputs)
+	drawCenterArea(scr, inputs)
+	drawHandArea(scr, inputs)
+	drawHintArea(scr, inputs)
+}
+
+// drawText 在 (x, y) 起始位置写入一行字符；返回写入后的下一列坐标。
+//
+// 自动处理 CJK 双宽字符：tcell.SetContent 接收 rune 时内部会判断 EastAsianWidth，
+// 但调用方必须知道下一个 cell 已经被该 CJK 占用，因此这里在双宽时跳 2 列。
+func drawText(scr tcell.Screen, x, y int, style tcell.Style, s string) int {
+	col := x
+	for _, r := range s {
+		w := 1
+		if r >= 0x2E80 && r <= 0x9FFF {
+			w = 2
+		}
+		scr.SetContent(col, y, r, nil, style)
+		col += w
+	}
+	return col
+}
+
+func defaultStyle() tcell.Style { return tcell.StyleDefault }
+
+// 顶部对家区域：行 0 名字 + 简短打过牌；行 1 隐藏手牌行；行 2 鸣牌行。
+func drawTopArea(scr tcell.Screen, in FrameInputs) {
+	region := in.Layout.TopArea
+	if region.Empty() {
+		return
+	}
+	seat := relativeSeatIndex(in.View.SeatIndex, SeatPosTop)
+	if seat < 0 {
+		return
+	}
+	player := in.View.Players[seat]
+	nameLine := centerVisual(seatLabel("对家", player), region.Width)
+	drawText(scr, region.X, region.Y, defaultStyle(), nameLine)
+
+	hidden := HiddenTilesRow(player.HandCnt, in.Theme)
+	drawText(scr, region.X, region.Y+1, defaultStyle(), centerVisual(hidden, region.Width))
+
+	mLine := formatMelds(player.Melds)
+	if mLine != "" {
+		drawText(scr, region.X, region.Y+2, defaultStyle(), centerVisual("鸣: "+mLine, region.Width))
+	}
+	dLine := formatDiscards(player.Discards)
+	if dLine != "" {
+		drawText(scr, region.X, region.Y+3, defaultStyle(), centerVisual("打: "+dLine, region.Width))
+	}
+}
+
+// 左右家：分两栏并排显示，每栏 3 行。
+//
+// 注意：左侧位置是出牌顺序的下家 (self+1)，右侧是上家 (self+3)，
+// 与雀魂等主流客户端布局一致。
+func drawLeftRightAreas(scr tcell.Screen, in FrameInputs) {
+	drawSidePlayer(scr, in, in.Layout.LeftArea, SeatPosLeft, "下家")
+	drawSidePlayer(scr, in, in.Layout.RightArea, SeatPosRight, "上家")
+}
+
+func drawSidePlayer(scr tcell.Screen, in FrameInputs, region Region, pos SeatPosition, label string) {
+	if region.Empty() {
+		return
+	}
+	seat := relativeSeatIndex(in.View.SeatIndex, pos)
+	if seat < 0 {
+		return
+	}
+	player := in.View.Players[seat]
+	drawText(scr, region.X, region.Y, defaultStyle(), seatLabel(label, player))
+	drawText(scr, region.X, region.Y+1, defaultStyle(), HiddenTilesRow(player.HandCnt, in.Theme))
+	if mLine := formatMelds(player.Melds); mLine != "" {
+		drawText(scr, region.X, region.Y+2, defaultStyle(), "鸣: "+mLine)
+	}
+	if dLine := formatDiscards(player.Discards); dLine != "" {
+		drawText(scr, region.X, region.Y+3, defaultStyle(), "打: "+dLine)
+	}
+}
+
+// 中央提示语：根据 stage / acting_seat 派生玩家可读短语。
+func drawCenterArea(scr tcell.Screen, in FrameInputs) {
+	region := in.Layout.CenterArea
+	if region.Empty() {
+		return
+	}
+	prompt := centralPrompt(in.View, in.Cursor)
+	if prompt == "" {
+		return
+	}
+	y := region.Y + region.Height/2
+	drawText(scr, region.X, y, defaultStyle(), centerVisual(prompt, region.Width))
+}
+
+// 自己的手牌：用 tile_art 渲染每张牌，光标处的牌整体上移一行（凸起）。
+func drawHandArea(scr tcell.Screen, in FrameInputs) {
+	region := in.Layout.HandArea
+	if region.Empty() {
+		return
+	}
+	if in.View.SeatIndex < 0 || in.View.SeatIndex > 3 {
+		return
+	}
+	hand := in.View.Players[in.View.SeatIndex].Hand
+	if len(hand) == 0 {
+		return
+	}
+	tiles := make([]TileArt, len(hand))
+	for i, t := range hand {
+		tiles[i] = RenderTile(t, in.Theme)
+	}
+	totalWidth := len(tiles) * TileArtWidth
+	startX := region.X + (region.Width-totalWidth)/2
+	if startX < region.X {
+		startX = region.X
+	}
+	for i, tile := range tiles {
+		col := startX + i*TileArtWidth
+		yOffset := 0
+		style := defaultStyle()
+		if in.Cursor != nil {
+			cursorOn := in.Cursor.Index == i
+			marked := in.Cursor.IsMarked(i)
+			if cursorOn || marked {
+				yOffset = -1 // 凸起：光标牌或已标记牌都上移一行
+			}
+			if cursorOn {
+				style = style.Reverse(true)
+			} else if marked {
+				style = style.Foreground(tcell.ColorYellow)
+			}
+			if in.Cursor.Pending && (cursorOn || marked) {
+				style = style.Foreground(tcell.ColorGray)
+			}
+		}
+		for r := 0; r < TileArtHeight; r++ {
+			drawText(scr, col, region.Y+r+yOffset, style, tile.Lines[r])
+		}
+	}
+}
+
+// 屏幕最下方的提示行：根据光标状态展示"按 Enter 出牌 / Esc 取消"等。
+func drawHintArea(scr tcell.Screen, in FrameInputs) {
+	region := in.Layout.HintArea
+	if region.Empty() {
+		return
+	}
+	hint := bottomHint(in.View, in.Cursor)
+	if hint == "" {
+		return
+	}
+	drawText(scr, region.X, region.Y, defaultStyle(), centerVisual(hint, region.Width))
+}
+
+// relativeSeatIndex 把目标方位反查回绝对座位号；玩家未入座或方位不合法时返回 -1。
+//
+// 与 RelativeSeat 保持互逆：left 是下家 (self+1)，right 是上家 (self+3)。
+func relativeSeatIndex(selfSeat int32, pos SeatPosition) int32 {
+	if selfSeat < 0 || selfSeat > 3 {
+		return -1
+	}
+	switch pos {
+	case SeatPosBottom:
+		return selfSeat
+	case SeatPosLeft:
+		return (selfSeat + 1) % 4
+	case SeatPosTop:
+		return (selfSeat + 2) % 4
+	case SeatPosRight:
+		return (selfSeat + 3) % 4
+	}
+	return -1
+}
+
+func seatLabel(prefix string, p PlayerView) string {
+	name := p.Nickname
+	if name == "" {
+		if p.UserID != "" {
+			name = p.UserID
+		} else {
+			name = "(空座)"
+		}
+	}
+	return prefix + " " + name
+}
+
+func formatMelds(melds []string) string {
+	if len(melds) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(melds))
+	for _, m := range melds {
+		parts = append(parts, prettifyMeld(m))
+	}
+	return strings.Join(parts, "  ")
+}
+
+// prettifyMeld 把 state 里 "pong:5p" / "gang:1m" 形式的内部记法转成 "[5p]碰"。
+func prettifyMeld(raw string) string {
+	if i := strings.Index(raw, ":"); i > 0 {
+		kind := raw[:i]
+		tile := raw[i+1:]
+		label := kind
+		switch kind {
+		case "pong":
+			label = "碰"
+		case "gang":
+			label = "杠"
+		case "chow":
+			label = "吃"
+		}
+		return "[" + tile + "]" + label
+	}
+	return raw
+}
+
+func formatDiscards(discards []string) string {
+	if len(discards) == 0 {
+		return ""
+	}
+	if len(discards) > 6 {
+		discards = discards[len(discards)-6:]
+	}
+	return strings.Join(discards, " ")
+}
+
+// centralPrompt 是中央区域的玩家可读提示语，纯函数便于单测。
+func centralPrompt(view RoomView, cursor *HandCursor) string {
+	model := DeriveInteractionModel(view)
+	if cursor != nil && cursor.Mode == CursorModeMulti3 && view.SeatIndex >= 0 {
+		need := 3 - len(cursor.Marked)
+		if cursor.Pending {
+			return "→ 提交中..."
+		}
+		if need > 0 {
+			return fmt.Sprintf("请用 Space 标记换 3 张牌 (还需 %d)", need)
+		}
+		return "已选 3 张, 按 Enter 提交  /  Esc 取消"
+	}
+	if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
+		hand := view.Players[view.SeatIndex].Hand
+		if cursor.Index < len(hand) {
+			tile := hand[cursor.Index]
+			if cursor.Pending {
+				return fmt.Sprintf("→ 出牌中... %s", tile)
+			}
+			return fmt.Sprintf("已选 %s,按 Enter 出牌  /  Esc 取消", tile)
+		}
+	}
+	if view.SeatIndex >= 0 && view.SeatIndex == view.ActingSeat {
+		switch model.Phase {
+		case PhaseDiscard:
+			return "该 你 打 牌"
+		case PhaseQueMen:
+			return "请 定 缺 (m / p / s)"
+		case PhaseExchange:
+			return "请 选 三 张 换 三 张"
+		case PhaseClaim, PhaseTsumo:
+			return "请 决 定"
+		}
+	}
+	if view.ActingSeat >= 0 && view.ActingSeat < 4 {
+		name := view.Players[view.ActingSeat].Nickname
+		if name == "" {
+			name = fmt.Sprintf("%d 号位", view.ActingSeat+1)
+		}
+		return fmt.Sprintf("等待 %s", name)
+	}
+	if view.Phase == phaseTable {
+		return "已自动准备,等待其他玩家就位"
+	}
+	return "等待开始"
+}
+
+// bottomHint 给最下面的提示行输出操作引导。
+func bottomHint(view RoomView, cursor *HandCursor) string {
+	model := DeriveInteractionModel(view)
+	if cursor != nil && cursor.Mode == CursorModeMulti3 && !cursor.Pending {
+		return "←→ 选牌    Space 标记/取消    Enter 提交    Esc 取消    i 房间信息"
+	}
+	if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && !cursor.Pending {
+		return "←→ 选牌    Enter 出牌    Esc 取消    i 房间信息    Esc 菜单"
+	}
+	if view.SeatIndex >= 0 && view.SeatIndex == view.ActingSeat && model.Phase == PhaseDiscard {
+		return "←→ 选牌    Enter 出牌    i 房间信息    Esc 菜单"
+	}
+	return "i 房间信息    Tab 查看玩家    Esc 菜单"
+}
+
+// centerVisual 把文本按 visual width 居中到指定宽度；CJK 字符算 2 cell。
+//
+// 与旧 layout.go 中的 centerText 区别在于：centerText 用 rune 数计算（不分宽度），
+// 这里精确按 cell。新的牌桌渲染统一用 centerVisual，避免双宽字符错位。
+func centerVisual(s string, width int) string {
+	w := visualWidth(s)
+	if w >= width {
+		return s
+	}
+	pad := (width - w) / 2
+	return strings.Repeat(" ", pad) + s
+}

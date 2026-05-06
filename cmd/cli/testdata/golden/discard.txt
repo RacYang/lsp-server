@@ -1,5 +1,0 @@
-stage=discard
-待牌: m9
-可选: discard
-弃: +--+
-|p |

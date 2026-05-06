@@ -43,7 +43,9 @@ func handleJoinRoom(
 	}
 	deps.Hub.Register(state.userID, state.roomID, conn)
 	resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_JoinRoomResp{JoinRoomResp: &clientv1.JoinRoomResponse{
-		SeatIndex: int32(seat), //nolint:gosec // G115：座位号 0..3
+		SeatIndex:   int32(seat), //nolint:gosec // G115：座位号 0..3
+		RuleId:      defaultClientRuleID,
+		DisplayName: state.roomID,
 	}}}
 	b, _ := proto.Marshal(resp)
 	_ = session.WriteBinary(conn, frame.Encode(msgid.JoinRoomResp, b))
@@ -272,6 +274,29 @@ func handleHu(
 	after, err := deps.Rooms.Hu(ctx, state.roomID, state.userID)
 	resp, after := huErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.HuResp, resp, after)
+}
+
+func handlePass(
+	ctx context.Context,
+	deps Deps,
+	conn *websocket.Conn,
+	state *wsConnState,
+	msgID uint16,
+	payload []byte,
+) {
+	var env clientv1.Envelope
+	if err := proto.Unmarshal(payload, &env); err != nil {
+		return
+	}
+	if env.GetPassReq() == nil || state.roomID == "" || state.userID == "" {
+		return
+	}
+	if shouldDropRequest(&env, msgID, state.userID) {
+		return
+	}
+	after, err := deps.Rooms.Pass(ctx, state.roomID, state.userID)
+	resp, after := passErrEnvelope(env.ReqId, after, err)
+	respondAction(conn, env.ReqId, msgid.PassResp, resp, after)
 }
 
 func writeJoinRoomError(conn *websocket.Conn, reqID string, code clientv1.ErrorCode, msg string) {

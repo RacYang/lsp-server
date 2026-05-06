@@ -25,6 +25,10 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		applyLogin(v, body.LoginResp)
 	case *clientv1.Envelope_JoinRoomResp:
 		v.SeatIndex = body.JoinRoomResp.GetSeatIndex()
+		v.RuleID = body.JoinRoomResp.GetRuleId()
+		v.DisplayName = body.JoinRoomResp.GetDisplayName()
+		clearRoundFacts(v)
+		v.LastSettlement = nil
 		if v.SeatIndex >= 0 && v.SeatIndex < 4 {
 			v.Players[v.SeatIndex].Nickname = v.Nickname
 			v.Players[v.SeatIndex].UserID = v.UserID
@@ -51,7 +55,10 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 	case *clientv1.Envelope_StartGame:
 		v.RoomID = body.StartGame.GetRoomId()
 		v.DealerSeat = body.StartGame.GetDealerSeat()
-		v.Stage = stageExchange
+		v.RoomState = "playing"
+		v.WaitingAction = "exchange_three"
+		v.AvailableActions = []string{"exchange_three"}
+		v.LastSettlement = nil
 		appendLog(v, fmt.Sprintf("开局，庄家 %d", v.DealerSeat))
 	case *clientv1.Envelope_DrawTile:
 		applyDraw(v, body.DrawTile)
@@ -60,8 +67,11 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 	case *clientv1.Envelope_Action:
 		applyAction(v, body.Action)
 	case *clientv1.Envelope_Settlement:
-		v.Stage = stageSettlement
 		v.LastSettlement = body.Settlement
+		v.RoomState = "settling"
+		v.WaitingAction = "none"
+		v.AvailableActions = nil
+		v.ClaimCandidates = map[int32][]string{}
 		appendLog(v, "收到结算")
 	case *clientv1.Envelope_HeartbeatResp:
 		// RTT 由连接层根据本地发送时间更新，这里只记录可见事件。
@@ -71,6 +81,8 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 			v.Phase = phaseLobby
 			v.RoomID = ""
 			v.SeatIndex = -1
+			clearRoundFacts(v)
+			v.LastSettlement = nil
 		}
 	case *clientv1.Envelope_RouteRedirect:
 		appendLog(v, "收到路由重定向: "+body.RouteRedirect.GetWsUrl())
@@ -86,7 +98,8 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 				v.QueBySeat[seat] = suit
 			}
 		}
-		v.Stage = stageDiscard
+		v.WaitingAction = "discard"
+		v.AvailableActions = []string{"discard"}
 		appendLog(v, "定缺完成")
 	case *clientv1.Envelope_Snapshot:
 		applySnapshot(v, body.Snapshot)
@@ -96,6 +109,17 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		appendResponseLog(v, "杠", body.GangResp.GetErrorCode(), body.GangResp.GetErrorMessage())
 	case *clientv1.Envelope_HuResp:
 		appendResponseLog(v, "胡", body.HuResp.GetErrorCode(), body.HuResp.GetErrorMessage())
+	case *clientv1.Envelope_PassResp:
+		appendResponseLog(v, "过", body.PassResp.GetErrorCode(), body.PassResp.GetErrorMessage())
+		if body.PassResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+			if v.WaitingAction == "tsumo_window" {
+				v.WaitingAction = "discard"
+				v.AvailableActions = []string{"discard"}
+			} else {
+				v.AvailableActions = nil
+			}
+			v.ClaimCandidates = map[int32][]string{}
+		}
 	}
 }
 
@@ -129,7 +153,7 @@ func applyAutoMatch(v *RoomView, resp *clientv1.AutoMatchResponse) {
 		appendLog(v, "自动匹配失败: "+resp.GetErrorMessage())
 		return
 	}
-	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex())
+	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex(), resp.GetRuleId(), resp.GetDisplayName())
 	appendLog(v, fmt.Sprintf("自动匹配成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
 }
 
@@ -139,14 +163,18 @@ func applyCreateRoom(v *RoomView, resp *clientv1.CreateRoomResponse) {
 		appendLog(v, "创建房间失败: "+resp.GetErrorMessage())
 		return
 	}
-	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex())
+	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex(), resp.GetRuleId(), resp.GetDisplayName())
 	appendLog(v, fmt.Sprintf("创建房间成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
 }
 
-func applyLobbySeat(v *RoomView, roomID string, seat int32) {
+func applyLobbySeat(v *RoomView, roomID string, seat int32, ruleID, displayName string) {
 	v.RoomID = roomID
+	v.RuleID = ruleID
+	v.DisplayName = displayName
 	v.SeatIndex = seat
 	v.Phase = phaseTable
+	clearRoundFacts(v)
+	v.LastSettlement = nil
 	if seat >= 0 && seat < 4 {
 		v.Players[seat].Nickname = v.Nickname
 		v.Players[seat].UserID = v.UserID
@@ -161,6 +189,8 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	t := draw.GetTile()
 	v.ActingSeat = seat
 	v.PendingTile = t
+	v.WaitingAction = "discard"
+	v.AvailableActions = []string{"discard"}
 	if seat == v.SeatIndex {
 		p := &v.Players[seat]
 		p.Hand = sortedTiles(append(p.Hand, t))
@@ -176,9 +206,11 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 	}
 	switch action.GetAction() {
 	case "exchange_three":
-		v.Stage = stageExchange
+		v.WaitingAction = "exchange_three"
+		v.AvailableActions = []string{"exchange_three"}
 	case "que_men":
-		v.Stage = stageQueMen
+		v.WaitingAction = "que_men"
+		v.AvailableActions = []string{"que_men"}
 	case "discard":
 		applyDiscardAction(v, seat, action.GetTile())
 	case "pong":
@@ -190,8 +222,22 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 			v.Players[seat].Hued = true
 		}
 	case "hu_choice", "qiang_gang_choice", "pong_choice", "gang_choice":
-		v.Stage = stageClaim
+		v.WaitingAction = "claim_window"
 		v.PendingTile = action.GetTile()
+		if seat == v.SeatIndex {
+			v.AvailableActions = actionsForChoice(action.GetAction())
+			v.ClaimCandidates = map[int32][]string{seat: append([]string(nil), v.AvailableActions...)}
+		} else {
+			v.AvailableActions = nil
+		}
+	case "tsumo_choice":
+		v.WaitingAction = "tsumo_window"
+		v.PendingTile = action.GetTile()
+		if seat == v.SeatIndex {
+			v.AvailableActions = []string{"hu", "pass"}
+		} else {
+			v.AvailableActions = nil
+		}
 	}
 	appendLog(v, fmt.Sprintf("%d %s %s", seat, action.GetAction(), action.GetTile()))
 }
@@ -206,7 +252,10 @@ func applyDiscardAction(v *RoomView, seat int32, tile string) {
 		p.Hand = removeOneTile(p.Hand, tile)
 		p.HandCnt = len(p.Hand)
 	}
-	v.Stage = stageDiscard
+	v.WaitingAction = "none"
+	v.PendingTile = ""
+	v.AvailableActions = nil
+	v.ClaimCandidates = map[int32][]string{}
 }
 
 func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
@@ -218,16 +267,21 @@ func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
 			break
 		}
 	}
-	v.Stage = stageQueMen
+	v.WaitingAction = "que_men"
+	v.AvailableActions = []string{"que_men"}
 	appendLog(v, "换三张完成")
 }
 
 func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 	v.RoomID = snap.GetRoomId()
-	v.Stage = snap.GetState()
+	if v.RoomID != "" {
+		v.Phase = phaseTable
+	}
+	v.RoomState = snap.GetState()
+	v.WaitingAction = snap.GetWaitingAction()
 	v.ActingSeat = snap.GetActingSeat()
 	v.PendingTile = snap.GetPendingTile()
-	v.AvailableAction = append([]string(nil), snap.GetAvailableActions()...)
+	v.AvailableActions = append([]string(nil), snap.GetAvailableActions()...)
 	v.ClaimCandidates = make(map[int32][]string, len(snap.GetClaimCandidates()))
 	for _, candidate := range snap.GetClaimCandidates() {
 		v.ClaimCandidates[candidate.GetSeatIndex()] = append([]string(nil), candidate.GetActions()...)
@@ -250,6 +304,28 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 	applySeatTiles(v, snap.GetDiscardsBySeat(), func(p *PlayerView, tiles []string) { p.Discards = tiles })
 	applySeatTiles(v, snap.GetMeldsBySeat(), func(p *PlayerView, tiles []string) { p.Melds = tiles })
 	appendLog(v, "快照已恢复")
+}
+
+func clearRoundFacts(v *RoomView) {
+	v.RoomState = ""
+	v.WaitingAction = ""
+	v.ActingSeat = -1
+	v.PendingTile = ""
+	v.AvailableActions = nil
+	v.ClaimCandidates = map[int32][]string{}
+}
+
+func actionsForChoice(action string) []string {
+	switch action {
+	case "hu_choice", "qiang_gang_choice":
+		return []string{"hu", "pass"}
+	case "gang_choice":
+		return []string{"gang", "pass"}
+	case "pong_choice":
+		return []string{"pong", "pass"}
+	default:
+		return []string{"pass"}
+	}
 }
 
 func applySeatTiles(v *RoomView, items []*clientv1.SeatTiles, fn func(*PlayerView, []string)) {

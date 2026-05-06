@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/pkg/logx"
 )
 
@@ -25,16 +30,13 @@ func main() {
 
 func run() int {
 	var (
-		wsURL              = flag.String("ws", "wss://racoo.cn/ws", "gate WebSocket 地址")
-		name               = flag.String("name", "终端玩家", "登录昵称")
-		roomID             = flag.String("room", "", "启动后自动加入的房间")
-		autoReady          = flag.Bool("auto-ready", false, "进房后自动发送 ready")
-		tokenFile          = flag.String("token-file", filepath.Join(os.Getenv("HOME"), ".lsp", "session.token"), "会话令牌文件")
+		configPath         = flag.String("config", DefaultConfigPath(), "本地配置文件路径 (TOML)")
+		nameFlag           = flag.String("name", "", "覆盖配置中的昵称")
+		wsURLFlag          = flag.String("ws", "", "覆盖配置中的服务器 WebSocket 地址")
 		origin             = flag.String("origin", "", "WebSocket Origin 头")
 		insecureSkipVerify = flag.Bool("insecure-skip-verify", false, "wss 调试时跳过证书校验")
-		cjkTiles           = flag.Bool("cjk-tiles", false, "使用中文花色牌面（需要等宽 CJK 字体）")
-		noColor            = flag.Bool("no-color", false, "关闭牌张颜色")
-		smokeDuration      = flag.Duration("smoke-duration", 0, "非交互冒烟时长，例如 5s；为 0 时启动 TUI")
+		smokeDuration      = flag.Duration("smoke-duration", 0, "非交互冒烟时长，例如 5s；为 0 时启动正常 UI")
+		smokeRoom          = flag.String("room", "", "冒烟模式下自动加入的房间")
 		showVersion        = flag.Bool("version", false, "打印版本信息后退出")
 	)
 	flag.Parse()
@@ -43,55 +45,257 @@ func run() int {
 		return 0
 	}
 
+	cfg, err := LoadConfig(*configPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "读取配置失败:", err)
+	}
+	applyFlagsToConfig(&cfg, *nameFlag, *wsURLFlag)
+
+	if cfg.Nickname == "" && *smokeDuration == 0 {
+		nickname, err := promptNickname(os.Stdin, os.Stdout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "读取昵称失败:", err)
+			return 1
+		}
+		if nickname == "" {
+			fmt.Fprintln(os.Stderr, "昵称不能为空,退出")
+			return 1
+		}
+		cfg.Nickname = nickname
+	}
+	if cfg.Nickname == "" {
+		cfg.Nickname = "终端玩家"
+	}
+
+	tokenPath := filepath.Join(filepath.Dir(*configPath), "session.token")
+	syncTokenFile(tokenPath, cfg.SessionToken)
+
+	state := NewAppState(cfg.Nickname)
+	state.Mutate(func(v *RoomView) { v.ServerURL = cfg.ServerURL })
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx = logx.WithTraceID(ctx, "cli")
-	ctx = logx.WithUserID(ctx, *name)
-	ctx = logx.WithRoomID(ctx, *roomID)
+	ctx = logx.WithUserID(ctx, cfg.Nickname)
+	ctx = logx.WithRoomID(ctx, "")
 
-	state := NewAppState(*name)
-	state.Mutate(func(v *RoomView) { v.ServerURL = *wsURL })
-	client := NewWSClient(*wsURL, *name, *tokenFile, *origin, *insecureSkipVerify, state)
-	handler := NewCommandHandler(client, state)
+	client := NewWSClient(cfg.ServerURL, cfg.Nickname, tokenPath, *origin, *insecureSkipVerify, state)
+
 	if *smokeDuration > 0 {
-		if err := runSmoke(ctx, client, handler, state, *roomID, *autoReady, *smokeDuration); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "冒烟失败:", err)
+		handler := NewCommandHandler(client, state)
+		if err := runSmoke(ctx, client, handler, state, *smokeRoom, *smokeDuration); err != nil {
+			fmt.Fprintln(os.Stderr, "冒烟失败:", err)
 			return 1
 		}
 		return 0
 	}
-	ui := NewUI(state, client, handler, RenderOptions{Width: 120, Height: 36, CJKTiles: *cjkTiles, NoColor: *noColor})
 
-	if *roomID != "" {
-		go client.Run(ctx)
-	}
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case env := <-client.Events():
-				state.Apply(env)
-				if env.GetLoginResp() != nil && *roomID != "" {
-					_ = handler.Handle(ctx, "join "+*roomID)
-				} else if env.GetLoginResp() != nil {
-					_ = handler.Handle(ctx, "list")
-				}
-				if (env.GetJoinRoomResp() != nil || env.GetAutoMatchResp() != nil || env.GetCreateRoomResp() != nil) && *autoReady {
-					_ = handler.Handle(ctx, "ready")
-				}
-			}
-		}
-	}()
-
-	if err := ui.Run(ctx); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "启动终端界面失败:", err)
+	if err := SilentLogin(ctx, client, &cfg, *configPath); err != nil {
+		fmt.Fprintln(os.Stderr, "登录失败:", err)
 		return 1
 	}
+	syncTokenFile(tokenPath, cfg.SessionToken)
+
+	bus := NewEventBus(state)
+	go client.Run(ctx)
+	go bus.Run(ctx, client.Events())
+	go runEmergencyAlerts(ctx, bus, os.Stderr)
+	if err := waitForSession(ctx, state, 10*time.Second); err != nil {
+		fmt.Fprintln(os.Stderr, "正式连接失败:", err)
+		return 1
+	}
+
+	prompter := NewIOPrompter(os.Stdin, os.Stdout)
+	switcher := NewTerminalSwitch()
+	lobbyGW := NewWSLobbyGateway(client, bus)
+	tableGW := NewWSTableGateway(client, bus)
+
+	for ctx.Err() == nil {
+		if view := state.Snapshot(); view.Phase == phaseTable && view.RoomID != "" {
+			exit := RunTableScreen(ctx, switcher, state, tableGW, &cfg)
+			if exit.Err != nil && !errors.Is(exit.Err, context.Canceled) {
+				fmt.Fprintln(os.Stderr, "牌桌退出:", exit.Err)
+			}
+			if sum := snapshotSettlementSummary(state.Snapshot()); sum != nil {
+				WriteStdoutSummary(os.Stdout, *sum)
+			}
+			if exit.Reason == TableExitContextDone {
+				break
+			}
+			continue
+		}
+		outcome, err := RunLobby(ctx, prompter, lobbyGW, &cfg)
+		_ = SaveConfig(*configPath, cfg)
+		if err != nil {
+			if !errors.Is(err, context.Canceled) {
+				fmt.Fprintln(os.Stderr, "lobby 错误:", err)
+			}
+			break
+		}
+		if outcome.Reason == LobbyExitQuit {
+			break
+		}
+		exit := RunTableScreen(ctx, switcher, state, tableGW, &cfg)
+		if exit.Err != nil && !errors.Is(exit.Err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "牌桌退出:", exit.Err)
+		}
+		if sum := snapshotSettlementSummary(state.Snapshot()); sum != nil {
+			WriteStdoutSummary(os.Stdout, *sum)
+		}
+		if exit.Reason == TableExitContextDone {
+			break
+		}
+	}
+	_ = SaveConfig(*configPath, cfg)
 	return 0
 }
 
-func runSmoke(ctx context.Context, client *WSClient, handler *CommandHandler, state *AppState, roomID string, autoReady bool, duration time.Duration) error {
+func waitForSession(ctx context.Context, state *AppState, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return errors.New("等待 LoginResp 超时")
+		case <-ticker.C:
+			view := state.Snapshot()
+			if view.Connected && view.UserID != "" {
+				return nil
+			}
+		}
+	}
+}
+
+// applyFlagsToConfig 把命令行覆盖项落到配置上；空字符串保持原值。
+func applyFlagsToConfig(cfg *Config, name, ws string) {
+	if name != "" {
+		cfg.Nickname = name
+	}
+	if ws != "" {
+		cfg.ServerURL = ws
+	}
+}
+
+// promptNickname 在 stdin 上问昵称，回车结束。
+func promptNickname(in io.Reader, out io.Writer) (string, error) {
+	_, _ = fmt.Fprint(out, "请输入昵称 > ")
+	r := bufio.NewReader(in)
+	line, err := r.ReadString('\n')
+	if err != nil && line == "" {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
+}
+
+// syncTokenFile 把 cfg 中的 SessionToken 写到独立文件，
+// 让 WSClient.login 沿用现有 tokenFile 读路径，无须改 conn.go。
+func syncTokenFile(path, token string) {
+	if path == "" {
+		return
+	}
+	if token == "" {
+		_ = os.Remove(path)
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
+	_ = os.WriteFile(path, []byte(token), 0o600)
+}
+
+// runEmergencyAlerts 后台 goroutine：把高优先级通知（被踢出/路由重定向/断线降级）
+// 直接打到 stderr，让 lobby 阶段阻塞中的 stdin 也能立刻看到红字提示。
+func runEmergencyAlerts(ctx context.Context, bus *EventBus, w io.Writer) {
+	if bus == nil {
+		return
+	}
+	id, ch := bus.Subscribe(func(env *clientv1.Envelope) bool {
+		return env.GetRouteRedirect() != nil
+	}, 8)
+	defer bus.Unsubscribe(id)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case env, ok := <-ch:
+			if !ok {
+				return
+			}
+			if route := env.GetRouteRedirect(); route != nil {
+				_, _ = fmt.Fprintf(w, "\n[!] 服务端要求重连到 %s (%s)\n", route.GetWsUrl(), route.GetReason())
+			}
+		}
+	}
+}
+
+// snapshotSettlementSummary 把 state 中最新结算转成可读 SettlementSummary；
+// 没有结算时返回 nil（lobby 不打印摘要）。血战规则下可能多个胜者，
+// 这里把"自己是否在 winner 列表"作为 Win 判定依据。
+func snapshotSettlementSummary(view RoomView) *SettlementSummary {
+	if view.LastSettlement == nil {
+		return nil
+	}
+	notify := view.LastSettlement
+	sum := &SettlementSummary{
+		RoomID:   view.RoomID,
+		RuleID:   view.RuleID,
+		TotalFan: int(notify.GetTotalFan()),
+	}
+	winners := notify.GetWinnerUserIds()
+	switch {
+	case len(winners) == 0:
+		sum.Outcome = SettlementOutcomeDraw
+	case containsString(winners, view.UserID):
+		sum.Outcome = SettlementOutcomeWin
+	default:
+		sum.Outcome = SettlementOutcomeLose
+	}
+	for _, score := range notify.GetSeatScores() {
+		entry := SettlementScore{
+			Nickname: nicknameForSeat(view, score.GetSeatIndex()),
+			Delta:    int(score.GetTotalFan()),
+			IsSelf:   score.GetSeatIndex() == view.SeatIndex,
+		}
+		sum.Scores = append(sum.Scores, entry)
+	}
+	for _, breakdown := range notify.GetPerWinnerBreakdown() {
+		if sum.WinnerID == "" {
+			sum.WinnerID = breakdown.GetUserId()
+			sum.WinnerNick = nicknameForSeat(view, breakdown.GetSeatIndex())
+		}
+		for _, name := range breakdown.GetFanNames() {
+			sum.Fans = append(sum.Fans, SettlementFan{Name: name, Multiplier: 1})
+		}
+		if int(breakdown.GetFan()) > sum.TotalFan {
+			sum.TotalFan = int(breakdown.GetFan())
+		}
+	}
+	return sum
+}
+
+func containsString(list []string, target string) bool {
+	for _, s := range list {
+		if s == target {
+			return true
+		}
+	}
+	return false
+}
+
+func nicknameForSeat(view RoomView, seat int32) string {
+	if seat < 0 || int(seat) >= len(view.Players) {
+		return fmt.Sprintf("%d 号位", seat+1)
+	}
+	if name := view.Players[seat].Nickname; name != "" {
+		return name
+	}
+	return fmt.Sprintf("%d 号位", seat+1)
+}
+
+// runSmoke 保留旧的非交互冒烟入口，CI 用它做最低限度的连接 + 登录验证。
+func runSmoke(ctx context.Context, client *WSClient, handler *CommandHandler, state *AppState, roomID string, duration time.Duration) error {
 	smokeCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	go client.Run(smokeCtx)
@@ -102,18 +306,12 @@ func runSmoke(ctx context.Context, client *WSClient, handler *CommandHandler, st
 			if view.UserID == "" {
 				return fmt.Errorf("未完成登录")
 			}
-			if roomID != "" && view.RoomID == "" {
-				return fmt.Errorf("未完成进房")
-			}
 			fmt.Printf("smoke ok: user=%s room=%s seat=%d\n", view.UserID, view.RoomID, view.SeatIndex)
 			return nil
 		case env := <-client.Events():
 			state.Apply(env)
 			if env.GetLoginResp() != nil && roomID != "" {
 				_ = handler.Handle(smokeCtx, "join "+roomID)
-			}
-			if env.GetJoinRoomResp() != nil && autoReady {
-				_ = handler.Handle(smokeCtx, "ready")
 			}
 		}
 	}

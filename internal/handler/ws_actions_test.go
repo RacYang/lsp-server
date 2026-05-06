@@ -62,6 +62,9 @@ func (g *actionStubGateway) Gang(_ context.Context, _, _, _ string) (func(), err
 func (g *actionStubGateway) Hu(_ context.Context, _, _ string) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
+func (g *actionStubGateway) Pass(_ context.Context, _, _ string) (func(), error) {
+	return g.makeAfter(), g.actionErr
+}
 func (g *actionStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
 }
@@ -148,6 +151,17 @@ func actionCases() []actionCase {
 			},
 			getError: func(e *clientv1.Envelope) (clientv1.ErrorCode, string) {
 				return e.GetHuResp().GetErrorCode(), e.GetHuResp().GetErrorMessage()
+			},
+		},
+		{
+			name:    "pass",
+			reqMsg:  msgid.PassReq,
+			respMsg: msgid.PassResp,
+			build: func(reqID string) proto.Message {
+				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PassReq{PassReq: &clientv1.PassRequest{}}}
+			},
+			getError: func(e *clientv1.Envelope) (clientv1.ErrorCode, string) {
+				return e.GetPassResp().GetErrorCode(), e.GetPassResp().GetErrorMessage()
 			},
 		},
 		{

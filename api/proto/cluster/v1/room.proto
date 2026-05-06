@@ -22,6 +22,7 @@ message ApplyEventRequest {
     HuEvent hu = 6;
     ExchangeThreeEvent exchange_three = 7;
     QueMenEvent que_men = 8;
+    PassEvent pass = 11;
   }
   string idempotency_key = 9;
   string user_id = 10;
@@ -91,6 +92,8 @@ message GangEvent {
 }
 
 message HuEvent {}
+
+message PassEvent {}
 
 message ExchangeThreeEvent {
   repeated string tiles = 1;

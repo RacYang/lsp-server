@@ -26,7 +26,8 @@ func TestApplyInitialDealDrawDiscardAndSnapshot(t *testing.T) {
 		RoomId:           "r1",
 		PlayerIds:        []string{"u0", "u1", "u2", "u3"},
 		QueSuitBySeat:    []int32{0, 1, 2, -1},
-		State:            "discard",
+		State:            "playing",
+		WaitingAction:    "discard",
 		ActingSeat:       2,
 		AvailableActions: []string{"discard"},
 		YourHandTiles:    []string{"m2", "m1"},
@@ -47,7 +48,7 @@ func TestApplyResponsesAndSettlement(t *testing.T) {
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_PongResp{PongResp: &clientv1.PongResponse{ErrorCode: clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, ErrorMessage: "不能碰"}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Settlement{Settlement: &clientv1.SettlementNotify{RoomId: "r", DetailText: "结算"}}})
 	view := st.Snapshot()
-	require.Equal(t, stageSettlement, view.Stage)
+	require.Equal(t, PhaseSettlement, DeriveInteractionModel(view).Phase)
 	require.Equal(t, "不能碰", view.LastError)
 	require.NotNil(t, view.LastSettlement)
 }

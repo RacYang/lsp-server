@@ -51,6 +51,8 @@ func dispatchFrame(
 		handleGang(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.HuReq:
 		handleHu(ctx, deps, conn, state, h.MsgID, h.Payload)
+	case msgid.PassReq:
+		handlePass(ctx, deps, conn, state, h.MsgID, h.Payload)
 	default:
 		unknownMsgTotal.Inc()
 		logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)

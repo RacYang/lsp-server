@@ -314,6 +314,14 @@ func (g *remoteRoomGateway) Hu(ctx context.Context, roomID, userID string) (func
 	})
 }
 
+func (g *remoteRoomGateway) Pass(ctx context.Context, roomID, userID string) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_Pass{Pass: &clusterv1.PassEvent{}},
+	})
+}
+
 func (g *remoteRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId: roomID,

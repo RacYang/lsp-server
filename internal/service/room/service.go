@@ -39,8 +39,8 @@ func DefaultTimeoutConfig() TimeoutConfig {
 	return TimeoutConfig{
 		ExchangeThree: 15 * time.Second,
 		QueMen:        15 * time.Second,
-		ClaimWindow:   3 * time.Second,
-		TsumoWindow:   3 * time.Second,
+		ClaimWindow:   5 * time.Second,
+		TsumoWindow:   5 * time.Second,
 		Discard:       15 * time.Second,
 	}
 }
@@ -262,6 +262,15 @@ func (s *Service) Hu(ctx context.Context, roomID, userID string) ([]Notification
 		return nil, fmt.Errorf("room not found")
 	}
 	return a.submitHu(ctx, userID)
+}
+
+// Pass 放弃当前抢答或自摸选择，并由服务端推进下一等待态。
+func (s *Service) Pass(ctx context.Context, roomID, userID string) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitPass(ctx, userID)
 }
 
 // AutoTimeout 执行当前等待态的服务端托管动作，供上层定时器到期后调用。

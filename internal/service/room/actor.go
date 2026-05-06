@@ -80,6 +80,11 @@ type cmdHu struct {
 	res    chan actionResult
 }
 
+type cmdPass struct {
+	userID string
+	res    chan actionResult
+}
+
 type cmdAutoTimeout struct {
 	res chan actionResult
 }
@@ -176,6 +181,10 @@ func (a *roomActor) run() {
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdHu:
 			notifications, err := a.doHu(m.userID)
+			a.resetScheduler()
+			m.res <- actionResult{notifications: notifications, err: err}
+		case cmdPass:
+			notifications, err := a.doPass(m.userID)
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdAutoTimeout:
@@ -329,6 +338,10 @@ func (a *roomActor) submitHu(ctx context.Context, userID string) ([]Notification
 	return a.submitAction(ctx, cmdHu{userID: userID, res: make(chan actionResult, 1)})
 }
 
+func (a *roomActor) submitPass(ctx context.Context, userID string) ([]Notification, error) {
+	return a.submitAction(ctx, cmdPass{userID: userID, res: make(chan actionResult, 1)})
+}
+
 func (a *roomActor) submitAutoTimeout(ctx context.Context) ([]Notification, error) {
 	return a.submitAction(ctx, cmdAutoTimeout{res: make(chan actionResult, 1)})
 }
@@ -436,6 +449,9 @@ func (a *roomActor) submitAction(ctx context.Context, cmd any) ([]Notification, 
 		rr := <-c.res
 		return rr.notifications, rr.err
 	case cmdHu:
+		rr := <-c.res
+		return rr.notifications, rr.err
+	case cmdPass:
 		rr := <-c.res
 		return rr.notifications, rr.err
 	case cmdAutoTimeout:

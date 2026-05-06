@@ -10,6 +10,9 @@ import (
 )
 
 // CommandHandler 把命令栏文本与快捷键映射为对服务器的请求帧。
+//
+// 该入口仅作为 smoke/调试路径保留为只读维护态；玩家全流程的新动作统一接入
+// TableGateway 与全屏 TUI，避免命令栏和 TUI 双轨继续漂移。
 type CommandHandler struct {
 	client *WSClient
 	state  *AppState

@@ -1,5 +1,0 @@
-stage=claim
-可选: pong/hu
-西家
-东家
-事件:

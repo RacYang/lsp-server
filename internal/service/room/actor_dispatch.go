@@ -130,6 +130,22 @@ func (a *roomActor) doHu(userID string) ([]Notification, error) {
 	return notifications, nil
 }
 
+func (a *roomActor) doPass(userID string) ([]Notification, error) {
+	seat, err := a.seatOf(userID)
+	if err != nil {
+		return nil, err
+	}
+	notifications, err := a.engine.ApplyPass(context.Background(), a.round, seat)
+	if err != nil {
+		return nil, err
+	}
+	if a.round.closed {
+		a.closeRoomAfterRound()
+		a.round = nil
+	}
+	return notifications, nil
+}
+
 func (a *roomActor) doAutoTimeout() ([]Notification, error) {
 	notifications, err := a.engine.ApplyTimeout(context.Background(), a.round)
 	if err != nil {

@@ -151,6 +151,17 @@ func (g *LocalRoomGateway) Hu(ctx context.Context, roomID, userID string) (func(
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
+func (g *LocalRoomGateway) Pass(ctx context.Context, roomID, userID string) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.Pass(ctx, roomID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
 func (g *LocalRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")

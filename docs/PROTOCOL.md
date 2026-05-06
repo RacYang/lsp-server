@@ -61,6 +61,8 @@
 | 35 | 自动匹配响应 | `auto_match_resp` | S→C |
 | 36 | 创建房间请求 | `create_room_req` | C→S |
 | 37 | 创建房间响应 | `create_room_resp` | S→C |
+| 38 | 过请求 | `pass_req` | C→S |
+| 39 | 过响应 | `pass_resp` | S→C |
 
 ## Phase 3 登录与重连（节选）
 
@@ -83,9 +85,10 @@
 
 - `discard_req` 已打通到 `ws -> gate -> room.ApplyEvent -> room actor -> StreamEvents`，服务端进入真正的“等待摸牌/等待出牌”循环，而不是 `ready` 后自动整局回放。
 - `Envelope.idempotency_key` 可由客户端为会改变房间状态的请求生成。WS 入口会对已知状态变更请求做进程内去重，未知 `msg_id` 不进入幂等缓存。
-- `pong_req` / `gang_req` / `hu_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口。服务端会向可抢座位分别下发 `hu_choice` / `qiang_gang_choice` / `pong_choice` / `gang_choice`，并按“胡优先于杠、杠优先于碰、同优先级按出牌座位下家顺序”的规则裁决。
-- 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端随后可发送 `hu_req`，也可直接对该摸到的牌发送 `discard_req` 继续轮转。
-- `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions` 与 `claim_candidates`，用于重连后恢复当前等待态。
+- `pong_req` / `gang_req` / `hu_req` / `pass_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口，`pass_req` 表示当前被询问玩家主动放弃本次抢答或自摸选择。
+- 服务端只允许当前最高优先级候选响应抢答窗口。候选主动 `pass_req` 后，服务端移除该候选并接力下一 top candidate；若无人可抢，则关闭窗口并继续摸牌。每个接力候选拿到完整 `ClaimWindow`。
+- 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端可发送 `hu_req` 胡牌，也可发送 `pass_req` 表示不胡。主动过会把摸到的牌加入手牌并进入 `discard` 等待态，让玩家自行选牌打出；服务端超时托管才会默认打出 `pendingDraw`。
+- `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions` 与 `claim_candidates`，用于重连后恢复当前等待态。`SnapshotNotify.state` 只表示房间 FSM（waiting/ready/playing/settling/closed），局内 UI 必须以 `waiting_action` 为准。
 - `InitialDealNotify` 由 `room` 在完成开局发牌后按座位定向下发，每个连接只会收到自己座位的 13 张初始手牌；集群模式通过 `cluster.v1.RoomServiceStreamEventsResponse.target_seat` 传递定向语义，`-1` 表示广播。
 - 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。
 - WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。
@@ -93,13 +96,15 @@
 ## Phase 7 大厅列表与匹配
 
 - `ListRoomsRequest` 返回 `RoomMeta` 列表，仅包含公开、未满且可加入的等待房间；私密房不出现在列表中。
-- `AutoMatchRequest.rule_id` 为空时使用默认规则。服务端会选择最早创建的可加入公开房；没有候选时创建一个公开房并直接返回 `room_id` 与 `seat_index`。
+- `JoinRoomResponse`、`AutoMatchResponse`、`CreateRoomResponse` 会返回 `rule_id` 与 `display_name`，客户端入桌后不再猜规则与房间名。
+- `AutoMatchRequest.rule_id` 为空时使用默认规则。服务端会选择最早创建的可加入公开房；没有候选时创建一个公开房并直接返回 `room_id`、`seat_index` 与房间元数据。
 - `CreateRoomRequest` 会创建房间并让创建者直接占座。`private=true` 时房间只能凭 `room_id` 手动加入。
 - `RoomMeta.stage` 当前仅表达 lobby 视角的 `waiting`，不承载局内细分状态；重连与局内视图仍以 `SnapshotNotify` 为准。
 
 ## Phase 5 协议与观测补充
 
 - `Envelope.idempotency_key` 会随所有请求载荷传递，WS 入口只对会改变房间状态的已知请求做进程内快速去重；跨进程幂等仍以 `RoomService.ApplyEvent.idempotency_key` 与 Redis 为准。
+- `ActionNotify.action` 当前冻结为 `discard`、`pong`、`gang`、`hu`、`exchange_three`、`que_men`、`hu_choice`、`qiang_gang_choice`、`pong_choice`、`gang_choice`、`tsumo_choice`。新增跨端动作须同步协议文档与 ADR。
 - `SnapshotNotify.claim_candidates` 与 `ActionNotify.action` 的 `hu_choice` / `qiang_gang_choice` / `pong_choice` / `gang_choice` 共同描述抢答窗口，重连客户端应优先以快照中的等待态恢复 UI。
 - `SettlementNotify.per_winner_breakdown` 透传每个赢家的结构化分摊结果；包牌、退税、查花猪与查大叫等罚分仍通过结算字段表达，不依赖客户端重新推导。
 - 未知 `msg_id` 不进入幂等缓存，也不会分配新的 `ErrorCode`；服务端以 `lsp_unknown_msg_total` 计数供观测。

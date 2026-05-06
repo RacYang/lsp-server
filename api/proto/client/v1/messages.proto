@@ -67,6 +67,9 @@ message Envelope {
     AutoMatchResponse auto_match_resp = 37;
     CreateRoomRequest create_room_req = 38;
     CreateRoomResponse create_room_resp = 39;
+    // Phase 8 玩家客户端闭环：显式放弃当前抢答/自摸选择。
+    PassRequest pass_req = 40;
+    PassResponse pass_resp = 41;
   }
 }
 
@@ -96,6 +99,8 @@ message JoinRoomResponse {
   int32 seat_index = 1;
   ErrorCode error_code = 2;
   string error_message = 3;
+  string rule_id = 4;
+  string display_name = 5;
 }
 
 // RoomMeta 是大厅页展示的公开房间摘要；私密房不会出现在列表中。
@@ -132,6 +137,8 @@ message AutoMatchResponse {
   int32 seat_index = 2;
   ErrorCode error_code = 3;
   string error_message = 4;
+  string rule_id = 5;
+  string display_name = 6;
 }
 
 // CreateRoomRequest 创建一个房间并直接让创建者占座；private=true 时不出现在大厅列表。
@@ -146,6 +153,8 @@ message CreateRoomResponse {
   int32 seat_index = 2;
   ErrorCode error_code = 3;
   string error_message = 4;
+  string rule_id = 5;
+  string display_name = 6;
 }
 
 message ReadyRequest {}
@@ -187,6 +196,13 @@ message HuResponse {
   string error_message = 2;
 }
 
+message PassRequest {}
+
+message PassResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+}
+
 // StartGameNotify 表示房间开局（服务端推送）。
 message StartGameNotify {
   string room_id = 1;
@@ -206,6 +222,10 @@ message DrawTileNotify {
 }
 
 // ActionNotify 表示他人可见动作（吃碰杠胡等，Phase 1 简化为文本描述）。
+// 合法 action 字符串集合当前冻结为：
+// discard, pong, gang, hu, exchange_three, que_men,
+// pong_choice, gang_choice, hu_choice, qiang_gang_choice, tsumo_choice。
+// 新增跨端动作须先更新协议文档与 ADR。
 message ActionNotify {
   int32 seat_index = 1;
   string action = 2;
@@ -316,6 +336,8 @@ message QueMenDoneNotify {
 }
 
 // SnapshotNotify 为重连恢复下发的房间视图摘要；cursor 为快照游标，格式见 ADR-0013。
+// state 表示房间 FSM（waiting/ready/playing/settling/closed）；
+// waiting_action 表示局内 UI 阶段（exchange_three/que_men/discard/claim_window/tsumo_window/none）。
 message SnapshotNotify {
   string room_id = 1;
   repeated string player_ids = 2;

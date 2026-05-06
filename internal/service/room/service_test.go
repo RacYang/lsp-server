@@ -249,7 +249,7 @@ func TestRoundViewShowsClaimWindow(t *testing.T) {
 
 	view := rs.SnapshotView()
 	require.EqualValues(t, 2, view.ActingSeat)
-	require.Equal(t, "claim", view.WaitingAction)
+	require.Equal(t, "claim_window", view.WaitingAction)
 	require.Equal(t, "m3", view.PendingTile)
 	require.Equal(t, []string{"pong"}, view.AvailableActions)
 }
@@ -416,7 +416,7 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 	e := NewEngine("sichuan_xzdd")
 	notifs, err := e.ApplyDiscard(context.Background(), rs, 0, "m3")
 	require.NoError(t, err)
-	require.Len(t, notifs, 4)
+	require.Len(t, notifs, 2)
 	require.True(t, rs.claimWindowOpen)
 	require.Len(t, rs.claimCandidates, 3)
 
@@ -428,7 +428,7 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 			claimBySeat[action.GetSeatIndex()] = action.GetAction()
 		}
 	}
-	require.Equal(t, map[int32]string{1: "pong_choice", 2: "gang_choice", 3: "pong_choice"}, claimBySeat)
+	require.Equal(t, map[int32]string{2: "gang_choice"}, claimBySeat)
 	_, err = e.ApplyPong(context.Background(), rs, 1)
 	require.Error(t, err)
 
@@ -437,6 +437,64 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 	require.False(t, rs.claimWindowOpen)
 	require.Len(t, notifs, 2)
 	require.Equal(t, 2, rs.turn)
+}
+
+func TestApplyPassRelaysClaimCandidate(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-pass-relay",
+		ruleID:          "sichuan_xzdd",
+		rule:            rules.MustGet("sichuan_xzdd"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)})},
+		queBySeat:       make([]int32, 4),
+		waitingDiscard:  true,
+		turn:            0,
+		lastDiscardSeat: -1,
+	}
+	e := NewEngine("sichuan_xzdd")
+	_, err := e.ApplyDiscard(context.Background(), rs, 0, "m3")
+	require.NoError(t, err)
+
+	notifs, err := e.ApplyPass(context.Background(), rs, 2)
+	require.NoError(t, err)
+	require.True(t, rs.claimWindowOpen)
+	require.Len(t, rs.claimCandidates, 2)
+	require.Len(t, notifs, 1)
+
+	var env clientv1.Envelope
+	require.NoError(t, proto.Unmarshal(notifs[0].Payload, &env))
+	require.Equal(t, "pong_choice", env.GetAction().GetAction())
+	require.EqualValues(t, 1, env.GetAction().GetSeatIndex())
+}
+
+func TestApplyPassSelfDrawKeepsPlayerDiscardChoice(t *testing.T) {
+	t.Parallel()
+
+	drawn := tile.Must(tile.SuitDots, 7)
+	rs := &RoundState{
+		roomID:          "r-pass-tsumo",
+		ruleID:          "sichuan_xzdd",
+		rule:            rules.MustGet("sichuan_xzdd"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles(nil),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 1)}), hand.New(), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		turn:            0,
+		waitingTsumo:    true,
+		pendingDraw:     drawn,
+		currentDraw:     drawn,
+		lastDiscardSeat: -1,
+	}
+	e := NewEngine("sichuan_xzdd")
+	notifs, err := e.ApplyPass(context.Background(), rs, 0)
+	require.NoError(t, err)
+	require.Empty(t, notifs)
+	require.False(t, rs.waitingTsumo)
+	require.True(t, rs.waitingDiscard)
+	require.Contains(t, rs.hands[0].Tiles(), drawn)
 }
 
 func TestClaimWindowPersistsAndRestores(t *testing.T) {
@@ -463,7 +521,7 @@ func TestClaimWindowPersistsAndRestores(t *testing.T) {
 
 	view := restored.SnapshotView()
 	require.EqualValues(t, 2, view.ActingSeat)
-	require.Equal(t, "claim", view.WaitingAction)
+	require.Equal(t, "claim_window", view.WaitingAction)
 	require.Equal(t, "m3", view.PendingTile)
 	require.Equal(t, []string{"gang", "pong"}, view.AvailableActions)
 }

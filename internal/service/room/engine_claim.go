@@ -150,6 +150,46 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat int, tileText
 	return append(out, next...), nil
 }
 
+// ApplyPass 处理玩家主动放弃当前抢答或自摸选择。
+func (e *Engine) ApplyPass(_ context.Context, rs *RoundState, seat int) ([]Notification, error) {
+	if e == nil {
+		return nil, fmt.Errorf("nil engine")
+	}
+	if rs == nil {
+		return nil, fmt.Errorf("nil round state")
+	}
+	if seat < 0 || seat > 3 {
+		return nil, fmt.Errorf("invalid seat")
+	}
+	switch {
+	case rs.claimWindowOpen:
+		if !rs.isTopClaimSeat(seat) {
+			return nil, fmt.Errorf("pass not allowed")
+		}
+		metrics.ClaimWindowTotal.WithLabelValues("pass").Inc()
+		rs.removeClaimCandidate(seat)
+		if _, ok := rs.bestClaimCandidate(); ok {
+			metrics.ClaimWindowTotal.WithLabelValues("relay").Inc()
+			return rs.claimPromptNotifications(rs.lastDiscard)
+		}
+		rs.clearClaimWindow()
+		rs.closeOpeningClaimWindow()
+		return e.drawForCurrentTurn(rs)
+	case seat == rs.turn && rs.waitingTsumo:
+		if rs.pendingDraw == 0 {
+			return nil, fmt.Errorf("missing pending draw")
+		}
+		metrics.ClaimWindowTotal.WithLabelValues("pass").Inc()
+		rs.hands[seat].Add(rs.pendingDraw)
+		rs.pendingDraw = 0
+		rs.waitingTsumo = false
+		rs.waitingDiscard = true
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("pass not allowed")
+	}
+}
+
 func (rs *RoundState) canClaimPong(seat int) bool {
 	return rs != nil && !rs.isHued(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "pong")
 }
@@ -268,6 +308,19 @@ func (rs *RoundState) isTopClaimSeat(seat int) bool {
 	return ok && candidate.seat == seat
 }
 
+func (rs *RoundState) removeClaimCandidate(seat int) {
+	if rs == nil || len(rs.claimCandidates) == 0 {
+		return
+	}
+	out := rs.claimCandidates[:0]
+	for _, candidate := range rs.claimCandidates {
+		if candidate.seat != seat {
+			out = append(out, candidate)
+		}
+	}
+	rs.claimCandidates = out
+}
+
 func (rs *RoundState) hasClaimAction(seat int, action string) bool {
 	if rs == nil || !rs.claimWindowOpen {
 		return false
@@ -303,31 +356,31 @@ func hasAction(actions []string, action string) bool {
 }
 
 func (rs *RoundState) claimPromptNotifications(discard tile.Tile) ([]Notification, error) {
-	out := make([]Notification, 0, len(rs.claimCandidates))
-	for _, candidate := range rs.claimCandidates {
-		claimAction := "pong_choice"
-		if hasAction(candidate.actions, "hu") {
-			if rs.qiangGangWindow {
-				claimAction = "qiang_gang_choice"
-			} else {
-				claimAction = "hu_choice"
-			}
-		} else if hasAction(candidate.actions, "gang") {
-			claimAction = "gang_choice"
-		}
-		claimSeatIndex := int32(candidate.seat) //nolint:gosec // 座位范围固定
-		claimPayload, err := marshalEnvelope(&clientv1.Envelope{
-			ReqId: fmt.Sprintf("claim-%d-%d", rs.step, candidate.seat),
-			Body: &clientv1.Envelope_Action{
-				Action: &clientv1.ActionNotify{SeatIndex: claimSeatIndex, Action: claimAction, Tile: discard.String()},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, Notification{Kind: KindAction, Payload: claimPayload, TargetSeat: BroadcastSeat})
+	candidate, ok := rs.bestClaimCandidate()
+	if !ok {
+		return nil, nil
 	}
-	return out, nil
+	claimAction := "pong_choice"
+	if hasAction(candidate.actions, "hu") {
+		if rs.qiangGangWindow {
+			claimAction = "qiang_gang_choice"
+		} else {
+			claimAction = "hu_choice"
+		}
+	} else if hasAction(candidate.actions, "gang") {
+		claimAction = "gang_choice"
+	}
+	claimSeatIndex := int32(candidate.seat) //nolint:gosec // 座位范围固定
+	claimPayload, err := marshalEnvelope(&clientv1.Envelope{
+		ReqId: fmt.Sprintf("claim-%d-%d", rs.step, candidate.seat),
+		Body: &clientv1.Envelope_Action{
+			Action: &clientv1.ActionNotify{SeatIndex: claimSeatIndex, Action: claimAction, Tile: discard.String()},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []Notification{{Kind: KindAction, Payload: claimPayload, TargetSeat: BroadcastSeat}}, nil
 }
 
 func (rs *RoundState) rawCanClaimPong(seat int) bool {

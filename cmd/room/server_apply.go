@@ -67,6 +67,9 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 	case *clusterv1.ApplyEventRequest_Hu:
 		notifications, err := s.rooms.Hu(ctx, roomID, userID)
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_Pass:
+		notifications, err := s.rooms.Pass(ctx, roomID, userID)
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_ExchangeThree:
 		notifications, err := s.rooms.ExchangeThree(ctx, roomID, userID, req.GetExchangeThree().GetTiles(), req.GetExchangeThree().GetDirection())
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)

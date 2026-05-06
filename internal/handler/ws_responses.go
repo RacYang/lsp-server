@@ -49,6 +49,16 @@ func huErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, f
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_HuResp{HuResp: &clientv1.HuResponse{}}}, after
 }
 
+func passErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PassResp{PassResp: &clientv1.PassResponse{
+			ErrorCode:    actionErrorCode(err),
+			ErrorMessage: err.Error(),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PassResp{PassResp: &clientv1.PassResponse{}}}, after
+}
+
 func exchangeThreeErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
 	if err != nil {
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{
