@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
@@ -57,7 +58,10 @@ func evaluateLoginEnvelope(env *clientv1.Envelope, hadToken bool) loginVerdict {
 		}
 	}
 	// 仅当之前提交了 token 才有"清 token 再试"的语义；否则视为致命错误。
-	if resp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED && hadToken {
+	// 房间已被清理时，旧 token 仍可能合法但无法恢复，按陈旧会话处理。
+	if hadToken && (resp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED ||
+		resp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND ||
+		strings.Contains(resp.GetErrorMessage(), "room not found")) {
 		return loginVerdict{decision: loginDecisionClearTokenAndRetry, errorMessage: resp.GetErrorMessage()}
 	}
 	if resp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT {

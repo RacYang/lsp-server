@@ -33,6 +33,26 @@ func TestEvaluateLoginEnvelopeUnauthorizedWithTokenTriggersRetry(t *testing.T) {
 	require.Equal(t, "token expired", v.errorMessage)
 }
 
+func TestEvaluateLoginEnvelopeRoomNotFoundWithTokenTriggersRetry(t *testing.T) {
+	env := &clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND,
+		ErrorMessage: "room not found",
+	}}}
+	v := evaluateLoginEnvelope(env, true)
+	require.Equal(t, loginDecisionClearTokenAndRetry, v.decision)
+	require.Equal(t, "room not found", v.errorMessage)
+}
+
+func TestEvaluateLoginEnvelopeRoomNotFoundMessageWithTokenTriggersRetry(t *testing.T) {
+	env := &clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_RECONNECTING,
+		ErrorMessage: "快照房间失败: room not found",
+	}}}
+	v := evaluateLoginEnvelope(env, true)
+	require.Equal(t, loginDecisionClearTokenAndRetry, v.decision)
+	require.Equal(t, "快照房间失败: room not found", v.errorMessage)
+}
+
 func TestEvaluateLoginEnvelopeUnauthorizedWithoutTokenIsFatal(t *testing.T) {
 	env := &clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
 		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
