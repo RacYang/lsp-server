@@ -1,8 +1,13 @@
 name: ci
 
+# 触发器: 每次 push 与 pull_request 都跑全量 verify。
+# 旧写法 `push: true / pull_request: true` 是非法的 GitHub Actions 语法,
+# YAML 会把 true 解析成布尔值,导致 workflow 自始至终标 "workflow file issue"
+# 而从未真正执行过任何检查。改为 push: / pull_request: (空值即 null,
+# Actions 视为"该事件全量触发,不附加分支或路径过滤"),与 release.yml 风格一致。
 "on":
-  push: true
-  pull_request: true
+  push:
+  pull_request:
 
 jobs:
   verify:
