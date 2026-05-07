@@ -85,6 +85,27 @@ LOOP:
 	require.LessOrEqualf(t, count, 1, "缓冲为 1 的订阅者最多收到 1 条,丢弃保护生效")
 }
 
+func TestEventBusKeepsNewestWhenSubscriberSlow(t *testing.T) {
+	bus := NewEventBus(nil)
+	src := make(chan *clientv1.Envelope, 8)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go bus.Run(ctx, src)
+
+	_, ch := bus.Subscribe(nil, 1)
+	src <- &clientv1.Envelope{ReqId: "old"}
+	src <- &clientv1.Envelope{ReqId: "new"}
+
+	require.Eventually(t, func() bool {
+		select {
+		case env := <-ch:
+			return env.GetReqId() == "new"
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestEventBusAppliesToState(t *testing.T) {
 	state := NewAppState("racoo")
 	bus := NewEventBus(state)

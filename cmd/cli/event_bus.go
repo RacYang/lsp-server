@@ -103,6 +103,14 @@ func (b *EventBus) fanout(env *clientv1.Envelope) {
 		select {
 		case sub.ch <- env:
 		default:
+			select {
+			case <-sub.ch:
+			default:
+			}
+			select {
+			case sub.ch <- env:
+			default:
+			}
 		}
 	}
 }

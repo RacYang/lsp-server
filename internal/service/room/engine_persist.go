@@ -16,16 +16,28 @@ const roundPersistSchemaVersion = 3
 
 // SnapshotView 返回当前局面的最小等待态摘要。
 func (rs *RoundState) SnapshotView() RoundView {
+	if rs == nil {
+		return RoundView{}
+	}
 	actingSeat, waitingAction, pendingTile, available := rs.snapshotWaiting()
 	return RoundView{
-		ActingSeat:       actingSeat,
-		WaitingAction:    waitingAction,
-		PendingTile:      pendingTile,
-		AvailableActions: append([]string(nil), available...),
-		ClaimCandidates:  rs.roundClaimCandidates(),
-		HandsBySeat:      rs.handStringsBySeat(),
-		DiscardsBySeat:   rs.discardStringsBySeat(),
-		MeldsBySeat:      cloneStringMatrix(rs.melds),
+		ActingSeat:        actingSeat,
+		ActingSeats:       rs.actingSeats(),
+		WaitingAction:     waitingAction,
+		Phase:             rs.phase(),
+		LastStep:          int64(rs.step),
+		PendingTile:       pendingTile,
+		AvailableActions:  append([]string(nil), available...),
+		ClaimCandidates:   rs.roundClaimCandidates(),
+		HandsBySeat:       rs.handStringsBySeat(),
+		DiscardsBySeat:    rs.discardStringsBySeat(),
+		MeldsBySeat:       cloneStringMatrix(rs.melds),
+		PlayerIDs:         rs.playerIDs,
+		QueBySeat:         append([]int32(nil), rs.queBySeat...),
+		HuedSeats:         append([]bool(nil), rs.huedSeats...),
+		ExchangeSubmitted: append([]bool(nil), rs.exchangeSubmitted...),
+		QueSubmitted:      append([]bool(nil), rs.queSubmitted...),
+		Closed:            rs.closed,
 	}
 }
 

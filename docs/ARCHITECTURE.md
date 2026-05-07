@@ -9,6 +9,7 @@
 - Phase 5：血战规则补完、room 引擎拆分与可观测性最小集合（[ADR-0017](adr/0017-room-engine-and-settlement-boundary.md)、[ADR-0019](adr/0019-observability-metrics.md)）。
 - Phase 5.3 / 5.4 / 5.5：规则深化、庄家与高阶番种、运行时参数与存储弹性（[ADR-0020](adr/0020-rules-deepening.md)、[ADR-0021](adr/0021-dealer-and-advanced-fans.md)、[ADR-0022](adr/0022-runtime-knobs-and-storage-resilience.md)）。
 - Phase 6：生产部署、SLO、压测与容量基线（范围见 [ADR-0023](adr/0023-scope-and-roadmap.md)，部署与 SLO 见 [ADR-0024](adr/0024-deployment-and-slo.md)，压测容量见 [ADR-0025](adr/0025-load-and-capacity.md)，备份与凭据见 [ADR-0026](adr/0026-postgres-backup-and-restore.md)、[ADR-0027](adr/0027-secret-and-credential-management.md)）。
+- Phase 7：玩家客户端与四川血战权威局内契约（[ADR-0038](adr/0038-cli-symmetric-tui-layout.md)、[ADR-0039](adr/0039-sichuan-xzdd-authoritative-round-contract.md)）。
 
 ## 运行时拓扑
 
@@ -29,6 +30,14 @@ flowchart LR
 ## 部署与可观测
 
 Phase 6 生产交付工件集中在 `deploy/`：`docker/` 提供三服务镜像定义，`k8s/base/` 提供基础清单，`k8s/overlays/example/` 展示托管 Secret placeholder overlay，`observability/` 提供 Prometheus recording/alerting rules，`ops/postgres-restore.md` 记录 PostgreSQL 恢复演练 runbook。
+
+## 客户端 TUI
+
+`cmd/cli` 负责把 `client.v1` 事件转换为 `RoomView`，再渲染为黑白终端牌桌。牌桌布局采用 [ADR-0038](adr/0038-cli-symmetric-tui-layout.md) 的四方对称拓扑：北/南横排，西/东单行紧凑，中央桌面承载阶段化 HUD、操作提示与出牌史。`DerivePhase` 是中央桌面、键栏与帮助浮窗共享的阶段派生入口，优先读取服务端 `Phase` 与 `acting_seats`；重连恢复以 `SnapshotNotify.last_step` 为权威切点，丢弃快照之前的陈旧推进事件。
+
+## 局内权威契约
+
+四川血战局内链路遵循 [ADR-0039](adr/0039-sichuan-xzdd-authoritative-round-contract.md)：玩家显式命令与托管命令在 room engine 中分流；换三张方向、定缺结果与阶段由 `RoundState` 统一下发；隐私敏感通知通过 `Notification.PrivacyPerSeat` 由网关按座位投影，避免其他玩家收到摸牌明文。
 
 ## 边界
 

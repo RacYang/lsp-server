@@ -42,6 +42,32 @@ func TestApplyInitialDealDrawDiscardAndSnapshot(t *testing.T) {
 	require.Equal(t, int32(2), view.ActingSeat)
 }
 
+func TestApplyDiscardDoesNotKeepDiscarderAsActingSeat(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: 1, Tile: "p9"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{SeatIndex: 1, Action: "discard", Tile: "p9"}}})
+
+	view := st.Snapshot()
+	require.Equal(t, int32(-1), view.ActingSeat, "discard.seat 是刚出牌的人,不是下一位行动者")
+	require.Equal(t, []string{"p9"}, view.Players[1].Discards)
+	require.Empty(t, view.Players[0].Discards)
+}
+
+func TestApplyPongRemovesClaimedDiscardFromRiver(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{SeatIndex: 1, Action: "discard", Tile: "p9"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{SeatIndex: 2, Action: "pong", Tile: "p9"}}})
+
+	view := st.Snapshot()
+	require.Empty(t, view.Players[1].Discards)
+	require.Equal(t, []string{"pong:p9"}, view.Players[2].Melds)
+	require.Equal(t, int32(2), view.ActingSeat)
+}
+
 func TestApplyResponsesAndSettlement(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ReadyResp{ReadyResp: &clientv1.ReadyResponse{}}})
@@ -51,6 +77,63 @@ func TestApplyResponsesAndSettlement(t *testing.T) {
 	require.Equal(t, PhaseSettlement, DeriveInteractionModel(view).Phase)
 	require.Equal(t, "不能碰", view.LastError)
 	require.NotNil(t, view.LastSettlement)
+}
+
+func TestQueMenStartGameDrawKeepsAuthoritativePhase(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{SeatIndex: 0, Tiles: []string{"m1", "m2", "m3"}}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
+		QueSuitBySeat: []int32{0, 1, 2, 0},
+		Phase:         clientv1.Phase_PHASE_DRAW,
+		Step:          1,
+		ActingSeats:   []int32{0},
+	}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
+		RoomId:      "r1",
+		DealerSeat:  0,
+		Phase:       clientv1.Phase_PHASE_DRAW,
+		Step:        1,
+		ActingSeats: []int32{0},
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, clientv1.Phase_PHASE_DRAW, view.RoundPhase)
+	require.Equal(t, "none", view.WaitingAction)
+	require.Equal(t, 3, view.Players[0].HandCnt)
+
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
+		SeatIndex:   0,
+		Tile:        "p9",
+		Phase:       clientv1.Phase_PHASE_DISCARD,
+		Step:        2,
+		ActingSeats: []int32{0},
+	}}})
+	view = st.Snapshot()
+	require.Equal(t, clientv1.Phase_PHASE_DISCARD, view.RoundPhase)
+	require.Equal(t, "discard", view.WaitingAction)
+	require.Equal(t, []string{"m1", "m2", "m3", "p9"}, view.Players[0].Hand)
+}
+
+func TestSnapshotStepDropsStaleDrawTile(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Snapshot{Snapshot: &clientv1.SnapshotNotify{
+		RoomId:        "r1",
+		State:         "playing",
+		LastStep:      8,
+		YourHandTiles: []string{"m1", "m2", "m3", "m4"},
+	}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
+		SeatIndex: 0,
+		Tile:      "p9",
+		Step:      8,
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, []string{"m1", "m2", "m3", "m4"}, view.Players[0].Hand)
 }
 
 func TestApplyLoginResetsLobbyStateWhenNotResumed(t *testing.T) {

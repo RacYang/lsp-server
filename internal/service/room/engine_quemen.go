@@ -44,7 +44,12 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat Seat, sui
 	quePayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "que-men",
 		Body: &clientv1.Envelope_QueMenDone{
-			QueMenDone: &clientv1.QueMenDoneNotify{QueSuitBySeat: rs.queBySeat},
+			QueMenDone: &clientv1.QueMenDoneNotify{
+				QueSuitBySeat: rs.queBySeat,
+				Phase:         clientv1.Phase_PHASE_DRAW,
+				Step:          int64(rs.step),
+				ActingSeats:   []int32{rs.turn.Proto()},
+			},
 		},
 	})
 	if err != nil {
@@ -53,7 +58,13 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat Seat, sui
 	startPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "start",
 		Body: &clientv1.Envelope_StartGame{
-			StartGame: &clientv1.StartGameNotify{RoomId: rs.roomID, DealerSeat: rs.dealerSeat.Proto()},
+			StartGame: &clientv1.StartGameNotify{
+				RoomId:      rs.roomID,
+				DealerSeat:  rs.dealerSeat.Proto(),
+				Phase:       clientv1.Phase_PHASE_DRAW,
+				Step:        int64(rs.step),
+				ActingSeats: []int32{rs.turn.Proto()},
+			},
 		},
 	})
 	if err != nil {

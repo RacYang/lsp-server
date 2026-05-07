@@ -62,11 +62,18 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 
 	var gotSettlement bool
 	players := []string{"u1", "u2", "u3", "u4"}
+	hands := make([][]string, 4)
 	for i := 0; i < 512; i++ {
 		evt, err := stream.Recv()
 		require.NoError(t, err)
 		require.Equal(t, "r1", evt.GetRoomId())
+		if deal := evt.GetInitialDeal(); deal != nil {
+			hands[deal.GetSeatIndex()] = append([]string(nil), deal.GetTiles()...)
+		}
 		if draw := evt.GetDrawTile(); draw != nil {
+			if draw.GetTile() == "" {
+				continue
+			}
 			_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
 				RoomId: "r1",
 				UserId: players[draw.GetSeatIndex()],
@@ -77,10 +84,12 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 		if action := evt.GetAction(); action != nil {
 			switch action.GetAction() {
 			case "exchange_three":
+				seat := action.GetSeatIndex()
+				require.GreaterOrEqual(t, len(hands[seat]), 3)
 				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body:   &clusterv1.ApplyEventRequest_ExchangeThree{ExchangeThree: &clusterv1.ExchangeThreeEvent{}},
+					Body:   &clusterv1.ApplyEventRequest_ExchangeThree{ExchangeThree: &clusterv1.ExchangeThreeEvent{Tiles: append([]string(nil), hands[seat][:3]...)}},
 				})
 				require.NoError(t, err)
 			case "que_men":
@@ -94,7 +103,7 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body:   &clusterv1.ApplyEventRequest_Pong{Pong: &clusterv1.PongEvent{}},
+					Body:   &clusterv1.ApplyEventRequest_Pass{Pass: &clusterv1.PassEvent{}},
 				})
 				require.NoError(t, err)
 			case "gang_choice":

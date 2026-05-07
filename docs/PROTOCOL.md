@@ -69,7 +69,7 @@
 - `LoginRequest.session_token` 非空时表示尝试恢复；服务端校验 Redis 中的令牌摘要与会话记录。
 - `LoginResponse.session_token` 为新签发或沿用（重连成功时与请求相同）的不透明令牌；`resumed` 表示是否恢复上下文；`resume_cursor` 为建议保存的事件游标。
 - `session_token` 绑定用户会话，不绑定具体 `gate` 副本；同集群内任意 `gate` 都应能恢复大厅态或牌桌态。
-- 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`；其中 `your_hand_tiles` 仅包含当前连接所属座位的手牌，`discards_by_seat` 与 `melds_by_seat` 用于恢复弃牌堆与副露展示。
+- 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`；其中 `your_hand_tiles` 仅包含当前连接所属座位的手牌，`discards_by_seat` 与 `melds_by_seat` 用于恢复弃牌堆与副露展示。`phase`、`acting_seats` 与 `last_step` 是局内恢复的权威切点，客户端应丢弃 `step <= last_step` 的陈旧推进事件。
 
 ## 业务错误码（ErrorCode 节选）
 
@@ -89,9 +89,10 @@
 - `pong_req` / `gang_req` / `hu_req` / `pass_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口，`pass_req` 表示当前被询问玩家主动放弃本次抢答或自摸选择。
 - 服务端只允许当前最高优先级候选响应抢答窗口。候选主动 `pass_req` 后，服务端移除该候选并接力下一 top candidate；若无人可抢，则关闭窗口并继续摸牌。每个接力候选拿到完整 `ClaimWindow`。
 - 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端可发送 `hu_req` 胡牌，也可发送 `pass_req` 表示不胡。主动过会把摸到的牌加入手牌并进入 `discard` 等待态，让玩家自行选牌打出；服务端超时托管才会默认打出 `pendingDraw`。
-- `SnapshotNotify` 现已追加 `acting_seat`、`waiting_action`、`pending_tile`、`available_actions` 与 `claim_candidates`，用于重连后恢复当前等待态。`SnapshotNotify.state` 只表示房间 FSM（waiting/ready/playing/settling/closed），局内 UI 必须以 `waiting_action` 为准。
+- `SnapshotNotify` 现已追加 `acting_seat`、`acting_seats`、`phase`、`waiting_action`、`pending_tile`、`available_actions`、`claim_candidates` 与 `last_step`，用于重连后恢复当前等待态。`SnapshotNotify.state` 只表示房间 FSM（waiting/ready/playing/settling/closed），局内 UI 优先以 `phase` 为准；`waiting_action` 保留给旧客户端。
 - `InitialDealNotify` 由 `room` 在完成开局发牌后按座位定向下发，每个连接只会收到自己座位的 13 张初始手牌；集群模式通过 `cluster.v1.RoomServiceStreamEventsResponse.target_seat` 传递定向语义，`-1` 表示广播。
-- 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。
+- `DrawTileNotify` 通过每座位投影下发：摸牌本人收到具体 `tile`，其他座位收到空 `tile` 与相同 `seat_index`。隐私敏感局内事件不得全量明文广播。
+- 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。玩家显式请求不会触发自动出牌；碰牌后必须等待该玩家下一次 `discard_req` 或托管超时。
 - WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。
 
 ## Phase 7 大厅列表与匹配

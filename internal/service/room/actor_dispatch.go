@@ -117,7 +117,7 @@ func (a *roomActor) doPong(userID string) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	notifications, err := a.engine.ApplyPong(context.Background(), a.round, seat)
+	notifications, err := a.engine.ApplyPongByPlayer(context.Background(), a.round, seat)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func (a *roomActor) doExchangeThree(userID string, tiles []string, direction int
 	if err != nil {
 		return nil, err
 	}
-	return a.engine.ApplyExchangeThree(context.Background(), a.round, seat, tiles, direction)
+	return a.engine.ApplyExchangeThreeByPlayer(context.Background(), a.round, seat, tiles, direction)
 }
 
 func (a *roomActor) doQueMen(userID string, suit int32) ([]Notification, error) {

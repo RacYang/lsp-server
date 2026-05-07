@@ -6,6 +6,7 @@
 
 ### 治理与文档
 
+- 架构：新增 ADR-0039，收口四川血战局内权威契约；room engine 区分玩家命令与托管命令，客户端优先读取服务端 `Phase` / `step`，摸牌通知改为每座位投影避免他家牌面泄漏。
 - 修复：`gate` 同集群内不再把会话绑定到具体副本，`session_token` 可在任意 `gate` 恢复大厅或牌桌态；`RouteRedirectNotify` 收敛为跨入口切换能力，CLI 会自动跟随完整 `ws_url`。
 - 文档：新增 [ADR-0030](docs/adr/0030-single-host-compose-deploy.md)，与 [ADR-0024](docs/adr/0024-deployment-and-slo.md) 并存，限定单机 / 小规模 / 单租户场景的 Docker Compose 部署形态。
 - 部署：新增 `deploy/compose/`，含三服务 + Redis + PostgreSQL + 单节点 etcd 的 compose.yaml、`.env.example`、配置模板与一次性 envsubst 渲染容器；业务镜像保持 distroless 不变。

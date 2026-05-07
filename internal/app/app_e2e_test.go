@@ -171,6 +171,7 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 }
 
 func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clientv1.SettlementNotify, error) {
+	hand := make([]string, 0, 14)
 	for n := 0; n < max; n++ {
 		_ = conn.SetReadDeadline(time.Now().Add(8 * time.Second))
 		_, data, err := conn.ReadMessage()
@@ -186,9 +187,14 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 			return nil, err
 		}
 		switch h.MsgID {
+		case msgid.InitialDealNotify:
+			if deal := env.GetInitialDeal(); deal != nil && deal.GetSeatIndex() == seat {
+				hand = append(hand[:0], deal.GetTiles()...)
+			}
 		case msgid.DrawTile:
 			draw := env.GetDrawTile()
-			if draw != nil && draw.GetSeatIndex() == seat {
+			if draw != nil && draw.GetSeatIndex() == seat && draw.GetTile() != "" {
+				hand = append(hand, draw.GetTile())
 				req := &clientv1.Envelope{
 					ReqId: fmt.Sprintf("discard-%d", n),
 					Body: &clientv1.Envelope_DiscardReq{
@@ -210,10 +216,15 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 			}
 			switch action.GetAction() {
 			case "exchange_three":
+				if len(hand) < 3 {
+					break
+				}
+				tiles := append([]string(nil), hand[:3]...)
+				hand = append([]string(nil), hand[3:]...)
 				req := &clientv1.Envelope{
 					ReqId: fmt.Sprintf("exchange-%d", n),
 					Body: &clientv1.Envelope_ExchangeThreeReq{
-						ExchangeThreeReq: &clientv1.ExchangeThreeRequest{},
+						ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles},
 					},
 				}
 				pb, err := proto.Marshal(req)
@@ -239,16 +250,16 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				}
 			case "pong_choice":
 				req := &clientv1.Envelope{
-					ReqId: fmt.Sprintf("pong-%d", n),
-					Body: &clientv1.Envelope_PongReq{
-						PongReq: &clientv1.PongRequest{},
+					ReqId: fmt.Sprintf("pass-%d", n),
+					Body: &clientv1.Envelope_PassReq{
+						PassReq: &clientv1.PassRequest{},
 					},
 				}
 				pb, err := proto.Marshal(req)
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.PongReq, pb)); err != nil {
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.PassReq, pb)); err != nil {
 					return nil, err
 				}
 			case "gang_choice":

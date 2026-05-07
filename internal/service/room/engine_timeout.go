@@ -21,7 +21,7 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 	if rs.waitingExchange {
 		for seat, done := range rs.exchangeSubmitted {
 			if !done {
-				return e.ApplyExchangeThree(ctx, rs, Seat(seat), nil, defaultExchangeDirection)
+				return e.ApplyExchangeThreeByTimeout(ctx, rs, Seat(seat))
 			}
 		}
 	}
@@ -48,7 +48,7 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 		if hasAction(candidate.actions, "gang") {
 			return e.ApplyGang(ctx, rs, candidate.seat, rs.lastDiscard.String())
 		}
-		return e.ApplyPong(ctx, rs, candidate.seat)
+		return e.ApplyPongByTimeout(ctx, rs, candidate.seat)
 	}
 	if rs.waitingTsumo {
 		return e.ApplyDiscard(ctx, rs, rs.turn, rs.pendingDraw.String())

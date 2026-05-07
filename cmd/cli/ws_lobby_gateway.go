@@ -15,23 +15,23 @@ import (
 type wsLobbyGateway struct {
 	client *WSClient
 	bus    *EventBus
+	state  *AppState
+	rpc    *RPCCaller
 }
 
 // NewWSLobbyGateway 把 WSClient + EventBus 包装成 LobbyGateway。
-func NewWSLobbyGateway(client *WSClient, bus *EventBus) LobbyGateway {
-	return &wsLobbyGateway{client: client, bus: bus}
+// state 用于在 JoinRoomResp 这类 protobuf 不带 room_id 的响应里
+// 由客户端侧补齐 RoomID/Phase，否则主循环看不到入桌信号会回退到 lobby。
+func NewWSLobbyGateway(client *WSClient, bus *EventBus, state *AppState) LobbyGateway {
+	return &wsLobbyGateway{client: client, bus: bus, state: state, rpc: NewRPCCaller(client, bus)}
 }
 
 func (g *wsLobbyGateway) AutoMatch(ctx context.Context, ruleID string) (LobbyJoinResult, error) {
-	id, ch := g.bus.Subscribe(func(e *clientv1.Envelope) bool { return e.GetAutoMatchResp() != nil }, 4)
-	defer g.bus.Unsubscribe(id)
-	if err := g.client.Send(ctx, msgid.AutoMatchReq, &clientv1.Envelope{
-		ReqId: newReqID("automatch"),
+	reqID := newReqID("automatch")
+	env, err := g.rpc.Call(ctx, msgid.AutoMatchReq, &clientv1.Envelope{
+		ReqId: reqID,
 		Body:  &clientv1.Envelope_AutoMatchReq{AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: ruleID, PadWithBots: true}},
-	}); err != nil {
-		return LobbyJoinResult{}, err
-	}
-	env, err := awaitEnvelope(ctx, ch)
+	}, func(e *clientv1.Envelope) bool { return e.GetAutoMatchResp() != nil })
 	if err != nil {
 		return LobbyJoinResult{}, err
 	}
@@ -39,24 +39,38 @@ func (g *wsLobbyGateway) AutoMatch(ctx context.Context, ruleID string) (LobbyJoi
 	if errStr := envelopeError(resp.GetErrorCode(), resp.GetErrorMessage()); errStr != "" {
 		return LobbyJoinResult{}, errors.New(errStr)
 	}
-	return LobbyJoinResult{
+	result := LobbyJoinResult{
 		RoomID:      resp.GetRoomId(),
 		SeatIndex:   resp.GetSeatIndex(),
 		DisplayName: resp.GetDisplayName(),
 		RuleID:      resp.GetRuleId(),
-	}, nil
+	}
+	applyJoinResultToState(g.state, result)
+	return result, nil
+}
+
+func (g *wsLobbyGateway) LeaveRoom(ctx context.Context) error {
+	reqID := newReqID("leave")
+	env, err := g.rpc.Call(ctx, msgid.LeaveRoomReq, &clientv1.Envelope{
+		ReqId:          reqID,
+		IdempotencyKey: newReqID("idem-leave"),
+		Body:           &clientv1.Envelope_LeaveRoomReq{LeaveRoomReq: &clientv1.LeaveRoomRequest{}},
+	}, func(e *clientv1.Envelope) bool { return e.GetLeaveRoomResp() != nil })
+	if err != nil {
+		return err
+	}
+	if errStr := envelopeError(env.GetLeaveRoomResp().GetErrorCode(), env.GetLeaveRoomResp().GetErrorMessage()); errStr != "" {
+		return errors.New(errStr)
+	}
+	return nil
 }
 
 func (g *wsLobbyGateway) ListRooms(ctx context.Context, pageToken string) (LobbyRoomList, error) {
-	id, ch := g.bus.Subscribe(func(e *clientv1.Envelope) bool { return e.GetListRoomsResp() != nil }, 4)
-	defer g.bus.Unsubscribe(id)
-	if err := g.client.Send(ctx, msgid.ListRoomsReq, &clientv1.Envelope{
-		ReqId: newReqID("listrooms"),
+	reqID := newReqID("listrooms")
+	env, err := g.rpc.Call(ctx, msgid.ListRoomsReq, &clientv1.Envelope{
+		ReqId: reqID,
 		Body:  &clientv1.Envelope_ListRoomsReq{ListRoomsReq: &clientv1.ListRoomsRequest{PageToken: pageToken, PageSize: 20}},
-	}); err != nil {
-		return LobbyRoomList{}, err
-	}
-	env, err := awaitEnvelope(ctx, ch)
+	}, func(e *clientv1.Envelope) bool { return e.GetListRoomsResp() != nil })
 	if err != nil {
 		return LobbyRoomList{}, err
 	}
@@ -83,19 +97,15 @@ func (g *wsLobbyGateway) ListRooms(ctx context.Context, pageToken string) (Lobby
 }
 
 func (g *wsLobbyGateway) CreateRoom(ctx context.Context, opts LobbyCreateOpts) (LobbyJoinResult, error) {
-	id, ch := g.bus.Subscribe(func(e *clientv1.Envelope) bool { return e.GetCreateRoomResp() != nil }, 4)
-	defer g.bus.Unsubscribe(id)
-	if err := g.client.Send(ctx, msgid.CreateRoomReq, &clientv1.Envelope{
-		ReqId: newReqID("createroom"),
+	reqID := newReqID("createroom")
+	env, err := g.rpc.Call(ctx, msgid.CreateRoomReq, &clientv1.Envelope{
+		ReqId: reqID,
 		Body: &clientv1.Envelope_CreateRoomReq{CreateRoomReq: &clientv1.CreateRoomRequest{
 			RuleId:      opts.RuleID,
 			DisplayName: opts.DisplayName,
 			Private:     opts.Private,
 		}},
-	}); err != nil {
-		return LobbyJoinResult{}, err
-	}
-	env, err := awaitEnvelope(ctx, ch)
+	}, func(e *clientv1.Envelope) bool { return e.GetCreateRoomResp() != nil })
 	if err != nil {
 		return LobbyJoinResult{}, err
 	}
@@ -103,24 +113,22 @@ func (g *wsLobbyGateway) CreateRoom(ctx context.Context, opts LobbyCreateOpts) (
 	if errStr := envelopeError(resp.GetErrorCode(), resp.GetErrorMessage()); errStr != "" {
 		return LobbyJoinResult{}, errors.New(errStr)
 	}
-	return LobbyJoinResult{
+	result := LobbyJoinResult{
 		RoomID:      resp.GetRoomId(),
 		SeatIndex:   resp.GetSeatIndex(),
 		DisplayName: resp.GetDisplayName(),
 		RuleID:      resp.GetRuleId(),
-	}, nil
+	}
+	applyJoinResultToState(g.state, result)
+	return result, nil
 }
 
 func (g *wsLobbyGateway) JoinRoom(ctx context.Context, roomID string) (LobbyJoinResult, error) {
-	id, ch := g.bus.Subscribe(func(e *clientv1.Envelope) bool { return e.GetJoinRoomResp() != nil }, 4)
-	defer g.bus.Unsubscribe(id)
-	if err := g.client.Send(ctx, msgid.JoinRoomReq, &clientv1.Envelope{
-		ReqId: newReqID("joinroom"),
+	reqID := newReqID("joinroom")
+	env, err := g.rpc.Call(ctx, msgid.JoinRoomReq, &clientv1.Envelope{
+		ReqId: reqID,
 		Body:  &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: roomID}},
-	}); err != nil {
-		return LobbyJoinResult{}, err
-	}
-	env, err := awaitEnvelope(ctx, ch)
+	}, func(e *clientv1.Envelope) bool { return e.GetJoinRoomResp() != nil })
 	if err != nil {
 		return LobbyJoinResult{}, err
 	}
@@ -128,12 +136,35 @@ func (g *wsLobbyGateway) JoinRoom(ctx context.Context, roomID string) (LobbyJoin
 	if errStr := envelopeError(resp.GetErrorCode(), resp.GetErrorMessage()); errStr != "" {
 		return LobbyJoinResult{}, errors.New(errStr)
 	}
-	return LobbyJoinResult{
+	result := LobbyJoinResult{
 		RoomID:      roomID,
 		SeatIndex:   resp.GetSeatIndex(),
 		DisplayName: resp.GetDisplayName(),
 		RuleID:      resp.GetRuleId(),
-	}, nil
+	}
+	// JoinRoomResp 不携带 room_id，state.Apply 走 envelope 分支也写不进 RoomID；
+	// 这里由客户端把它补上，并切到 phaseTable，让 main 主循环识别"已入桌"。
+	applyJoinResultToState(g.state, result)
+	return result, nil
+}
+
+// applyJoinResultToState 把成功的 LobbyJoinResult 落到本地 view，
+// 主要为补齐 JoinRoomResp 缺失的 RoomID 字段，统一切换 phaseTable。
+func applyJoinResultToState(state *AppState, res LobbyJoinResult) {
+	if state == nil || res.RoomID == "" {
+		return
+	}
+	state.Mutate(func(v *RoomView) {
+		v.RoomID = res.RoomID
+		v.SeatIndex = res.SeatIndex
+		if res.RuleID != "" {
+			v.RuleID = res.RuleID
+		}
+		if res.DisplayName != "" {
+			v.DisplayName = res.DisplayName
+		}
+		v.Phase = phaseTable
+	})
 }
 
 func (g *wsLobbyGateway) ChangeNickname(name string) {

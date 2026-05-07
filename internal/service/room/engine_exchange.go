@@ -10,8 +10,26 @@ import (
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
-// ApplyExchangeThree 记录某座位已完成换三张确认；四家齐备后再统一换牌并进入定缺阶段。
-func (e *Engine) ApplyExchangeThree(_ context.Context, rs *RoundState, seat Seat, tiles []string, direction int32) ([]Notification, error) {
+// ApplyExchangeThree 兼容旧调用方，按玩家显式命令处理。
+func (e *Engine) ApplyExchangeThree(ctx context.Context, rs *RoundState, seat Seat, tiles []string, direction int32) ([]Notification, error) {
+	return e.ApplyExchangeThreeByPlayer(ctx, rs, seat, tiles, direction)
+}
+
+// ApplyExchangeThreeByPlayer 记录玩家已完成换三张确认；玩家提交必须严格校验选牌。
+func (e *Engine) ApplyExchangeThreeByPlayer(_ context.Context, rs *RoundState, seat Seat, tiles []string, direction int32) ([]Notification, error) {
+	return e.applyExchangeThree(rs, seat, tiles, direction, false)
+}
+
+// ApplyExchangeThreeByTimeout 为未响应座位托管选择三张牌；仅托管入口允许自动选牌。
+func (e *Engine) ApplyExchangeThreeByTimeout(_ context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
+	direction := defaultExchangeDirection
+	if rs != nil && rs.exchangeDirection > 0 {
+		direction = rs.exchangeDirection
+	}
+	return e.applyExchangeThree(rs, seat, nil, direction, true)
+}
+
+func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, direction int32, timeout bool) ([]Notification, error) {
 	if e == nil {
 		return nil, fmt.Errorf("nil engine")
 	}
@@ -30,19 +48,20 @@ func (e *Engine) ApplyExchangeThree(_ context.Context, rs *RoundState, seat Seat
 	if rs.exchangeSubmitted[seat] {
 		return nil, fmt.Errorf("exchange already submitted")
 	}
-	normalizedDirection, ok := normalizeExchangeDirection(direction)
-	if !ok && len(tiles) == 0 {
-		normalizedDirection = defaultExchangeDirection
-		ok = true
-	}
-	if !ok {
-		return nil, fmt.Errorf("invalid exchange direction")
-	}
-	if rs.exchangeDirection >= 0 && rs.exchangeDirection != normalizedDirection {
-		return nil, fmt.Errorf("exchange direction mismatch")
+	normalizedDirection := rs.exchangeDirection
+	if normalizedDirection < 0 {
+		var ok bool
+		normalizedDirection, ok = normalizeExchangeDirection(direction)
+		if !ok {
+			normalizedDirection = defaultExchangeDirection
+		}
 	}
 	rs.exchangeDirection = normalizedDirection
-	rs.exchangeSelection[seat] = normalizeExchangeSelection(rs.hands[seat], tiles)
+	selection, err := normalizeExchangeSelection(rs.hands[seat], tiles, timeout)
+	if err != nil {
+		return nil, err
+	}
+	rs.exchangeSelection[seat] = selection
 	rs.exchangeSubmitted[seat] = true
 	for _, done := range rs.exchangeSubmitted {
 		if !done {
@@ -57,7 +76,13 @@ func (e *Engine) ApplyExchangeThree(_ context.Context, rs *RoundState, seat Seat
 	exchangePayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "exchange",
 		Body: &clientv1.Envelope_ExchangeThreeDone{
-			ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{PerSeat: receivedTiles},
+			ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
+				PerSeat:     receivedTiles,
+				Direction:   rs.exchangeDirection,
+				Phase:       clientv1.Phase_PHASE_QUE_MEN,
+				Step:        int64(rs.step),
+				ActingSeats: pendingSeats(rs.queSubmitted),
+			},
 		},
 	})
 	if err != nil {
@@ -80,7 +105,13 @@ func (rs *RoundState) promptSeatActions(action string) []Notification {
 		payload, err := marshalEnvelope(&clientv1.Envelope{
 			ReqId: fmt.Sprintf("%s-%d", action, seat),
 			Body: &clientv1.Envelope_Action{
-				Action: &clientv1.ActionNotify{SeatIndex: seatIndex, Action: action},
+				Action: &clientv1.ActionNotify{
+					SeatIndex:   seatIndex,
+					Action:      action,
+					Phase:       rs.phase(),
+					Step:        int64(rs.step),
+					ActingSeats: rs.actingSeats(),
+				},
 			},
 		})
 		if err != nil {
@@ -155,23 +186,29 @@ func normalizeExchangeDirection(direction int32) (int32, bool) {
 	}
 }
 
-func normalizeExchangeSelection(h *hand.Hand, raws []string) []tile.Tile {
-	if h == nil || len(raws) != 3 {
-		return chooseExchangeTiles(h)
+func normalizeExchangeSelection(h *hand.Hand, raws []string, allowFallback bool) ([]tile.Tile, error) {
+	if h == nil {
+		return nil, fmt.Errorf("missing hand")
+	}
+	if len(raws) == 0 && allowFallback {
+		return chooseExchangeTiles(h), nil
+	}
+	if len(raws) != 3 {
+		return nil, fmt.Errorf("invalid exchange selection")
 	}
 	tmp := hand.FromTiles(append([]tile.Tile(nil), h.Tiles()...))
 	out := make([]tile.Tile, 0, 3)
 	for _, raw := range raws {
 		t, err := tile.Parse(raw)
 		if err != nil {
-			return chooseExchangeTiles(h)
+			return nil, fmt.Errorf("parse exchange tile %q: %w", raw, err)
 		}
 		if err := tmp.Remove(t); err != nil {
-			return chooseExchangeTiles(h)
+			return nil, fmt.Errorf("exchange tile from hand: %w", err)
 		}
 		out = append(out, t)
 	}
-	return out
+	return out, nil
 }
 
 func chooseExchangeTiles(h *hand.Hand) []tile.Tile {

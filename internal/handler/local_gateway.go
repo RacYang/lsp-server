@@ -261,6 +261,20 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.
 		return
 	}
 	encoded := frame.Encode(outMsgID, notification.Payload)
+	if notification.Privacy == roomsvc.PrivacyPerSeat && notification.Project != nil {
+		players, _, ok := g.rooms.RoomSnapshot(roomID)
+		if !ok {
+			return
+		}
+		for seat := 0; seat < len(players) && seat < 4; seat++ {
+			projected := notification.Project(roomsvc.Seat(seat))
+			if len(projected) == 0 {
+				continue
+			}
+			g.hub.SendToUser(players[seat], frame.Encode(outMsgID, projected))
+		}
+		return
+	}
 	if notification.TargetSeat == roomsvc.BroadcastSeat {
 		g.hub.Broadcast(roomID, encoded)
 		return
@@ -311,13 +325,19 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		Cursor:           srec.LastCursor,
 		State:            state,
 		ActingSeat:       view.ActingSeat,
+		ActingSeats:      append([]int32(nil), view.ActingSeats...),
 		WaitingAction:    view.WaitingAction,
+		Phase:            view.Phase,
+		LastStep:         view.LastStep,
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),
 		ClaimCandidates:  roomClaimCandidatesToClient(view.ClaimCandidates),
 		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
 		DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
 		MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
+	}
+	for seat := 0; seat < len(snap.Seats) && seat < len(view.HandsBySeat); seat++ {
+		snap.Seats[seat].HandCount = int32(len(view.HandsBySeat[seat])) //nolint:gosec // 座位手牌数量小于 20。
 	}
 	return &ResumeResult{
 		UserID:              uid,

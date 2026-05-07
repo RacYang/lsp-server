@@ -17,7 +17,7 @@ import (
 type TableGateway interface {
 	Ready(ctx context.Context) error
 	Discard(ctx context.Context, tile string) error
-	ExchangeThree(ctx context.Context, tiles []string) error
+	ExchangeThree(ctx context.Context, tiles []string, direction int32) error
 	QueMen(ctx context.Context, suit int32) error
 	Pong(ctx context.Context) error
 	Gang(ctx context.Context, tile string) error
@@ -31,8 +31,10 @@ type TableGateway interface {
 type TableExitReason int
 
 const (
-	// TableExitGameOver 服务端推送结算且玩家按 Enter 离桌。
+	// TableExitGameOver 服务端推送结算且玩家选择离桌。
 	TableExitGameOver TableExitReason = iota
+	// TableExitRestart 服务端推送结算且玩家选择再来一局。
+	TableExitRestart
 	// TableExitLeaveRoom 玩家在局内菜单选择"返回大厅"。
 	TableExitLeaveRoom
 	// TableExitContextDone 主循环外层 ctx 被取消。
@@ -63,7 +65,7 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 
 	w, h := scr.Size()
 	if w < MinTableWidth || h < MinTableHeight {
-		return TableExit{Reason: TableExitTerminalTooSmall, Err: errors.New("窗口太小,请放大终端到至少 80x24 后重试")}
+		return TableExit{Reason: TableExitTerminalTooSmall, Err: fmt.Errorf("窗口太小,请放大终端到至少 %dx%d 后重试", MinTableWidth, MinTableHeight)}
 	}
 
 	overlay := OverlayState{}
@@ -72,6 +74,7 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 	var claimDialog *ClaimDialogState
 	var settlementDialog *SettlementDialogState
 	theme := ParseTileTheme(cfg.TileTheme)
+	lastTier := LayoutTierStandard
 
 	go func() {
 		_ = gateway.Ready(ctx)
@@ -102,24 +105,26 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 		model := DeriveInteractionModel(view)
 		cursor.SyncMode(view)
 		w, h := scr.Size()
-		layout, ok := CalcLayout(w, h)
+		layout, ok := CalcLayout(w, h, lastTier)
 		if !ok {
 			scr.Clear()
-			drawText(scr, 0, 0, defaultStyle(), "窗口太小,请放大终端到至少 80x24")
+			drawText(scr, 0, 0, defaultStyle(), fmt.Sprintf("窗口太小,请放大终端到至少 %dx%d", MinTableWidth, MinTableHeight))
 			scr.Show()
 			return
 		}
+		lastTier = layout.Tier
+		now := time.Now()
 		RenderFrame(scr, FrameInputs{
 			View:   view,
 			Layout: layout,
 			Theme:  theme,
 			Cursor: cursor,
+			Now:    now,
 		})
 		netOverlay.Update(view.Connected, time.Now())
 		ctxOverlay := OverlayContext{RuleID: view.RuleID, Theme: theme}
 		DrawOverlay(scr, layout, view, ctxOverlay, overlay)
 		DrawNetOverlay(scr, layout, netOverlay, time.Now())
-		now := time.Now()
 		if model.Claim != nil && model.Claim.Dialog != nil {
 			if claimDialog == nil || claimDialog.Tile != model.Claim.Dialog.Tile || claimDialog.Trigger != model.Claim.Dialog.Trigger {
 				claimDialog = model.Claim.Dialog
@@ -142,7 +147,7 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 	}
 
 	redraw()
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -150,6 +155,11 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 		case <-ctx.Done():
 			return TableExit{Reason: TableExitContextDone, Err: ctx.Err()}
 		case <-ticker.C:
+			// 观察房间状态：被服务端踢出 / 房间销毁 / 重定向重置等都会让 Phase 回到 lobby。
+			// 这里兜底退出，避免渲染层卡在已经无效的牌桌画面。
+			if view := state.Snapshot(); view.Phase != phaseTable || view.RoomID == "" {
+				return TableExit{Reason: TableExitLeaveRoom}
+			}
 			if !overlay.IsOpen() && claimDialog != nil && !claimDialog.Pending && claimDialog.Expired(time.Now()) {
 				claimDialog.Pending = true
 				go func() {
@@ -165,7 +175,9 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 			if result.exit != nil {
 				return *result.exit
 			}
-			redraw()
+			if _, resized := ev.(*tcell.EventResize); !resized {
+				redraw()
+			}
 		}
 	}
 }
@@ -218,7 +230,11 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			return submitAddBot(ctx, state, gateway, emptySeatCount(view))
 		case 'r', 'R':
 			if model.Phase == PhaseSettlement {
-				go func() { _ = gateway.Ready(ctx) }()
+				return tableEventResult{exit: &TableExit{Reason: TableExitRestart}}
+			}
+		case 'l', 'L':
+			if model.Phase == PhaseSettlement {
+				return leaveRoomFireAndForget(ctx, state, gateway, TableExitGameOver)
 			}
 		case 'm', 'M':
 			return submitQueMen(ctx, gateway, model, 0)
@@ -248,13 +264,12 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			return tableEventResult{exit: &TableExit{Reason: TableExitLeaveRoom}}
 		}
 		if model.Phase == PhaseSettlement {
-			_ = gateway.LeaveRoom(ctx)
-			return tableEventResult{exit: &TableExit{Reason: TableExitGameOver}}
+			return tableEventResult{}
 		}
 		if claimDialog != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
 			return submitClaimAction(ctx, gateway, claimDialog, claimDialog.Selected())
 		}
-		return submitCursorAction(ctx, cursor, hand, gateway, view)
+		return submitCursorAction(ctx, state, cursor, hand, gateway, view)
 	}
 	return tableEventResult{}
 }
@@ -330,14 +345,20 @@ func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, state *AppState, 
 	return tableEventResult{}
 }
 
+// leaveRoomFireAndForget 让玩家立即回到大厅。
+//
+// 设计要点：
+//   - 用户主动按 q / Esc→返回大厅 永远会得到 exit；之前的"本地 RoomID 为空就吃掉退出"分支
+//     会让被服务端事件提前清空房间状态的玩家卡死在牌桌界面，已删除。
+//   - 仅当本地确实持有过 RoomID 时才向服务端补一发 LeaveRoom；否则会反复触发
+//     "尚未进入房间" 噪声日志（见 internal/handler/ws_handlers_room.go 的 INVALID_STATE 分支）。
 func leaveRoomFireAndForget(ctx context.Context, state *AppState, gateway TableGateway, reason TableExitReason) tableEventResult {
 	roomID := ""
 	if state != nil {
 		roomID = state.LeaveRoomLocally("已返回大厅，正在通知服务端离房")
 	}
-	go retryLeaveRoom(ctx, gateway, 6, 5*time.Second)
-	if roomID == "" && reason == TableExitLeaveRoom {
-		return tableEventResult{}
+	if roomID != "" {
+		go retryLeaveRoom(ctx, gateway, 6, 5*time.Second)
 	}
 	return tableEventResult{exit: &TableExit{Reason: reason}}
 }
@@ -363,8 +384,13 @@ func retryLeaveRoom(ctx context.Context, gateway TableGateway, attempts int, int
 	}
 }
 
+// submitQueMen 把 m/p/s 三个键路由成"定缺"动作。
+//
+// 川麻血战的定缺与换三张同样是 4 家并发（不是轮到谁才能定缺），所以这里只校验
+// 本地 SeatIndex 合法，不再要求 model.SelfSeat == model.ActingSeat，避免出现
+// "我能看到提示但按 m/p/s 没反应" 的死锁。
 func submitQueMen(ctx context.Context, gateway TableGateway, model InteractionModel, suit int32) tableEventResult {
-	if model.Phase != PhaseQueMen || model.SelfSeat != model.ActingSeat {
+	if model.Phase != PhaseQueMen || model.SelfSeat < 0 || model.SelfSeat > 3 {
 		return tableEventResult{}
 	}
 	go func() {
@@ -398,7 +424,7 @@ func submitClaimAction(ctx context.Context, gateway TableGateway, dialog *ClaimD
 }
 
 // submitCursorAction 处理 Enter 提交：单选模式直接 Discard，多选模式打 ExchangeThree。
-func submitCursorAction(ctx context.Context, cursor *HandCursor, hand []string, gateway TableGateway, view RoomView) tableEventResult {
+func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor, hand []string, gateway TableGateway, view RoomView) tableEventResult {
 	if !cursor.CanSubmit() {
 		return tableEventResult{}
 	}
@@ -425,12 +451,41 @@ func submitCursorAction(ctx context.Context, cursor *HandCursor, hand []string, 
 				tiles = append(tiles, hand[idx])
 			}
 		}
+		if len(tiles) != 3 {
+			return tableEventResult{}
+		}
+		removeExchangedTilesLocally(state, view.SeatIndex, tiles)
 		cursor.Submit()
 		go func() {
-			if err := gateway.ExchangeThree(ctx, tiles); err != nil {
+			if err := gateway.ExchangeThree(ctx, tiles, 0); err != nil {
 				cursor.RollbackPending()
+				restoreExchangedTilesLocally(state, view.SeatIndex, tiles)
 			}
 		}()
 	}
 	return tableEventResult{}
+}
+
+func removeExchangedTilesLocally(state *AppState, seat int32, tiles []string) {
+	if state == nil || seat < 0 || seat > 3 || len(tiles) == 0 {
+		return
+	}
+	state.Mutate(func(v *RoomView) {
+		p := &v.Players[seat]
+		for _, tile := range tiles {
+			p.Hand = removeOneTile(p.Hand, tile)
+		}
+		p.HandCnt = len(p.Hand)
+	})
+}
+
+func restoreExchangedTilesLocally(state *AppState, seat int32, tiles []string) {
+	if state == nil || seat < 0 || seat > 3 || len(tiles) == 0 {
+		return
+	}
+	state.Mutate(func(v *RoomView) {
+		p := &v.Players[seat]
+		p.Hand = sortedTiles(append(p.Hand, tiles...))
+		p.HandCnt = len(p.Hand)
+	})
 }

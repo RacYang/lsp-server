@@ -10,8 +10,13 @@ import (
 	"racoo.cn/lsp/internal/metrics"
 )
 
-// ApplyPong 处理弃牌抢答窗口中的碰牌动作，并中断原本轮到的座位。
-func (e *Engine) ApplyPong(_ context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
+// ApplyPong 兼容旧调用方，按玩家显式碰牌处理。
+func (e *Engine) ApplyPong(ctx context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
+	return e.ApplyPongByPlayer(ctx, rs, seat)
+}
+
+// ApplyPongByPlayer 处理玩家显式碰牌，并中断原本轮到的座位。
+func (e *Engine) ApplyPongByPlayer(_ context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
 	if e == nil {
 		return nil, fmt.Errorf("nil engine")
 	}
@@ -50,16 +55,31 @@ func (e *Engine) ApplyPong(_ context.Context, rs *RoundState, seat Seat) ([]Noti
 	payload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("pong-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{SeatIndex: seatIndex, Action: "pong", Tile: claimedTile.String()},
+			Action: &clientv1.ActionNotify{
+				SeatIndex:   seatIndex,
+				Action:      "pong",
+				Tile:        claimedTile.String(),
+				Phase:       clientv1.Phase_PHASE_DISCARD,
+				Step:        int64(rs.step),
+				ActingSeats: []int32{seatIndex},
+			},
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	out := []Notification{{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}}
+	return []Notification{{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}}, nil
+}
+
+// ApplyPongByTimeout 为托管座位处理碰牌，并立即选择一张牌托管打出。
+func (e *Engine) ApplyPongByTimeout(ctx context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
+	out, err := e.ApplyPongByPlayer(ctx, rs, seat)
+	if err != nil {
+		return nil, err
+	}
 	//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 	discard := chooseDiscard(rs.hands[seat], tile.Suit(rs.queBySeat[seat]))
-	next, err := e.ApplyDiscard(context.Background(), rs, seat, discard.String())
+	next, err := e.ApplyDiscard(ctx, rs, seat, discard.String())
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +157,14 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 	payload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("gang-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{SeatIndex: seatIndex, Action: "gang", Tile: gangTile.String()},
+			Action: &clientv1.ActionNotify{
+				SeatIndex:   seatIndex,
+				Action:      "gang",
+				Tile:        gangTile.String(),
+				Phase:       clientv1.Phase_PHASE_DRAW,
+				Step:        int64(rs.step),
+				ActingSeats: []int32{seatIndex},
+			},
 		},
 	})
 	if err != nil {
@@ -375,7 +402,14 @@ func (rs *RoundState) claimPromptNotifications(discard tile.Tile) ([]Notificatio
 	claimPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("claim-%d-%d", rs.step, candidate.seat),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{SeatIndex: claimSeatIndex, Action: claimAction, Tile: discard.String()},
+			Action: &clientv1.ActionNotify{
+				SeatIndex:   claimSeatIndex,
+				Action:      claimAction,
+				Tile:        discard.String(),
+				Phase:       clientv1.Phase_PHASE_CLAIM,
+				Step:        int64(rs.step),
+				ActingSeats: []int32{claimSeatIndex},
+			},
 		},
 	})
 	if err != nil {

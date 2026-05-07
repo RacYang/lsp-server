@@ -16,15 +16,15 @@ import (
 // 不依赖网络往返,因此 gateway 只需实现接口即可。
 type stubTableGateway struct{}
 
-func (stubTableGateway) Ready(context.Context) error                   { return nil }
-func (stubTableGateway) Discard(context.Context, string) error         { return nil }
-func (stubTableGateway) ExchangeThree(context.Context, []string) error { return nil }
-func (stubTableGateway) QueMen(context.Context, int32) error           { return nil }
-func (stubTableGateway) Pong(context.Context) error                    { return nil }
-func (stubTableGateway) Gang(context.Context, string) error            { return nil }
-func (stubTableGateway) Hu(context.Context) error                      { return nil }
-func (stubTableGateway) Pass(context.Context) error                    { return nil }
-func (stubTableGateway) LeaveRoom(context.Context) error               { return nil }
+func (stubTableGateway) Ready(context.Context) error                          { return nil }
+func (stubTableGateway) Discard(context.Context, string) error                { return nil }
+func (stubTableGateway) ExchangeThree(context.Context, []string, int32) error { return nil }
+func (stubTableGateway) QueMen(context.Context, int32) error                  { return nil }
+func (stubTableGateway) Pong(context.Context) error                           { return nil }
+func (stubTableGateway) Gang(context.Context, string) error                   { return nil }
+func (stubTableGateway) Hu(context.Context) error                             { return nil }
+func (stubTableGateway) Pass(context.Context) error                           { return nil }
+func (stubTableGateway) LeaveRoom(context.Context) error                      { return nil }
 func (stubTableGateway) AddBot(context.Context, int32) ([]*clientv1.SeatInfo, error) {
 	return nil, nil
 }
@@ -40,6 +40,20 @@ func (g leaveSignalGateway) LeaveRoom(context.Context) error {
 	default:
 	}
 	return nil
+}
+
+type exchangeGateway struct {
+	stubTableGateway
+	tiles chan []string
+	err   error
+}
+
+func (g exchangeGateway) ExchangeThree(_ context.Context, tiles []string, _ int32) error {
+	select {
+	case g.tiles <- append([]string(nil), tiles...):
+	default:
+	}
+	return g.err
 }
 
 // TestHandleOverlayKeyEnterClosesNonMenuOverlay 验证非菜单浮窗（房间信息 / 玩家详情）
@@ -118,9 +132,37 @@ func TestHandleTableEventResizeKeepsTableOpen(t *testing.T) {
 	cfg := &Config{}
 	res := handleTableEvent(context.Background(), tcell.NewEventResize(120, MinTableHeight), scr, state, stubTableGateway{}, cursor, overlay, nil, &theme, cfg, nil)
 	require.Nil(t, res.exit)
-	layout, ok := CalcLayout(120, MinTableHeight)
+	layout, ok := CalcLayout(145, 45, LayoutTierStandard)
 	require.True(t, ok)
-	require.True(t, layout.Wide)
+	require.Equal(t, LayoutTierFull, layout.Tier)
+}
+
+// TestHandleTableKeyQExitsEvenWhenLocalRoomEmpty 防回归：用户主动按 q / 返回大厅
+// 时永远应当返回到大厅，即便本地状态因外部事件（LeaveRoomResp / RoomDestroy /
+// RouteRedirect）已经被清空。修复 "离房失败：尚未进入房间" + UI 卡死的根因。
+func TestHandleTableKeyQExitsEvenWhenLocalRoomEmpty(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseLobby
+		v.RoomID = ""
+		v.SeatIndex = -1
+	})
+	cursor := &HandCursor{}
+	overlay := &OverlayState{}
+	theme := TileThemeUnicode
+	cfg := &Config{}
+	gw := leaveSignalGateway{calls: make(chan struct{}, 1)}
+
+	res := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyRune, 'q', tcell.ModNone), state, gw, cursor, overlay, nil, &theme, cfg, nil)
+	require.NotNil(t, res.exit, "q 必须永远触发牌桌退出，避免玩家在残留 UI 上卡死")
+	require.Equal(t, TableExitLeaveRoom, res.exit.Reason)
+
+	// 本地已经无房间时不应再骚扰服务端，否则会被回 INVALID_STATE，污染玩家可见日志。
+	select {
+	case <-gw.calls:
+		t.Fatal("本地无 RoomID 时不应再向服务端发 LeaveRoom")
+	case <-time.After(50 * time.Millisecond):
+	}
 }
 
 func TestHandleTableKeyQLeavesLocallyAndNotifiesServer(t *testing.T) {
@@ -149,5 +191,74 @@ func TestHandleTableKeyQLeavesLocallyAndNotifiesServer(t *testing.T) {
 	case <-gw.calls:
 	case <-time.After(time.Second):
 		t.Fatal("expected async LeaveRoom call")
+	}
+}
+
+func TestHandleTableKeyEnterDoesNotLeaveOnSettlement(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "r1"
+		v.SeatIndex = 0
+		v.LastSettlement = &clientv1.SettlementNotify{RoomId: "r1"}
+	})
+	cursor := &HandCursor{}
+	overlay := &OverlayState{}
+	theme := TileThemeUnicode
+	cfg := &Config{}
+	gw := leaveSignalGateway{calls: make(chan struct{}, 1)}
+
+	res := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), state, gw, cursor, overlay, nil, &theme, cfg, nil)
+	require.Nil(t, res.exit, "结算态 Enter 只停留在当前牌桌,不应直接返回主菜单")
+
+	select {
+	case <-gw.calls:
+		t.Fatal("结算态 Enter 不应触发 LeaveRoom")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestHandleTableKeyRRestartsOnSettlement(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "r1"
+		v.SeatIndex = 0
+		v.LastSettlement = &clientv1.SettlementNotify{RoomId: "r1"}
+	})
+	cursor := &HandCursor{}
+	overlay := &OverlayState{}
+	theme := TileThemeUnicode
+	cfg := &Config{}
+
+	res := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyRune, 'r', tcell.ModNone), state, stubTableGateway{}, cursor, overlay, nil, &theme, cfg, nil)
+	require.NotNil(t, res.exit)
+	require.Equal(t, TableExitRestart, res.exit.Reason)
+}
+
+func TestSubmitExchangeRemovesTilesLocally(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "r1"
+		v.SeatIndex = 0
+		v.WaitingAction = "exchange_three"
+		v.Players[0].Hand = []string{"m1", "m9", "p1", "s1"}
+		v.Players[0].HandCnt = 4
+	})
+	cursor := &HandCursor{Mode: CursorModeMulti3, Index: 0, Marked: []int{0, 1, 2}}
+	gw := exchangeGateway{tiles: make(chan []string, 1)}
+	view := state.Snapshot()
+
+	res := submitCursorAction(context.Background(), state, cursor, view.Players[0].Hand, gw, view)
+	require.Nil(t, res.exit)
+	require.True(t, cursor.Pending)
+	require.Equal(t, []string{"s1"}, state.Snapshot().Players[0].Hand)
+
+	select {
+	case got := <-gw.tiles:
+		require.Equal(t, []string{"m1", "m9", "p1"}, got)
+	case <-time.After(time.Second):
+		t.Fatal("expected exchange request")
 	}
 }

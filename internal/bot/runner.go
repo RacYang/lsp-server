@@ -189,7 +189,7 @@ func (r *Runner) sendAction(ctx context.Context, client *wsclient.Client, action
 			IdempotencyKey: r.idempotencyKey(msgid.ExchangeThreeReq),
 			Body: &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{
 				Tiles:     action.Tiles,
-				Direction: 3,
+				Direction: 0,
 			}},
 		})
 	case ActionQueMen:

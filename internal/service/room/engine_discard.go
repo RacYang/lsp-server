@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 
+	"google.golang.org/protobuf/proto"
+
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
@@ -54,7 +56,13 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	actionPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("discard-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{SeatIndex: seatIndex, Action: "discard", Tile: discard.String()},
+			Action: &clientv1.ActionNotify{
+				SeatIndex: seatIndex,
+				Action:    "discard",
+				Tile:      discard.String(),
+				Phase:     clientv1.Phase_PHASE_CLAIM,
+				Step:      int64(rs.step),
+			},
 		},
 	})
 	if err != nil {
@@ -75,7 +83,20 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	rs.lastDiscardSeat = seat
 	rs.turn = rs.nextActiveSeat(seat)
 	rs.openClaimWindow()
+	actionPhase := clientv1.Phase_PHASE_DRAW
+	actionSeats := []int32{rs.turn.Proto()}
 	if len(rs.claimCandidates) > 0 {
+		actionPhase = clientv1.Phase_PHASE_CLAIM
+		actionSeats = rs.actingSeats()
+		if actionEnv := new(clientv1.Envelope); proto.Unmarshal(actionPayload, actionEnv) == nil {
+			if action := actionEnv.GetAction(); action != nil {
+				action.Phase = actionPhase
+				action.ActingSeats = actionSeats
+				if payload, err := marshalEnvelope(actionEnv); err == nil {
+					out[0].Payload = payload
+				}
+			}
+		}
 		metrics.ClaimWindowTotal.WithLabelValues("open").Inc()
 		claimPrompts, err := rs.claimPromptNotifications(discard)
 		if err != nil {
@@ -85,6 +106,15 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	}
 	rs.clearClaimWindow()
 	rs.closeOpeningClaimWindow()
+	if actionEnv := new(clientv1.Envelope); proto.Unmarshal(actionPayload, actionEnv) == nil {
+		if action := actionEnv.GetAction(); action != nil {
+			action.Phase = actionPhase
+			action.ActingSeats = actionSeats
+			if payload, err := marshalEnvelope(actionEnv); err == nil {
+				out[0].Payload = payload
+			}
+		}
+	}
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {
 		return nil, err
@@ -171,7 +201,13 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	huPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("hu-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{SeatIndex: seatIndex, Action: "hu", Tile: winTile.String()},
+			Action: &clientv1.ActionNotify{
+				SeatIndex: seatIndex,
+				Action:    "hu",
+				Tile:      winTile.String(),
+				Phase:     rs.phase(),
+				Step:      int64(rs.step),
+			},
 		},
 	})
 	if err != nil {
@@ -239,22 +275,56 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	drawPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("draw-%d", rs.step),
 		Body: &clientv1.Envelope_DrawTile{
-			DrawTile: &clientv1.DrawTileNotify{SeatIndex: seatIndex, Tile: drawn.String()},
+			DrawTile: &clientv1.DrawTileNotify{
+				SeatIndex:   seatIndex,
+				Tile:        drawn.String(),
+				Phase:       clientv1.Phase_PHASE_DISCARD,
+				Step:        int64(rs.step),
+				ActingSeats: []int32{seatIndex},
+			},
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 	rs.currentDraw = drawn
-	out := []Notification{{Kind: KindDrawTile, Payload: drawPayload, TargetSeat: BroadcastSeat}}
+	out := []Notification{{
+		Kind:       KindDrawTile,
+		Payload:    drawPayload,
+		TargetSeat: BroadcastSeat,
+		Privacy:    PrivacyPerSeat,
+		Project: func(target Seat) []byte {
+			visible := target == rs.turn
+			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_DISCARD, int64(rs.step), []int32{seatIndex}, visible)
+			if err != nil {
+				return drawPayload
+			}
+			return payload
+		},
+	}}
 	if _, ok := rs.rule.CheckHu(rs.hands[rs.turn], drawn, rules.HuContext{}); ok {
 		rs.pendingDraw = drawn
 		rs.waitingTsumo = true
 		rs.waitingDiscard = false
+		out[0].Project = func(target Seat) []byte {
+			visible := target == rs.turn
+			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_TSUMO, int64(rs.step), []int32{seatIndex}, visible)
+			if err != nil {
+				return drawPayload
+			}
+			return payload
+		}
 		choicePayload, err := marshalEnvelope(&clientv1.Envelope{
 			ReqId: fmt.Sprintf("tsumo-choice-%d", rs.step),
 			Body: &clientv1.Envelope_Action{
-				Action: &clientv1.ActionNotify{SeatIndex: seatIndex, Action: "tsumo_choice", Tile: drawn.String()},
+				Action: &clientv1.ActionNotify{
+					SeatIndex:   seatIndex,
+					Action:      "tsumo_choice",
+					Tile:        drawn.String(),
+					Phase:       clientv1.Phase_PHASE_TSUMO,
+					Step:        int64(rs.step),
+					ActingSeats: []int32{seatIndex},
+				},
 			},
 		})
 		if err != nil {
@@ -265,6 +335,24 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	rs.hands[rs.turn].Add(drawn)
 	rs.waitingDiscard = true
 	return out, nil
+}
+
+func drawTilePayload(reqID string, seatIndex int32, tileText string, phase clientv1.Phase, step int64, actingSeats []int32, visible bool) ([]byte, error) {
+	if !visible {
+		tileText = ""
+	}
+	return marshalEnvelope(&clientv1.Envelope{
+		ReqId: reqID,
+		Body: &clientv1.Envelope_DrawTile{
+			DrawTile: &clientv1.DrawTileNotify{
+				SeatIndex:   seatIndex,
+				Tile:        tileText,
+				Phase:       phase,
+				Step:        step,
+				ActingSeats: append([]int32(nil), actingSeats...),
+			},
+		},
+	})
 }
 
 func (rs *RoundState) isHued(seat Seat) bool {

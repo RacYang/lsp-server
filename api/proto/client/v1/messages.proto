@@ -20,6 +20,20 @@ enum ErrorCode {
   ERROR_CODE_FEATURE_DISABLED = 9;
 }
 
+// Phase 表示局内权威阶段；客户端优先以该字段驱动交互状态。
+enum Phase {
+  PHASE_UNSPECIFIED = 0;
+  PHASE_LOBBY = 1;
+  PHASE_EXCHANGE = 2;
+  PHASE_QUE_MEN = 3;
+  PHASE_DRAW = 4;
+  PHASE_DISCARD = 5;
+  PHASE_CLAIM = 6;
+  PHASE_TSUMO = 7;
+  PHASE_SETTLE = 8;
+  PHASE_CLOSED = 9;
+}
+
 // Envelope 为请求/响应通用外壳；body 使用 oneof 承载具体消息。
 message Envelope {
   string req_id = 1;
@@ -115,6 +129,7 @@ message SeatInfo {
   string nickname = 3;
   bool is_bot = 4;
   bool surrendered = 5;
+  int32 hand_count = 6;
 }
 
 // RoomMeta 是大厅页展示的公开房间摘要；私密房不会出现在列表中。
@@ -247,18 +262,25 @@ message AddBotResponse {
 message StartGameNotify {
   string room_id = 1;
   int32 dealer_seat = 2;
+  Phase phase = 3;
+  int64 step = 4;
+  repeated int32 acting_seats = 5;
 }
 
 // InitialDealNotify 表示开局发给当前座位的 13 张初始手牌。
 message InitialDealNotify {
   int32 seat_index = 1;
   repeated string tiles = 2;
+  int64 step = 3;
 }
 
 // DrawTileNotify 表示某座位摸牌。
 message DrawTileNotify {
   int32 seat_index = 1;
   string tile = 2;
+  Phase phase = 3;
+  int64 step = 4;
+  repeated int32 acting_seats = 5;
 }
 
 // ActionNotify 表示他人可见动作（吃碰杠胡等，Phase 1 简化为文本描述）。
@@ -270,6 +292,9 @@ message ActionNotify {
   int32 seat_index = 1;
   string action = 2;
   string tile = 3;
+  Phase phase = 4;
+  int64 step = 5;
+  repeated int32 acting_seats = 6;
 }
 
 // SettlementNotify 表示一局结算摘要。
@@ -340,7 +365,7 @@ message RouteRedirectNotify {
 // ExchangeThreeRequest 换三张：提交要交出的三张牌（字符串编码同 tile 名称）。
 message ExchangeThreeRequest {
   repeated string tiles = 1;
-  // 1=顺时针 2=对家 3=逆时针（四家必须提交一致方向）
+  // 1=顺时针 2=对家 3=逆时针；服务端以首个有效 hint 解析为本局权威方向。
   int32 direction = 2;
 }
 
@@ -353,6 +378,10 @@ message ExchangeThreeResponse {
 message ExchangeThreeDoneNotify {
   // 每座位实际换入的三张，按座位索引排列；不展示他人手牌时可为空并仅靠日志回放。
   repeated SeatTiles per_seat = 1;
+  int32 direction = 2;
+  Phase phase = 3;
+  int64 step = 4;
+  repeated int32 acting_seats = 5;
 }
 
 message SeatTiles {
@@ -375,6 +404,9 @@ message QueMenResponse {
 message QueMenDoneNotify {
   // 每座位缺门花色，-1 表示未公开
   repeated int32 que_suit_by_seat = 1;
+  Phase phase = 2;
+  int64 step = 3;
+  repeated int32 acting_seats = 4;
 }
 
 // SnapshotNotify 为重连恢复下发的房间视图摘要；cursor 为快照游标，格式见 ADR-0013。
@@ -398,6 +430,9 @@ message SnapshotNotify {
   // melds_by_seat 按座位返回副露文本编码，用于重连后恢复牌桌。
   repeated SeatTiles melds_by_seat = 13;
   repeated SeatInfo seats = 14;
+  Phase phase = 15;
+  repeated int32 acting_seats = 16;
+  int64 last_step = 17;
 }
 
 // ClaimCandidate 表示快照中仍然有效的抢答候选。

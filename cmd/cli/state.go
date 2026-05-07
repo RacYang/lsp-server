@@ -23,25 +23,31 @@ type AppState struct {
 
 // RoomView 是渲染层唯一读取的数据结构。
 type RoomView struct {
-	UserID        string
-	Nickname      string
-	ServerURL     string
-	Phase         string
-	RoomID        string
-	RuleID        string
-	DisplayName   string
-	SessionToken  string
-	SeatIndex     int32
-	RoomState     string
-	WaitingAction string
+	UserID          string
+	Nickname        string
+	ServerURL       string
+	Phase           string
+	RoomID          string
+	RuleID          string
+	DisplayName     string
+	SessionToken    string
+	SeatIndex       int32
+	RoomState       string
+	WaitingAction   string
+	RoundPhase      clientv1.Phase
+	LastStep        int64
+	SnapshotStep    int64
+	ActionStartedAt time.Time
 
-	DealerSeat       int32
-	ActingSeat       int32
-	PendingTile      string
-	AvailableActions []string
-	ClaimCandidates  map[int32][]string
-	QueBySeat        [4]int32
-	Players          [4]PlayerView
+	DealerSeat        int32
+	ActingSeat        int32
+	ActingSeats       []int32
+	PendingTile       string
+	AvailableActions  []string
+	ClaimCandidates   map[int32][]string
+	QueBySeat         [4]int32
+	ExchangeDirection int32
+	Players           [4]PlayerView
 
 	LastSettlement     *clientv1.SettlementNotify
 	RoomList           []*clientv1.RoomMeta
@@ -82,6 +88,7 @@ func NewAppState(name string) *AppState {
 	st.view.Nickname = name
 	st.view.SeatIndex = -1
 	st.view.ActingSeat = -1
+	st.view.ExchangeDirection = -1
 	st.view.Phase = phaseLogin
 	st.view.ClaimCandidates = make(map[int32][]string)
 	for i := range st.view.QueBySeat {
@@ -138,6 +145,7 @@ func (s *AppState) addLogLocked(text string) {
 func cloneRoomView(in RoomView) RoomView {
 	out := in
 	out.AvailableActions = append([]string(nil), in.AvailableActions...)
+	out.ActingSeats = append([]int32(nil), in.ActingSeats...)
 	out.ClaimCandidates = make(map[int32][]string, len(in.ClaimCandidates))
 	for seat, actions := range in.ClaimCandidates {
 		out.ClaimCandidates[seat] = append([]string(nil), actions...)

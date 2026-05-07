@@ -92,6 +92,77 @@ func (ErrorCode) EnumDescriptor() ([]byte, []int) {
 	return file_client_v1_messages_proto_rawDescGZIP(), []int{0}
 }
 
+// Phase 表示局内权威阶段；客户端优先以该字段驱动交互状态。
+type Phase int32
+
+const (
+	Phase_PHASE_UNSPECIFIED Phase = 0
+	Phase_PHASE_LOBBY       Phase = 1
+	Phase_PHASE_EXCHANGE    Phase = 2
+	Phase_PHASE_QUE_MEN     Phase = 3
+	Phase_PHASE_DRAW        Phase = 4
+	Phase_PHASE_DISCARD     Phase = 5
+	Phase_PHASE_CLAIM       Phase = 6
+	Phase_PHASE_TSUMO       Phase = 7
+	Phase_PHASE_SETTLE      Phase = 8
+	Phase_PHASE_CLOSED      Phase = 9
+)
+
+// Enum value maps for Phase.
+var (
+	Phase_name = map[int32]string{
+		0: "PHASE_UNSPECIFIED",
+		1: "PHASE_LOBBY",
+		2: "PHASE_EXCHANGE",
+		3: "PHASE_QUE_MEN",
+		4: "PHASE_DRAW",
+		5: "PHASE_DISCARD",
+		6: "PHASE_CLAIM",
+		7: "PHASE_TSUMO",
+		8: "PHASE_SETTLE",
+		9: "PHASE_CLOSED",
+	}
+	Phase_value = map[string]int32{
+		"PHASE_UNSPECIFIED": 0,
+		"PHASE_LOBBY":       1,
+		"PHASE_EXCHANGE":    2,
+		"PHASE_QUE_MEN":     3,
+		"PHASE_DRAW":        4,
+		"PHASE_DISCARD":     5,
+		"PHASE_CLAIM":       6,
+		"PHASE_TSUMO":       7,
+		"PHASE_SETTLE":      8,
+		"PHASE_CLOSED":      9,
+	}
+)
+
+func (x Phase) Enum() *Phase {
+	p := new(Phase)
+	*p = x
+	return p
+}
+
+func (x Phase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Phase) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v1_messages_proto_enumTypes[1].Descriptor()
+}
+
+func (Phase) Type() protoreflect.EnumType {
+	return &file_client_v1_messages_proto_enumTypes[1]
+}
+
+func (x Phase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Phase.Descriptor instead.
+func (Phase) EnumDescriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{1}
+}
+
 // Envelope 为请求/响应通用外壳；body 使用 oneof 承载具体消息。
 type Envelope struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1129,6 +1200,7 @@ type SeatInfo struct {
 	Nickname      string                 `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
 	IsBot         bool                   `protobuf:"varint,4,opt,name=is_bot,json=isBot,proto3" json:"is_bot,omitempty"`
 	Surrendered   bool                   `protobuf:"varint,5,opt,name=surrendered,proto3" json:"surrendered,omitempty"`
+	HandCount     int32                  `protobuf:"varint,6,opt,name=hand_count,json=handCount,proto3" json:"hand_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1196,6 +1268,13 @@ func (x *SeatInfo) GetSurrendered() bool {
 		return x.Surrendered
 	}
 	return false
+}
+
+func (x *SeatInfo) GetHandCount() int32 {
+	if x != nil {
+		return x.HandCount
+	}
+	return 0
 }
 
 // RoomMeta 是大厅页展示的公开房间摘要；私密房不会出现在列表中。
@@ -2491,6 +2570,9 @@ type StartGameNotify struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RoomId        string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
 	DealerSeat    int32                  `protobuf:"varint,2,opt,name=dealer_seat,json=dealerSeat,proto3" json:"dealer_seat,omitempty"`
+	Phase         Phase                  `protobuf:"varint,3,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	Step          int64                  `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32                `protobuf:"varint,5,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2539,11 +2621,33 @@ func (x *StartGameNotify) GetDealerSeat() int32 {
 	return 0
 }
 
+func (x *StartGameNotify) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *StartGameNotify) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *StartGameNotify) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
 // InitialDealNotify 表示开局发给当前座位的 13 张初始手牌。
 type InitialDealNotify struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
 	Tiles         []string               `protobuf:"bytes,2,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	Step          int64                  `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2592,11 +2696,21 @@ func (x *InitialDealNotify) GetTiles() []string {
 	return nil
 }
 
+func (x *InitialDealNotify) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
 // DrawTileNotify 表示某座位摸牌。
 type DrawTileNotify struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
 	Tile          string                 `protobuf:"bytes,2,opt,name=tile,proto3" json:"tile,omitempty"`
+	Phase         Phase                  `protobuf:"varint,3,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	Step          int64                  `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32                `protobuf:"varint,5,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2645,6 +2759,27 @@ func (x *DrawTileNotify) GetTile() string {
 	return ""
 }
 
+func (x *DrawTileNotify) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *DrawTileNotify) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *DrawTileNotify) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
 // ActionNotify 表示他人可见动作（吃碰杠胡等，Phase 1 简化为文本描述）。
 // 合法 action 字符串集合当前冻结为：
 // discard, pong, gang, hu, exchange_three, que_men,
@@ -2655,6 +2790,9 @@ type ActionNotify struct {
 	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
 	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
 	Tile          string                 `protobuf:"bytes,3,opt,name=tile,proto3" json:"tile,omitempty"`
+	Phase         Phase                  `protobuf:"varint,4,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	Step          int64                  `protobuf:"varint,5,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32                `protobuf:"varint,6,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2708,6 +2846,27 @@ func (x *ActionNotify) GetTile() string {
 		return x.Tile
 	}
 	return ""
+}
+
+func (x *ActionNotify) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *ActionNotify) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *ActionNotify) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
 }
 
 // SettlementNotify 表示一局结算摘要。
@@ -3259,7 +3418,7 @@ func (x *RouteRedirectNotify) GetReason() string {
 type ExchangeThreeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Tiles []string               `protobuf:"bytes,1,rep,name=tiles,proto3" json:"tiles,omitempty"`
-	// 1=顺时针 2=对家 3=逆时针（四家必须提交一致方向）
+	// 1=顺时针 2=对家 3=逆时针；服务端以首个有效 hint 解析为本局权威方向。
 	Direction     int32 `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3366,6 +3525,10 @@ type ExchangeThreeDoneNotify struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 每座位实际换入的三张，按座位索引排列；不展示他人手牌时可为空并仅靠日志回放。
 	PerSeat       []*SeatTiles `protobuf:"bytes,1,rep,name=per_seat,json=perSeat,proto3" json:"per_seat,omitempty"`
+	Direction     int32        `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
+	Phase         Phase        `protobuf:"varint,3,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	Step          int64        `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32      `protobuf:"varint,5,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3403,6 +3566,34 @@ func (*ExchangeThreeDoneNotify) Descriptor() ([]byte, []int) {
 func (x *ExchangeThreeDoneNotify) GetPerSeat() []*SeatTiles {
 	if x != nil {
 		return x.PerSeat
+	}
+	return nil
+}
+
+func (x *ExchangeThreeDoneNotify) GetDirection() int32 {
+	if x != nil {
+		return x.Direction
+	}
+	return 0
+}
+
+func (x *ExchangeThreeDoneNotify) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *ExchangeThreeDoneNotify) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *ExchangeThreeDoneNotify) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
 	}
 	return nil
 }
@@ -3562,6 +3753,9 @@ type QueMenDoneNotify struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 每座位缺门花色，-1 表示未公开
 	QueSuitBySeat []int32 `protobuf:"varint,1,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
+	Phase         Phase   `protobuf:"varint,2,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	Step          int64   `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32 `protobuf:"varint,4,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3603,6 +3797,27 @@ func (x *QueMenDoneNotify) GetQueSuitBySeat() []int32 {
 	return nil
 }
 
+func (x *QueMenDoneNotify) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *QueMenDoneNotify) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *QueMenDoneNotify) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
 // SnapshotNotify 为重连恢复下发的房间视图摘要；cursor 为快照游标，格式见 ADR-0013。
 // state 表示房间 FSM（waiting/ready/playing/settling/closed）；
 // waiting_action 表示局内 UI 阶段（exchange_three/que_men/discard/claim_window/tsumo_window/none）。
@@ -3626,6 +3841,9 @@ type SnapshotNotify struct {
 	// melds_by_seat 按座位返回副露文本编码，用于重连后恢复牌桌。
 	MeldsBySeat   []*SeatTiles `protobuf:"bytes,13,rep,name=melds_by_seat,json=meldsBySeat,proto3" json:"melds_by_seat,omitempty"`
 	Seats         []*SeatInfo  `protobuf:"bytes,14,rep,name=seats,proto3" json:"seats,omitempty"`
+	Phase         Phase        `protobuf:"varint,15,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	ActingSeats   []int32      `protobuf:"varint,16,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
+	LastStep      int64        `protobuf:"varint,17,opt,name=last_step,json=lastStep,proto3" json:"last_step,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3757,6 +3975,27 @@ func (x *SnapshotNotify) GetSeats() []*SeatInfo {
 		return x.Seats
 	}
 	return nil
+}
+
+func (x *SnapshotNotify) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *SnapshotNotify) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
+func (x *SnapshotNotify) GetLastStep() int64 {
+	if x != nil {
+		return x.LastStep
+	}
+	return 0
 }
 
 // ClaimCandidate 表示快照中仍然有效的抢答候选。
@@ -3897,14 +4136,16 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\x12\x17\n" +
 	"\arule_id\x18\x04 \x01(\tR\x06ruleId\x12!\n" +
 	"\fdisplay_name\x18\x05 \x01(\tR\vdisplayName\x12)\n" +
-	"\x05seats\x18\x06 \x03(\v2\x13.client.v1.SeatInfoR\x05seats\"\x97\x01\n" +
+	"\x05seats\x18\x06 \x03(\v2\x13.client.v1.SeatInfoR\x05seats\"\xb6\x01\n" +
 	"\bSeatInfo\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +
 	"\bnickname\x18\x03 \x01(\tR\bnickname\x12\x15\n" +
 	"\x06is_bot\x18\x04 \x01(\bR\x05isBot\x12 \n" +
-	"\vsurrendered\x18\x05 \x01(\bR\vsurrendered\"\xd5\x01\n" +
+	"\vsurrendered\x18\x05 \x01(\bR\vsurrendered\x12\x1d\n" +
+	"\n" +
+	"hand_count\x18\x06 \x01(\x05R\thandCount\"\xd5\x01\n" +
 	"\bRoomMeta\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x17\n" +
 	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12!\n" +
@@ -4002,24 +4243,34 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x05added\x18\x01 \x03(\v2\x13.client.v1.SeatInfoR\x05added\x123\n" +
 	"\n" +
 	"error_code\x18\x02 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"K\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"\xaa\x01\n" +
 	"\x0fStartGameNotify\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1f\n" +
 	"\vdealer_seat\x18\x02 \x01(\x05R\n" +
-	"dealerSeat\"H\n" +
+	"dealerSeat\x12&\n" +
+	"\x05phase\x18\x03 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x04 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x05 \x03(\x05R\vactingSeats\"\\\n" +
 	"\x11InitialDealNotify\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x14\n" +
-	"\x05tiles\x18\x02 \x03(\tR\x05tiles\"C\n" +
+	"\x05tiles\x18\x02 \x03(\tR\x05tiles\x12\x12\n" +
+	"\x04step\x18\x03 \x01(\x03R\x04step\"\xa2\x01\n" +
 	"\x0eDrawTileNotify\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x12\n" +
-	"\x04tile\x18\x02 \x01(\tR\x04tile\"Y\n" +
+	"\x04tile\x18\x02 \x01(\tR\x04tile\x12&\n" +
+	"\x05phase\x18\x03 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x04 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x05 \x03(\x05R\vactingSeats\"\xb8\x01\n" +
 	"\fActionNotify\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x12\n" +
-	"\x04tile\x18\x03 \x01(\tR\x04tile\"\xcc\x02\n" +
+	"\x04tile\x18\x03 \x01(\tR\x04tile\x12&\n" +
+	"\x05phase\x18\x04 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x05 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x06 \x03(\x05R\vactingSeats\"\xcc\x02\n" +
 	"\x10SettlementNotify\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12&\n" +
 	"\x0fwinner_user_ids\x18\x02 \x03(\tR\rwinnerUserIds\x12\x1b\n" +
@@ -4068,9 +4319,13 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x15ExchangeThreeResponse\x123\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"J\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"\xc7\x01\n" +
 	"\x17ExchangeThreeDoneNotify\x12/\n" +
-	"\bper_seat\x18\x01 \x03(\v2\x14.client.v1.SeatTilesR\aperSeat\"@\n" +
+	"\bper_seat\x18\x01 \x03(\v2\x14.client.v1.SeatTilesR\aperSeat\x12\x1c\n" +
+	"\tdirection\x18\x02 \x01(\x05R\tdirection\x12&\n" +
+	"\x05phase\x18\x03 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x04 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x05 \x03(\x05R\vactingSeats\"@\n" +
 	"\tSeatTiles\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x14\n" +
@@ -4080,9 +4335,12 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x0eQueMenResponse\x123\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\";\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"\x9a\x01\n" +
 	"\x10QueMenDoneNotify\x12'\n" +
-	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"\xce\x04\n" +
+	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\x12&\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x03 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x04 \x03(\x05R\vactingSeats\"\xb6\x05\n" +
 	"\x0eSnapshotNotify\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12!\n" +
 	"\n" +
@@ -4100,7 +4358,10 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x0fyour_hand_tiles\x18\v \x03(\tR\ryourHandTiles\x12>\n" +
 	"\x10discards_by_seat\x18\f \x03(\v2\x14.client.v1.SeatTilesR\x0ediscardsBySeat\x128\n" +
 	"\rmelds_by_seat\x18\r \x03(\v2\x14.client.v1.SeatTilesR\vmeldsBySeat\x12)\n" +
-	"\x05seats\x18\x0e \x03(\v2\x13.client.v1.SeatInfoR\x05seats\"I\n" +
+	"\x05seats\x18\x0e \x03(\v2\x13.client.v1.SeatInfoR\x05seats\x12&\n" +
+	"\x05phase\x18\x0f \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12!\n" +
+	"\facting_seats\x18\x10 \x03(\x05R\vactingSeats\x12\x1b\n" +
+	"\tlast_step\x18\x11 \x01(\x03R\blastStep\"I\n" +
 	"\x0eClaimCandidate\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x18\n" +
@@ -4115,7 +4376,19 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x19ERROR_CODE_ROUTE_REDIRECT\x10\x06\x12\x1b\n" +
 	"\x17ERROR_CODE_RATE_LIMITED\x10\a\x12\x1b\n" +
 	"\x17ERROR_CODE_RECONNECTING\x10\b\x12\x1f\n" +
-	"\x1bERROR_CODE_FEATURE_DISABLED\x10\tB,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
+	"\x1bERROR_CODE_FEATURE_DISABLED\x10\t*\xbf\x01\n" +
+	"\x05Phase\x12\x15\n" +
+	"\x11PHASE_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vPHASE_LOBBY\x10\x01\x12\x12\n" +
+	"\x0ePHASE_EXCHANGE\x10\x02\x12\x11\n" +
+	"\rPHASE_QUE_MEN\x10\x03\x12\x0e\n" +
+	"\n" +
+	"PHASE_DRAW\x10\x04\x12\x11\n" +
+	"\rPHASE_DISCARD\x10\x05\x12\x0f\n" +
+	"\vPHASE_CLAIM\x10\x06\x12\x0f\n" +
+	"\vPHASE_TSUMO\x10\a\x12\x10\n" +
+	"\fPHASE_SETTLE\x10\b\x12\x10\n" +
+	"\fPHASE_CLOSED\x10\tB,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
 
 var (
 	file_client_v1_messages_proto_rawDescOnce sync.Once
@@ -4129,115 +4402,116 @@ func file_client_v1_messages_proto_rawDescGZIP() []byte {
 	return file_client_v1_messages_proto_rawDescData
 }
 
-var file_client_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_client_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_client_v1_messages_proto_goTypes = []any{
 	(ErrorCode)(0),                  // 0: client.v1.ErrorCode
-	(*Envelope)(nil),                // 1: client.v1.Envelope
-	(*LoginRequest)(nil),            // 2: client.v1.LoginRequest
-	(*LoginResponse)(nil),           // 3: client.v1.LoginResponse
-	(*JoinRoomRequest)(nil),         // 4: client.v1.JoinRoomRequest
-	(*JoinRoomResponse)(nil),        // 5: client.v1.JoinRoomResponse
-	(*SeatInfo)(nil),                // 6: client.v1.SeatInfo
-	(*RoomMeta)(nil),                // 7: client.v1.RoomMeta
-	(*ListRoomsRequest)(nil),        // 8: client.v1.ListRoomsRequest
-	(*ListRoomsResponse)(nil),       // 9: client.v1.ListRoomsResponse
-	(*AutoMatchRequest)(nil),        // 10: client.v1.AutoMatchRequest
-	(*AutoMatchResponse)(nil),       // 11: client.v1.AutoMatchResponse
-	(*CreateRoomRequest)(nil),       // 12: client.v1.CreateRoomRequest
-	(*CreateRoomResponse)(nil),      // 13: client.v1.CreateRoomResponse
-	(*ReadyRequest)(nil),            // 14: client.v1.ReadyRequest
-	(*ReadyResponse)(nil),           // 15: client.v1.ReadyResponse
-	(*DiscardRequest)(nil),          // 16: client.v1.DiscardRequest
-	(*DiscardResponse)(nil),         // 17: client.v1.DiscardResponse
-	(*PongRequest)(nil),             // 18: client.v1.PongRequest
-	(*PongResponse)(nil),            // 19: client.v1.PongResponse
-	(*GangRequest)(nil),             // 20: client.v1.GangRequest
-	(*GangResponse)(nil),            // 21: client.v1.GangResponse
-	(*HuRequest)(nil),               // 22: client.v1.HuRequest
-	(*HuResponse)(nil),              // 23: client.v1.HuResponse
-	(*PassRequest)(nil),             // 24: client.v1.PassRequest
-	(*PassResponse)(nil),            // 25: client.v1.PassResponse
-	(*RenameRequest)(nil),           // 26: client.v1.RenameRequest
-	(*RenameResponse)(nil),          // 27: client.v1.RenameResponse
-	(*AddBotRequest)(nil),           // 28: client.v1.AddBotRequest
-	(*AddBotResponse)(nil),          // 29: client.v1.AddBotResponse
-	(*StartGameNotify)(nil),         // 30: client.v1.StartGameNotify
-	(*InitialDealNotify)(nil),       // 31: client.v1.InitialDealNotify
-	(*DrawTileNotify)(nil),          // 32: client.v1.DrawTileNotify
-	(*ActionNotify)(nil),            // 33: client.v1.ActionNotify
-	(*SettlementNotify)(nil),        // 34: client.v1.SettlementNotify
-	(*SeatScore)(nil),               // 35: client.v1.SeatScore
-	(*PenaltyItem)(nil),             // 36: client.v1.PenaltyItem
-	(*WinnerBreakdown)(nil),         // 37: client.v1.WinnerBreakdown
-	(*HeartbeatRequest)(nil),        // 38: client.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),       // 39: client.v1.HeartbeatResponse
-	(*LeaveRoomRequest)(nil),        // 40: client.v1.LeaveRoomRequest
-	(*LeaveRoomResponse)(nil),       // 41: client.v1.LeaveRoomResponse
-	(*RouteRedirectNotify)(nil),     // 42: client.v1.RouteRedirectNotify
-	(*ExchangeThreeRequest)(nil),    // 43: client.v1.ExchangeThreeRequest
-	(*ExchangeThreeResponse)(nil),   // 44: client.v1.ExchangeThreeResponse
-	(*ExchangeThreeDoneNotify)(nil), // 45: client.v1.ExchangeThreeDoneNotify
-	(*SeatTiles)(nil),               // 46: client.v1.SeatTiles
-	(*QueMenRequest)(nil),           // 47: client.v1.QueMenRequest
-	(*QueMenResponse)(nil),          // 48: client.v1.QueMenResponse
-	(*QueMenDoneNotify)(nil),        // 49: client.v1.QueMenDoneNotify
-	(*SnapshotNotify)(nil),          // 50: client.v1.SnapshotNotify
-	(*ClaimCandidate)(nil),          // 51: client.v1.ClaimCandidate
+	(Phase)(0),                      // 1: client.v1.Phase
+	(*Envelope)(nil),                // 2: client.v1.Envelope
+	(*LoginRequest)(nil),            // 3: client.v1.LoginRequest
+	(*LoginResponse)(nil),           // 4: client.v1.LoginResponse
+	(*JoinRoomRequest)(nil),         // 5: client.v1.JoinRoomRequest
+	(*JoinRoomResponse)(nil),        // 6: client.v1.JoinRoomResponse
+	(*SeatInfo)(nil),                // 7: client.v1.SeatInfo
+	(*RoomMeta)(nil),                // 8: client.v1.RoomMeta
+	(*ListRoomsRequest)(nil),        // 9: client.v1.ListRoomsRequest
+	(*ListRoomsResponse)(nil),       // 10: client.v1.ListRoomsResponse
+	(*AutoMatchRequest)(nil),        // 11: client.v1.AutoMatchRequest
+	(*AutoMatchResponse)(nil),       // 12: client.v1.AutoMatchResponse
+	(*CreateRoomRequest)(nil),       // 13: client.v1.CreateRoomRequest
+	(*CreateRoomResponse)(nil),      // 14: client.v1.CreateRoomResponse
+	(*ReadyRequest)(nil),            // 15: client.v1.ReadyRequest
+	(*ReadyResponse)(nil),           // 16: client.v1.ReadyResponse
+	(*DiscardRequest)(nil),          // 17: client.v1.DiscardRequest
+	(*DiscardResponse)(nil),         // 18: client.v1.DiscardResponse
+	(*PongRequest)(nil),             // 19: client.v1.PongRequest
+	(*PongResponse)(nil),            // 20: client.v1.PongResponse
+	(*GangRequest)(nil),             // 21: client.v1.GangRequest
+	(*GangResponse)(nil),            // 22: client.v1.GangResponse
+	(*HuRequest)(nil),               // 23: client.v1.HuRequest
+	(*HuResponse)(nil),              // 24: client.v1.HuResponse
+	(*PassRequest)(nil),             // 25: client.v1.PassRequest
+	(*PassResponse)(nil),            // 26: client.v1.PassResponse
+	(*RenameRequest)(nil),           // 27: client.v1.RenameRequest
+	(*RenameResponse)(nil),          // 28: client.v1.RenameResponse
+	(*AddBotRequest)(nil),           // 29: client.v1.AddBotRequest
+	(*AddBotResponse)(nil),          // 30: client.v1.AddBotResponse
+	(*StartGameNotify)(nil),         // 31: client.v1.StartGameNotify
+	(*InitialDealNotify)(nil),       // 32: client.v1.InitialDealNotify
+	(*DrawTileNotify)(nil),          // 33: client.v1.DrawTileNotify
+	(*ActionNotify)(nil),            // 34: client.v1.ActionNotify
+	(*SettlementNotify)(nil),        // 35: client.v1.SettlementNotify
+	(*SeatScore)(nil),               // 36: client.v1.SeatScore
+	(*PenaltyItem)(nil),             // 37: client.v1.PenaltyItem
+	(*WinnerBreakdown)(nil),         // 38: client.v1.WinnerBreakdown
+	(*HeartbeatRequest)(nil),        // 39: client.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),       // 40: client.v1.HeartbeatResponse
+	(*LeaveRoomRequest)(nil),        // 41: client.v1.LeaveRoomRequest
+	(*LeaveRoomResponse)(nil),       // 42: client.v1.LeaveRoomResponse
+	(*RouteRedirectNotify)(nil),     // 43: client.v1.RouteRedirectNotify
+	(*ExchangeThreeRequest)(nil),    // 44: client.v1.ExchangeThreeRequest
+	(*ExchangeThreeResponse)(nil),   // 45: client.v1.ExchangeThreeResponse
+	(*ExchangeThreeDoneNotify)(nil), // 46: client.v1.ExchangeThreeDoneNotify
+	(*SeatTiles)(nil),               // 47: client.v1.SeatTiles
+	(*QueMenRequest)(nil),           // 48: client.v1.QueMenRequest
+	(*QueMenResponse)(nil),          // 49: client.v1.QueMenResponse
+	(*QueMenDoneNotify)(nil),        // 50: client.v1.QueMenDoneNotify
+	(*SnapshotNotify)(nil),          // 51: client.v1.SnapshotNotify
+	(*ClaimCandidate)(nil),          // 52: client.v1.ClaimCandidate
 }
 var file_client_v1_messages_proto_depIdxs = []int32{
-	2,  // 0: client.v1.Envelope.login_req:type_name -> client.v1.LoginRequest
-	3,  // 1: client.v1.Envelope.login_resp:type_name -> client.v1.LoginResponse
-	4,  // 2: client.v1.Envelope.join_room_req:type_name -> client.v1.JoinRoomRequest
-	5,  // 3: client.v1.Envelope.join_room_resp:type_name -> client.v1.JoinRoomResponse
-	14, // 4: client.v1.Envelope.ready_req:type_name -> client.v1.ReadyRequest
-	15, // 5: client.v1.Envelope.ready_resp:type_name -> client.v1.ReadyResponse
-	16, // 6: client.v1.Envelope.discard_req:type_name -> client.v1.DiscardRequest
-	17, // 7: client.v1.Envelope.discard_resp:type_name -> client.v1.DiscardResponse
-	18, // 8: client.v1.Envelope.pong_req:type_name -> client.v1.PongRequest
-	20, // 9: client.v1.Envelope.gang_req:type_name -> client.v1.GangRequest
-	22, // 10: client.v1.Envelope.hu_req:type_name -> client.v1.HuRequest
-	30, // 11: client.v1.Envelope.start_game:type_name -> client.v1.StartGameNotify
-	32, // 12: client.v1.Envelope.draw_tile:type_name -> client.v1.DrawTileNotify
-	33, // 13: client.v1.Envelope.action:type_name -> client.v1.ActionNotify
-	34, // 14: client.v1.Envelope.settlement:type_name -> client.v1.SettlementNotify
-	38, // 15: client.v1.Envelope.heartbeat_req:type_name -> client.v1.HeartbeatRequest
-	39, // 16: client.v1.Envelope.heartbeat_resp:type_name -> client.v1.HeartbeatResponse
-	40, // 17: client.v1.Envelope.leave_room_req:type_name -> client.v1.LeaveRoomRequest
-	41, // 18: client.v1.Envelope.leave_room_resp:type_name -> client.v1.LeaveRoomResponse
-	42, // 19: client.v1.Envelope.route_redirect:type_name -> client.v1.RouteRedirectNotify
-	43, // 20: client.v1.Envelope.exchange_three_req:type_name -> client.v1.ExchangeThreeRequest
-	44, // 21: client.v1.Envelope.exchange_three_resp:type_name -> client.v1.ExchangeThreeResponse
-	45, // 22: client.v1.Envelope.exchange_three_done:type_name -> client.v1.ExchangeThreeDoneNotify
-	47, // 23: client.v1.Envelope.que_men_req:type_name -> client.v1.QueMenRequest
-	48, // 24: client.v1.Envelope.que_men_resp:type_name -> client.v1.QueMenResponse
-	49, // 25: client.v1.Envelope.que_men_done:type_name -> client.v1.QueMenDoneNotify
-	50, // 26: client.v1.Envelope.snapshot:type_name -> client.v1.SnapshotNotify
-	19, // 27: client.v1.Envelope.pong_resp:type_name -> client.v1.PongResponse
-	21, // 28: client.v1.Envelope.gang_resp:type_name -> client.v1.GangResponse
-	23, // 29: client.v1.Envelope.hu_resp:type_name -> client.v1.HuResponse
-	31, // 30: client.v1.Envelope.initial_deal:type_name -> client.v1.InitialDealNotify
-	8,  // 31: client.v1.Envelope.list_rooms_req:type_name -> client.v1.ListRoomsRequest
-	9,  // 32: client.v1.Envelope.list_rooms_resp:type_name -> client.v1.ListRoomsResponse
-	10, // 33: client.v1.Envelope.auto_match_req:type_name -> client.v1.AutoMatchRequest
-	11, // 34: client.v1.Envelope.auto_match_resp:type_name -> client.v1.AutoMatchResponse
-	12, // 35: client.v1.Envelope.create_room_req:type_name -> client.v1.CreateRoomRequest
-	13, // 36: client.v1.Envelope.create_room_resp:type_name -> client.v1.CreateRoomResponse
-	24, // 37: client.v1.Envelope.pass_req:type_name -> client.v1.PassRequest
-	25, // 38: client.v1.Envelope.pass_resp:type_name -> client.v1.PassResponse
-	26, // 39: client.v1.Envelope.rename_req:type_name -> client.v1.RenameRequest
-	27, // 40: client.v1.Envelope.rename_resp:type_name -> client.v1.RenameResponse
-	28, // 41: client.v1.Envelope.add_bot_req:type_name -> client.v1.AddBotRequest
-	29, // 42: client.v1.Envelope.add_bot_resp:type_name -> client.v1.AddBotResponse
+	3,  // 0: client.v1.Envelope.login_req:type_name -> client.v1.LoginRequest
+	4,  // 1: client.v1.Envelope.login_resp:type_name -> client.v1.LoginResponse
+	5,  // 2: client.v1.Envelope.join_room_req:type_name -> client.v1.JoinRoomRequest
+	6,  // 3: client.v1.Envelope.join_room_resp:type_name -> client.v1.JoinRoomResponse
+	15, // 4: client.v1.Envelope.ready_req:type_name -> client.v1.ReadyRequest
+	16, // 5: client.v1.Envelope.ready_resp:type_name -> client.v1.ReadyResponse
+	17, // 6: client.v1.Envelope.discard_req:type_name -> client.v1.DiscardRequest
+	18, // 7: client.v1.Envelope.discard_resp:type_name -> client.v1.DiscardResponse
+	19, // 8: client.v1.Envelope.pong_req:type_name -> client.v1.PongRequest
+	21, // 9: client.v1.Envelope.gang_req:type_name -> client.v1.GangRequest
+	23, // 10: client.v1.Envelope.hu_req:type_name -> client.v1.HuRequest
+	31, // 11: client.v1.Envelope.start_game:type_name -> client.v1.StartGameNotify
+	33, // 12: client.v1.Envelope.draw_tile:type_name -> client.v1.DrawTileNotify
+	34, // 13: client.v1.Envelope.action:type_name -> client.v1.ActionNotify
+	35, // 14: client.v1.Envelope.settlement:type_name -> client.v1.SettlementNotify
+	39, // 15: client.v1.Envelope.heartbeat_req:type_name -> client.v1.HeartbeatRequest
+	40, // 16: client.v1.Envelope.heartbeat_resp:type_name -> client.v1.HeartbeatResponse
+	41, // 17: client.v1.Envelope.leave_room_req:type_name -> client.v1.LeaveRoomRequest
+	42, // 18: client.v1.Envelope.leave_room_resp:type_name -> client.v1.LeaveRoomResponse
+	43, // 19: client.v1.Envelope.route_redirect:type_name -> client.v1.RouteRedirectNotify
+	44, // 20: client.v1.Envelope.exchange_three_req:type_name -> client.v1.ExchangeThreeRequest
+	45, // 21: client.v1.Envelope.exchange_three_resp:type_name -> client.v1.ExchangeThreeResponse
+	46, // 22: client.v1.Envelope.exchange_three_done:type_name -> client.v1.ExchangeThreeDoneNotify
+	48, // 23: client.v1.Envelope.que_men_req:type_name -> client.v1.QueMenRequest
+	49, // 24: client.v1.Envelope.que_men_resp:type_name -> client.v1.QueMenResponse
+	50, // 25: client.v1.Envelope.que_men_done:type_name -> client.v1.QueMenDoneNotify
+	51, // 26: client.v1.Envelope.snapshot:type_name -> client.v1.SnapshotNotify
+	20, // 27: client.v1.Envelope.pong_resp:type_name -> client.v1.PongResponse
+	22, // 28: client.v1.Envelope.gang_resp:type_name -> client.v1.GangResponse
+	24, // 29: client.v1.Envelope.hu_resp:type_name -> client.v1.HuResponse
+	32, // 30: client.v1.Envelope.initial_deal:type_name -> client.v1.InitialDealNotify
+	9,  // 31: client.v1.Envelope.list_rooms_req:type_name -> client.v1.ListRoomsRequest
+	10, // 32: client.v1.Envelope.list_rooms_resp:type_name -> client.v1.ListRoomsResponse
+	11, // 33: client.v1.Envelope.auto_match_req:type_name -> client.v1.AutoMatchRequest
+	12, // 34: client.v1.Envelope.auto_match_resp:type_name -> client.v1.AutoMatchResponse
+	13, // 35: client.v1.Envelope.create_room_req:type_name -> client.v1.CreateRoomRequest
+	14, // 36: client.v1.Envelope.create_room_resp:type_name -> client.v1.CreateRoomResponse
+	25, // 37: client.v1.Envelope.pass_req:type_name -> client.v1.PassRequest
+	26, // 38: client.v1.Envelope.pass_resp:type_name -> client.v1.PassResponse
+	27, // 39: client.v1.Envelope.rename_req:type_name -> client.v1.RenameRequest
+	28, // 40: client.v1.Envelope.rename_resp:type_name -> client.v1.RenameResponse
+	29, // 41: client.v1.Envelope.add_bot_req:type_name -> client.v1.AddBotRequest
+	30, // 42: client.v1.Envelope.add_bot_resp:type_name -> client.v1.AddBotResponse
 	0,  // 43: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
 	0,  // 44: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	6,  // 45: client.v1.JoinRoomResponse.seats:type_name -> client.v1.SeatInfo
-	7,  // 46: client.v1.ListRoomsResponse.rooms:type_name -> client.v1.RoomMeta
+	7,  // 45: client.v1.JoinRoomResponse.seats:type_name -> client.v1.SeatInfo
+	8,  // 46: client.v1.ListRoomsResponse.rooms:type_name -> client.v1.RoomMeta
 	0,  // 47: client.v1.ListRoomsResponse.error_code:type_name -> client.v1.ErrorCode
 	0,  // 48: client.v1.AutoMatchResponse.error_code:type_name -> client.v1.ErrorCode
-	6,  // 49: client.v1.AutoMatchResponse.seats:type_name -> client.v1.SeatInfo
+	7,  // 49: client.v1.AutoMatchResponse.seats:type_name -> client.v1.SeatInfo
 	0,  // 50: client.v1.CreateRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	6,  // 51: client.v1.CreateRoomResponse.seats:type_name -> client.v1.SeatInfo
+	7,  // 51: client.v1.CreateRoomResponse.seats:type_name -> client.v1.SeatInfo
 	0,  // 52: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
 	0,  // 53: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
 	0,  // 54: client.v1.PongResponse.error_code:type_name -> client.v1.ErrorCode
@@ -4245,24 +4519,30 @@ var file_client_v1_messages_proto_depIdxs = []int32{
 	0,  // 56: client.v1.HuResponse.error_code:type_name -> client.v1.ErrorCode
 	0,  // 57: client.v1.PassResponse.error_code:type_name -> client.v1.ErrorCode
 	0,  // 58: client.v1.RenameResponse.error_code:type_name -> client.v1.ErrorCode
-	6,  // 59: client.v1.AddBotResponse.added:type_name -> client.v1.SeatInfo
+	7,  // 59: client.v1.AddBotResponse.added:type_name -> client.v1.SeatInfo
 	0,  // 60: client.v1.AddBotResponse.error_code:type_name -> client.v1.ErrorCode
-	35, // 61: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
-	36, // 62: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
-	37, // 63: client.v1.SettlementNotify.per_winner_breakdown:type_name -> client.v1.WinnerBreakdown
-	0,  // 64: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 65: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
-	46, // 66: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
-	0,  // 67: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
-	51, // 68: client.v1.SnapshotNotify.claim_candidates:type_name -> client.v1.ClaimCandidate
-	46, // 69: client.v1.SnapshotNotify.discards_by_seat:type_name -> client.v1.SeatTiles
-	46, // 70: client.v1.SnapshotNotify.melds_by_seat:type_name -> client.v1.SeatTiles
-	6,  // 71: client.v1.SnapshotNotify.seats:type_name -> client.v1.SeatInfo
-	72, // [72:72] is the sub-list for method output_type
-	72, // [72:72] is the sub-list for method input_type
-	72, // [72:72] is the sub-list for extension type_name
-	72, // [72:72] is the sub-list for extension extendee
-	0,  // [0:72] is the sub-list for field type_name
+	1,  // 61: client.v1.StartGameNotify.phase:type_name -> client.v1.Phase
+	1,  // 62: client.v1.DrawTileNotify.phase:type_name -> client.v1.Phase
+	1,  // 63: client.v1.ActionNotify.phase:type_name -> client.v1.Phase
+	36, // 64: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
+	37, // 65: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
+	38, // 66: client.v1.SettlementNotify.per_winner_breakdown:type_name -> client.v1.WinnerBreakdown
+	0,  // 67: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 68: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
+	47, // 69: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
+	1,  // 70: client.v1.ExchangeThreeDoneNotify.phase:type_name -> client.v1.Phase
+	0,  // 71: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
+	1,  // 72: client.v1.QueMenDoneNotify.phase:type_name -> client.v1.Phase
+	52, // 73: client.v1.SnapshotNotify.claim_candidates:type_name -> client.v1.ClaimCandidate
+	47, // 74: client.v1.SnapshotNotify.discards_by_seat:type_name -> client.v1.SeatTiles
+	47, // 75: client.v1.SnapshotNotify.melds_by_seat:type_name -> client.v1.SeatTiles
+	7,  // 76: client.v1.SnapshotNotify.seats:type_name -> client.v1.SeatInfo
+	1,  // 77: client.v1.SnapshotNotify.phase:type_name -> client.v1.Phase
+	78, // [78:78] is the sub-list for method output_type
+	78, // [78:78] is the sub-list for method input_type
+	78, // [78:78] is the sub-list for extension type_name
+	78, // [78:78] is the sub-list for extension extendee
+	0,  // [0:78] is the sub-list for field type_name
 }
 
 func init() { file_client_v1_messages_proto_init() }
@@ -4320,7 +4600,7 @@ func file_client_v1_messages_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v1_messages_proto_rawDesc), len(file_client_v1_messages_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   0,

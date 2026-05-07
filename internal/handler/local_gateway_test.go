@@ -7,7 +7,9 @@ import (
 	miniredis "github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/internal/store/redis"
@@ -63,6 +65,33 @@ func TestLocalRoomGatewayEnsureSubscriptionNoOp(t *testing.T) {
 	require.NoError(t, g.EnsureRoomEventSubscription(context.Background(), "r", "c"))
 }
 
+func TestLocalRoomGatewaySendsPerSeatProjectedNotification(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	svc := roomsvc.NewService(roomsvc.NewLobby())
+	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
+		_, err := svc.Join(ctx, "project-room", uid)
+		require.NoError(t, err)
+	}
+	g := NewLocalRoomGateway(svc, session.NewHub(), nil)
+	payload, err := proto.Marshal(&clientv1.Envelope{
+		Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: 0, Tile: "m1"}},
+	})
+	require.NoError(t, err)
+	g.sendNotification("project-room", roomsvc.Notification{
+		Kind:       roomsvc.KindDrawTile,
+		Payload:    payload,
+		TargetSeat: roomsvc.BroadcastSeat,
+		Privacy:    roomsvc.PrivacyPerSeat,
+		Project: func(seat roomsvc.Seat) []byte {
+			projected, _ := proto.Marshal(&clientv1.Envelope{
+				Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: int32(seat), Tile: ""}},
+			})
+			return projected
+		},
+	})
+}
+
 func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 	t.Parallel()
 	mr, err := miniredis.Run()
@@ -94,7 +123,12 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 		require.NoError(t, err)
 	}
 	for _, uid := range []string{"resume-user", "u2", "u3", "u4"} {
-		_, err = gw.ExchangeThree(ctx, "resume-room", uid, nil, 0)
+		view, ok, viewErr := svc.RoundView(ctx, "resume-room")
+		require.NoError(t, viewErr)
+		require.True(t, ok)
+		seat := seatIndexForUser(view.PlayerIDs[:], uid)
+		require.GreaterOrEqual(t, seat, 0)
+		_, err = gw.ExchangeThree(ctx, "resume-room", uid, view.HandsBySeat[seat][:3], 0)
 		require.NoError(t, err)
 	}
 	for _, uid := range []string{"resume-user", "u2", "u3", "u4"} {

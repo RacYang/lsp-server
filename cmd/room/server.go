@@ -65,6 +65,7 @@ func (s *roomGRPCServer) setReady(v bool) {
 }
 
 func (s *roomGRPCServer) persistPublishAndFinalize(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification) error {
+	notifications = expandPerSeatNotifications(notifications)
 	events, err := s.persistNotifications(ctx, roomID, notifications)
 	if err != nil {
 		return err
@@ -118,6 +119,25 @@ func (s *roomGRPCServer) persistNotifications(ctx context.Context, roomID string
 		out = append(out, persistedEvent{cursor: cursors[idx], evt: evt})
 	}
 	return out, nil
+}
+
+func expandPerSeatNotifications(notifications []roomsvc.Notification) []roomsvc.Notification {
+	out := make([]roomsvc.Notification, 0, len(notifications))
+	for _, notification := range notifications {
+		if notification.Privacy != roomsvc.PrivacyPerSeat || notification.Project == nil {
+			out = append(out, notification)
+			continue
+		}
+		for seat := 0; seat < 4; seat++ {
+			projected := notification
+			projected.TargetSeat = roomsvc.Seat(seat)
+			projected.Payload = notification.Project(roomsvc.Seat(seat))
+			projected.Privacy = roomsvc.PrivacyPublic
+			projected.Project = nil
+			out = append(out, projected)
+		}
+	}
+	return out
 }
 
 func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification roomsvc.Notification, evt *clusterv1.RoomServiceStreamEventsResponse, cursor string) {

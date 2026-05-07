@@ -39,7 +39,19 @@ type Notification struct {
 	Kind       Kind
 	Payload    []byte
 	TargetSeat Seat
+	Privacy    NotificationPrivacy
+	Project    func(Seat) []byte
 }
+
+// NotificationPrivacy 标识通知是否需要按座位投影后下发。
+type NotificationPrivacy int
+
+const (
+	// PrivacyPublic 表示 payload 可原样广播给全桌。
+	PrivacyPublic NotificationPrivacy = iota
+	// PrivacyPerSeat 表示 payload 必须经 Project 按目标座位改写。
+	PrivacyPerSeat
+)
 
 // Engine 负责在单房上下文内生成确定性的血战流程通知。
 type Engine struct {
@@ -140,13 +152,23 @@ type roundPersist struct {
 // RoundView 描述客户端恢复时所需的最小等待态摘要。
 type RoundView struct {
 	ActingSeat       int32
+	ActingSeats      []int32
 	WaitingAction    string
+	Phase            clientv1.Phase
+	LastStep         int64
 	PendingTile      string
 	AvailableActions []string
 	ClaimCandidates  []RoundClaimCandidate
 	HandsBySeat      [][]string
 	DiscardsBySeat   [][]string
 	MeldsBySeat      [][]string
+	// 以下字段供 BotSupervisor 与重连快照重建 bot 视图使用，对老调用方可零值兼容。
+	QueBySeat         []int32
+	PlayerIDs         [4]string
+	HuedSeats         []bool
+	Closed            bool
+	ExchangeSubmitted []bool
+	QueSubmitted      []bool
 }
 
 // RoundClaimCandidate 描述恢复快照中仍有效的抢答候选。
@@ -229,6 +251,7 @@ func (rs *RoundState) initialDealNotifications() ([]Notification, error) {
 				InitialDeal: &clientv1.InitialDealNotify{
 					SeatIndex: seatIndex,
 					Tiles:     tilesToStrings(rs.hands[seat].Tiles()),
+					Step:      int64(rs.step),
 				},
 			},
 		})

@@ -304,7 +304,7 @@ func TestExchangeThreeUsesClientDirection(t *testing.T) {
 	}
 }
 
-func TestExchangeThreeRejectsMismatchedDirection(t *testing.T) {
+func TestExchangeThreeKeepsFirstDirectionAsAuthority(t *testing.T) {
 	t.Parallel()
 
 	rs := roundWaitingExchange()
@@ -312,7 +312,38 @@ func TestExchangeThreeRejectsMismatchedDirection(t *testing.T) {
 	_, err := e.ApplyExchangeThree(context.Background(), rs, 0, tilesToStrings(rs.hands[0].Tiles()), 1)
 	require.NoError(t, err)
 	_, err = e.ApplyExchangeThree(context.Background(), rs, 1, tilesToStrings(rs.hands[1].Tiles()), 2)
-	require.ErrorContains(t, err, "exchange direction mismatch")
+	require.NoError(t, err)
+	require.EqualValues(t, 1, rs.exchangeDirection)
+}
+
+func TestExchangeThreeRejectsInvalidPlayerSelection(t *testing.T) {
+	t.Parallel()
+
+	rs := roundWaitingExchange()
+	e := NewEngine("sichuan_xzdd")
+	_, err := e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, []string{"m1", "m2"}, 0)
+	require.ErrorContains(t, err, "invalid exchange selection")
+	require.False(t, rs.exchangeSubmitted[0])
+
+	_, err = e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, []string{"m1", "m2", "p9"}, 0)
+	require.ErrorContains(t, err, "exchange tile from hand")
+	require.False(t, rs.exchangeSubmitted[0])
+}
+
+func TestExchangeTimeoutUsesAuthoritativeDirection(t *testing.T) {
+	t.Parallel()
+
+	rs := roundWaitingExchange()
+	e := NewEngine("sichuan_xzdd")
+	_, err := e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, tilesToStrings(rs.hands[0].Tiles()), 1)
+	require.NoError(t, err)
+	for seat := 1; seat < 4; seat++ {
+		_, err := e.ApplyExchangeThreeByTimeout(context.Background(), rs, Seat(seat))
+		require.NoError(t, err)
+	}
+	require.False(t, rs.waitingExchange)
+	require.True(t, rs.waitingQueMen)
+	require.EqualValues(t, 1, rs.exchangeDirection)
 }
 
 func TestQueMenUsesClientSuit(t *testing.T) {
@@ -358,12 +389,12 @@ func TestApplyPongInterruptsPendingTurn(t *testing.T) {
 	e := NewEngine("sichuan_xzdd")
 	notifs, err := e.ApplyPong(context.Background(), rs, 2)
 	require.NoError(t, err)
-	require.Len(t, notifs, 3)
-	require.Equal(t, Seat(3), rs.turn)
+	require.Len(t, notifs, 1)
+	require.Equal(t, Seat(2), rs.turn)
 	require.True(t, rs.waitingDiscard)
-	require.Equal(t, tile.Must(tile.SuitDots, 7), rs.currentDraw)
+	require.Zero(t, rs.currentDraw)
 	require.Equal(t, []tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2)}, rs.hands[1].Tiles())
-	require.Empty(t, rs.hands[2].Tiles())
+	require.Equal(t, []tile.Tile{tile.Must(tile.SuitDots, 9)}, rs.hands[2].Tiles())
 }
 
 func roundWaitingExchange() *RoundState {
@@ -417,6 +448,36 @@ func TestApplyDiscardPromptsClaimInsteadOfNextDraw(t *testing.T) {
 		}
 	}
 	require.True(t, sawClaim)
+}
+
+func TestDrawTileNotificationProjectsTileOnlyToActor(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-private-draw",
+		ruleID:          "sichuan_xzdd",
+		rule:            rules.MustGet("sichuan_xzdd"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		turn:            1,
+		lastDiscardSeat: -1,
+	}
+	e := NewEngine("sichuan_xzdd")
+	notifs, err := e.drawForCurrentTurn(rs)
+	require.NoError(t, err)
+	require.Len(t, notifs, 1)
+	require.Equal(t, PrivacyPerSeat, notifs[0].Privacy)
+	require.NotNil(t, notifs[0].Project)
+
+	var actorEnv clientv1.Envelope
+	require.NoError(t, proto.Unmarshal(notifs[0].Project(1), &actorEnv))
+	require.Equal(t, "p7", actorEnv.GetDrawTile().GetTile())
+
+	var otherEnv clientv1.Envelope
+	require.NoError(t, proto.Unmarshal(notifs[0].Project(0), &otherEnv))
+	require.Empty(t, otherEnv.GetDrawTile().GetTile())
 }
 
 func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
@@ -832,7 +893,8 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		if a.round.waitingExchange {
 			for seat, done := range a.round.exchangeSubmitted {
 				if !done {
-					if _, err := svc.ExchangeThree(ctx, roomID, a.room.PlayerIDs[seat], nil, 0); err != nil {
+					tiles := tilesToStrings(a.round.hands[seat].Tiles()[:3])
+					if _, err := svc.ExchangeThree(ctx, roomID, a.room.PlayerIDs[seat], tiles, 0); err != nil {
 						return err
 					}
 				}
