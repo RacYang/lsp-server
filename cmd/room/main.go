@@ -113,7 +113,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		}
 		svc.setReady(true)
 	}
-	a, err := app.NewGRPC(cfg.ServerAddr, func(s *grpc.Server) {
+	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
 		registerRoomService(s, svc)
 	})
 	if err != nil {

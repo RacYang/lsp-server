@@ -122,6 +122,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		}
 
 		hands[turn].Add(drawn)
+		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 		discard := chooseDiscard(hands[turn], tile.Suit(queBySeat[turn]))
 		if err := hands[turn].Remove(discard); err != nil {
 			return nil, err

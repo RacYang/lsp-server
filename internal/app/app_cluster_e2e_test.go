@@ -179,7 +179,8 @@ func mustRepoRoot(t *testing.T) string {
 
 func reserveTCPAddr(t *testing.T) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("申请临时端口失败: %v", err)
 	}
@@ -201,7 +202,10 @@ func writeConfig(t *testing.T, dir, name, content string) string {
 
 func startProc(t *testing.T, ctx context.Context, repoRoot, target, cfgPath string) {
 	t.Helper()
-	cmd := exec.CommandContext(ctx, "go", "run", target)
+	// G204 误报: target 来自调用方写死的本仓库 cmd/* 路径, 不接受外部输入,
+	// 在 e2e 中故意让 go run 启动子进程是该测试的核心。
+	cmd := exec.CommandContext(ctx, "go", "run", target) //nolint:gosec // G204
+
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "LSP_CONFIG="+cfgPath)
 	var out bytes.Buffer
@@ -234,8 +238,9 @@ func startProc(t *testing.T, ctx context.Context, repoRoot, target, cfgPath stri
 func waitForTCP(t *testing.T, addr string, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
+	dialer := &net.Dialer{Timeout: 200 * time.Millisecond}
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		conn, err := dialer.DialContext(t.Context(), "tcp", addr)
 		if err == nil {
 			_ = conn.Close()
 			return

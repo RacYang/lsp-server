@@ -51,6 +51,7 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 		return e.ApplyDiscard(ctx, rs, rs.turn, rs.pendingDraw.String())
 	}
 	if rs.waitingDiscard {
+		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 		discard := chooseDiscard(rs.hands[rs.turn], tile.Suit(rs.queBySeat[rs.turn]))
 		return e.ApplyDiscard(ctx, rs, rs.turn, discard.String())
 	}

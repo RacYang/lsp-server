@@ -57,6 +57,7 @@ func (e *Engine) ApplyPong(_ context.Context, rs *RoundState, seat int) ([]Notif
 		return nil, err
 	}
 	out := []Notification{{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}}
+	//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 	discard := chooseDiscard(rs.hands[seat], tile.Suit(rs.queBySeat[seat]))
 	next, err := e.ApplyDiscard(context.Background(), rs, seat, discard.String())
 	if err != nil {

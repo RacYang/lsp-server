@@ -23,7 +23,8 @@ import (
 // 用真实通道才能覆盖到 register 路径与拦截器链路，bufconn 与单测桩都做不到这一点。
 func startBufLobbyServer(t *testing.T) (clusterv1.LobbyServiceClient, func()) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
 	srv := grpc.NewServer()
@@ -32,8 +33,9 @@ func startBufLobbyServer(t *testing.T) (clusterv1.LobbyServiceClient, func()) {
 
 	addr := ln.Addr().String()
 	deadline := time.Now().Add(time.Second)
+	dialer := &net.Dialer{Timeout: 100 * time.Millisecond}
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		conn, err := dialer.DialContext(t.Context(), "tcp", addr)
 		if err == nil {
 			_ = conn.Close()
 			break

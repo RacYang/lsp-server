@@ -58,7 +58,8 @@ func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32,
 	for seat := 0; seat < 4; seat++ {
 		seatIndex := int32(seat) //nolint:gosec // G115：seat 仅在 0..3 范围
 		skipped := false
-		if holdsQueSuit(hands[seat], tile.Suit(queBySeat[seat])) {
+		if holdsQueSuit(hands[seat], tile.Suit(queBySeat[seat])) { //nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
+
 			skipped = true
 			for to := 0; to < 4; to++ {
 				toSeat := int32(to) //nolint:gosec // G115：to 仅在 0..3 范围

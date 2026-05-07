@@ -6,7 +6,7 @@ paths:
 
 tools:
   go: 1.26.2
-  golangci-lint: 2.1.6
+  golangci-lint: 2.12.2
   go-arch-lint: 1.12.0
   buf: 1.53.0
   govulncheck: 1.1.4

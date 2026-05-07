@@ -82,7 +82,10 @@ func SaveConfig(path string, cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("创建配置目录: %w", err)
 	}
-	data, err := toml.Marshal(cfg)
+	// G117 误报: SessionToken 字段命中 gosec 的"密钥泄漏"启发式,
+	// 但本配置就是设计来在用户主机上 0600 权限地持久化会话凭证以便重连,
+	// 这是该字段的合同语义, 不是无意泄漏。
+	data, err := toml.Marshal(cfg) //nolint:gosec // G117
 	if err != nil {
 		return fmt.Errorf("序列化配置: %w", err)
 	}

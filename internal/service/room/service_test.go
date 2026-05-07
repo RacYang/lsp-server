@@ -843,6 +843,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 				return err
 			}
 		}
+		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 		discard := chooseDiscard(a.round.hands[seat], tile.Suit(a.round.queBySeat[seat]))
 		notifs, err := svc.Discard(ctx, roomID, userID, discard.String())
 		if err != nil {
