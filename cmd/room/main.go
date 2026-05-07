@@ -81,6 +81,9 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		Discard:         cfg.RoomTimeouts.Discard,
 		SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 	})
+	// 占座机器人由本进程的 BotSupervisor 代为出牌；ADR-0037 描述的"后续补 supervisor"在此落地。
+	botSup := app.NewBotSupervisor(svcCore)
+	svcCore.SetAfterCmdHook(botSup.AfterCmd)
 	svc := newRoomGRPCServer(svcCore, ev, gs, st, rcli)
 	svc.setIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {

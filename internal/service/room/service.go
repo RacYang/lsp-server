@@ -24,6 +24,9 @@ type Service struct {
 	mailboxCapacity      int
 	onAuto               func(context.Context, string, []Notification)
 	allowLeaveDuringPlay bool
+	// onAfterCmd 在 actor 处理完一条命令后触发，BotSupervisor 借此接力推动机器人座位。
+	// 这条回调必须自身保持非阻塞（典型实现是丢给独立 goroutine 处理），否则会拖慢 actor 主循环。
+	onAfterCmd func(roomID string)
 }
 
 // TimeoutConfig 定义各等待态的服务端托管时长。
@@ -132,6 +135,33 @@ func (s *Service) SetAutoTimeoutHandler(fn func(context.Context, string, []Notif
 	s.onAuto = fn
 }
 
+// SetAfterCmdHook 注册"actor 处理完一条命令后"回调，供 BotSupervisor 之类的协作组件接力推进。
+// 回调必须非阻塞（应在 goroutine 内完成实际工作），否则会拖慢房间主循环。
+func (s *Service) SetAfterCmdHook(fn func(roomID string)) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.onAfterCmd = fn
+	s.mu.Unlock()
+}
+
+// PlayerIDs 返回房间当前 4 座的 user_id（空座为 ""）。
+func (s *Service) PlayerIDs(roomID string) ([4]string, bool) {
+	if s == nil || s.lobby == nil {
+		return [4]string{}, false
+	}
+	r, ok := s.lobby.GetRoom(roomID)
+	if !ok || r == nil {
+		return [4]string{}, false
+	}
+	var out [4]string
+	for i := 0; i < 4 && i < len(r.PlayerIDs); i++ {
+		out[i] = r.PlayerIDs[i]
+	}
+	return out, true
+}
+
 // EnsureRoom 若不存在则创建房间并启动该房的 mailbox 协程。
 func (s *Service) EnsureRoom(roomID string) error {
 	if s == nil {
@@ -165,6 +195,7 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	a.onExit = s.removeActor
 	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
 	a.onAuto = s.onAuto
+	a.onAfterCmd = s.onAfterCmd
 	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
 	s.actors[roomID] = a
 	go a.run()
@@ -192,6 +223,7 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 	a.onExit = s.removeActor
 	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
 	a.onAuto = s.onAuto
+	a.onAfterCmd = s.onAfterCmd
 	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
 	s.actors[roomID] = a
 	s.mu.Unlock()

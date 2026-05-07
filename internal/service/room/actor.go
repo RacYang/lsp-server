@@ -31,6 +31,7 @@ type roomActor struct {
 	engine               *Engine
 	scheduler            *roomScheduler
 	onAuto               func(context.Context, string, []Notification)
+	onAfterCmd           func(roomID string)
 	allowLeaveDuringPlay bool
 }
 
@@ -239,6 +240,9 @@ func (a *roomActor) run() {
 			}
 			m.res <- roomSnapshotResult{playerIDs: out, fsmState: state}
 		default:
+		}
+		if a.onAfterCmd != nil && a.room != nil {
+			a.onAfterCmd(a.room.ID)
 		}
 		if a.room != nil && a.room.FSM != nil && a.room.FSM.State() == domainroom.StateClosed {
 			a.closed.Store(true)

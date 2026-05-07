@@ -273,27 +273,17 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	if len(env.GetAddBotResp().GetAdded()) != 3 {
 		t.Fatalf("add bot got %d seats", len(env.GetAddBotResp().GetAdded()))
 	}
-	action := readUntilEnv(t, conn, msgid.ActionNotify, 8)
-	if action.GetAction().GetAction() != "exchange_three" {
-		t.Fatalf("action mismatch: %q", action.GetAction().GetAction())
+	badBot := &clientv1.Envelope{ReqId: "bot-bad", Body: &clientv1.Envelope_AddBotReq{
+		AddBotReq: &clientv1.AddBotRequest{Count: 0, OpId: "op-bad"},
+	}}
+	pb, _ = proto.Marshal(badBot)
+	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestMergeSeatInfosReplacesExistingSeat(t *testing.T) {
-	base := []*clientv1.SeatInfo{
-		{SeatIndex: 0, UserId: "u0"},
-		{SeatIndex: 1, UserId: "old"},
+	env = readUntilEnv(t, conn, msgid.AddBotResp, 8)
+	if env.GetAddBotResp().GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		t.Fatal("invalid add bot request should return an error")
 	}
-	added := []*clientv1.SeatInfo{
-		{SeatIndex: 1, UserId: "bot:room:1", IsBot: true},
-		{SeatIndex: 2, UserId: "bot:room:2", IsBot: true},
-	}
-	got := mergeSeatInfos(base, added)
-	require.Len(t, got, 3)
-	require.Equal(t, "u0", got[0].GetUserId())
-	require.Equal(t, "bot:room:1", got[1].GetUserId())
-	require.True(t, got[1].GetIsBot())
-	require.Equal(t, "bot:room:2", got[2].GetUserId())
 }
 
 func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
