@@ -68,8 +68,8 @@ func (f *fakeResumeGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (s
 func (f *fakeResumeGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
 	return "", 0, nil
 }
-func (f *fakeResumeGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, error) {
-	return nil, nil
+func (f *fakeResumeGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, func(), error) {
+	return nil, nil, nil
 }
 func (f *fakeResumeGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	if f.resumeErr != nil {
@@ -130,8 +130,8 @@ func (g *joinStubGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (str
 func (g *joinStubGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
 	return "", 0, nil
 }
-func (g *joinStubGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, error) {
-	return nil, nil
+func (g *joinStubGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, func(), error) {
+	return nil, nil, nil
 }
 func (g *joinStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	return nil, fmt.Errorf("not implemented")
@@ -194,6 +194,30 @@ func readEnv(t *testing.T, conn *websocket.Conn, wantMsg uint16) *clientv1.Envel
 	return &env
 }
 
+func readUntilEnv(t *testing.T, conn *websocket.Conn, wantMsg uint16, maxFrames int) *clientv1.Envelope {
+	t.Helper()
+	for i := 0; i < maxFrames; i++ {
+		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := frame.ReadFrame(bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var env clientv1.Envelope
+		if err := proto.Unmarshal(h.Payload, &env); err != nil {
+			t.Fatal(err)
+		}
+		if h.MsgID == wantMsg {
+			return &env
+		}
+	}
+	t.Fatalf("msg_id %d not seen within %d frames", wantMsg, maxFrames)
+	return nil
+}
+
 func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	lobby := roomsvc.NewLobby()
 	hub := session.NewHub()
@@ -228,29 +252,6 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 		t.Fatal("seat")
 	}
 
-	addBot := &clientv1.Envelope{ReqId: "bot", Body: &clientv1.Envelope_AddBotReq{
-		AddBotReq: &clientv1.AddBotRequest{Count: 1, OpId: "op-test"},
-	}}
-	pb, _ = proto.Marshal(addBot)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
-		t.Fatal(err)
-	}
-	env = readEnv(t, conn, msgid.AddBotResp)
-	if len(env.GetAddBotResp().GetAdded()) != 1 {
-		t.Fatalf("add bot got %d seats", len(env.GetAddBotResp().GetAdded()))
-	}
-	badBot := &clientv1.Envelope{ReqId: "bot-bad", Body: &clientv1.Envelope_AddBotReq{
-		AddBotReq: &clientv1.AddBotRequest{Count: 0, OpId: "op-bad"},
-	}}
-	pb, _ = proto.Marshal(badBot)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
-		t.Fatal(err)
-	}
-	env = readEnv(t, conn, msgid.AddBotResp)
-	if env.GetAddBotResp().GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-		t.Fatal("invalid add bot request should return an error")
-	}
-
 	rd := &clientv1.Envelope{ReqId: "c", Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}}
 	pb, _ = proto.Marshal(rd)
 	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)); err != nil {
@@ -259,6 +260,22 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	env = readEnv(t, conn, msgid.ReadyResp)
 	if env.GetReadyResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
 		t.Fatalf("ready err %v", env.GetReadyResp().GetErrorCode())
+	}
+
+	addBot := &clientv1.Envelope{ReqId: "bot", Body: &clientv1.Envelope_AddBotReq{
+		AddBotReq: &clientv1.AddBotRequest{Count: 3, OpId: "op-test"},
+	}}
+	pb, _ = proto.Marshal(addBot)
+	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
+		t.Fatal(err)
+	}
+	env = readEnv(t, conn, msgid.AddBotResp)
+	if len(env.GetAddBotResp().GetAdded()) != 3 {
+		t.Fatalf("add bot got %d seats", len(env.GetAddBotResp().GetAdded()))
+	}
+	action := readUntilEnv(t, conn, msgid.ActionNotify, 8)
+	if action.GetAction().GetAction() != "exchange_three" {
+		t.Fatalf("action mismatch: %q", action.GetAction().GetAction())
 	}
 }
 

@@ -92,6 +92,23 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		})
 		return
 	}
+	seats := selfSeatInfo(ctx, deps, int32(seat), state.userID) //nolint:gosec // 座位号固定为 0..3
+	var afterAddBot func()
+	if req.GetPadWithBots() {
+		added, after, err := deps.Rooms.AddBot(ctx, roomID, state.userID, 3, "normal", "automatch:"+roomID+":"+state.userID)
+		if err != nil {
+			writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
+				ReqId: env.ReqId,
+				Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
+					ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+					ErrorMessage: err.Error(),
+				}},
+			})
+			return
+		}
+		seats = mergeSeatInfos(seats, added)
+		afterAddBot = after
+	}
 	writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
@@ -99,9 +116,12 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 			SeatIndex:   int32(seat), //nolint:gosec // 座位号固定为 0..3
 			RuleId:      normalizeClientRuleID(req.GetRuleId()),
 			DisplayName: roomID,
-			Seats:       selfSeatInfo(ctx, deps, int32(seat), state.userID), //nolint:gosec // 座位号固定为 0..3
+			Seats:       seats,
 		}},
 	})
+	if afterAddBot != nil {
+		afterAddBot()
+	}
 }
 
 func handleAddBot(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, msgID uint16, payload []byte) {
@@ -116,7 +136,7 @@ func handleAddBot(ctx context.Context, deps Deps, conn *websocket.Conn, state *w
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	added, err := deps.Rooms.AddBot(ctx, state.roomID, state.userID, req.GetCount(), req.GetDifficulty(), req.GetOpId())
+	added, after, err := deps.Rooms.AddBot(ctx, state.roomID, state.userID, req.GetCount(), req.GetDifficulty(), req.GetOpId())
 	resp := &clientv1.AddBotResponse{Added: added}
 	if err != nil {
 		resp.ErrorCode = clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
@@ -128,7 +148,31 @@ func handleAddBot(ctx context.Context, deps Deps, conn *websocket.Conn, state *w
 	})
 	if err == nil {
 		logx.Info(logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID), "玩家添加机器人", "count", len(added))
+		if after != nil {
+			after()
+		}
 	}
+}
+
+func mergeSeatInfos(base, added []*clientv1.SeatInfo) []*clientv1.SeatInfo {
+	if len(added) == 0 {
+		return base
+	}
+	out := append([]*clientv1.SeatInfo(nil), base...)
+	for _, seat := range added {
+		replaced := false
+		for i, existing := range out {
+			if existing.GetSeatIndex() == seat.GetSeatIndex() {
+				out[i] = seat
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			out = append(out, seat)
+		}
+	}
+	return out
 }
 
 // handleCreateRoom 创建房间后直接让创建者入座；私密房只可凭 room_id 手动加入。

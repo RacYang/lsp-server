@@ -212,9 +212,9 @@ func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string
 	return roomID, int(resp.GetSeatIndex()), nil
 }
 
-func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, error) {
+func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, func(), error) {
 	if g == nil {
-		return nil, fmt.Errorf("nil remote room gateway")
+		return nil, nil, fmt.Errorf("nil remote room gateway")
 	}
 	resp, err := g.lobby.AddBot(withOutgoingTrace(ctx), &clusterv1.AddBotRequest{
 		RoomId:     roomID,
@@ -224,12 +224,25 @@ func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, c
 		OpId:       opID,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if resp.GetError() != "" {
-		return nil, errors.New(resp.GetError())
+		return nil, nil, errors.New(resp.GetError())
 	}
-	return clusterSeatsToClient(resp.GetAdded()), nil
+	added := clusterSeatsToClient(resp.GetAdded())
+	after := func() {
+		for _, seat := range resp.GetAdded() {
+			if seat.GetUserId() == "" {
+				continue
+			}
+			if _, err := g.Ready(context.Background(), roomID, seat.GetUserId()); err != nil {
+				logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), seat.GetUserId()), roomID)
+				logx.Warn(logCtx, "机器人自动准备失败", "err", err.Error())
+			}
+			g.rememberRoomSeat(roomID, seat.GetSeatIndex(), seat.GetUserId())
+		}
+	}
+	return added, after, nil
 }
 
 func (g *remoteRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error) {

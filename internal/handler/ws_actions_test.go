@@ -80,8 +80,8 @@ func (g *actionStubGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (s
 func (g *actionStubGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
 	return "", 0, nil
 }
-func (g *actionStubGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, error) {
-	return nil, nil
+func (g *actionStubGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, func(), error) {
+	return nil, nil, nil
 }
 func (g *actionStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	return nil, fmt.Errorf("not implemented")

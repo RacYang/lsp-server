@@ -75,13 +75,7 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 	if err != nil {
 		return "", -1, err
 	}
-	if padWithBots {
-		added, err := g.AddBot(ctx, roomID, userID, 3, "normal", "automatch:"+roomID+":"+userID)
-		if err != nil {
-			return "", -1, err
-		}
-		_ = added
-	}
+	_ = padWithBots
 	return roomID, seat, nil
 }
 
@@ -100,19 +94,25 @@ func (g *LocalRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName s
 	return roomID, seat, nil
 }
 
-func (g *LocalRoomGateway) AddBot(ctx context.Context, roomID, userID string, count int32, _ string, _ string) ([]*clientv1.SeatInfo, error) {
+func (g *LocalRoomGateway) AddBot(ctx context.Context, roomID, userID string, count int32, _ string, _ string) ([]*clientv1.SeatInfo, func(), error) {
 	if g == nil || g.lobby == nil || g.rooms == nil {
-		return nil, fmt.Errorf("nil local lobby gateway")
+		return nil, nil, fmt.Errorf("nil local lobby gateway")
 	}
 	added, err := g.lobby.AddBot(ctx, roomID, count, 3)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make([]*clientv1.SeatInfo, 0, len(added))
+	var notifications []roomsvc.Notification
 	for _, bot := range added {
 		if _, err := g.rooms.Join(ctx, roomID, bot.UserID); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		readyNotifications, err := g.rooms.Ready(ctx, roomID, bot.UserID)
+		if err != nil {
+			return nil, nil, err
+		}
+		notifications = append(notifications, readyNotifications...)
 		out = append(out, &clientv1.SeatInfo{
 			SeatIndex: bot.SeatIndex,
 			UserId:    bot.UserID,
@@ -120,7 +120,7 @@ func (g *LocalRoomGateway) AddBot(ctx context.Context, roomID, userID string, co
 			IsBot:     true,
 		})
 	}
-	return out, nil
+	return out, g.broadcastAfter(roomID, notifications), nil
 }
 
 // Ready 触发本地 worker，并返回一个在 ReadyResp 之后执行的广播回调。
