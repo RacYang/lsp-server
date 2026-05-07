@@ -18,8 +18,8 @@ func NewRoom(id string) *Room {
 }
 
 // SeatOf 返回座位上的 user_id，空字符串表示空位。
-func (r *Room) SeatOf(seat int) string {
-	if r == nil || seat < 0 || seat > 3 {
+func (r *Room) SeatOf(seat Seat) string {
+	if r == nil || !seat.Valid() {
 		return ""
 	}
 	return r.PlayerIDs[seat]
@@ -76,11 +76,11 @@ func (r *Room) Leave(userID string) error {
 }
 
 // SetReady 标记座位准备状态；若四人全准备则切到 ready 态。
-func (r *Room) SetReady(seat int, v bool) error {
+func (r *Room) SetReady(seat Seat, v bool) error {
 	if r == nil {
 		return nil
 	}
-	if seat < 0 || seat > 3 {
+	if !seat.Valid() {
 		return nil
 	}
 	r.Ready[seat] = v

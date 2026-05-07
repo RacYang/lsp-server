@@ -10,7 +10,7 @@ import (
 )
 
 // ApplyQueMen 记录某座位的定缺确认；四家齐备后开局并摸首张牌。
-func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat int, suit int32) ([]Notification, error) {
+func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat Seat, suit int32) ([]Notification, error) {
 	if e == nil {
 		return nil, fmt.Errorf("nil engine")
 	}
@@ -53,7 +53,7 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat int, suit
 	startPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "start",
 		Body: &clientv1.Envelope_StartGame{
-			StartGame: &clientv1.StartGameNotify{RoomId: rs.roomID, DealerSeat: int32(rs.dealerSeat)}, //nolint:gosec // 座位范围固定
+			StartGame: &clientv1.StartGameNotify{RoomId: rs.roomID, DealerSeat: rs.dealerSeat.Proto()},
 		},
 	})
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,11 +21,15 @@ import (
 )
 
 // actionStubGateway 让所有动作返回可配置的错误与 after，便于驱动 handler 中的成功/失败分支。
+//
+// afterCount 用 atomic.Int32 是因为 after 闭包在 http server goroutine 里执行,
+// 而测试断言运行在主线程, 没有同步原语 -race 会报数据竞争 (此前 CI 长期没跑 lint
+// 与 -race 才一直没暴露)。
 type actionStubGateway struct {
 	joinSeat   int
 	joinErr    error
 	actionErr  error
-	afterCount int
+	afterCount atomic.Int32
 }
 
 func (g *actionStubGateway) Join(_ context.Context, _, _ string) (int, error) {
@@ -35,7 +40,7 @@ func (g *actionStubGateway) makeAfter() func() {
 	if g.actionErr != nil {
 		return nil
 	}
-	return func() { g.afterCount++ }
+	return func() { g.afterCount.Add(1) }
 }
 
 func (g *actionStubGateway) Ready(_ context.Context, _, _ string) (func(), error) {
@@ -211,7 +216,7 @@ func TestActionHandlersHappyPath(t *testing.T) {
 			code, msg := c.getError(env)
 			require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, code, "动作 %s 成功路径应返回 UNSPECIFIED", c.name)
 			require.Empty(t, msg)
-			require.Equal(t, 1, gateway.afterCount, "成功路径必须运行 after 闭包")
+			waitForAfterCount(t, gateway, 1, "成功路径必须运行 after 闭包")
 		})
 	}
 }
@@ -238,7 +243,7 @@ func TestActionHandlersInvalidStateError(t *testing.T) {
 			code, msg := c.getError(env)
 			require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, code, "动作 %s 失败路径应返回 INVALID_STATE", c.name)
 			require.Contains(t, msg, "bad state")
-			require.Equal(t, 0, gateway.afterCount, "失败路径不得调用 after 闭包")
+			require.Equal(t, int32(0), gateway.afterCount.Load(), "失败路径不得调用 after 闭包")
 		})
 	}
 }
@@ -308,7 +313,7 @@ func TestActionHandlersIdempotencyHits(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.DiscardReq, pb)))
 	_ = readEnv(t, conn, msgid.DiscardResp)
-	require.Equal(t, 1, gateway.afterCount)
+	waitForAfterCount(t, gateway, 1, "首次请求必须执行 after 闭包")
 
 	req2 := &clientv1.Envelope{ReqId: "d-2", IdempotencyKey: "idem-d", Body: &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: "1m"}}}
 	pb, err = proto.Marshal(req2)
@@ -321,5 +326,20 @@ func TestActionHandlersIdempotencyHits(t *testing.T) {
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("幂等键命中时不应再回响应")
 	}
-	require.Equal(t, 1, gateway.afterCount, "幂等命中时不能进入 gateway")
+	require.Equal(t, int32(1), gateway.afterCount.Load(), "幂等命中时不能进入 gateway")
+}
+
+// waitForAfterCount 在 200 毫秒内轮询 atomic afterCount, 等待 after 闭包在 http
+// server goroutine 中真正完成自增。直接 require.Equal 的话, 客户端 readEnv 返回时
+// after 可能尚未跑完, 在快环境下偶尔会读到比期望值少 1 的中间态。
+func waitForAfterCount(t *testing.T, g *actionStubGateway, want int32, msgAndArgs ...any) {
+	t.Helper()
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if g.afterCount.Load() == want {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	require.Equal(t, want, g.afterCount.Load(), msgAndArgs...)
 }

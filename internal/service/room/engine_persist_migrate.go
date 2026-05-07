@@ -53,11 +53,11 @@ func legacyLedgerFromTotals(totals []int32) []sichuanxzdd.ScoreEntry {
 		}
 		out = append(out, sichuanxzdd.ScoreEntry{
 			Reason:     "legacy_total",
-			FromSeat:   from,
-			ToSeat:     to,
+			FromSeat:   Seat(from),
+			ToSeat:     Seat(to),
 			Amount:     amount,
 			Step:       0,
-			WinnerSeat: -1,
+			WinnerSeat: SeatInvalid,
 		})
 	}
 	return out

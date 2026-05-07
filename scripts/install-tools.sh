@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG_FILE="${ROOT_DIR}/.build/config.yaml"
 GO_BIN="$(go env GOPATH)/bin"
-export PATH="${PATH}:${GO_BIN}"
+export PATH="${GO_BIN}:${PATH}"
 export GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
 export GOSUMDB="${GOSUMDB:-sum.golang.org}"
 
@@ -20,6 +20,14 @@ bootstrap_install_yq
 
 version_of() {
   yq -r ".tools.\"$1\"" "${CONFIG_FILE}"
+}
+
+tool_version_contains() {
+  local expected="$1"
+  shift
+  local output
+  output="$("$@" 2>/dev/null || true)"
+  [[ "${output}" == *"${expected}"* ]]
 }
 
 install_go_tool() {
@@ -89,20 +97,7 @@ install_golangci_lint_binary() {
   fi
 }
 
-if ! command -v golangci-lint >/dev/null 2>&1; then
-  install_golangci_lint_binary
-fi
-install_go_tool "go-arch-lint" "github.com/fe3dback/go-arch-lint"
-install_go_tool "buf" "github.com/bufbuild/buf/cmd/buf"
-install_go_tool "govulncheck" "golang.org/x/vuln/cmd/govulncheck"
-if ! command -v gitleaks >/dev/null 2>&1; then
-  install_gitleaks_binary
-fi
-install_go_tool "goimports" "golang.org/x/tools/cmd/goimports"
-install_go_tool "protoc-gen-go" "google.golang.org/protobuf/cmd/protoc-gen-go"
-install_go_tool "protoc-gen-go-grpc" "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
-
-if ! command -v markdownlint-cli2 >/dev/null 2>&1; then
+install_markdownlint_cli2() {
   if command -v npm >/dev/null 2>&1; then
     npm install -g "markdownlint-cli2@$(version_of markdownlint-cli2)"
   elif command -v brew >/dev/null 2>&1; then
@@ -112,15 +107,52 @@ if ! command -v markdownlint-cli2 >/dev/null 2>&1; then
     echo "npm is required to install markdownlint-cli2" >&2
     exit 1
   fi
-fi
+}
 
-if ! command -v yamllint >/dev/null 2>&1; then
-  if command -v pip3 >/dev/null 2>&1; then
-    pip3 install "yamllint==$(version_of yamllint)"
-  else
-    echo "pip3 is required to install yamllint" >&2
+install_yamllint_module() {
+  local version log_file
+  version="$(version_of yamllint)"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 is required to install yamllint" >&2
     exit 1
   fi
+  log_file="$(mktemp)"
+  if python3 -m pip install --user "yamllint==${version}" >"${log_file}" 2>&1; then
+    rm -f "${log_file}"
+  elif [[ "$(<"${log_file}")" == *"externally-managed-environment"* ]]; then
+    python3 -m pip install --user --break-system-packages "yamllint==${version}"
+    rm -f "${log_file}"
+  else
+    sed -n '1,120p' "${log_file}" >&2
+    rm -f "${log_file}"
+    exit 1
+  fi
+  python3 -m yamllint --version >/dev/null
+}
+
+if ! tool_version_contains "$(version_of yq)" yq --version; then
+  go install "github.com/mikefarah/yq/v4@v$(version_of yq)"
+fi
+
+if ! tool_version_contains "$(version_of golangci-lint)" golangci-lint version; then
+  install_golangci_lint_binary
+fi
+install_go_tool "go-arch-lint" "github.com/fe3dback/go-arch-lint"
+install_go_tool "buf" "github.com/bufbuild/buf/cmd/buf"
+install_go_tool "govulncheck" "golang.org/x/vuln/cmd/govulncheck"
+if ! tool_version_contains "$(version_of gitleaks)" gitleaks version; then
+  install_gitleaks_binary
+fi
+install_go_tool "goimports" "golang.org/x/tools/cmd/goimports"
+install_go_tool "protoc-gen-go" "google.golang.org/protobuf/cmd/protoc-gen-go"
+install_go_tool "protoc-gen-go-grpc" "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+
+if ! tool_version_contains "$(version_of markdownlint-cli2)" markdownlint-cli2 --version; then
+  install_markdownlint_cli2
+fi
+
+if ! tool_version_contains "$(version_of yamllint)" python3 -m yamllint --version; then
+  install_yamllint_module
 fi
 
 if ! command -v shellcheck >/dev/null 2>&1; then

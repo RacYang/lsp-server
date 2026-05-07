@@ -429,7 +429,7 @@ func (g *remoteRoomGateway) ensureRoomStream(ctx context.Context, roomID, sinceC
 		g.streamMu.Unlock()
 		return fmt.Errorf("subscribe room stream: %w", err)
 	}
-	go g.consumeRoomStream(roomID, stream, handle)
+	go g.consumeRoomStream(streamBase, roomID, stream, handle)
 	return nil
 }
 
@@ -612,7 +612,7 @@ func clusterWinnerBreakdownsToClient(items []*clusterv1.WinnerBreakdown) []*clie
 	return out
 }
 
-func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
+func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
 	defer func() {
 		_ = stream.CloseSend()
 		g.streamMu.Lock()
@@ -628,7 +628,7 @@ func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerS
 		}
 		msgID, payload, err := encodeClusterRoomEvent(evt)
 		if err != nil {
-			logCtx := logx.WithRoomID(context.Background(), roomID)
+			logCtx := logx.WithRoomID(streamCtx, roomID)
 			logx.Warn(logCtx, "房间事件转客户端推送失败", "err", err.Error())
 			continue
 		}
@@ -646,7 +646,7 @@ func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerS
 		if g.sess != nil && evt.GetCursor() != "" {
 			cur := evt.GetCursor()
 			for _, uid := range delivered {
-				_ = g.sess.UpdateCursor(context.Background(), uid, cur)
+				_ = g.sess.UpdateCursor(streamCtx, uid, cur)
 			}
 		}
 	}

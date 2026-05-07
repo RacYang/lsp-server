@@ -296,7 +296,7 @@ func TestExchangeThreeUsesClientDirection(t *testing.T) {
 			rs := roundWaitingExchange()
 			e := NewEngine("sichuan_xzdd")
 			for seat := 0; seat < 4; seat++ {
-				_, err := e.ApplyExchangeThree(context.Background(), rs, seat, tilesToStrings(rs.hands[seat].Tiles()), tt.direction)
+				_, err := e.ApplyExchangeThree(context.Background(), rs, Seat(seat), tilesToStrings(rs.hands[seat].Tiles()), tt.direction)
 				require.NoError(t, err)
 			}
 			require.Equal(t, tt.wantSeat0, rs.hands[0].Tiles())
@@ -359,7 +359,7 @@ func TestApplyPongInterruptsPendingTurn(t *testing.T) {
 	notifs, err := e.ApplyPong(context.Background(), rs, 2)
 	require.NoError(t, err)
 	require.Len(t, notifs, 3)
-	require.Equal(t, 3, rs.turn)
+	require.Equal(t, Seat(3), rs.turn)
 	require.True(t, rs.waitingDiscard)
 	require.Equal(t, tile.Must(tile.SuitDots, 7), rs.currentDraw)
 	require.Equal(t, []tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2)}, rs.hands[1].Tiles())
@@ -458,7 +458,7 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, rs.claimWindowOpen)
 	require.Len(t, notifs, 2)
-	require.Equal(t, 2, rs.turn)
+	require.Equal(t, Seat(2), rs.turn)
 }
 
 func TestApplyPassRelaysClaimCandidate(t *testing.T) {
@@ -561,7 +561,7 @@ func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
 		queBySeat:       make([]int32, 4),
 		turn:            1,
 		huedSeats:       make([]bool, 4),
-		winnerSeats:     make([]int, 0, 3),
+		winnerSeats:     make([]Seat, 0, 3),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
 	}
@@ -571,7 +571,7 @@ func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, rs.closed)
 	require.True(t, rs.isHued(2))
-	require.Equal(t, 1, rs.turn)
+	require.Equal(t, Seat(1), rs.turn)
 
 	var sawSeat1Draw bool
 	for _, notification := range notifs {
@@ -605,7 +605,7 @@ func TestApplyTimeoutUsesBestClaimCandidate(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, rs.claimWindowOpen)
 	require.Len(t, notifs, 2)
-	require.Equal(t, 2, rs.turn)
+	require.Equal(t, Seat(2), rs.turn)
 }
 
 func TestApplyTimeoutAutoDiscardsCurrentTurn(t *testing.T) {
@@ -627,7 +627,7 @@ func TestApplyTimeoutAutoDiscardsCurrentTurn(t *testing.T) {
 	notifs, err := NewEngine("sichuan_xzdd").ApplyTimeout(context.Background(), rs)
 	require.NoError(t, err)
 	require.Len(t, notifs, 2)
-	require.Equal(t, 1, rs.turn)
+	require.Equal(t, Seat(1), rs.turn)
 }
 
 func TestServiceAutoTimeoutSubmitsThroughActor(t *testing.T) {
@@ -741,7 +741,7 @@ func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 		require.True(t, ok)
 	}
 	for i := 0; i < 4; i++ {
-		require.NoError(t, r.SetReady(i, true))
+		require.NoError(t, r.SetReady(domainroom.Seat(i), true))
 	}
 	require.NoError(t, r.StartPlaying())
 
@@ -843,6 +843,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 				return err
 			}
 		}
+		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 		discard := chooseDiscard(a.round.hands[seat], tile.Suit(a.round.queBySeat[seat]))
 		notifs, err := svc.Discard(ctx, roomID, userID, discard.String())
 		if err != nil {

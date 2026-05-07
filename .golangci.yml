@@ -24,9 +24,28 @@ linters:
           disabled: true
         - name: unused-parameter
           disabled: true
+    gosec:
+      excludes:
+        - G117
+        - G118
   exclusions:
     paths:
       - ".*/gen/.*"
+    rules:
+      -
+        path: "internal/mahjong/wall/wall.go"
+        linters:
+          - "gosec"
+        text: "G404"
+      -
+        path: "_test\\.go$"
+        linters:
+          - "gosec"
+        text: "G(304|204)"
+      -
+        path: "_test\\.go$"
+        linters:
+          - "noctx"
 formatters:
   enable:
     - gofmt

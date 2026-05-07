@@ -55,7 +55,7 @@ func (w *Wall) Shuffle(src *rand.Rand) {
 		return
 	}
 	if src == nil {
-		src = rand.New(rand.NewPCG(0, 0)) //nolint:gosec // G404：牌墙洗牌需可复现，使用 PCG 而非加密随机
+		src = rand.New(rand.NewPCG(0, 0))
 	}
 	src.Shuffle(len(w.tiles), func(i, j int) {
 		w.tiles[i], w.tiles[j] = w.tiles[j], w.tiles[i]
@@ -65,7 +65,7 @@ func (w *Wall) Shuffle(src *rand.Rand) {
 
 // ShuffleWithSeed 使用确定性 PCG 洗牌，便于夹具与单测。
 func (w *Wall) ShuffleWithSeed(seed uint64) {
-	src := rand.New(rand.NewPCG(seed, seed^0x9E3779B97F4A7C15)) //nolint:gosec // G404：同上，供测试与房间固定种子
+	src := rand.New(rand.NewPCG(seed, seed^0x9E3779B97F4A7C15))
 	w.Shuffle(src)
 }
 

@@ -13,7 +13,7 @@ import (
 )
 
 // ApplyDiscard 推进当前轮次出牌，并在需要时继续发出下一次摸牌或结算。
-func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat int, tileText string) ([]Notification, error) {
+func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, tileText string) ([]Notification, error) {
 	if e == nil {
 		return nil, fmt.Errorf("nil engine")
 	}
@@ -50,7 +50,7 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat int, til
 	}
 	rs.lastDiscardAfterGang = rs.lastGangFollowUp
 	rs.lastGangFollowUp = false
-	seatIndex := int32(seat) //nolint:gosec // seat 范围固定
+	seatIndex := seat.Proto()
 	actionPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("discard-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
@@ -94,7 +94,7 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat int, til
 }
 
 // ApplyHu 处理当前轮次的自摸胡牌或弃牌抢答胡牌。
-func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notification, error) {
+func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
 	if e == nil {
 		return nil, fmt.Errorf("nil engine")
 	}
@@ -110,8 +110,8 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 	var (
 		winTile      tile.Tile
 		source       = rules.HuSourceTsumo
-		nextTurnFrom int
-		payer        = -1
+		nextTurnFrom Seat
+		payer        = SeatInvalid
 	)
 	switch {
 	case rs.claimWindowOpen && rs.hasClaimAction(seat, "hu"):
@@ -167,7 +167,7 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 	if source != rules.HuSourceTsumo {
 		metrics.ClaimWindowTotal.WithLabelValues("hu").Inc()
 	}
-	seatIndex := int32(seat) //nolint:gosec // seat 范围固定
+	seatIndex := seat.Proto()
 	huPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("hu-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
@@ -194,7 +194,7 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat int) ([]Notif
 	return append(out, next...), nil
 }
 
-func (rs *RoundState) isOpeningDrawHu(seat int, source rules.HuSource) bool {
+func (rs *RoundState) isOpeningDrawHu(seat Seat, source rules.HuSource) bool {
 	return rs != nil && source == rules.HuSourceTsumo && seat == rs.openingDrawSeat
 }
 
@@ -235,7 +235,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	seatIndex := int32(rs.turn) //nolint:gosec // turn 范围固定
+	seatIndex := rs.turn.Proto()
 	drawPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("draw-%d", rs.step),
 		Body: &clientv1.Envelope_DrawTile{
@@ -267,11 +267,11 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	return out, nil
 }
 
-func (rs *RoundState) isHued(seat int) bool {
-	return rs != nil && seat >= 0 && seat < len(rs.huedSeats) && rs.huedSeats[seat]
+func (rs *RoundState) isHued(seat Seat) bool {
+	return rs != nil && seat >= 0 && int(seat) < len(rs.huedSeats) && rs.huedSeats[seat]
 }
 
-func (rs *RoundState) markHued(seat int) {
+func (rs *RoundState) markHued(seat Seat) {
 	if rs == nil || seat < 0 || seat > 3 || rs.isHued(seat) {
 		return
 	}
@@ -295,12 +295,12 @@ func (rs *RoundState) huedCount() int {
 	return n
 }
 
-func (rs *RoundState) nextActiveSeat(from int) int {
+func (rs *RoundState) nextActiveSeat(from Seat) Seat {
 	if rs == nil {
 		return from
 	}
 	for offset := 1; offset <= 4; offset++ {
-		seat := (from + offset) % 4
+		seat := Seat((int(from) + offset) % 4)
 		if !rs.isHued(seat) {
 			return seat
 		}

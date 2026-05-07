@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
@@ -36,11 +37,11 @@ const (
 
 // GangRecord 记录一笔杠牌流水，后续用于抢杠、退税与责任方判定。
 type GangRecord struct {
-	Seat            int
+	Seat            domainroom.Seat
 	Kind            GangKind
 	Tile            tile.Tile
-	FromSeat        int
-	ResponsibleSeat int
+	FromSeat        domainroom.Seat
+	ResponsibleSeat domainroom.Seat
 	Step            int
 }
 
@@ -49,10 +50,10 @@ type HuContext struct {
 	Source          HuSource
 	PendingTile     tile.Tile
 	Que             []tile.Suit
-	Discarder       int
+	Discarder       domainroom.Seat
 	IsHaiDi         bool
 	IsGangShangHua  bool
-	ResponsibleSeat int
+	ResponsibleSeat domainroom.Seat
 	GangHistory     []GangRecord
 	WallRemaining   int
 }
@@ -64,8 +65,8 @@ type HuResult struct {
 
 // ScoreContext 为计分上下文；Phase 5 规则 PR 会逐步消费这些字段。
 type ScoreContext struct {
-	HuSeat               int
-	DealerSeat           int
+	HuSeat               domainroom.Seat
+	DealerSeat           domainroom.Seat
 	SeatGenTiles         [][]tile.Tile
 	GangRecords          []GangRecord
 	IsTsumo              bool
@@ -75,7 +76,7 @@ type ScoreContext struct {
 	IsGangShangHua       bool
 	IsGangShangPao       bool
 	Que                  []tile.Suit
-	ResponsibleSeat      int
+	ResponsibleSeat      domainroom.Seat
 	WallRemaining        int
 }
 

@@ -547,7 +547,7 @@ func TestHandleWebSocketUpgradeReject(t *testing.T) {
 		HandleWebSocket(context.Background(), Deps{}, w, r)
 	}))
 	defer srv.Close()
-	resp, err := http.Get(srv.URL) //nolint:noctx // 测试非 WS 请求触发升级失败分支
+	resp, err := http.Get(srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

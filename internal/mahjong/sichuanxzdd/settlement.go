@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
 	"racoo.cn/lsp/internal/mahjong/tile"
@@ -27,25 +28,25 @@ const (
 
 // ScoreEntry 是血战结算流水；FromSeat/ToSeat 为 -1 时表示系统池。
 type ScoreEntry struct {
-	Reason     string   `json:"reason"`
-	FromSeat   int      `json:"from_seat"`
-	ToSeat     int      `json:"to_seat"`
-	Amount     int32    `json:"amount"`
-	Step       int      `json:"step"`
-	WinnerSeat int      `json:"winner_seat"`
-	WinnerFan  int32    `json:"winner_fan,omitempty"`
-	FanNames   []string `json:"fan_names,omitempty"`
+	Reason     string          `json:"reason"`
+	FromSeat   domainroom.Seat `json:"from_seat"`
+	ToSeat     domainroom.Seat `json:"to_seat"`
+	Amount     int32           `json:"amount"`
+	Step       int             `json:"step"`
+	WinnerSeat domainroom.Seat `json:"winner_seat"`
+	WinnerFan  int32           `json:"winner_fan,omitempty"`
+	FanNames   []string        `json:"fan_names,omitempty"`
 }
 
 // BuildSettlement 生成当前四川血战子集的结算摘要。
 // 当前结算先汇总房间引擎已经计算好的胡牌与杠分，再补充查花猪、查大叫等局末罚分。
 // 后续扩展番种或包牌规则时，应优先扩展规则上下文与结构化明细，而不是在传输层拼文本。
-func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32, ledger []ScoreEntry, winnerSeats []int) ([]*clientv1.SeatScore, []*clientv1.PenaltyItem, []*clientv1.WinnerBreakdown, string) {
+func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32, ledger []ScoreEntry, winnerSeats []domainroom.Seat) ([]*clientv1.SeatScore, []*clientv1.PenaltyItem, []*clientv1.WinnerBreakdown, string) {
 	seatScores := make([]*clientv1.SeatScore, 0, 4)
 	penalties := make([]*clientv1.PenaltyItem, 0)
 	balances := foldLedger(ledger)
 	detail := "荒牌"
-	winners := map[int]struct{}{}
+	winners := map[domainroom.Seat]struct{}{}
 	if len(winnerSeats) > 0 {
 		parts := make([]string, 0, len(winnerSeats))
 		for _, seat := range winnerSeats {
@@ -56,12 +57,14 @@ func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32,
 	}
 	breakdowns := buildWinnerBreakdowns(playerIDs, ledger, winners)
 	for seat := 0; seat < 4; seat++ {
-		seatIndex := int32(seat) //nolint:gosec // G115：seat 仅在 0..3 范围
+		seatID := domainroom.SeatFromInt(seat)
+		seatIndex := seatID.Proto()
 		skipped := false
-		if holdsQueSuit(hands[seat], tile.Suit(queBySeat[seat])) {
+		if holdsQueSuit(hands[seat], tile.Suit(queBySeat[seat])) { //nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
+
 			skipped = true
 			for to := 0; to < 4; to++ {
-				toSeat := int32(to) //nolint:gosec // G115：to 仅在 0..3 范围
+				toSeat := domainroom.SeatFromInt(to).Proto()
 				if to == seat {
 					continue
 				}
@@ -69,10 +72,9 @@ func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32,
 			}
 		}
 		if len(winners) > 0 {
-			if _, ok := winners[seat]; !ok && !skipped && !isTing(hands[seat]) {
+			if _, ok := winners[seatID]; !ok && !skipped && !isTing(hands[seat]) {
 				for winnerSeat := range winners {
-					winnerSeat32 := int32(winnerSeat) //nolint:gosec // G115：winnerSeat 仅可能为 0..3
-					appendPenalty(&penalties, balances, ReasonChaDaJiao, seatIndex, winnerSeat32, 1)
+					appendPenalty(&penalties, balances, ReasonChaDaJiao, seatIndex, winnerSeat.Proto(), 1)
 				}
 			}
 		}
@@ -133,14 +135,15 @@ func appendRefundPenalties(penalties *[]*clientv1.PenaltyItem, balances []int32,
 		return
 	}
 	for _, entry := range ledger {
-		if entry.ToSeat != seat || entry.FromSeat < 0 || entry.Amount <= 0 {
+		seatID := domainroom.SeatFromInt(seat)
+		if entry.ToSeat != seatID || entry.FromSeat < 0 || entry.Amount <= 0 {
 			continue
 		}
 		reason, ok := refundReason(entry.Reason, noTingDraw)
 		if !ok {
 			continue
 		}
-		appendPenalty(penalties, balances, reason, int32(seat), int32(entry.FromSeat), entry.Amount) //nolint:gosec // 座位范围固定
+		appendPenalty(penalties, balances, reason, seatID.Proto(), entry.FromSeat.Proto(), entry.Amount)
 	}
 }
 
@@ -165,9 +168,9 @@ func isTing(h *hand.Hand) bool {
 	return hu.IsTing(h.Counts())
 }
 
-func buildWinnerBreakdowns(playerIDs [4]string, ledger []ScoreEntry, winners map[int]struct{}) []*clientv1.WinnerBreakdown {
-	bySeat := make(map[int]*clientv1.WinnerBreakdown, len(winners))
-	seenName := make(map[int]map[string]struct{}, len(winners))
+func buildWinnerBreakdowns(playerIDs [4]string, ledger []ScoreEntry, winners map[domainroom.Seat]struct{}) []*clientv1.WinnerBreakdown {
+	bySeat := make(map[domainroom.Seat]*clientv1.WinnerBreakdown, len(winners))
+	seenName := make(map[domainroom.Seat]map[string]struct{}, len(winners))
 	for _, entry := range ledger {
 		if entry.WinnerSeat < 0 || entry.WinnerSeat > 3 {
 			continue
@@ -177,7 +180,7 @@ func buildWinnerBreakdowns(playerIDs [4]string, ledger []ScoreEntry, winners map
 		}
 		b := bySeat[entry.WinnerSeat]
 		if b == nil {
-			seatIndex := int32(entry.WinnerSeat) //nolint:gosec // 座位范围固定
+			seatIndex := entry.WinnerSeat.Proto()
 			b = &clientv1.WinnerBreakdown{SeatIndex: seatIndex, UserId: playerIDs[entry.WinnerSeat]}
 			bySeat[entry.WinnerSeat] = b
 			seenName[entry.WinnerSeat] = make(map[string]struct{})
@@ -198,7 +201,7 @@ func buildWinnerBreakdowns(playerIDs [4]string, ledger []ScoreEntry, winners map
 	}
 	out := make([]*clientv1.WinnerBreakdown, 0, len(winners))
 	for seat := 0; seat < 4; seat++ {
-		if b := bySeat[seat]; b != nil {
+		if b := bySeat[domainroom.SeatFromInt(seat)]; b != nil {
 			out = append(out, b)
 		}
 	}

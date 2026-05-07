@@ -22,7 +22,7 @@ type huFixture struct {
 // TestJSONSimpleHu 读取 testdata 夹具，验证规则接口与和牌判定链路。
 func TestJSONSimpleHu(t *testing.T) {
 	const rel = "testdata/simple_hu.json"
-	b, err := os.ReadFile(rel) //nolint:gosec // G304：固定常量路径，仅读取仓库内夹具
+	b, err := os.ReadFile(rel)
 	if err != nil {
 		t.Fatalf("read json: %v", err)
 	}

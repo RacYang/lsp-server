@@ -3,6 +3,7 @@ package sichuanxzdd
 import (
 	"testing"
 
+	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
@@ -24,7 +25,7 @@ func TestBuildSettlementMultiWinnerAndPenalties(t *testing.T) {
 		{Reason: ReasonHuDiscard, FromSeat: 3, ToSeat: 2, Amount: 2, WinnerSeat: 2, WinnerFan: 2, FanNames: []string{"对对胡"}},
 	}
 
-	scores, penalties, breakdowns, detail := BuildSettlement(playerIDs, hands, queBySeat, ledger, []int{1, 2})
+	scores, penalties, breakdowns, detail := BuildSettlement(playerIDs, hands, queBySeat, ledger, []domainroom.Seat{1, 2})
 	if len(scores) != 4 {
 		t.Fatalf("scores len = %d", len(scores))
 	}
@@ -58,7 +59,7 @@ func TestBuildSettlementRefundsGangIncome(t *testing.T) {
 		hand.New(),
 	}
 	queBySeat := []int32{int32(tile.SuitDots), int32(tile.SuitCharacters), int32(tile.SuitBamboo), int32(tile.SuitDots)}
-	ledger := []ScoreEntry{{Reason: ReasonGangMing, FromSeat: 0, ToSeat: 1, Amount: 1, WinnerSeat: -1}}
+	ledger := []ScoreEntry{{Reason: ReasonGangMing, FromSeat: 0, ToSeat: 1, Amount: 1, WinnerSeat: domainroom.SeatInvalid}}
 
 	scores, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, nil)
 	if scores[1].GetTotalFan() >= 1 {
@@ -89,7 +90,7 @@ func TestBuildSettlementWinnerBreakdownBaoPai(t *testing.T) {
 		FanNames:   []string{"抢杠胡", ReasonBaoPai},
 	}}
 
-	_, _, breakdowns, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, []int{2})
+	_, _, breakdowns, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, []domainroom.Seat{2})
 	if len(breakdowns) != 1 {
 		t.Fatalf("breakdowns len = %d", len(breakdowns))
 	}

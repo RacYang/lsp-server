@@ -1,0 +1,5 @@
+package negative
+
+func disabledLinter() {
+	_ = 1 //nolint:forcetypeassert // 未启用 linter 不得保留豁免
+}

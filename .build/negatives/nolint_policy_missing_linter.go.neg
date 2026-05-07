@@ -1,0 +1,5 @@
+package negative
+
+func missingLinter() {
+	_ = 1 //nolint // 缺少具体 linter
+}

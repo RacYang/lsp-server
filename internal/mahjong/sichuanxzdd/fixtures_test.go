@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
 	"racoo.cn/lsp/internal/mahjong/rules"
@@ -47,8 +48,8 @@ func TestFanDeepeningYAMLFixtures(t *testing.T) {
 	for _, tc := range file.Cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			ctx := rules.ScoreContext{
-				HuSeat:               tc.ScoreContext.HuSeat,
-				DealerSeat:           tc.ScoreContext.DealerSeat,
+				HuSeat:               domainroom.SeatFromInt(tc.ScoreContext.HuSeat),
+				DealerSeat:           domainroom.SeatFromInt(tc.ScoreContext.DealerSeat),
 				IsTsumo:              tc.ScoreContext.IsTsumo,
 				IsOpeningDraw:        tc.ScoreContext.IsOpeningDraw,
 				IsDealerFirstDiscard: tc.ScoreContext.IsDealerFirstDiscard,
@@ -91,7 +92,7 @@ func TestChaDaJiaoYAMLFixtures(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			hands := []*hand.Hand{handFromFixtureTiles(t, tc.Hand), hand.New(), hand.New(), hand.New()}
 			queBySeat := []int32{int32(fixtureSuit(t, tc.QueSuit)), int32(tile.SuitCharacters), int32(tile.SuitDots), int32(tile.SuitBamboo)}
-			_, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, nil, tc.Winners)
+			_, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, nil, fixtureSeats(tc.Winners))
 			var sawSeatPenalty bool
 			var sawReason bool
 			for _, penalty := range penalties {
@@ -160,9 +161,9 @@ func TestGangRefundYAMLFixtures(t *testing.T) {
 			}
 			ledger := make([]ScoreEntry, 0, len(tc.Ledger))
 			for _, entry := range tc.Ledger {
-				ledger = append(ledger, ScoreEntry{Reason: entry.Reason, FromSeat: entry.From, ToSeat: entry.To, Amount: entry.Amount, WinnerSeat: -1})
+				ledger = append(ledger, ScoreEntry{Reason: entry.Reason, FromSeat: domainroom.SeatFromInt(entry.From), ToSeat: domainroom.SeatFromInt(entry.To), Amount: entry.Amount, WinnerSeat: domainroom.SeatInvalid})
 			}
-			_, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, winners)
+			_, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, fixtureSeats(winners))
 			for _, penalty := range penalties {
 				if penalty.GetReason() == tc.ExpectPenalty.Reason &&
 					penalty.GetFromSeat() == tc.ExpectPenalty.From &&
@@ -183,7 +184,7 @@ func readYAMLFixture(t *testing.T, name string, out any) {
 	default:
 		t.Fatalf("unexpected fixture name %s", name)
 	}
-	data, err := os.ReadFile(filepath.Join("testdata", name)) //nolint:gosec // 文件名已通过白名单限制在 testdata 夹具内。
+	data, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatalf("read fixture %s: %v", name, err)
 	}
@@ -204,7 +205,15 @@ func fixtureGangRecords(t *testing.T, records []fixtureGangRecord) []rules.GangR
 				t.Fatalf("parse gang tile %s: %v", record.Tile, err)
 			}
 		}
-		out = append(out, rules.GangRecord{Seat: record.Seat, Kind: fixtureGangKind(t, record.Kind), Tile: ti})
+		out = append(out, rules.GangRecord{Seat: domainroom.SeatFromInt(record.Seat), Kind: fixtureGangKind(t, record.Kind), Tile: ti})
+	}
+	return out
+}
+
+func fixtureSeats(in []int) []domainroom.Seat {
+	out := make([]domainroom.Seat, 0, len(in))
+	for _, seat := range in {
+		out = append(out, domainroom.SeatFromInt(seat))
 	}
 	return out
 }

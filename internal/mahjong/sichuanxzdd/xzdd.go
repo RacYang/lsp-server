@@ -4,6 +4,7 @@ package sichuanxzdd
 import (
 	"context"
 
+	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
@@ -203,7 +204,7 @@ func countAnKe(c hu.Counts) int {
 	return n
 }
 
-func countSeatGang(records []rules.GangRecord, seat int) int {
+func countSeatGang(records []rules.GangRecord, seat domainroom.Seat) int {
 	n := 0
 	for _, record := range records {
 		if record.Seat == seat && record.Kind != rules.GangKindUnspecified {
@@ -213,7 +214,7 @@ func countSeatGang(records []rules.GangRecord, seat int) int {
 	return n
 }
 
-func countAnGang(records []rules.GangRecord, seat int) int {
+func countAnGang(records []rules.GangRecord, seat domainroom.Seat) int {
 	n := 0
 	for _, record := range records {
 		if record.Seat == seat && record.Kind == rules.GangKindAn {

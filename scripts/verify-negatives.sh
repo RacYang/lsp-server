@@ -247,6 +247,16 @@ run_gate_session_routing_negative() {
   fi
 }
 
+run_nolint_policy_negatives() {
+  local negative_file
+  for negative_file in "${ROOT_DIR}"/.build/negatives/nolint_policy_*.go.neg; do
+    [[ -f "${negative_file}" ]] || continue
+    if python3 "${ROOT_DIR}/scripts/verify-nolint-policy.py" --file "${negative_file}" >/dev/null 2>&1; then
+      fail_unexpected_pass "${negative_file}"
+    fi
+  done
+}
+
 for rule in "${RULES_DIR}"/*.mdc; do
   [[ -f "${rule}" ]] || continue
   kind="$(extract_field "${rule}" "kind")"
@@ -320,6 +330,9 @@ for rule in "${RULES_DIR}"/*.mdc; do
       ;;
     *gate_session_routing*.go.neg)
       run_gate_session_routing_negative "${negative_file}"
+      ;;
+    *nolint_policy*.go.neg)
+      run_nolint_policy_negatives
       ;;
     *.go.neg)
       run_golangci_negative "${negative_file}" "${enforcer}"
