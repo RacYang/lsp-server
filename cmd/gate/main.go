@@ -53,7 +53,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
 	}
-	a, err := app.NewGate(ctx, cfg)
+	a, err := app.NewGate(cfg)
 	if err != nil {
 		logx.Error(ctx, "网关服务装配失败", "err", err.Error())
 		return 1

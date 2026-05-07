@@ -25,13 +25,13 @@ func TestNewGRPCBindFailsOnUsedPort(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = occupied.Close() }()
 
-	_, err = NewGRPC(t.Context(), occupied.Addr().String(), nil)
+	_, err = NewGRPC(occupied.Addr().String(), nil)
 	require.Error(t, err)
 }
 
 // TestGRPCAppRunCancelledContext 校验 ctx 取消触发 GracefulStop，Run 返回 context.Canceled。
 func TestGRPCAppRunCancelledContext(t *testing.T) {
-	app, err := NewGRPC(t.Context(), "127.0.0.1:0", nil)
+	app, err := NewGRPC("127.0.0.1:0", nil)
 	require.NoError(t, err)
 	require.NotNil(t, app.Addr())
 
@@ -55,7 +55,7 @@ func TestGRPCAppNilSafe(t *testing.T) {
 // 通过自定义 health server 实现把 ctx 中的 trace_id 写到响应 status 字段，
 // 间接验证拦截器把 trace_id 注入了 handler 的 ctx。
 func TestGRPCAppRegisterAndCallWithTraceInjected(t *testing.T) {
-	app, err := NewGRPC(t.Context(), "127.0.0.1:0", func(s *grpc.Server) {
+	app, err := NewGRPC("127.0.0.1:0", func(s *grpc.Server) {
 		healthpb.RegisterHealthServer(s, &traceCapturingHealth{})
 	})
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestGRPCAppRegisterAndCallWithTraceInjected(t *testing.T) {
 // TestStreamInterceptorAcceptsTraceID 通过流式 health.Watch 调用，
 // 让 stream 拦截器路径被实际触发，覆盖 traceStreamServerInterceptor。
 func TestStreamInterceptorAcceptsTraceID(t *testing.T) {
-	app, err := NewGRPC(t.Context(), "127.0.0.1:0", func(s *grpc.Server) {
+	app, err := NewGRPC("127.0.0.1:0", func(s *grpc.Server) {
 		healthpb.RegisterHealthServer(s, &traceCapturingHealth{})
 	})
 	require.NoError(t, err)

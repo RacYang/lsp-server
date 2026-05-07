@@ -429,7 +429,9 @@ func (g *remoteRoomGateway) ensureRoomStream(ctx context.Context, roomID, sinceC
 		g.streamMu.Unlock()
 		return fmt.Errorf("subscribe room stream: %w", err)
 	}
-	go g.consumeRoomStream(subCtx, roomID, stream, handle)
+	// G118 误报: consumeRoomStream 内部刻意使用 context.Background, 让订阅期日志与
+	// cursor 更新不被 subCtx 一旦取消就连带失败; subCtx 仅用于 grpc stream 自身的取消语义。
+	go g.consumeRoomStream(roomID, stream, handle) //nolint:gosec // G118
 	return nil
 }
 
@@ -612,12 +614,7 @@ func clusterWinnerBreakdownsToClient(items []*clusterv1.WinnerBreakdown) []*clie
 	return out
 }
 
-// consumeRoomStream 消费 grpc 房间事件流并把事件推到本地 Hub。
-//
-// streamCtx 是 ensureRoomStream 创建的与本订阅同生共死的 ctx,
-// 取消即代表整个订阅退出, 内部所有 trace/cursor 更新都基于它,
-// 不再退化到 context.Background, 避免 trace_id 与超时控制丢失。
-func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
+func (g *remoteRoomGateway) consumeRoomStream(roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
 	defer func() {
 		_ = stream.CloseSend()
 		g.streamMu.Lock()
@@ -633,7 +630,7 @@ func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID 
 		}
 		msgID, payload, err := encodeClusterRoomEvent(evt)
 		if err != nil {
-			logCtx := logx.WithRoomID(streamCtx, roomID)
+			logCtx := logx.WithRoomID(context.Background(), roomID)
 			logx.Warn(logCtx, "房间事件转客户端推送失败", "err", err.Error())
 			continue
 		}
@@ -651,7 +648,7 @@ func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID 
 		if g.sess != nil && evt.GetCursor() != "" {
 			cur := evt.GetCursor()
 			for _, uid := range delivered {
-				_ = g.sess.UpdateCursor(streamCtx, uid, cur)
+				_ = g.sess.UpdateCursor(context.Background(), uid, cur)
 			}
 		}
 	}

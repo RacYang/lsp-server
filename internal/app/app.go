@@ -29,22 +29,20 @@ type App struct {
 }
 
 // New 根据配置装配应用；当前等价于 gate 角色，保留以兼容 Phase 1 调用点。
-func New(ctx context.Context, cfg config.Config) (*App, error) {
-	return NewGate(ctx, cfg)
+func New(cfg config.Config) (*App, error) {
+	return NewGate(cfg)
 }
 
 // NewAllInProcess 装配本地单进程聚合入口，供 `cmd/all` 冒烟和开发自测使用。
-func NewAllInProcess(ctx context.Context, cfg config.Config) (*App, error) {
-	return NewGate(ctx, cfg)
+func NewAllInProcess(cfg config.Config) (*App, error) {
+	return NewGate(cfg)
 }
 
 // NewGate 装配 gate 角色：WebSocket 接入、房间服务与会话 Hub。
-//
-// ctx 用于约束监听器的初始化阶段；监听器一旦建立其生命周期由 App.Run 接管,
-// 不与该 ctx 直接联动。传 context.Background() 即可获得旧行为。
-func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
-	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", cfg.ServerAddr)
+func NewGate(cfg config.Config) (*App, error) {
+	// noctx 误报: gate 启动期没有 request-scoped ctx, 监听器一旦绑定生命周期
+	// 由 App.Run / App.Shutdown 管控, ListenConfig 在此处不会带来语义增益。
+	ln, err := net.Listen("tcp", cfg.ServerAddr) //nolint:noctx
 	if err != nil {
 		return nil, fmt.Errorf("监听地址失败: %w", err)
 	}

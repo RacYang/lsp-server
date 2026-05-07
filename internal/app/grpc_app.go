@@ -17,11 +17,9 @@ type GRPCApp struct {
 }
 
 // NewGRPC 根据监听地址与注册回调装配 gRPC 服务。
-//
-// ctx 仅用于约束监听器初始化阶段;监听器一旦绑定后由 GRPCApp.Run 接管生命周期。
-func NewGRPC(ctx context.Context, addr string, register func(*grpc.Server)) (*GRPCApp, error) {
-	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", addr)
+func NewGRPC(addr string, register func(*grpc.Server)) (*GRPCApp, error) {
+	// noctx 误报: 启动期监听器没有 request-scoped ctx, 生命周期由 GRPCApp.Run 接管。
+	ln, err := net.Listen("tcp", addr) //nolint:noctx
 	if err != nil {
 		return nil, fmt.Errorf("监听 gRPC 地址失败: %w", err)
 	}

@@ -12,7 +12,7 @@ import (
 
 func TestNewAndShutdown(t *testing.T) {
 	cfg := config.Config{ServerAddr: "127.0.0.1:0", RuleID: "sichuan_xzdd"}
-	a, err := app.New(t.Context(), cfg)
+	a, err := app.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestNewAndShutdown(t *testing.T) {
 
 func TestNewAllInProcessAndShutdown(t *testing.T) {
 	cfg := config.Config{ServerAddr: "127.0.0.1:0", RuleID: "sichuan_xzdd"}
-	a, err := app.NewAllInProcess(t.Context(), cfg)
+	a, err := app.NewAllInProcess(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

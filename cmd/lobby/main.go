@@ -62,7 +62,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		defer func() { _ = reg.Stop(context.Background()) }()
 		claimer = router.NewEtcd(cli, "/lsp")
 	}
-	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
+	a, err := app.NewGRPC(cfg.ServerAddr, func(s *grpc.Server) {
 		registerLobbyService(s, newLobbyGRPCServer(svc, claimer, defaultRoomNodeID))
 	})
 	if err != nil {

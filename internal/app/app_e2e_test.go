@@ -318,7 +318,7 @@ func drivePlayersUntilSettlement(t *testing.T, conns []*websocket.Conn) *clientv
 
 func TestE2EFourPlayersReceiveSettlement(t *testing.T) {
 	cfg := config.Config{ServerAddr: "127.0.0.1:0", RuleID: "sichuan_xzdd"}
-	a, err := app.New(t.Context(), cfg)
+	a, err := app.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
