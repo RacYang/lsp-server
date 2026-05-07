@@ -35,6 +35,11 @@ type HandCursor struct {
 // DeriveCursorMode 根据玩家视图派生当前应该启用的光标模式。
 //
 // 逻辑只看 InteractionModel.Phase；更细粒度动作留给提交时校验。
+//
+// 注意：川麻血战的"换三张"是 4 家并发选择（不是轮流），服务端 broadcast 4 条
+// ActionNotify(seat=0..3, action="exchange_three")，client 侧 ActingSeat 的语义
+// 在该阶段不再是"轮到谁"。所以这里只要 SeatIndex 合法就给 CursorModeMulti3，
+// 否则会出现"非庄家按任何键都没反应"的死锁。
 func DeriveCursorMode(view RoomView) CursorMode {
 	model := DeriveInteractionModel(view)
 	switch model.Phase {
@@ -43,7 +48,7 @@ func DeriveCursorMode(view RoomView) CursorMode {
 			return CursorModeSingle
 		}
 	case PhaseExchange:
-		if view.SeatIndex == view.ActingSeat {
+		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 			return CursorModeMulti3
 		}
 	}

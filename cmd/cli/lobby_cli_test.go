@@ -19,7 +19,15 @@ type fakeGateway struct {
 	listRooms     func() (LobbyRoomList, error)
 	createRoom    func(LobbyCreateOpts) (LobbyJoinResult, error)
 	joinRoom      func(string) (LobbyJoinResult, error)
+	leaveRoom     func() error
 	nicknameCalls []string
+}
+
+func (f *fakeGateway) LeaveRoom(ctx context.Context) error {
+	if f.leaveRoom == nil {
+		return nil
+	}
+	return f.leaveRoom()
 }
 
 // AutoMatch 把脚本里的 autoMatch 闭包透传出去,未配置时返回 not configured 让测试一眼看出漏配。

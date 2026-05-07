@@ -13,6 +13,7 @@ func TestLoadConfigReturnsDefaultsWhenMissing(t *testing.T) {
 	cfg, err := LoadConfig(path)
 	require.NoError(t, err)
 	require.Equal(t, NewDefaultConfig(), cfg)
+	require.Equal(t, tileThemeEmoji, cfg.TileTheme)
 }
 
 func TestLoadConfigParsesPartialFileAndFillsDefaults(t *testing.T) {
@@ -23,7 +24,7 @@ func TestLoadConfigParsesPartialFileAndFillsDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "racoo", cfg.Nickname)
 	require.Equal(t, defaultServerURL, cfg.ServerURL)
-	require.Equal(t, tileThemeUnicode, cfg.TileTheme)
+	require.Equal(t, tileThemeEmoji, cfg.TileTheme)
 	require.Equal(t, defaultClaimTimeout, cfg.ClaimTimeoutMS)
 }
 
@@ -57,7 +58,7 @@ func TestSaveConfigNormalizesInvalidTheme(t *testing.T) {
 	require.NoError(t, SaveConfig(path, Config{Nickname: "bob", TileTheme: "weird"}))
 	got, err := LoadConfig(path)
 	require.NoError(t, err)
-	require.Equal(t, tileThemeUnicode, got.TileTheme)
+	require.Equal(t, tileThemeEmoji, got.TileTheme)
 }
 
 func TestSaveConfigUsesAtomicRename(t *testing.T) {

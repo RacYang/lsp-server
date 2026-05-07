@@ -37,7 +37,7 @@ func TestRelativeSeatGuardsAgainstInvalidIndices(t *testing.T) {
 func TestCalcLayoutRejectsTinyTerminal(t *testing.T) {
 	_, ok := CalcLayout(40, 12)
 	require.False(t, ok)
-	_, ok = CalcLayout(79, MinTableHeight)
+	_, ok = CalcLayout(MinTableWidth-1, MinTableHeight)
 	require.False(t, ok)
 	_, ok = CalcLayout(MinTableWidth, 23)
 	require.False(t, ok)
@@ -48,43 +48,46 @@ func TestCalcLayoutMinimum(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, MinTableWidth, l.Width)
 	require.Equal(t, MinTableHeight, l.Height)
-	require.Equal(t, 0, l.StatusBar.Y)
-	require.Equal(t, 1, l.StatusBar.Height)
-	require.Equal(t, 1, l.TopArea.Y)
-	require.Equal(t, 5, l.TopArea.Height)
-	require.Equal(t, MinTableHeight-1, l.HintArea.Y)
-	require.Equal(t, 1, l.HintArea.Height)
-	require.Equal(t, l.KeyBar, l.HintArea)
-	require.Equal(t, 4, l.DiscardColumns)
-	require.False(t, l.HandArea.Empty())
+	require.Equal(t, 0, l.TitleBar.Y)
+	require.Equal(t, 1, l.TitleBar.Height)
+	require.Equal(t, MinTableHeight-1, l.KeyBar.Y)
+	require.Equal(t, 1, l.KeyBar.Height)
+	require.False(t, l.SouthBand.Empty())
 	require.False(t, l.CenterArea.Empty())
-	require.Greater(t, l.RightArea.X, l.LeftArea.X)
+	require.Equal(t, 52, l.TableFrame.Width)
+	require.Equal(t, 26, l.TableFrame.Height)
+	require.Equal(t, l.TableFrame.Height*2, l.TableFrame.Width)
 }
 
-func TestCalcLayoutSelfBlocksOrderedAboveHand(t *testing.T) {
-	// 自家"打 / 鸣 / protrusion / hand"四块在垂直方向必须按距离手牌从远到近排列,
-	// 且互不重叠;protrusion 行紧贴 HandArea 上方,鸣行紧贴 protrusion 上方,
-	// 牌河行再紧贴鸣行上方。这样光标凸起不会盖住自家鸣牌,鸣牌又不会盖住牌河。
+func TestCalcLayoutSquareCenteredInvariant(t *testing.T) {
 	l, ok := CalcLayout(MinTableWidth, MinTableHeight)
 	require.True(t, ok)
-	require.Equal(t, l.HandArea.Y-1, l.SelfMeldsArea.Y+l.SelfMeldsArea.Height,
-		"protrusion 缓冲必须夹在 SelfMeldsArea 与 HandArea 之间")
-	require.Equal(t, l.SelfMeldsArea.Y, l.SelfDiscardsArea.Y+l.SelfDiscardsArea.Height,
-		"SelfMeldsArea 必须紧贴 SelfDiscardsArea 下方,无空隙也无重叠")
-	require.GreaterOrEqual(t, l.SelfDiscardsArea.Y, l.CenterArea.Y+l.CenterArea.Height,
-		"SelfDiscardsArea 不应回侵 CenterArea")
+	require.Equal(t, l.LeftPlayerSlot.Width, l.RightPlayerSlot.Width)
+	require.Equal(t, l.TableFrame.Height*2, l.TableFrame.Width)
+	centerX := l.TableFrame.X + l.TableFrame.Width/2
+	require.InDelta(t, MinTableWidth/2, centerX, 1)
 }
 
-func TestCalcLayoutLargeTerminalGrowsCenterArea(t *testing.T) {
-	smallL, _ := CalcLayout(MinTableWidth, MinTableHeight)
-	bigL, ok := CalcLayout(MinTableWidth, MinTableHeight+10)
+func TestCalcLayoutWideTerminalUsesMoreDensity(t *testing.T) {
+	l, ok := CalcLayout(125, 41, LayoutTierStandard)
 	require.True(t, ok)
-	require.Greater(t, bigL.CenterArea.Height, smallL.CenterArea.Height)
+	require.Equal(t, LayoutTierWide, l.Tier)
+	require.Equal(t, 64, l.TableFrame.Width)
+	require.Equal(t, 32, l.TableFrame.Height)
 }
 
-func TestCalcLayoutWideTerminalUsesMoreDiscardColumns(t *testing.T) {
-	l, ok := CalcLayout(120, MinTableHeight)
-	require.True(t, ok)
-	require.True(t, l.Wide)
-	require.Equal(t, 6, l.DiscardColumns)
+func TestResolveLayoutTierHysteresis(t *testing.T) {
+	require.Equal(t, LayoutTierStandard, ResolveLayoutTier(120, 36, LayoutTierStandard))
+	require.Equal(t, LayoutTierWide, ResolveLayoutTier(125, 41, LayoutTierStandard))
+	require.Equal(t, LayoutTierStandard, ResolveLayoutTier(119, 35, LayoutTierWide))
+}
+
+func TestCalcLayoutSupportedTiersStaySquare(t *testing.T) {
+	for _, size := range []struct{ w, h int }{{100, 30}, {120, 36}, {140, 40}, {200, 60}} {
+		l, ok := CalcLayout(size.w, size.h)
+		require.True(t, ok)
+		require.Equalf(t, l.TableFrame.Height*2, l.TableFrame.Width, "%dx%d", size.w, size.h)
+		require.Equalf(t, l.LeftPlayerSlot.Width, l.TableFrame.X, "%dx%d", size.w, size.h)
+		require.Equalf(t, l.RightPlayerSlot.X, l.TableFrame.X+l.TableFrame.Width, "%dx%d", size.w, size.h)
+	}
 }

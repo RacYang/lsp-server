@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // LobbyGateway 抽象 lobby 主循环对网络层的所有依赖。
@@ -14,6 +15,7 @@ import (
 // 要么带回错误（含取消、超时、协议错误）。把"等待响应"封装在 gateway 里，
 // 主循环就能保持单线程的传统命令行节奏。
 type LobbyGateway interface {
+	LeaveRoom(ctx context.Context) error
 	AutoMatch(ctx context.Context, ruleID string) (LobbyJoinResult, error)
 	ListRooms(ctx context.Context, pageToken string) (LobbyRoomList, error)
 	CreateRoom(ctx context.Context, opts LobbyCreateOpts) (LobbyJoinResult, error)
@@ -173,6 +175,11 @@ func printLobbyStatus(p Prompter, cfg *Config) {
 
 func handleAutoMatch(ctx context.Context, p Prompter, gw LobbyGateway) (LobbyJoinResult, error) {
 	p.Print("正在匹配,按 Ctrl+C 取消...")
+	// 快速开始代表开一桌新的可玩局。先清掉服务端残留房间会话，
+	// 避免刚结算后再次匹配被带回旧房间或结算房间。
+	leaveCtx, cancelLeave := context.WithTimeout(ctx, 2*time.Second)
+	_ = gw.LeaveRoom(leaveCtx)
+	cancelLeave()
 	res, err := gw.AutoMatch(ctx, "")
 	if err != nil {
 		return LobbyJoinResult{}, err

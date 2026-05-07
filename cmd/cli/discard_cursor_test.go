@@ -22,11 +22,21 @@ func TestDeriveCursorMode(t *testing.T) {
 	v.WaitingAction = "exchange_three"
 	require.Equal(t, CursorModeMulti3, DeriveCursorMode(v))
 
+	// 川麻血战换三张是 4 家并发；本地 SeatIndex=1 即便 ActingSeat=0 也应能选牌，
+	// 否则非 dealer 玩家在换三张阶段会陷入死锁（按任何键都没反应）。
 	v.ActingSeat = 0
+	require.Equal(t, CursorModeMulti3, DeriveCursorMode(v))
+
+	// PhaseDiscard 仍然是轮转出牌，非 ActingSeat 不能操作手牌。
+	v.WaitingAction = "discard"
 	require.Equal(t, CursorModeNone, DeriveCursorMode(v))
 
 	v = makeMyTurnDiscardView()
 	v.SeatIndex = -1
+	require.Equal(t, CursorModeNone, DeriveCursorMode(v))
+
+	// SeatIndex 合法但还没入座成功（极端情况）也应该退回 None。
+	v.WaitingAction = "exchange_three"
 	require.Equal(t, CursorModeNone, DeriveCursorMode(v))
 }
 

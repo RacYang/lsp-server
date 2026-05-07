@@ -80,10 +80,10 @@ func TestSettlementDialogIncludesAllScoresWhenRevealed(t *testing.T) {
 	require.Contains(t, joined, "共 3 番")
 	require.Contains(t, joined, "+9")
 	require.Contains(t, joined, "-3")
-	require.Contains(t, joined, "Enter 继续")
+	require.Contains(t, joined, "R 再来一局")
 }
 
-func TestDrawSettlementDialogRendersFullBox(t *testing.T) {
+func TestDrawSettlementDialogRendersBorderlessSummary(t *testing.T) {
 	scr := tcell.NewSimulationScreen("UTF-8")
 	require.NoError(t, scr.Init())
 	defer scr.Fini()
@@ -97,7 +97,7 @@ func TestDrawSettlementDialogRendersFullBox(t *testing.T) {
 	out := dumpScreen(scr)
 	require.Contains(t, out, "胡 了 !")
 	require.Contains(t, out, "+9")
-	require.Contains(t, out, "╭")
+	require.NotContains(t, out, "╭")
 }
 
 func TestWriteStdoutSummaryWin(t *testing.T) {

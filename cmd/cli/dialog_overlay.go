@@ -117,7 +117,7 @@ func DrawOverlay(scr tcell.Screen, layout TableLayout, view RoomView, ctx Overla
 	case OverlayMenu:
 		drawOverlayMenu(scr, layout, o.SelectedIndex)
 	case OverlayHelp:
-		drawOverlayBox(scr, layout, "快 速 参 考", overlayHelpLines())
+		drawOverlayBox(scr, layout, "快 速 参 考", overlayHelpLines(view))
 	}
 }
 
@@ -178,8 +178,9 @@ func overlayPlayersLines(view RoomView) []string {
 	return lines
 }
 
-func overlayHelpLines() []string {
-	return []string{
+func overlayHelpLines(view RoomView) []string {
+	phase := DerivePhase(view, nil)
+	lines := []string{
 		"←→ 选牌    Enter 出牌 / 确认",
 		"换三张: 空格标记三张,Enter 提交",
 		"定缺: m 万 / p 筒 / s 条",
@@ -190,6 +191,15 @@ func overlayHelpLines() []string {
 		"",
 		"按 ? 或 Enter 关闭",
 	}
+	switch phase {
+	case PhaseClaim:
+		lines = append([]string{"当前模式: -- 鸣牌 --", "P 跳过 / Enter 确认", ""}, lines...)
+	case PhaseExchange:
+		lines = append([]string{"当前模式: -- 换三张 --", "Space 标记三张 / Enter 提交", ""}, lines...)
+	case PhaseSettlement:
+		lines = append([]string{"当前模式: -- 结算 --", "R 再来一局 / L 离桌 / Enter 停留", ""}, lines...)
+	}
+	return lines
 }
 
 func drawOverlayMenu(scr tcell.Screen, layout TableLayout, selectedIdx int) {

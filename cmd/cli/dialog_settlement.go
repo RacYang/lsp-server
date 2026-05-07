@@ -88,7 +88,7 @@ func (d *SettlementDialogState) VisibleLines(now time.Time) int {
 	return n
 }
 
-// AllRevealed 报告是否已经走完所有揭晓行，调用方据此关闭"按 Enter 继续"提示。
+// AllRevealed 报告是否已经走完所有揭晓行。
 func (d *SettlementDialogState) AllRevealed(now time.Time) bool {
 	return d.VisibleLines(now) >= d.totalRevealLines()
 }
@@ -141,22 +141,22 @@ func (d *SettlementDialogState) allLines(innerWidth int) []string {
 		}
 		lines = append(lines, centerVisual(fmt.Sprintf("%s   %s%d", label, sign, s.Delta), innerWidth))
 	}
-	lines = append(lines, centerVisual("Enter 继续  /  q 离桌", innerWidth))
+	lines = append(lines, centerVisual("R 再来一局  /  L 离桌", innerWidth))
 	return lines
 }
 
-// DrawSettlementDialog 在中央区域绘制结算浮窗。
+// DrawSettlementDialog 在牌桌中央以无框文本绘制结算摘要。
 func DrawSettlementDialog(scr tcell.Screen, layout TableLayout, d *SettlementDialogState, now time.Time) {
 	if d == nil {
 		return
 	}
-	innerWidth := minInt(40, layout.Width-6)
+	innerWidth := minInt(40, layout.TableFrame.Width-6)
 	if innerWidth < 28 {
 		innerWidth = 28
 	}
 	lines := d.renderLines(now, innerWidth)
-	height := len(lines) + 2
-	width := innerWidth + 2
+	height := len(lines)
+	width := innerWidth
 	x := layout.CenterArea.X + (layout.CenterArea.Width-width)/2
 	y := layout.CenterArea.Y + (layout.CenterArea.Height-height)/2
 	if x < 0 {
@@ -165,14 +165,10 @@ func DrawSettlementDialog(scr tcell.Screen, layout TableLayout, d *SettlementDia
 	if y < 0 {
 		y = 0
 	}
-	style := defaultStyle()
-	drawText(scr, x, y, style, "╭"+strings.Repeat("─", width-2)+"╮")
+	style := defaultStyle().Reverse(true)
 	for i, line := range lines {
-		drawText(scr, x, y+1+i, style, "│")
-		drawText(scr, x+1, y+1+i, style, padRightVisual(line, innerWidth))
-		drawText(scr, x+width-1, y+1+i, style, "│")
+		drawText(scr, x, y+i, style, padRightVisual(line, innerWidth))
 	}
-	drawText(scr, x, y+1+len(lines), style, "╰"+strings.Repeat("─", width-2)+"╯")
 }
 
 // WriteStdoutSummary 把结算摘要写到 io.Writer (生产里是 os.Stdout)。

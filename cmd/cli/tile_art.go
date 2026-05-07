@@ -17,11 +17,15 @@ const (
 	// TileThemeASCII 是降级风格，使用纯 ASCII 字符 +-|，便于在 CJK 渲染异常的终端上保留可读性。
 	// 牌占 4 个 cell 宽 × 3 行高，与 Unicode 主题宽度一致，方便切换主题不用重排版。
 	TileThemeASCII
+	// TileThemeEmoji 使用 Unicode Mahjong Tiles 区块的单字符牌面，适合支持 emoji 双宽的终端。
+	TileThemeEmoji
 )
 
 // String 帮助调试输出与 config 互转。
 func (t TileTheme) String() string {
 	switch t {
+	case TileThemeEmoji:
+		return tileThemeEmoji
 	case TileThemeASCII:
 		return tileThemeASCII
 	default:
@@ -34,6 +38,8 @@ func ParseTileTheme(s string) TileTheme {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case tileThemeASCII:
 		return TileThemeASCII
+	case tileThemeEmoji:
+		return TileThemeEmoji
 	default:
 		return TileThemeUnicode
 	}
@@ -56,6 +62,12 @@ type TileArt struct {
 	Width int
 }
 
+// VerticalTileArt 是竖向压缩牌面，保留给侧栏或窄区域使用。
+type VerticalTileArt struct {
+	Lines [3]string
+	Width int
+}
+
 // RenderTile 把协议层的牌名（如 1m / 5p / 9s / 1z）渲染成三行字符画。
 //
 // 若牌名格式不识别，返回带问号的占位牌而不是 panic，便于在异常数据时仍能渲染界面。
@@ -64,10 +76,38 @@ func RenderTile(name string, theme TileTheme) TileArt {
 	switch theme {
 	case TileThemeASCII:
 		return renderASCII(face)
+	case TileThemeEmoji:
+		return renderEmoji(face)
 	default:
 		return renderUnicode(face)
 	}
 }
+
+// RenderTileVertical 输出 2 cell 宽 × 3 行的竖向压缩牌面。
+func RenderTileVertical(name string, theme TileTheme) VerticalTileArt {
+	face := decodeTile(name)
+	if theme == TileThemeASCII {
+		short := face.asciiShort
+		if len(short) > 2 {
+			short = short[:2]
+		}
+		return VerticalTileArt{Lines: [3]string{"++", short, "++"}, Width: 2}
+	}
+	if theme == TileThemeEmoji {
+		return VerticalTileArt{Lines: [3]string{"  ", emojiTileGlyph(face.asciiShort), "  "}, Width: 2}
+	}
+	return VerticalTileArt{Lines: [3]string{face.rank, face.suit, "─"}, Width: 2}
+}
+
+// TileGlyph 返回 Unicode Mahjong Tiles 区块里的单字符牌面。
+//
+// 新牌桌默认用单字符牌面组织视觉层级；ASCII/中文拟物主题仍保留给配置与浮层兼容。
+func TileGlyph(name string) string {
+	return emojiTileGlyph(decodeTile(name).asciiShort)
+}
+
+// HiddenGlyph 返回未知手牌的统一牌背。
+func HiddenGlyph() string { return "🀫" }
 
 // TileName 把协议层牌名转为玩家可读中文名；异常输入原样返回，便于排查服务端数据。
 func TileName(name string) string {

@@ -62,8 +62,23 @@ func RelativeSeat(selfSeat, targetSeat int32) SeatPosition {
 //
 // 低于这个尺寸时 RunTableScreen 会拒绝进入牌桌，提示玩家放大终端。
 const (
-	MinTableWidth  = 80
-	MinTableHeight = 24
+	MinTableWidth  = 100
+	MinTableHeight = 30
+
+	RecommendedTableWidth  = 140
+	RecommendedTableHeight = 40
+)
+
+// LayoutTier 是雀魂式居中牌桌在 16:9 / 16:10 桌面终端上的三个密度档位。
+type LayoutTier int
+
+const (
+	// LayoutTierStandard 是 100×30 起步的紧凑桌面布局，桌外形 26×52。
+	LayoutTierStandard LayoutTier = iota
+	// LayoutTierWide 是 120×36 起步的推荐布局，桌外形 32×64。
+	LayoutTierWide
+	// LayoutTierFull 是 140×40 起步的全屏布局，桌外形 36×72。
+	LayoutTierFull
 )
 
 // TableLayout 描述牌桌每个区域在屏幕上的起始坐标与尺寸。
@@ -73,20 +88,35 @@ const (
 type TableLayout struct {
 	Width, Height int
 
-	StatusBar        Region // 顶部状态栏: 房号/规则/剩牌/庄家/上一动作
-	TopArea          Region // 北家（对家）信息块
-	LeftArea         Region // 西家（上家）信息块
-	RightArea        Region // 东家（下家）信息块
-	CenterArea       Region // 中央提示语/浮窗区
-	SelfArea         Region // 自己区域：牌河/鸣牌/手牌/摸牌
-	SelfDiscardsArea Region // 自己牌河（最近若干弃张）;与其他三家"打: ..."保持对称
-	SelfMeldsArea    Region // 自己鸣牌（碰/杠/吃）;与其他三家"鸣: ..."保持对称
-	HandArea         Region // 自己手牌字符画
-	KeyBar           Region // 底部按键栏
-	HintArea         Region // 兼容旧测试与调用；等同 KeyBar
+	TitleBar        Region // 顶部系统信息：房间、局数、剩牌与战绩。
+	NorthBand       Region // 北家紧凑信息与焦点提示。
+	LeftPlayerSlot  Region // 西家无框玩家信息块。
+	TableFrame      Region // 严格正方形牌桌，Width 必须等于 Height*2。
+	RightPlayerSlot Region // 东家无框玩家信息块。
+	SouthBand       Region // 南家（自己）紧凑信息与操作提示。
+	KeyBar          Region // 底部阶段化按键栏。
 
-	DiscardColumns int  // 每行展示多少张弃牌
-	Wide           bool // 是否为宽屏布局
+	// CenterArea 只作为弹窗/结算层的居中锚点保留，指向 TableFrame。
+	// 渲染主流程不再把它当成中央信息盒使用。
+	CenterArea Region
+
+	Tier  LayoutTier
+	Slots TableInnerSlots
+}
+
+// TableInnerSlots 描述 TableFrame 内部所有"牌"相关子区域。
+//
+// 坐标均为屏幕绝对坐标；TableFrame 自身含一圈桌沿，下面区域在桌沿内部。
+type TableInnerSlots struct {
+	NorthHand Region
+	NorthPond Region
+	WestWall  Region
+	WestPond  Region
+	Dial      Region
+	EastPond  Region
+	EastWall  Region
+	SouthPond Region
+	SouthHand Region
 }
 
 // Region 是屏幕上的一个矩形区域。
@@ -98,69 +128,195 @@ type Region struct {
 // Empty 表示矩形是否退化为空。
 func (r Region) Empty() bool { return r.Width <= 0 || r.Height <= 0 }
 
-// CalcLayout 根据屏幕尺寸切分各区域；不满足最小尺寸时返回 zero layout 与 false。
+// CalcLayout 根据屏幕尺寸切分雀魂式居中牌桌；不满足最小尺寸时返回 zero layout 与 false。
 //
-// 区域划分（最小 80×24 时）：
-//
-//	行 0      顶部状态栏
-//	行 1..5   顶部对家(高 5)
-//	行 6..11  左右上下家信息(高 6)
-//	行 12..16 中央信息盒(高 5)
-//	行 17     自己的牌河行（"打: ..."）
-//	行 18     自己的鸣牌行（"鸣: ..."）
-//	行 19     凸起预留(光标选中时,手牌顶端会上移 1 行到此处)
-//	行 20..23 你的手牌(高 4)
-//	末行      底部按键栏
-//
-// 自家"鸣"行紧贴手牌（与其他家"鸣 紧贴 hand row"对称）,"打"行在更外侧（更接近中央桌面）,
-// 与对家「行 2 鸣 / 行 3 打」相对手牌的远近对称。
-//
-// 实际实现保留少量自适应：屏幕越大,中央区会按比例向下放。
-func CalcLayout(width, height int) (TableLayout, bool) {
+// 可选的 lastTier 用于 resize 过程中的 5 cell 滞回：升档需要越过阈值 5 cell，
+// 降档立即发生，避免窗口边界轻微抖动时反复重排。
+func CalcLayout(width, height int, lastTierHint ...LayoutTier) (TableLayout, bool) {
 	if width < MinTableWidth || height < MinTableHeight {
 		return TableLayout{}, false
 	}
-	l := TableLayout{Width: width, Height: height}
-	l.Wide = width >= 100
-	l.DiscardColumns = 4
-	if l.Wide {
-		l.DiscardColumns = 6
+	lastTier := LayoutTierStandard
+	if len(lastTierHint) > 0 {
+		lastTier = lastTierHint[0]
+	}
+	tier := ResolveLayoutTier(width, height, lastTier)
+	tableH, tableW := tableSizeForTier(tier)
+	if tableW > width || tableH+4 > height {
+		tableH, tableW = largestCenteredTable(width, height)
+	}
+	if tableW < 52 || tableH < 26 {
+		return TableLayout{}, false
 	}
 
-	l.StatusBar = Region{X: 0, Y: 0, Width: width, Height: 1}
+	tableX := (width - tableW) / 2
+	tableY := (height - tableH) / 2
+	if tableY < 2 {
+		tableY = 2
+	}
+	if tableY+tableH+2 > height {
+		tableY = height - tableH - 2
+	}
+
+	l := TableLayout{Width: width, Height: height, Tier: tier}
+	l.TitleBar = Region{X: 0, Y: 0, Width: width, Height: 1}
+	l.NorthBand = Region{X: 0, Y: tableY - 1, Width: width, Height: 1}
+	l.TableFrame = Region{X: tableX, Y: tableY, Width: tableW, Height: tableH}
+	l.CenterArea = l.TableFrame
+	l.LeftPlayerSlot = Region{X: 0, Y: tableY, Width: tableX, Height: tableH}
+	l.RightPlayerSlot = Region{X: tableX + tableW, Y: tableY, Width: width - tableX - tableW, Height: tableH}
+	l.SouthBand = Region{X: 0, Y: tableY + tableH, Width: width, Height: 1}
 	l.KeyBar = Region{X: 0, Y: height - 1, Width: width, Height: 1}
-	l.HintArea = l.KeyBar
-
-	leftWidth := (width - 2) / 2
-	rightX := leftWidth + 1
-	rightWidth := width - rightX
-	l.TopArea = Region{X: 0, Y: 1, Width: width, Height: 5}
-	l.LeftArea = Region{X: 0, Y: 6, Width: leftWidth, Height: 6}
-	l.RightArea = Region{X: rightX, Y: 6, Width: rightWidth, Height: 6}
-
-	handY := height - TileArtHeight - 1
-	selfY := handY - 3
-	l.SelfArea = Region{X: 0, Y: selfY, Width: width, Height: height - selfY - 1}
-	centerY := 12
-	centerHeight := selfY - centerY
-	if centerHeight < 3 {
-		centerHeight = 3
-	}
-	l.CenterArea = Region{X: 0, Y: centerY, Width: width, Height: centerHeight}
-
-	// 紧贴 HandArea 上方依次是: protrusion 预留(handY-1) -> 鸣 (handY-2) -> 打 (handY-3)。
-	selfMeldsY := handY - 2
-	selfDiscardsY := handY - 3
-	floor := centerY + centerHeight
-	if selfDiscardsY < floor {
-		selfDiscardsY = floor
-	}
-	if selfMeldsY < selfDiscardsY+1 {
-		selfMeldsY = selfDiscardsY + 1
-	}
-	l.SelfDiscardsArea = Region{X: 0, Y: selfDiscardsY, Width: width, Height: 1}
-	l.SelfMeldsArea = Region{X: 0, Y: selfMeldsY, Width: width, Height: 1}
-	l.HandArea = Region{X: 0, Y: handY, Width: width, Height: TileArtHeight}
-	l.HintArea = Region{X: 0, Y: height - 1, Width: width, Height: 1}
+	l.Slots = tableInnerSlots(l.TableFrame, tier)
 	return l, true
+}
+
+func ResolveLayoutTier(width, height int, lastTier LayoutTier) LayoutTier {
+	target := rawLayoutTier(width, height)
+	if target > lastTier && !layoutTierCanPromote(width, height, target) {
+		return lastTier
+	}
+	return target
+}
+
+func rawLayoutTier(width, height int) LayoutTier {
+	switch {
+	case width >= 140 && height >= 40:
+		return LayoutTierFull
+	case width >= 120 && height >= 36:
+		return LayoutTierWide
+	default:
+		return LayoutTierStandard
+	}
+}
+
+func layoutTierCanPromote(width, height int, target LayoutTier) bool {
+	switch target {
+	case LayoutTierFull:
+		return width >= 145 && height >= 45
+	case LayoutTierWide:
+		return width >= 125 && height >= 41
+	default:
+		return true
+	}
+}
+
+func tableSizeForTier(tier LayoutTier) (height, width int) {
+	switch tier {
+	case LayoutTierFull:
+		return 36, 72
+	case LayoutTierWide:
+		return 32, 64
+	default:
+		return 26, 52
+	}
+}
+
+func largestCenteredTable(width, height int) (tableH, tableW int) {
+	tableH = height - 4
+	if tableH%2 != 0 {
+		tableH--
+	}
+	tableW = tableH * 2
+	if tableW > width {
+		tableW = width
+		if tableW%2 != 0 {
+			tableW--
+		}
+		tableH = tableW / 2
+	}
+	return tableH, tableW
+}
+
+func tableInnerSlots(frame Region, tier LayoutTier) TableInnerSlots {
+	inner := Region{X: frame.X + 1, Y: frame.Y + 1, Width: frame.Width - 2, Height: frame.Height - 2}
+	return TableInnerSlots{
+		NorthHand: horizontalTileLine(inner, inner.Y+1, hiddenHandWidth(defaultStartingHandSize)),
+		NorthPond: Region{
+			X:      inner.X + (inner.Width-26)/2,
+			Y:      inner.Y + 3,
+			Width:  26,
+			Height: tablePondRows(tier),
+		},
+		WestWall: Region{
+			X:      inner.X + 1,
+			Y:      inner.Y + tableWallY(inner.Height),
+			Width:  2,
+			Height: defaultStartingHandSize,
+		},
+		WestPond: Region{
+			X:      inner.X + 5,
+			Y:      inner.Y + tableSidePondY(inner.Height),
+			Width:  12,
+			Height: tableSidePondRows(tier),
+		},
+		Dial: Region{
+			X:      inner.X + (inner.Width-7)/2,
+			Y:      inner.Y + inner.Height/2 - 1,
+			Width:  7,
+			Height: 1,
+		},
+		EastPond: Region{
+			X:      inner.X + inner.Width - 17,
+			Y:      inner.Y + tableSidePondY(inner.Height),
+			Width:  12,
+			Height: tableSidePondRows(tier),
+		},
+		EastWall: Region{
+			X:      inner.X + inner.Width - 2,
+			Y:      inner.Y + tableWallY(inner.Height),
+			Width:  2,
+			Height: defaultStartingHandSize,
+		},
+		SouthPond: Region{
+			X:      inner.X + (inner.Width-26)/2,
+			Y:      inner.Y + inner.Height - 8,
+			Width:  26,
+			Height: tablePondRows(tier),
+		},
+		SouthHand: horizontalTileLine(inner, inner.Y+inner.Height-2, visibleHandWidth(14)),
+	}
+}
+
+func horizontalTileLine(inner Region, y, tileWidth int) Region {
+	return Region{X: inner.X + (inner.Width-tileWidth)/2, Y: y, Width: tileWidth, Height: 1}
+}
+
+func visibleHandWidth(count int) int {
+	if count <= 0 {
+		return 0
+	}
+	return count*2 + (count - 1)
+}
+
+func hiddenHandWidth(count int) int { return visibleHandWidth(count) }
+
+func tablePondRows(tier LayoutTier) int {
+	if tier == LayoutTierStandard {
+		return 4
+	}
+	return 5
+}
+
+func tableSidePondRows(tier LayoutTier) int {
+	if tier == LayoutTierStandard {
+		return 5
+	}
+	return 6
+}
+
+func tableWallY(innerH int) int {
+	y := (innerH - defaultStartingHandSize) / 2
+	if y < 0 {
+		return 0
+	}
+	return y
+}
+
+func tableSidePondY(innerH int) int {
+	y := innerH/2 - 3
+	if y < 0 {
+		return 0
+	}
+	return y
 }

@@ -125,7 +125,7 @@ func run() int {
 
 	prompter := NewIOPrompter(os.Stdin, os.Stdout)
 	switcher := NewTerminalSwitch()
-	lobbyGW := NewWSLobbyGateway(client, bus)
+	lobbyGW := NewWSLobbyGateway(client, bus, state)
 	tableGW := NewWSTableGateway(client, bus)
 
 	for ctx.Err() == nil {
@@ -136,6 +136,12 @@ func run() int {
 			}
 			if sum := snapshotSettlementSummary(state.Snapshot()); sum != nil {
 				WriteStdoutSummary(os.Stdout, *sum)
+			}
+			if exit.Reason == TableExitRestart {
+				if err := restartAfterSettlement(ctx, state, lobbyGW); err != nil {
+					fmt.Fprintln(os.Stderr, "再来一局失败:", err)
+				}
+				continue
 			}
 			if exit.Reason == TableExitContextDone {
 				break
@@ -153,19 +159,32 @@ func run() int {
 		if outcome.Reason == LobbyExitQuit {
 			break
 		}
-		exit := RunTableScreen(ctx, switcher, state, tableGW, &cfg)
-		if exit.Err != nil && !errors.Is(exit.Err, context.Canceled) {
-			fmt.Fprintln(os.Stderr, "牌桌退出:", exit.Err)
-		}
-		if sum := snapshotSettlementSummary(state.Snapshot()); sum != nil {
-			WriteStdoutSummary(os.Stdout, *sum)
-		}
-		if exit.Reason == TableExitContextDone {
-			break
-		}
+		// 不在这里直接调 RunTableScreen：lobby 处理器只负责发请求，phaseTable 由
+		// JoinRoomResp / CreateRoomResp 的 state apply 切换。统一交给下次循环开头
+		// 那一行 `view.Phase == phaseTable && RoomID != ""` 来判断是否进入牌桌，
+		// 避免出现"加入失败但仍弹出空牌桌"的旧 bug。
 	}
 	_ = SaveConfig(*configPath, cfg)
 	return 0
+}
+
+func restartAfterSettlement(ctx context.Context, state *AppState, gw LobbyGateway) error {
+	if state != nil {
+		state.Mutate(func(v *RoomView) {
+			resetRoomToLobby(v, true)
+			v.PendingLeaveRoomID = ""
+		})
+	}
+	leaveCtx, cancelLeave := context.WithTimeout(ctx, 3*time.Second)
+	_ = gw.LeaveRoom(leaveCtx)
+	cancelLeave()
+
+	res, err := gw.AutoMatch(ctx, "")
+	if err != nil {
+		return err
+	}
+	applyJoinResultToState(state, res)
+	return nil
 }
 
 func waitForSession(ctx context.Context, state *AppState, timeout time.Duration) error {

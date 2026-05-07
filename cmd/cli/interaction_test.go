@@ -27,6 +27,32 @@ func TestDeriveInteractionModelPhases(t *testing.T) {
 	}
 }
 
+// TestExchangeAndQueMenAllowConcurrentSeats 防回归：川麻血战的换三张 / 定缺都是
+// 4 家并发（不轮转），任何 SeatIndex 合法的玩家都应当能拿到对应 Allowed 动作；
+// 之前要求 SeatIndex == ActingSeat 会导致非 dealer 玩家在这两阶段卡死。
+func TestExchangeAndQueMenAllowConcurrentSeats(t *testing.T) {
+	cases := []struct {
+		action string
+		want   PlayerAction
+	}{
+		{"exchange_three", ActionExchangeThree},
+		{"que_men", ActionQueMen},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			view := RoomView{
+				Phase:         phaseTable,
+				SeatIndex:     2,
+				ActingSeat:    0,
+				WaitingAction: tc.action,
+			}
+			model := DeriveInteractionModel(view)
+			require.Contains(t, model.Allowed, tc.want)
+			require.NotContains(t, model.Hint, "等待")
+		})
+	}
+}
+
 func TestDeriveInteractionModelFiltersNonTargetClaim(t *testing.T) {
 	view := RoomView{
 		Phase:           phaseTable,

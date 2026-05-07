@@ -25,6 +25,7 @@ type Config struct {
 const (
 	tileThemeUnicode = "unicode"
 	tileThemeASCII   = "ascii"
+	tileThemeEmoji   = "emoji"
 
 	defaultServerURL    = "wss://racoo.cn/ws"
 	defaultClaimTimeout = 4500
@@ -34,7 +35,7 @@ const (
 func NewDefaultConfig() Config {
 	return Config{
 		ServerURL:      defaultServerURL,
-		TileTheme:      tileThemeUnicode,
+		TileTheme:      tileThemeEmoji,
 		ClaimTimeoutMS: defaultClaimTimeout,
 	}
 }
@@ -102,7 +103,7 @@ func (c *Config) fillDefaults() {
 	if c.ServerURL == "" {
 		c.ServerURL = def.ServerURL
 	}
-	if c.TileTheme != tileThemeUnicode && c.TileTheme != tileThemeASCII {
+	if c.TileTheme != tileThemeUnicode && c.TileTheme != tileThemeASCII && c.TileTheme != tileThemeEmoji {
 		c.TileTheme = def.TileTheme
 	}
 	if c.ClaimTimeoutMS <= 0 {

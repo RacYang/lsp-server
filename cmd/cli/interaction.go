@@ -14,6 +14,9 @@ const (
 	PhaseClaim
 	PhaseTsumo
 	PhaseSettlement
+	PhaseMyTurnIdle
+	PhaseMyTurnSelected
+	PhaseOtherTurn
 )
 
 // PlayerAction 是客户端可发给服务端的玩家动作集合。
@@ -72,7 +75,9 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 	switch view.WaitingAction {
 	case "exchange_three":
 		model.Phase = PhaseExchange
-		if view.SeatIndex == view.ActingSeat {
+		// 川麻血战：换三张是 4 家并发，不存在"轮到谁"的概念。只要本地 SeatIndex 合法
+		// 就给 ActionExchangeThree，让任何座位都能 Space 标记 / Enter 提交。
+		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 			model.Allowed = []PlayerAction{ActionExchangeThree}
 			model.Hint = "请选三张换三张"
 		} else {
@@ -80,7 +85,8 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 		}
 	case "que_men":
 		model.Phase = PhaseQueMen
-		if view.SeatIndex == view.ActingSeat {
+		// 定缺同理：4 家并发选缺一门，不依赖 ActingSeat。
+		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 			model.Allowed = []PlayerAction{ActionQueMen}
 			model.Hint = "请定缺 (m / p / s)"
 		} else {
@@ -121,6 +127,39 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 		model.Hint = "等待开始"
 	}
 	return model
+}
+
+// DerivePhase 把协议事实、交互模型与本地光标状态收敛成渲染层唯一消费的阶段。
+func DerivePhase(view RoomView, cursor *HandCursor) TablePhase {
+	model := DeriveInteractionModel(view)
+	switch model.Phase {
+	case PhaseSettlement:
+		return PhaseSettlement
+	case PhaseClaim, PhaseTsumo:
+		if model.Claim != nil {
+			return PhaseClaim
+		}
+		return PhaseOtherTurn
+	case PhaseExchange:
+		return PhaseExchange
+	case PhaseDiscard:
+		if view.SeatIndex == view.ActingSeat {
+			if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 {
+				return PhaseMyTurnSelected
+			}
+			return PhaseMyTurnIdle
+		}
+		return PhaseOtherTurn
+	case PhaseQueMen:
+		if view.SeatIndex == view.ActingSeat {
+			return PhaseMyTurnIdle
+		}
+		return PhaseOtherTurn
+	case PhaseWaiting:
+		return PhaseWaiting
+	default:
+		return model.Phase
+	}
 }
 
 func actionsFromStrings(actions []string) []PlayerAction {
