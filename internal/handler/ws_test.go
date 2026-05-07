@@ -279,6 +279,23 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	}
 }
 
+func TestMergeSeatInfosReplacesExistingSeat(t *testing.T) {
+	base := []*clientv1.SeatInfo{
+		{SeatIndex: 0, UserId: "u0"},
+		{SeatIndex: 1, UserId: "old"},
+	}
+	added := []*clientv1.SeatInfo{
+		{SeatIndex: 1, UserId: "bot:room:1", IsBot: true},
+		{SeatIndex: 2, UserId: "bot:room:2", IsBot: true},
+	}
+	got := mergeSeatInfos(base, added)
+	require.Len(t, got, 3)
+	require.Equal(t, "u0", got[0].GetUserId())
+	require.Equal(t, "bot:room:1", got[1].GetUserId())
+	require.True(t, got[1].GetIsBot())
+	require.Equal(t, "bot:room:2", got[2].GetUserId())
+}
+
 func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewLobby())
 	hub := session.NewHub()
