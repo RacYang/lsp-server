@@ -48,6 +48,12 @@ date: 2026-04-22
 - `resumed=false` 且局已结：可下发结算摘要（以 PG 为准）。  
 - 无法恢复：`ERROR_CODE_RECONNECTING`，或在跨入口 / 跨区域迁移时下发 `RouteRedirectNotify`（与 [client.v1 ErrorCode](../../api/proto/client/v1/messages.proto) 一致）。`RouteRedirectNotify.ws_url` 必须是客户端可直接拨号的完整 `ws://` / `wss://` URL；正常同集群 `gate` 副本恢复不应下发。
 
+### 5. 断线托管边界
+
+- WebSocket 断开只标记座位离线，不立即清理 lobby 的 `userIndex`；用户仍可凭 `session_token` 在 `runtime.room.surrender_after_offline` 窗口内回到同一房间。
+- 若超时前用户重新注册到原房间连接，离线托管任务必须取消，不得把短线重连玩家标记为 surrender。
+- 若超过 `surrender_after_offline` 仍未重连，gate 向 room 投递与主动离房相同的 surrender 路径；playing 中保留原 `user_id` 以便结算归属与后续恢复语义一致。
+
 ## 后果
 
 - `gate` 必须依赖 Redis 与会话装配；单进程 `cmd/all` 须注入相同抽象以保持行为一致。  

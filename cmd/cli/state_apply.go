@@ -20,6 +20,10 @@ func (s *AppState) Apply(env *clientv1.Envelope) {
 }
 
 func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
+	if shouldDropPendingLeaveFrame(v, env) {
+		appendLog(v, "已忽略离房后的陈旧牌桌事件")
+		return
+	}
 	switch body := env.GetBody().(type) {
 	case *clientv1.Envelope_LoginResp:
 		applyLogin(v, body.LoginResp)
@@ -29,6 +33,7 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		v.DisplayName = body.JoinRoomResp.GetDisplayName()
 		clearRoundFacts(v)
 		v.LastSettlement = nil
+		applySeatInfos(v, body.JoinRoomResp.GetSeats())
 		if v.SeatIndex >= 0 && v.SeatIndex < 4 {
 			v.Players[v.SeatIndex].Nickname = v.Nickname
 			v.Players[v.SeatIndex].UserID = v.UserID
@@ -78,11 +83,8 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 	case *clientv1.Envelope_LeaveRoomResp:
 		appendResponseLog(v, "离房", body.LeaveRoomResp.GetErrorCode(), body.LeaveRoomResp.GetErrorMessage())
 		if body.LeaveRoomResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-			v.Phase = phaseLobby
-			v.RoomID = ""
-			v.SeatIndex = -1
-			clearRoundFacts(v)
-			v.LastSettlement = nil
+			resetRoomToLobby(v, true)
+			v.PendingLeaveRoomID = ""
 		}
 	case *clientv1.Envelope_RouteRedirect:
 		v.Reconnecting = true
@@ -122,6 +124,11 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 			}
 			v.ClaimCandidates = map[int32][]string{}
 		}
+	case *clientv1.Envelope_AddBotResp:
+		appendResponseLog(v, "添加机器人", body.AddBotResp.GetErrorCode(), body.AddBotResp.GetErrorMessage())
+		if body.AddBotResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+			applySeatInfos(v, body.AddBotResp.GetAdded())
+		}
 	}
 }
 
@@ -140,8 +147,16 @@ func applyLogin(v *RoomView, resp *clientv1.LoginResponse) {
 	v.UserID = resp.GetUserId()
 	v.SessionToken = resp.GetSessionToken()
 	v.Phase = phaseLobby
+	v.SuppressAutoResume = resp.GetResumed()
+	if resp.GetResumed() {
+		v.RoomID = ""
+		v.DisplayName = ""
+		v.SeatIndex = -1
+		clearRoundFacts(v)
+	}
 	if !resp.GetResumed() {
 		v.RoomID = ""
+		v.ResumeRoomID = ""
 		v.DisplayName = ""
 		v.SeatIndex = -1
 		v.RoomState = ""
@@ -170,6 +185,7 @@ func applyAutoMatch(v *RoomView, resp *clientv1.AutoMatchResponse) {
 		return
 	}
 	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex(), resp.GetRuleId(), resp.GetDisplayName())
+	applySeatInfos(v, resp.GetSeats())
 	appendLog(v, fmt.Sprintf("自动匹配成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
 }
 
@@ -180,11 +196,15 @@ func applyCreateRoom(v *RoomView, resp *clientv1.CreateRoomResponse) {
 		return
 	}
 	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex(), resp.GetRuleId(), resp.GetDisplayName())
+	applySeatInfos(v, resp.GetSeats())
 	appendLog(v, fmt.Sprintf("创建房间成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
 }
 
 func applyLobbySeat(v *RoomView, roomID string, seat int32, ruleID, displayName string) {
 	v.RoomID = roomID
+	v.PendingLeaveRoomID = ""
+	v.SuppressAutoResume = false
+	v.ResumeRoomID = ""
 	v.RuleID = ruleID
 	v.DisplayName = displayName
 	v.SeatIndex = seat
@@ -289,6 +309,11 @@ func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
 }
 
 func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
+	if v.SuppressAutoResume && v.Phase == phaseLobby {
+		v.ResumeRoomID = snap.GetRoomId()
+		appendLog(v, "检测到可恢复房间，已停留在大厅")
+		return
+	}
 	v.RoomID = snap.GetRoomId()
 	if v.RoomID != "" {
 		v.Phase = phaseTable
@@ -302,11 +327,12 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 	for _, candidate := range snap.GetClaimCandidates() {
 		v.ClaimCandidates[candidate.GetSeatIndex()] = append([]string(nil), candidate.GetActions()...)
 	}
-	for seat, userID := range snap.GetPlayerIds() {
+	for seat, userID := range snap.GetPlayerIds() { //nolint:staticcheck // 兼容旧服务端的 deprecated player_ids 兜底。
 		if seat < len(v.Players) {
 			v.Players[seat].UserID = userID
 		}
 	}
+	applySeatInfos(v, snap.GetSeats())
 	for seat, suit := range snap.GetQueSuitBySeat() {
 		if seat < len(v.QueBySeat) {
 			v.QueBySeat[seat] = suit
@@ -322,6 +348,23 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 	appendLog(v, "快照已恢复")
 }
 
+func applySeatInfos(v *RoomView, seats []*clientv1.SeatInfo) {
+	if len(seats) == 0 {
+		return
+	}
+	for _, seat := range seats {
+		idx := seat.GetSeatIndex()
+		if idx < 0 || idx > 3 {
+			continue
+		}
+		p := &v.Players[idx]
+		p.UserID = seat.GetUserId()
+		p.Nickname = seat.GetNickname()
+		p.IsBot = seat.GetIsBot()
+		p.Surrendered = seat.GetSurrendered()
+	}
+}
+
 func clearRoundFacts(v *RoomView) {
 	v.RoomState = ""
 	v.WaitingAction = ""
@@ -329,6 +372,55 @@ func clearRoundFacts(v *RoomView) {
 	v.PendingTile = ""
 	v.AvailableActions = nil
 	v.ClaimCandidates = map[int32][]string{}
+}
+
+func resetRoomToLobby(v *RoomView, keepSettlement bool) {
+	v.Phase = phaseLobby
+	v.RoomID = ""
+	v.RuleID = ""
+	v.DisplayName = ""
+	v.SeatIndex = -1
+	v.RoomState = ""
+	clearRoundFacts(v)
+	for i := range v.Players {
+		v.Players[i] = PlayerView{}
+	}
+	for i := range v.QueBySeat {
+		v.QueBySeat[i] = -1
+	}
+	if !keepSettlement {
+		v.LastSettlement = nil
+	}
+}
+
+func shouldDropPendingLeaveFrame(v *RoomView, env *clientv1.Envelope) bool {
+	if v.PendingLeaveRoomID == "" || v.Phase != phaseLobby || env == nil {
+		return false
+	}
+	if _, ok := env.GetBody().(*clientv1.Envelope_LeaveRoomResp); ok {
+		return false
+	}
+	roomID := envelopeRoomID(env)
+	return roomID != "" && roomID == v.PendingLeaveRoomID
+}
+
+func envelopeRoomID(env *clientv1.Envelope) string {
+	switch body := env.GetBody().(type) {
+	case *clientv1.Envelope_AutoMatchResp:
+		return body.AutoMatchResp.GetRoomId()
+	case *clientv1.Envelope_CreateRoomResp:
+		return body.CreateRoomResp.GetRoomId()
+	case *clientv1.Envelope_StartGame:
+		return body.StartGame.GetRoomId()
+	case *clientv1.Envelope_Settlement:
+		return body.Settlement.GetRoomId()
+	case *clientv1.Envelope_Snapshot:
+		return body.Snapshot.GetRoomId()
+	case *clientv1.Envelope_RouteRedirect:
+		return body.RouteRedirect.GetRoomId()
+	default:
+		return ""
+	}
 }
 
 func actionsForChoice(action string) []string {

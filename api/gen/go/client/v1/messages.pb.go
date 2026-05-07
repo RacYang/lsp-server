@@ -25,15 +25,16 @@ const (
 type ErrorCode int32
 
 const (
-	ErrorCode_ERROR_CODE_UNSPECIFIED    ErrorCode = 0
-	ErrorCode_ERROR_CODE_UNAUTHORIZED   ErrorCode = 1
-	ErrorCode_ERROR_CODE_ROOM_NOT_FOUND ErrorCode = 2
-	ErrorCode_ERROR_CODE_ROOM_FULL      ErrorCode = 3
-	ErrorCode_ERROR_CODE_INVALID_STATE  ErrorCode = 4
-	ErrorCode_ERROR_CODE_NOT_YOUR_TURN  ErrorCode = 5
-	ErrorCode_ERROR_CODE_ROUTE_REDIRECT ErrorCode = 6
-	ErrorCode_ERROR_CODE_RATE_LIMITED   ErrorCode = 7
-	ErrorCode_ERROR_CODE_RECONNECTING   ErrorCode = 8
+	ErrorCode_ERROR_CODE_UNSPECIFIED      ErrorCode = 0
+	ErrorCode_ERROR_CODE_UNAUTHORIZED     ErrorCode = 1
+	ErrorCode_ERROR_CODE_ROOM_NOT_FOUND   ErrorCode = 2
+	ErrorCode_ERROR_CODE_ROOM_FULL        ErrorCode = 3
+	ErrorCode_ERROR_CODE_INVALID_STATE    ErrorCode = 4
+	ErrorCode_ERROR_CODE_NOT_YOUR_TURN    ErrorCode = 5
+	ErrorCode_ERROR_CODE_ROUTE_REDIRECT   ErrorCode = 6
+	ErrorCode_ERROR_CODE_RATE_LIMITED     ErrorCode = 7
+	ErrorCode_ERROR_CODE_RECONNECTING     ErrorCode = 8
+	ErrorCode_ERROR_CODE_FEATURE_DISABLED ErrorCode = 9
 )
 
 // Enum value maps for ErrorCode.
@@ -48,17 +49,19 @@ var (
 		6: "ERROR_CODE_ROUTE_REDIRECT",
 		7: "ERROR_CODE_RATE_LIMITED",
 		8: "ERROR_CODE_RECONNECTING",
+		9: "ERROR_CODE_FEATURE_DISABLED",
 	}
 	ErrorCode_value = map[string]int32{
-		"ERROR_CODE_UNSPECIFIED":    0,
-		"ERROR_CODE_UNAUTHORIZED":   1,
-		"ERROR_CODE_ROOM_NOT_FOUND": 2,
-		"ERROR_CODE_ROOM_FULL":      3,
-		"ERROR_CODE_INVALID_STATE":  4,
-		"ERROR_CODE_NOT_YOUR_TURN":  5,
-		"ERROR_CODE_ROUTE_REDIRECT": 6,
-		"ERROR_CODE_RATE_LIMITED":   7,
-		"ERROR_CODE_RECONNECTING":   8,
+		"ERROR_CODE_UNSPECIFIED":      0,
+		"ERROR_CODE_UNAUTHORIZED":     1,
+		"ERROR_CODE_ROOM_NOT_FOUND":   2,
+		"ERROR_CODE_ROOM_FULL":        3,
+		"ERROR_CODE_INVALID_STATE":    4,
+		"ERROR_CODE_NOT_YOUR_TURN":    5,
+		"ERROR_CODE_ROUTE_REDIRECT":   6,
+		"ERROR_CODE_RATE_LIMITED":     7,
+		"ERROR_CODE_RECONNECTING":     8,
+		"ERROR_CODE_FEATURE_DISABLED": 9,
 	}
 )
 
@@ -136,6 +139,10 @@ type Envelope struct {
 	//	*Envelope_CreateRoomResp
 	//	*Envelope_PassReq
 	//	*Envelope_PassResp
+	//	*Envelope_RenameReq
+	//	*Envelope_RenameResp
+	//	*Envelope_AddBotReq
+	//	*Envelope_AddBotResp
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -543,6 +550,42 @@ func (x *Envelope) GetPassResp() *PassResponse {
 	return nil
 }
 
+func (x *Envelope) GetRenameReq() *RenameRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RenameReq); ok {
+			return x.RenameReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetRenameResp() *RenameResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RenameResp); ok {
+			return x.RenameResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAddBotReq() *AddBotRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AddBotReq); ok {
+			return x.AddBotReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAddBotResp() *AddBotResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AddBotResp); ok {
+			return x.AddBotResp
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -709,6 +752,22 @@ type Envelope_PassResp struct {
 	PassResp *PassResponse `protobuf:"bytes,41,opt,name=pass_resp,json=passResp,proto3,oneof"`
 }
 
+type Envelope_RenameReq struct {
+	RenameReq *RenameRequest `protobuf:"bytes,42,opt,name=rename_req,json=renameReq,proto3,oneof"`
+}
+
+type Envelope_RenameResp struct {
+	RenameResp *RenameResponse `protobuf:"bytes,43,opt,name=rename_resp,json=renameResp,proto3,oneof"`
+}
+
+type Envelope_AddBotReq struct {
+	AddBotReq *AddBotRequest `protobuf:"bytes,44,opt,name=add_bot_req,json=addBotReq,proto3,oneof"`
+}
+
+type Envelope_AddBotResp struct {
+	AddBotResp *AddBotResponse `protobuf:"bytes,45,opt,name=add_bot_resp,json=addBotResp,proto3,oneof"`
+}
+
 func (*Envelope_LoginReq) isEnvelope_Body() {}
 
 func (*Envelope_LoginResp) isEnvelope_Body() {}
@@ -786,6 +845,14 @@ func (*Envelope_CreateRoomResp) isEnvelope_Body() {}
 func (*Envelope_PassReq) isEnvelope_Body() {}
 
 func (*Envelope_PassResp) isEnvelope_Body() {}
+
+func (*Envelope_RenameReq) isEnvelope_Body() {}
+
+func (*Envelope_RenameResp) isEnvelope_Body() {}
+
+func (*Envelope_AddBotReq) isEnvelope_Body() {}
+
+func (*Envelope_AddBotResp) isEnvelope_Body() {}
 
 type LoginRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -978,6 +1045,7 @@ type JoinRoomResponse struct {
 	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	RuleId        string                 `protobuf:"bytes,4,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
 	DisplayName   string                 `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Seats         []*SeatInfo            `protobuf:"bytes,6,rep,name=seats,proto3" json:"seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1047,6 +1115,89 @@ func (x *JoinRoomResponse) GetDisplayName() string {
 	return ""
 }
 
+func (x *JoinRoomResponse) GetSeats() []*SeatInfo {
+	if x != nil {
+		return x.Seats
+	}
+	return nil
+}
+
+type SeatInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Nickname      string                 `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	IsBot         bool                   `protobuf:"varint,4,opt,name=is_bot,json=isBot,proto3" json:"is_bot,omitempty"`
+	Surrendered   bool                   `protobuf:"varint,5,opt,name=surrendered,proto3" json:"surrendered,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SeatInfo) Reset() {
+	*x = SeatInfo{}
+	mi := &file_client_v1_messages_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeatInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeatInfo) ProtoMessage() {}
+
+func (x *SeatInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeatInfo.ProtoReflect.Descriptor instead.
+func (*SeatInfo) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SeatInfo) GetSeatIndex() int32 {
+	if x != nil {
+		return x.SeatIndex
+	}
+	return 0
+}
+
+func (x *SeatInfo) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *SeatInfo) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *SeatInfo) GetIsBot() bool {
+	if x != nil {
+		return x.IsBot
+	}
+	return false
+}
+
+func (x *SeatInfo) GetSurrendered() bool {
+	if x != nil {
+		return x.Surrendered
+	}
+	return false
+}
+
 // RoomMeta 是大厅页展示的公开房间摘要；私密房不会出现在列表中。
 type RoomMeta struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1063,7 +1214,7 @@ type RoomMeta struct {
 
 func (x *RoomMeta) Reset() {
 	*x = RoomMeta{}
-	mi := &file_client_v1_messages_proto_msgTypes[5]
+	mi := &file_client_v1_messages_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1075,7 +1226,7 @@ func (x *RoomMeta) String() string {
 func (*RoomMeta) ProtoMessage() {}
 
 func (x *RoomMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[5]
+	mi := &file_client_v1_messages_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1088,7 +1239,7 @@ func (x *RoomMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoomMeta.ProtoReflect.Descriptor instead.
 func (*RoomMeta) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{5}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RoomMeta) GetRoomId() string {
@@ -1151,7 +1302,7 @@ type ListRoomsRequest struct {
 
 func (x *ListRoomsRequest) Reset() {
 	*x = ListRoomsRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[6]
+	mi := &file_client_v1_messages_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1163,7 +1314,7 @@ func (x *ListRoomsRequest) String() string {
 func (*ListRoomsRequest) ProtoMessage() {}
 
 func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[6]
+	mi := &file_client_v1_messages_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1176,7 +1327,7 @@ func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsRequest.ProtoReflect.Descriptor instead.
 func (*ListRoomsRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{6}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListRoomsRequest) GetPageSize() int32 {
@@ -1205,7 +1356,7 @@ type ListRoomsResponse struct {
 
 func (x *ListRoomsResponse) Reset() {
 	*x = ListRoomsResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[7]
+	mi := &file_client_v1_messages_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1217,7 +1368,7 @@ func (x *ListRoomsResponse) String() string {
 func (*ListRoomsResponse) ProtoMessage() {}
 
 func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[7]
+	mi := &file_client_v1_messages_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1230,7 +1381,7 @@ func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsResponse.ProtoReflect.Descriptor instead.
 func (*ListRoomsResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{7}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListRoomsResponse) GetRooms() []*RoomMeta {
@@ -1265,13 +1416,14 @@ func (x *ListRoomsResponse) GetErrorMessage() string {
 type AutoMatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	PadWithBots   bool                   `protobuf:"varint,2,opt,name=pad_with_bots,json=padWithBots,proto3" json:"pad_with_bots,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AutoMatchRequest) Reset() {
 	*x = AutoMatchRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[8]
+	mi := &file_client_v1_messages_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1283,7 +1435,7 @@ func (x *AutoMatchRequest) String() string {
 func (*AutoMatchRequest) ProtoMessage() {}
 
 func (x *AutoMatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[8]
+	mi := &file_client_v1_messages_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1296,7 +1448,7 @@ func (x *AutoMatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AutoMatchRequest.ProtoReflect.Descriptor instead.
 func (*AutoMatchRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{8}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AutoMatchRequest) GetRuleId() string {
@@ -1304,6 +1456,13 @@ func (x *AutoMatchRequest) GetRuleId() string {
 		return x.RuleId
 	}
 	return ""
+}
+
+func (x *AutoMatchRequest) GetPadWithBots() bool {
+	if x != nil {
+		return x.PadWithBots
+	}
+	return false
 }
 
 type AutoMatchResponse struct {
@@ -1314,13 +1473,14 @@ type AutoMatchResponse struct {
 	ErrorMessage  string                 `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	RuleId        string                 `protobuf:"bytes,5,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
 	DisplayName   string                 `protobuf:"bytes,6,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Seats         []*SeatInfo            `protobuf:"bytes,7,rep,name=seats,proto3" json:"seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AutoMatchResponse) Reset() {
 	*x = AutoMatchResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[9]
+	mi := &file_client_v1_messages_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1332,7 +1492,7 @@ func (x *AutoMatchResponse) String() string {
 func (*AutoMatchResponse) ProtoMessage() {}
 
 func (x *AutoMatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[9]
+	mi := &file_client_v1_messages_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1345,7 +1505,7 @@ func (x *AutoMatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AutoMatchResponse.ProtoReflect.Descriptor instead.
 func (*AutoMatchResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{9}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AutoMatchResponse) GetRoomId() string {
@@ -1390,6 +1550,13 @@ func (x *AutoMatchResponse) GetDisplayName() string {
 	return ""
 }
 
+func (x *AutoMatchResponse) GetSeats() []*SeatInfo {
+	if x != nil {
+		return x.Seats
+	}
+	return nil
+}
+
 // CreateRoomRequest 创建一个房间并直接让创建者占座；private=true 时不出现在大厅列表。
 type CreateRoomRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1402,7 +1569,7 @@ type CreateRoomRequest struct {
 
 func (x *CreateRoomRequest) Reset() {
 	*x = CreateRoomRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[10]
+	mi := &file_client_v1_messages_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1414,7 +1581,7 @@ func (x *CreateRoomRequest) String() string {
 func (*CreateRoomRequest) ProtoMessage() {}
 
 func (x *CreateRoomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[10]
+	mi := &file_client_v1_messages_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1427,7 +1594,7 @@ func (x *CreateRoomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoomRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoomRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{10}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CreateRoomRequest) GetRuleId() string {
@@ -1459,13 +1626,14 @@ type CreateRoomResponse struct {
 	ErrorMessage  string                 `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	RuleId        string                 `protobuf:"bytes,5,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
 	DisplayName   string                 `protobuf:"bytes,6,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Seats         []*SeatInfo            `protobuf:"bytes,7,rep,name=seats,proto3" json:"seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateRoomResponse) Reset() {
 	*x = CreateRoomResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[11]
+	mi := &file_client_v1_messages_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1477,7 +1645,7 @@ func (x *CreateRoomResponse) String() string {
 func (*CreateRoomResponse) ProtoMessage() {}
 
 func (x *CreateRoomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[11]
+	mi := &file_client_v1_messages_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1490,7 +1658,7 @@ func (x *CreateRoomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoomResponse.ProtoReflect.Descriptor instead.
 func (*CreateRoomResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{11}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CreateRoomResponse) GetRoomId() string {
@@ -1535,6 +1703,13 @@ func (x *CreateRoomResponse) GetDisplayName() string {
 	return ""
 }
 
+func (x *CreateRoomResponse) GetSeats() []*SeatInfo {
+	if x != nil {
+		return x.Seats
+	}
+	return nil
+}
+
 type ReadyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1543,7 +1718,7 @@ type ReadyRequest struct {
 
 func (x *ReadyRequest) Reset() {
 	*x = ReadyRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[12]
+	mi := &file_client_v1_messages_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1555,7 +1730,7 @@ func (x *ReadyRequest) String() string {
 func (*ReadyRequest) ProtoMessage() {}
 
 func (x *ReadyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[12]
+	mi := &file_client_v1_messages_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1568,7 +1743,7 @@ func (x *ReadyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadyRequest.ProtoReflect.Descriptor instead.
 func (*ReadyRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{12}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{13}
 }
 
 type ReadyResponse struct {
@@ -1581,7 +1756,7 @@ type ReadyResponse struct {
 
 func (x *ReadyResponse) Reset() {
 	*x = ReadyResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[13]
+	mi := &file_client_v1_messages_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1593,7 +1768,7 @@ func (x *ReadyResponse) String() string {
 func (*ReadyResponse) ProtoMessage() {}
 
 func (x *ReadyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[13]
+	mi := &file_client_v1_messages_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1606,7 +1781,7 @@ func (x *ReadyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadyResponse.ProtoReflect.Descriptor instead.
 func (*ReadyResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{13}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ReadyResponse) GetErrorCode() ErrorCode {
@@ -1632,7 +1807,7 @@ type DiscardRequest struct {
 
 func (x *DiscardRequest) Reset() {
 	*x = DiscardRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[14]
+	mi := &file_client_v1_messages_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1644,7 +1819,7 @@ func (x *DiscardRequest) String() string {
 func (*DiscardRequest) ProtoMessage() {}
 
 func (x *DiscardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[14]
+	mi := &file_client_v1_messages_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1657,7 +1832,7 @@ func (x *DiscardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardRequest.ProtoReflect.Descriptor instead.
 func (*DiscardRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{14}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DiscardRequest) GetTile() string {
@@ -1677,7 +1852,7 @@ type DiscardResponse struct {
 
 func (x *DiscardResponse) Reset() {
 	*x = DiscardResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[15]
+	mi := &file_client_v1_messages_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1689,7 +1864,7 @@ func (x *DiscardResponse) String() string {
 func (*DiscardResponse) ProtoMessage() {}
 
 func (x *DiscardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[15]
+	mi := &file_client_v1_messages_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1702,7 +1877,7 @@ func (x *DiscardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardResponse.ProtoReflect.Descriptor instead.
 func (*DiscardResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{15}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DiscardResponse) GetErrorCode() ErrorCode {
@@ -1727,7 +1902,7 @@ type PongRequest struct {
 
 func (x *PongRequest) Reset() {
 	*x = PongRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[16]
+	mi := &file_client_v1_messages_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1739,7 +1914,7 @@ func (x *PongRequest) String() string {
 func (*PongRequest) ProtoMessage() {}
 
 func (x *PongRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[16]
+	mi := &file_client_v1_messages_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1752,7 +1927,7 @@ func (x *PongRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PongRequest.ProtoReflect.Descriptor instead.
 func (*PongRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{16}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{17}
 }
 
 type PongResponse struct {
@@ -1765,7 +1940,7 @@ type PongResponse struct {
 
 func (x *PongResponse) Reset() {
 	*x = PongResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[17]
+	mi := &file_client_v1_messages_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1777,7 +1952,7 @@ func (x *PongResponse) String() string {
 func (*PongResponse) ProtoMessage() {}
 
 func (x *PongResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[17]
+	mi := &file_client_v1_messages_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1790,7 +1965,7 @@ func (x *PongResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PongResponse.ProtoReflect.Descriptor instead.
 func (*PongResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{17}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PongResponse) GetErrorCode() ErrorCode {
@@ -1816,7 +1991,7 @@ type GangRequest struct {
 
 func (x *GangRequest) Reset() {
 	*x = GangRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[18]
+	mi := &file_client_v1_messages_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1828,7 +2003,7 @@ func (x *GangRequest) String() string {
 func (*GangRequest) ProtoMessage() {}
 
 func (x *GangRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[18]
+	mi := &file_client_v1_messages_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1841,7 +2016,7 @@ func (x *GangRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GangRequest.ProtoReflect.Descriptor instead.
 func (*GangRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{18}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GangRequest) GetTile() string {
@@ -1861,7 +2036,7 @@ type GangResponse struct {
 
 func (x *GangResponse) Reset() {
 	*x = GangResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[19]
+	mi := &file_client_v1_messages_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1873,7 +2048,7 @@ func (x *GangResponse) String() string {
 func (*GangResponse) ProtoMessage() {}
 
 func (x *GangResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[19]
+	mi := &file_client_v1_messages_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1886,7 +2061,7 @@ func (x *GangResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GangResponse.ProtoReflect.Descriptor instead.
 func (*GangResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{19}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GangResponse) GetErrorCode() ErrorCode {
@@ -1911,7 +2086,7 @@ type HuRequest struct {
 
 func (x *HuRequest) Reset() {
 	*x = HuRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[20]
+	mi := &file_client_v1_messages_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1923,7 +2098,7 @@ func (x *HuRequest) String() string {
 func (*HuRequest) ProtoMessage() {}
 
 func (x *HuRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[20]
+	mi := &file_client_v1_messages_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1936,7 +2111,7 @@ func (x *HuRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HuRequest.ProtoReflect.Descriptor instead.
 func (*HuRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{20}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{21}
 }
 
 type HuResponse struct {
@@ -1949,7 +2124,7 @@ type HuResponse struct {
 
 func (x *HuResponse) Reset() {
 	*x = HuResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[21]
+	mi := &file_client_v1_messages_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1961,7 +2136,7 @@ func (x *HuResponse) String() string {
 func (*HuResponse) ProtoMessage() {}
 
 func (x *HuResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[21]
+	mi := &file_client_v1_messages_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1974,7 +2149,7 @@ func (x *HuResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HuResponse.ProtoReflect.Descriptor instead.
 func (*HuResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{21}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *HuResponse) GetErrorCode() ErrorCode {
@@ -1999,7 +2174,7 @@ type PassRequest struct {
 
 func (x *PassRequest) Reset() {
 	*x = PassRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[22]
+	mi := &file_client_v1_messages_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2011,7 +2186,7 @@ func (x *PassRequest) String() string {
 func (*PassRequest) ProtoMessage() {}
 
 func (x *PassRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[22]
+	mi := &file_client_v1_messages_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2024,7 +2199,7 @@ func (x *PassRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PassRequest.ProtoReflect.Descriptor instead.
 func (*PassRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{22}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{23}
 }
 
 type PassResponse struct {
@@ -2037,7 +2212,7 @@ type PassResponse struct {
 
 func (x *PassResponse) Reset() {
 	*x = PassResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[23]
+	mi := &file_client_v1_messages_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2049,7 +2224,7 @@ func (x *PassResponse) String() string {
 func (*PassResponse) ProtoMessage() {}
 
 func (x *PassResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[23]
+	mi := &file_client_v1_messages_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2062,7 +2237,7 @@ func (x *PassResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PassResponse.ProtoReflect.Descriptor instead.
 func (*PassResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{23}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PassResponse) GetErrorCode() ErrorCode {
@@ -2073,6 +2248,238 @@ func (x *PassResponse) GetErrorCode() ErrorCode {
 }
 
 func (x *PassResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+type RenameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nickname      string                 `protobuf:"bytes,1,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenameRequest) Reset() {
+	*x = RenameRequest{}
+	mi := &file_client_v1_messages_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenameRequest) ProtoMessage() {}
+
+func (x *RenameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenameRequest.ProtoReflect.Descriptor instead.
+func (*RenameRequest) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *RenameRequest) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+type RenameResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ErrorCode       ErrorCode              `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
+	ErrorMessage    string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	AppliedNickname string                 `protobuf:"bytes,3,opt,name=applied_nickname,json=appliedNickname,proto3" json:"applied_nickname,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RenameResponse) Reset() {
+	*x = RenameResponse{}
+	mi := &file_client_v1_messages_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenameResponse) ProtoMessage() {}
+
+func (x *RenameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenameResponse.ProtoReflect.Descriptor instead.
+func (*RenameResponse) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *RenameResponse) GetErrorCode() ErrorCode {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ErrorCode_ERROR_CODE_UNSPECIFIED
+}
+
+func (x *RenameResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *RenameResponse) GetAppliedNickname() string {
+	if x != nil {
+		return x.AppliedNickname
+	}
+	return ""
+}
+
+type AddBotRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RoomId        string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Difficulty    string                 `protobuf:"bytes,3,opt,name=difficulty,proto3" json:"difficulty,omitempty"`
+	OpId          string                 `protobuf:"bytes,4,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddBotRequest) Reset() {
+	*x = AddBotRequest{}
+	mi := &file_client_v1_messages_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddBotRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddBotRequest) ProtoMessage() {}
+
+func (x *AddBotRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddBotRequest.ProtoReflect.Descriptor instead.
+func (*AddBotRequest) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *AddBotRequest) GetRoomId() string {
+	if x != nil {
+		return x.RoomId
+	}
+	return ""
+}
+
+func (x *AddBotRequest) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *AddBotRequest) GetDifficulty() string {
+	if x != nil {
+		return x.Difficulty
+	}
+	return ""
+}
+
+func (x *AddBotRequest) GetOpId() string {
+	if x != nil {
+		return x.OpId
+	}
+	return ""
+}
+
+type AddBotResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Added         []*SeatInfo            `protobuf:"bytes,1,rep,name=added,proto3" json:"added,omitempty"`
+	ErrorCode     ErrorCode              `protobuf:"varint,2,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddBotResponse) Reset() {
+	*x = AddBotResponse{}
+	mi := &file_client_v1_messages_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddBotResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddBotResponse) ProtoMessage() {}
+
+func (x *AddBotResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddBotResponse.ProtoReflect.Descriptor instead.
+func (*AddBotResponse) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *AddBotResponse) GetAdded() []*SeatInfo {
+	if x != nil {
+		return x.Added
+	}
+	return nil
+}
+
+func (x *AddBotResponse) GetErrorCode() ErrorCode {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ErrorCode_ERROR_CODE_UNSPECIFIED
+}
+
+func (x *AddBotResponse) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
 	}
@@ -2090,7 +2497,7 @@ type StartGameNotify struct {
 
 func (x *StartGameNotify) Reset() {
 	*x = StartGameNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[24]
+	mi := &file_client_v1_messages_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2102,7 +2509,7 @@ func (x *StartGameNotify) String() string {
 func (*StartGameNotify) ProtoMessage() {}
 
 func (x *StartGameNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[24]
+	mi := &file_client_v1_messages_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2115,7 +2522,7 @@ func (x *StartGameNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartGameNotify.ProtoReflect.Descriptor instead.
 func (*StartGameNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{24}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *StartGameNotify) GetRoomId() string {
@@ -2143,7 +2550,7 @@ type InitialDealNotify struct {
 
 func (x *InitialDealNotify) Reset() {
 	*x = InitialDealNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[25]
+	mi := &file_client_v1_messages_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2155,7 +2562,7 @@ func (x *InitialDealNotify) String() string {
 func (*InitialDealNotify) ProtoMessage() {}
 
 func (x *InitialDealNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[25]
+	mi := &file_client_v1_messages_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2168,7 +2575,7 @@ func (x *InitialDealNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitialDealNotify.ProtoReflect.Descriptor instead.
 func (*InitialDealNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{25}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *InitialDealNotify) GetSeatIndex() int32 {
@@ -2196,7 +2603,7 @@ type DrawTileNotify struct {
 
 func (x *DrawTileNotify) Reset() {
 	*x = DrawTileNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[26]
+	mi := &file_client_v1_messages_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2208,7 +2615,7 @@ func (x *DrawTileNotify) String() string {
 func (*DrawTileNotify) ProtoMessage() {}
 
 func (x *DrawTileNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[26]
+	mi := &file_client_v1_messages_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2221,7 +2628,7 @@ func (x *DrawTileNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrawTileNotify.ProtoReflect.Descriptor instead.
 func (*DrawTileNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{26}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DrawTileNotify) GetSeatIndex() int32 {
@@ -2254,7 +2661,7 @@ type ActionNotify struct {
 
 func (x *ActionNotify) Reset() {
 	*x = ActionNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[27]
+	mi := &file_client_v1_messages_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2266,7 +2673,7 @@ func (x *ActionNotify) String() string {
 func (*ActionNotify) ProtoMessage() {}
 
 func (x *ActionNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[27]
+	mi := &file_client_v1_messages_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2279,7 +2686,7 @@ func (x *ActionNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionNotify.ProtoReflect.Descriptor instead.
 func (*ActionNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{27}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ActionNotify) GetSeatIndex() int32 {
@@ -2323,7 +2730,7 @@ type SettlementNotify struct {
 
 func (x *SettlementNotify) Reset() {
 	*x = SettlementNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[28]
+	mi := &file_client_v1_messages_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2335,7 +2742,7 @@ func (x *SettlementNotify) String() string {
 func (*SettlementNotify) ProtoMessage() {}
 
 func (x *SettlementNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[28]
+	mi := &file_client_v1_messages_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2348,7 +2755,7 @@ func (x *SettlementNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettlementNotify.ProtoReflect.Descriptor instead.
 func (*SettlementNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{28}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *SettlementNotify) GetRoomId() string {
@@ -2413,7 +2820,7 @@ type SeatScore struct {
 
 func (x *SeatScore) Reset() {
 	*x = SeatScore{}
-	mi := &file_client_v1_messages_proto_msgTypes[29]
+	mi := &file_client_v1_messages_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2425,7 +2832,7 @@ func (x *SeatScore) String() string {
 func (*SeatScore) ProtoMessage() {}
 
 func (x *SeatScore) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[29]
+	mi := &file_client_v1_messages_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2438,7 +2845,7 @@ func (x *SeatScore) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeatScore.ProtoReflect.Descriptor instead.
 func (*SeatScore) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{29}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SeatScore) GetSeatIndex() int32 {
@@ -2482,7 +2889,7 @@ type PenaltyItem struct {
 
 func (x *PenaltyItem) Reset() {
 	*x = PenaltyItem{}
-	mi := &file_client_v1_messages_proto_msgTypes[30]
+	mi := &file_client_v1_messages_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2494,7 +2901,7 @@ func (x *PenaltyItem) String() string {
 func (*PenaltyItem) ProtoMessage() {}
 
 func (x *PenaltyItem) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[30]
+	mi := &file_client_v1_messages_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2507,7 +2914,7 @@ func (x *PenaltyItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PenaltyItem.ProtoReflect.Descriptor instead.
 func (*PenaltyItem) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{30}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *PenaltyItem) GetReason() string {
@@ -2551,7 +2958,7 @@ type WinnerBreakdown struct {
 
 func (x *WinnerBreakdown) Reset() {
 	*x = WinnerBreakdown{}
-	mi := &file_client_v1_messages_proto_msgTypes[31]
+	mi := &file_client_v1_messages_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2563,7 +2970,7 @@ func (x *WinnerBreakdown) String() string {
 func (*WinnerBreakdown) ProtoMessage() {}
 
 func (x *WinnerBreakdown) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[31]
+	mi := &file_client_v1_messages_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2576,7 +2983,7 @@ func (x *WinnerBreakdown) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WinnerBreakdown.ProtoReflect.Descriptor instead.
 func (*WinnerBreakdown) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{31}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *WinnerBreakdown) GetSeatIndex() int32 {
@@ -2617,7 +3024,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[32]
+	mi := &file_client_v1_messages_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2629,7 +3036,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[32]
+	mi := &file_client_v1_messages_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2642,7 +3049,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{32}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *HeartbeatRequest) GetClientTsMs() int64 {
@@ -2661,7 +3068,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[33]
+	mi := &file_client_v1_messages_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2673,7 +3080,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[33]
+	mi := &file_client_v1_messages_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2686,7 +3093,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{33}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *HeartbeatResponse) GetServerTsMs() int64 {
@@ -2705,7 +3112,7 @@ type LeaveRoomRequest struct {
 
 func (x *LeaveRoomRequest) Reset() {
 	*x = LeaveRoomRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[34]
+	mi := &file_client_v1_messages_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2717,7 +3124,7 @@ func (x *LeaveRoomRequest) String() string {
 func (*LeaveRoomRequest) ProtoMessage() {}
 
 func (x *LeaveRoomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[34]
+	mi := &file_client_v1_messages_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2730,7 +3137,7 @@ func (x *LeaveRoomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveRoomRequest.ProtoReflect.Descriptor instead.
 func (*LeaveRoomRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{34}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{39}
 }
 
 type LeaveRoomResponse struct {
@@ -2743,7 +3150,7 @@ type LeaveRoomResponse struct {
 
 func (x *LeaveRoomResponse) Reset() {
 	*x = LeaveRoomResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[35]
+	mi := &file_client_v1_messages_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2755,7 +3162,7 @@ func (x *LeaveRoomResponse) String() string {
 func (*LeaveRoomResponse) ProtoMessage() {}
 
 func (x *LeaveRoomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[35]
+	mi := &file_client_v1_messages_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2768,7 +3175,7 @@ func (x *LeaveRoomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveRoomResponse.ProtoReflect.Descriptor instead.
 func (*LeaveRoomResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{35}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *LeaveRoomResponse) GetErrorCode() ErrorCode {
@@ -2799,7 +3206,7 @@ type RouteRedirectNotify struct {
 
 func (x *RouteRedirectNotify) Reset() {
 	*x = RouteRedirectNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[36]
+	mi := &file_client_v1_messages_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2811,7 +3218,7 @@ func (x *RouteRedirectNotify) String() string {
 func (*RouteRedirectNotify) ProtoMessage() {}
 
 func (x *RouteRedirectNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[36]
+	mi := &file_client_v1_messages_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2824,7 +3231,7 @@ func (x *RouteRedirectNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteRedirectNotify.ProtoReflect.Descriptor instead.
 func (*RouteRedirectNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{36}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *RouteRedirectNotify) GetWsUrl() string {
@@ -2860,7 +3267,7 @@ type ExchangeThreeRequest struct {
 
 func (x *ExchangeThreeRequest) Reset() {
 	*x = ExchangeThreeRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[37]
+	mi := &file_client_v1_messages_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2872,7 +3279,7 @@ func (x *ExchangeThreeRequest) String() string {
 func (*ExchangeThreeRequest) ProtoMessage() {}
 
 func (x *ExchangeThreeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[37]
+	mi := &file_client_v1_messages_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2885,7 +3292,7 @@ func (x *ExchangeThreeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExchangeThreeRequest.ProtoReflect.Descriptor instead.
 func (*ExchangeThreeRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{37}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ExchangeThreeRequest) GetTiles() []string {
@@ -2912,7 +3319,7 @@ type ExchangeThreeResponse struct {
 
 func (x *ExchangeThreeResponse) Reset() {
 	*x = ExchangeThreeResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[38]
+	mi := &file_client_v1_messages_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2924,7 +3331,7 @@ func (x *ExchangeThreeResponse) String() string {
 func (*ExchangeThreeResponse) ProtoMessage() {}
 
 func (x *ExchangeThreeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[38]
+	mi := &file_client_v1_messages_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2937,7 +3344,7 @@ func (x *ExchangeThreeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExchangeThreeResponse.ProtoReflect.Descriptor instead.
 func (*ExchangeThreeResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{38}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ExchangeThreeResponse) GetErrorCode() ErrorCode {
@@ -2965,7 +3372,7 @@ type ExchangeThreeDoneNotify struct {
 
 func (x *ExchangeThreeDoneNotify) Reset() {
 	*x = ExchangeThreeDoneNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[39]
+	mi := &file_client_v1_messages_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2977,7 +3384,7 @@ func (x *ExchangeThreeDoneNotify) String() string {
 func (*ExchangeThreeDoneNotify) ProtoMessage() {}
 
 func (x *ExchangeThreeDoneNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[39]
+	mi := &file_client_v1_messages_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2990,7 +3397,7 @@ func (x *ExchangeThreeDoneNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExchangeThreeDoneNotify.ProtoReflect.Descriptor instead.
 func (*ExchangeThreeDoneNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{39}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ExchangeThreeDoneNotify) GetPerSeat() []*SeatTiles {
@@ -3010,7 +3417,7 @@ type SeatTiles struct {
 
 func (x *SeatTiles) Reset() {
 	*x = SeatTiles{}
-	mi := &file_client_v1_messages_proto_msgTypes[40]
+	mi := &file_client_v1_messages_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3022,7 +3429,7 @@ func (x *SeatTiles) String() string {
 func (*SeatTiles) ProtoMessage() {}
 
 func (x *SeatTiles) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[40]
+	mi := &file_client_v1_messages_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3035,7 +3442,7 @@ func (x *SeatTiles) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeatTiles.ProtoReflect.Descriptor instead.
 func (*SeatTiles) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{40}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *SeatTiles) GetSeatIndex() int32 {
@@ -3063,7 +3470,7 @@ type QueMenRequest struct {
 
 func (x *QueMenRequest) Reset() {
 	*x = QueMenRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[41]
+	mi := &file_client_v1_messages_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3075,7 +3482,7 @@ func (x *QueMenRequest) String() string {
 func (*QueMenRequest) ProtoMessage() {}
 
 func (x *QueMenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[41]
+	mi := &file_client_v1_messages_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3088,7 +3495,7 @@ func (x *QueMenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueMenRequest.ProtoReflect.Descriptor instead.
 func (*QueMenRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{41}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *QueMenRequest) GetSuit() int32 {
@@ -3108,7 +3515,7 @@ type QueMenResponse struct {
 
 func (x *QueMenResponse) Reset() {
 	*x = QueMenResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[42]
+	mi := &file_client_v1_messages_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3120,7 +3527,7 @@ func (x *QueMenResponse) String() string {
 func (*QueMenResponse) ProtoMessage() {}
 
 func (x *QueMenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[42]
+	mi := &file_client_v1_messages_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3133,7 +3540,7 @@ func (x *QueMenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueMenResponse.ProtoReflect.Descriptor instead.
 func (*QueMenResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{42}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *QueMenResponse) GetErrorCode() ErrorCode {
@@ -3161,7 +3568,7 @@ type QueMenDoneNotify struct {
 
 func (x *QueMenDoneNotify) Reset() {
 	*x = QueMenDoneNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[43]
+	mi := &file_client_v1_messages_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3173,7 +3580,7 @@ func (x *QueMenDoneNotify) String() string {
 func (*QueMenDoneNotify) ProtoMessage() {}
 
 func (x *QueMenDoneNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[43]
+	mi := &file_client_v1_messages_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3186,7 +3593,7 @@ func (x *QueMenDoneNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueMenDoneNotify.ProtoReflect.Descriptor instead.
 func (*QueMenDoneNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{43}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *QueMenDoneNotify) GetQueSuitBySeat() []int32 {
@@ -3200,30 +3607,32 @@ func (x *QueMenDoneNotify) GetQueSuitBySeat() []int32 {
 // state 表示房间 FSM（waiting/ready/playing/settling/closed）；
 // waiting_action 表示局内 UI 阶段（exchange_three/que_men/discard/claim_window/tsumo_window/none）。
 type SnapshotNotify struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	RoomId           string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
-	PlayerIds        []string               `protobuf:"bytes,2,rep,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
-	QueSuitBySeat    []int32                `protobuf:"varint,3,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
-	Cursor           string                 `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
-	State            string                 `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
-	ActingSeat       int32                  `protobuf:"varint,6,opt,name=acting_seat,json=actingSeat,proto3" json:"acting_seat,omitempty"`
-	WaitingAction    string                 `protobuf:"bytes,7,opt,name=waiting_action,json=waitingAction,proto3" json:"waiting_action,omitempty"`
-	PendingTile      string                 `protobuf:"bytes,8,opt,name=pending_tile,json=pendingTile,proto3" json:"pending_tile,omitempty"`
-	AvailableActions []string               `protobuf:"bytes,9,rep,name=available_actions,json=availableActions,proto3" json:"available_actions,omitempty"`
-	ClaimCandidates  []*ClaimCandidate      `protobuf:"bytes,10,rep,name=claim_candidates,json=claimCandidates,proto3" json:"claim_candidates,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	RoomId string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	// Deprecated: Marked as deprecated in client/v1/messages.proto.
+	PlayerIds        []string          `protobuf:"bytes,2,rep,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
+	QueSuitBySeat    []int32           `protobuf:"varint,3,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
+	Cursor           string            `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	State            string            `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	ActingSeat       int32             `protobuf:"varint,6,opt,name=acting_seat,json=actingSeat,proto3" json:"acting_seat,omitempty"`
+	WaitingAction    string            `protobuf:"bytes,7,opt,name=waiting_action,json=waitingAction,proto3" json:"waiting_action,omitempty"`
+	PendingTile      string            `protobuf:"bytes,8,opt,name=pending_tile,json=pendingTile,proto3" json:"pending_tile,omitempty"`
+	AvailableActions []string          `protobuf:"bytes,9,rep,name=available_actions,json=availableActions,proto3" json:"available_actions,omitempty"`
+	ClaimCandidates  []*ClaimCandidate `protobuf:"bytes,10,rep,name=claim_candidates,json=claimCandidates,proto3" json:"claim_candidates,omitempty"`
 	// your_hand_tiles 仅包含当前连接所属座位的手牌，不广播给其它座位。
 	YourHandTiles []string `protobuf:"bytes,11,rep,name=your_hand_tiles,json=yourHandTiles,proto3" json:"your_hand_tiles,omitempty"`
 	// discards_by_seat 按座位返回弃牌历史，用于重连后恢复牌桌。
 	DiscardsBySeat []*SeatTiles `protobuf:"bytes,12,rep,name=discards_by_seat,json=discardsBySeat,proto3" json:"discards_by_seat,omitempty"`
 	// melds_by_seat 按座位返回副露文本编码，用于重连后恢复牌桌。
 	MeldsBySeat   []*SeatTiles `protobuf:"bytes,13,rep,name=melds_by_seat,json=meldsBySeat,proto3" json:"melds_by_seat,omitempty"`
+	Seats         []*SeatInfo  `protobuf:"bytes,14,rep,name=seats,proto3" json:"seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SnapshotNotify) Reset() {
 	*x = SnapshotNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[44]
+	mi := &file_client_v1_messages_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3235,7 +3644,7 @@ func (x *SnapshotNotify) String() string {
 func (*SnapshotNotify) ProtoMessage() {}
 
 func (x *SnapshotNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[44]
+	mi := &file_client_v1_messages_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3248,7 +3657,7 @@ func (x *SnapshotNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotNotify.ProtoReflect.Descriptor instead.
 func (*SnapshotNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{44}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SnapshotNotify) GetRoomId() string {
@@ -3258,6 +3667,7 @@ func (x *SnapshotNotify) GetRoomId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in client/v1/messages.proto.
 func (x *SnapshotNotify) GetPlayerIds() []string {
 	if x != nil {
 		return x.PlayerIds
@@ -3342,6 +3752,13 @@ func (x *SnapshotNotify) GetMeldsBySeat() []*SeatTiles {
 	return nil
 }
 
+func (x *SnapshotNotify) GetSeats() []*SeatInfo {
+	if x != nil {
+		return x.Seats
+	}
+	return nil
+}
+
 // ClaimCandidate 表示快照中仍然有效的抢答候选。
 type ClaimCandidate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3353,7 +3770,7 @@ type ClaimCandidate struct {
 
 func (x *ClaimCandidate) Reset() {
 	*x = ClaimCandidate{}
-	mi := &file_client_v1_messages_proto_msgTypes[45]
+	mi := &file_client_v1_messages_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3365,7 +3782,7 @@ func (x *ClaimCandidate) String() string {
 func (*ClaimCandidate) ProtoMessage() {}
 
 func (x *ClaimCandidate) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[45]
+	mi := &file_client_v1_messages_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3378,7 +3795,7 @@ func (x *ClaimCandidate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimCandidate.ProtoReflect.Descriptor instead.
 func (*ClaimCandidate) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{45}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ClaimCandidate) GetSeatIndex() int32 {
@@ -3399,7 +3816,7 @@ var File_client_v1_messages_proto protoreflect.FileDescriptor
 
 const file_client_v1_messages_proto_rawDesc = "" +
 	"\n" +
-	"\x18client/v1/messages.proto\x12\tclient.v1\"\x90\x14\n" +
+	"\x18client/v1/messages.proto\x12\tclient.v1\"\x84\x16\n" +
 	"\bEnvelope\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\tR\x05reqId\x12'\n" +
 	"\x0fidempotency_key\x18  \x01(\tR\x0eidempotencyKey\x126\n" +
@@ -3450,7 +3867,14 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x0fcreate_room_req\x18& \x01(\v2\x1c.client.v1.CreateRoomRequestH\x00R\rcreateRoomReq\x12I\n" +
 	"\x10create_room_resp\x18' \x01(\v2\x1d.client.v1.CreateRoomResponseH\x00R\x0ecreateRoomResp\x123\n" +
 	"\bpass_req\x18( \x01(\v2\x16.client.v1.PassRequestH\x00R\apassReq\x126\n" +
-	"\tpass_resp\x18) \x01(\v2\x17.client.v1.PassResponseH\x00R\bpassRespB\x06\n" +
+	"\tpass_resp\x18) \x01(\v2\x17.client.v1.PassResponseH\x00R\bpassResp\x129\n" +
+	"\n" +
+	"rename_req\x18* \x01(\v2\x18.client.v1.RenameRequestH\x00R\trenameReq\x12<\n" +
+	"\vrename_resp\x18+ \x01(\v2\x19.client.v1.RenameResponseH\x00R\n" +
+	"renameResp\x12:\n" +
+	"\vadd_bot_req\x18, \x01(\v2\x18.client.v1.AddBotRequestH\x00R\taddBotReq\x12=\n" +
+	"\fadd_bot_resp\x18- \x01(\v2\x19.client.v1.AddBotResponseH\x00R\n" +
+	"addBotRespB\x06\n" +
 	"\x04body\"O\n" +
 	"\fLoginRequest\x12\x1a\n" +
 	"\bnickname\x18\x01 \x01(\tR\bnickname\x12#\n" +
@@ -3464,7 +3888,7 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\aresumed\x18\x05 \x01(\bR\aresumed\x12#\n" +
 	"\rresume_cursor\x18\x06 \x01(\tR\fresumeCursor\"*\n" +
 	"\x0fJoinRoomRequest\x12\x17\n" +
-	"\aroom_id\x18\x01 \x01(\tR\x06roomId\"\xc7\x01\n" +
+	"\aroom_id\x18\x01 \x01(\tR\x06roomId\"\xf2\x01\n" +
 	"\x10JoinRoomResponse\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x123\n" +
@@ -3472,7 +3896,15 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"error_code\x18\x02 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\x12\x17\n" +
 	"\arule_id\x18\x04 \x01(\tR\x06ruleId\x12!\n" +
-	"\fdisplay_name\x18\x05 \x01(\tR\vdisplayName\"\xd5\x01\n" +
+	"\fdisplay_name\x18\x05 \x01(\tR\vdisplayName\x12)\n" +
+	"\x05seats\x18\x06 \x03(\v2\x13.client.v1.SeatInfoR\x05seats\"\x97\x01\n" +
+	"\bSeatInfo\x12\x1d\n" +
+	"\n" +
+	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1a\n" +
+	"\bnickname\x18\x03 \x01(\tR\bnickname\x12\x15\n" +
+	"\x06is_bot\x18\x04 \x01(\bR\x05isBot\x12 \n" +
+	"\vsurrendered\x18\x05 \x01(\bR\vsurrendered\"\xd5\x01\n" +
 	"\bRoomMeta\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x17\n" +
 	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12!\n" +
@@ -3491,9 +3923,10 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x123\n" +
 	"\n" +
 	"error_code\x18\x03 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\"+\n" +
+	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\"O\n" +
 	"\x10AutoMatchRequest\x12\x17\n" +
-	"\arule_id\x18\x01 \x01(\tR\x06ruleId\"\xe1\x01\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
+	"\rpad_with_bots\x18\x02 \x01(\bR\vpadWithBots\"\x8c\x02\n" +
 	"\x11AutoMatchResponse\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1d\n" +
 	"\n" +
@@ -3502,11 +3935,12 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"error_code\x18\x03 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12\x17\n" +
 	"\arule_id\x18\x05 \x01(\tR\x06ruleId\x12!\n" +
-	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\"i\n" +
+	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\x12)\n" +
+	"\x05seats\x18\a \x03(\v2\x13.client.v1.SeatInfoR\x05seats\"i\n" +
 	"\x11CreateRoomRequest\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x18\n" +
-	"\aprivate\x18\x03 \x01(\bR\aprivate\"\xe2\x01\n" +
+	"\aprivate\x18\x03 \x01(\bR\aprivate\"\x8d\x02\n" +
 	"\x12CreateRoomResponse\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1d\n" +
 	"\n" +
@@ -3515,7 +3949,8 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"error_code\x18\x03 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12\x17\n" +
 	"\arule_id\x18\x05 \x01(\tR\x06ruleId\x12!\n" +
-	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\"\x0e\n" +
+	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\x12)\n" +
+	"\x05seats\x18\a \x03(\v2\x13.client.v1.SeatInfoR\x05seats\"\x0e\n" +
 	"\fReadyRequest\"i\n" +
 	"\rReadyResponse\x123\n" +
 	"\n" +
@@ -3548,7 +3983,26 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\fPassResponse\x123\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"K\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"+\n" +
+	"\rRenameRequest\x12\x1a\n" +
+	"\bnickname\x18\x01 \x01(\tR\bnickname\"\x95\x01\n" +
+	"\x0eRenameResponse\x123\n" +
+	"\n" +
+	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12)\n" +
+	"\x10applied_nickname\x18\x03 \x01(\tR\x0fappliedNickname\"s\n" +
+	"\rAddBotRequest\x12\x17\n" +
+	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\x12\x1e\n" +
+	"\n" +
+	"difficulty\x18\x03 \x01(\tR\n" +
+	"difficulty\x12\x13\n" +
+	"\x05op_id\x18\x04 \x01(\tR\x04opId\"\x95\x01\n" +
+	"\x0eAddBotResponse\x12)\n" +
+	"\x05added\x18\x01 \x03(\v2\x13.client.v1.SeatInfoR\x05added\x123\n" +
+	"\n" +
+	"error_code\x18\x02 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"K\n" +
 	"\x0fStartGameNotify\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1f\n" +
 	"\vdealer_seat\x18\x02 \x01(\x05R\n" +
@@ -3628,11 +4082,11 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\";\n" +
 	"\x10QueMenDoneNotify\x12'\n" +
-	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"\x9f\x04\n" +
+	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"\xce\x04\n" +
 	"\x0eSnapshotNotify\x12\x17\n" +
-	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1d\n" +
+	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12!\n" +
 	"\n" +
-	"player_ids\x18\x02 \x03(\tR\tplayerIds\x12'\n" +
+	"player_ids\x18\x02 \x03(\tB\x02\x18\x01R\tplayerIds\x12'\n" +
 	"\x10que_suit_by_seat\x18\x03 \x03(\x05R\rqueSuitBySeat\x12\x16\n" +
 	"\x06cursor\x18\x04 \x01(\tR\x06cursor\x12\x14\n" +
 	"\x05state\x18\x05 \x01(\tR\x05state\x12\x1f\n" +
@@ -3645,11 +4099,12 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	" \x03(\v2\x19.client.v1.ClaimCandidateR\x0fclaimCandidates\x12&\n" +
 	"\x0fyour_hand_tiles\x18\v \x03(\tR\ryourHandTiles\x12>\n" +
 	"\x10discards_by_seat\x18\f \x03(\v2\x14.client.v1.SeatTilesR\x0ediscardsBySeat\x128\n" +
-	"\rmelds_by_seat\x18\r \x03(\v2\x14.client.v1.SeatTilesR\vmeldsBySeat\"I\n" +
+	"\rmelds_by_seat\x18\r \x03(\v2\x14.client.v1.SeatTilesR\vmeldsBySeat\x12)\n" +
+	"\x05seats\x18\x0e \x03(\v2\x13.client.v1.SeatInfoR\x05seats\"I\n" +
 	"\x0eClaimCandidate\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x18\n" +
-	"\aactions\x18\x02 \x03(\tR\aactions*\x92\x02\n" +
+	"\aactions\x18\x02 \x03(\tR\aactions*\xb3\x02\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17ERROR_CODE_UNAUTHORIZED\x10\x01\x12\x1d\n" +
@@ -3659,7 +4114,8 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x18ERROR_CODE_NOT_YOUR_TURN\x10\x05\x12\x1d\n" +
 	"\x19ERROR_CODE_ROUTE_REDIRECT\x10\x06\x12\x1b\n" +
 	"\x17ERROR_CODE_RATE_LIMITED\x10\a\x12\x1b\n" +
-	"\x17ERROR_CODE_RECONNECTING\x10\bB,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
+	"\x17ERROR_CODE_RECONNECTING\x10\b\x12\x1f\n" +
+	"\x1bERROR_CODE_FEATURE_DISABLED\x10\tB,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
 
 var (
 	file_client_v1_messages_proto_rawDescOnce sync.Once
@@ -3674,7 +4130,7 @@ func file_client_v1_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
+var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_client_v1_messages_proto_goTypes = []any{
 	(ErrorCode)(0),                  // 0: client.v1.ErrorCode
 	(*Envelope)(nil),                // 1: client.v1.Envelope
@@ -3682,115 +4138,131 @@ var file_client_v1_messages_proto_goTypes = []any{
 	(*LoginResponse)(nil),           // 3: client.v1.LoginResponse
 	(*JoinRoomRequest)(nil),         // 4: client.v1.JoinRoomRequest
 	(*JoinRoomResponse)(nil),        // 5: client.v1.JoinRoomResponse
-	(*RoomMeta)(nil),                // 6: client.v1.RoomMeta
-	(*ListRoomsRequest)(nil),        // 7: client.v1.ListRoomsRequest
-	(*ListRoomsResponse)(nil),       // 8: client.v1.ListRoomsResponse
-	(*AutoMatchRequest)(nil),        // 9: client.v1.AutoMatchRequest
-	(*AutoMatchResponse)(nil),       // 10: client.v1.AutoMatchResponse
-	(*CreateRoomRequest)(nil),       // 11: client.v1.CreateRoomRequest
-	(*CreateRoomResponse)(nil),      // 12: client.v1.CreateRoomResponse
-	(*ReadyRequest)(nil),            // 13: client.v1.ReadyRequest
-	(*ReadyResponse)(nil),           // 14: client.v1.ReadyResponse
-	(*DiscardRequest)(nil),          // 15: client.v1.DiscardRequest
-	(*DiscardResponse)(nil),         // 16: client.v1.DiscardResponse
-	(*PongRequest)(nil),             // 17: client.v1.PongRequest
-	(*PongResponse)(nil),            // 18: client.v1.PongResponse
-	(*GangRequest)(nil),             // 19: client.v1.GangRequest
-	(*GangResponse)(nil),            // 20: client.v1.GangResponse
-	(*HuRequest)(nil),               // 21: client.v1.HuRequest
-	(*HuResponse)(nil),              // 22: client.v1.HuResponse
-	(*PassRequest)(nil),             // 23: client.v1.PassRequest
-	(*PassResponse)(nil),            // 24: client.v1.PassResponse
-	(*StartGameNotify)(nil),         // 25: client.v1.StartGameNotify
-	(*InitialDealNotify)(nil),       // 26: client.v1.InitialDealNotify
-	(*DrawTileNotify)(nil),          // 27: client.v1.DrawTileNotify
-	(*ActionNotify)(nil),            // 28: client.v1.ActionNotify
-	(*SettlementNotify)(nil),        // 29: client.v1.SettlementNotify
-	(*SeatScore)(nil),               // 30: client.v1.SeatScore
-	(*PenaltyItem)(nil),             // 31: client.v1.PenaltyItem
-	(*WinnerBreakdown)(nil),         // 32: client.v1.WinnerBreakdown
-	(*HeartbeatRequest)(nil),        // 33: client.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),       // 34: client.v1.HeartbeatResponse
-	(*LeaveRoomRequest)(nil),        // 35: client.v1.LeaveRoomRequest
-	(*LeaveRoomResponse)(nil),       // 36: client.v1.LeaveRoomResponse
-	(*RouteRedirectNotify)(nil),     // 37: client.v1.RouteRedirectNotify
-	(*ExchangeThreeRequest)(nil),    // 38: client.v1.ExchangeThreeRequest
-	(*ExchangeThreeResponse)(nil),   // 39: client.v1.ExchangeThreeResponse
-	(*ExchangeThreeDoneNotify)(nil), // 40: client.v1.ExchangeThreeDoneNotify
-	(*SeatTiles)(nil),               // 41: client.v1.SeatTiles
-	(*QueMenRequest)(nil),           // 42: client.v1.QueMenRequest
-	(*QueMenResponse)(nil),          // 43: client.v1.QueMenResponse
-	(*QueMenDoneNotify)(nil),        // 44: client.v1.QueMenDoneNotify
-	(*SnapshotNotify)(nil),          // 45: client.v1.SnapshotNotify
-	(*ClaimCandidate)(nil),          // 46: client.v1.ClaimCandidate
+	(*SeatInfo)(nil),                // 6: client.v1.SeatInfo
+	(*RoomMeta)(nil),                // 7: client.v1.RoomMeta
+	(*ListRoomsRequest)(nil),        // 8: client.v1.ListRoomsRequest
+	(*ListRoomsResponse)(nil),       // 9: client.v1.ListRoomsResponse
+	(*AutoMatchRequest)(nil),        // 10: client.v1.AutoMatchRequest
+	(*AutoMatchResponse)(nil),       // 11: client.v1.AutoMatchResponse
+	(*CreateRoomRequest)(nil),       // 12: client.v1.CreateRoomRequest
+	(*CreateRoomResponse)(nil),      // 13: client.v1.CreateRoomResponse
+	(*ReadyRequest)(nil),            // 14: client.v1.ReadyRequest
+	(*ReadyResponse)(nil),           // 15: client.v1.ReadyResponse
+	(*DiscardRequest)(nil),          // 16: client.v1.DiscardRequest
+	(*DiscardResponse)(nil),         // 17: client.v1.DiscardResponse
+	(*PongRequest)(nil),             // 18: client.v1.PongRequest
+	(*PongResponse)(nil),            // 19: client.v1.PongResponse
+	(*GangRequest)(nil),             // 20: client.v1.GangRequest
+	(*GangResponse)(nil),            // 21: client.v1.GangResponse
+	(*HuRequest)(nil),               // 22: client.v1.HuRequest
+	(*HuResponse)(nil),              // 23: client.v1.HuResponse
+	(*PassRequest)(nil),             // 24: client.v1.PassRequest
+	(*PassResponse)(nil),            // 25: client.v1.PassResponse
+	(*RenameRequest)(nil),           // 26: client.v1.RenameRequest
+	(*RenameResponse)(nil),          // 27: client.v1.RenameResponse
+	(*AddBotRequest)(nil),           // 28: client.v1.AddBotRequest
+	(*AddBotResponse)(nil),          // 29: client.v1.AddBotResponse
+	(*StartGameNotify)(nil),         // 30: client.v1.StartGameNotify
+	(*InitialDealNotify)(nil),       // 31: client.v1.InitialDealNotify
+	(*DrawTileNotify)(nil),          // 32: client.v1.DrawTileNotify
+	(*ActionNotify)(nil),            // 33: client.v1.ActionNotify
+	(*SettlementNotify)(nil),        // 34: client.v1.SettlementNotify
+	(*SeatScore)(nil),               // 35: client.v1.SeatScore
+	(*PenaltyItem)(nil),             // 36: client.v1.PenaltyItem
+	(*WinnerBreakdown)(nil),         // 37: client.v1.WinnerBreakdown
+	(*HeartbeatRequest)(nil),        // 38: client.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),       // 39: client.v1.HeartbeatResponse
+	(*LeaveRoomRequest)(nil),        // 40: client.v1.LeaveRoomRequest
+	(*LeaveRoomResponse)(nil),       // 41: client.v1.LeaveRoomResponse
+	(*RouteRedirectNotify)(nil),     // 42: client.v1.RouteRedirectNotify
+	(*ExchangeThreeRequest)(nil),    // 43: client.v1.ExchangeThreeRequest
+	(*ExchangeThreeResponse)(nil),   // 44: client.v1.ExchangeThreeResponse
+	(*ExchangeThreeDoneNotify)(nil), // 45: client.v1.ExchangeThreeDoneNotify
+	(*SeatTiles)(nil),               // 46: client.v1.SeatTiles
+	(*QueMenRequest)(nil),           // 47: client.v1.QueMenRequest
+	(*QueMenResponse)(nil),          // 48: client.v1.QueMenResponse
+	(*QueMenDoneNotify)(nil),        // 49: client.v1.QueMenDoneNotify
+	(*SnapshotNotify)(nil),          // 50: client.v1.SnapshotNotify
+	(*ClaimCandidate)(nil),          // 51: client.v1.ClaimCandidate
 }
 var file_client_v1_messages_proto_depIdxs = []int32{
 	2,  // 0: client.v1.Envelope.login_req:type_name -> client.v1.LoginRequest
 	3,  // 1: client.v1.Envelope.login_resp:type_name -> client.v1.LoginResponse
 	4,  // 2: client.v1.Envelope.join_room_req:type_name -> client.v1.JoinRoomRequest
 	5,  // 3: client.v1.Envelope.join_room_resp:type_name -> client.v1.JoinRoomResponse
-	13, // 4: client.v1.Envelope.ready_req:type_name -> client.v1.ReadyRequest
-	14, // 5: client.v1.Envelope.ready_resp:type_name -> client.v1.ReadyResponse
-	15, // 6: client.v1.Envelope.discard_req:type_name -> client.v1.DiscardRequest
-	16, // 7: client.v1.Envelope.discard_resp:type_name -> client.v1.DiscardResponse
-	17, // 8: client.v1.Envelope.pong_req:type_name -> client.v1.PongRequest
-	19, // 9: client.v1.Envelope.gang_req:type_name -> client.v1.GangRequest
-	21, // 10: client.v1.Envelope.hu_req:type_name -> client.v1.HuRequest
-	25, // 11: client.v1.Envelope.start_game:type_name -> client.v1.StartGameNotify
-	27, // 12: client.v1.Envelope.draw_tile:type_name -> client.v1.DrawTileNotify
-	28, // 13: client.v1.Envelope.action:type_name -> client.v1.ActionNotify
-	29, // 14: client.v1.Envelope.settlement:type_name -> client.v1.SettlementNotify
-	33, // 15: client.v1.Envelope.heartbeat_req:type_name -> client.v1.HeartbeatRequest
-	34, // 16: client.v1.Envelope.heartbeat_resp:type_name -> client.v1.HeartbeatResponse
-	35, // 17: client.v1.Envelope.leave_room_req:type_name -> client.v1.LeaveRoomRequest
-	36, // 18: client.v1.Envelope.leave_room_resp:type_name -> client.v1.LeaveRoomResponse
-	37, // 19: client.v1.Envelope.route_redirect:type_name -> client.v1.RouteRedirectNotify
-	38, // 20: client.v1.Envelope.exchange_three_req:type_name -> client.v1.ExchangeThreeRequest
-	39, // 21: client.v1.Envelope.exchange_three_resp:type_name -> client.v1.ExchangeThreeResponse
-	40, // 22: client.v1.Envelope.exchange_three_done:type_name -> client.v1.ExchangeThreeDoneNotify
-	42, // 23: client.v1.Envelope.que_men_req:type_name -> client.v1.QueMenRequest
-	43, // 24: client.v1.Envelope.que_men_resp:type_name -> client.v1.QueMenResponse
-	44, // 25: client.v1.Envelope.que_men_done:type_name -> client.v1.QueMenDoneNotify
-	45, // 26: client.v1.Envelope.snapshot:type_name -> client.v1.SnapshotNotify
-	18, // 27: client.v1.Envelope.pong_resp:type_name -> client.v1.PongResponse
-	20, // 28: client.v1.Envelope.gang_resp:type_name -> client.v1.GangResponse
-	22, // 29: client.v1.Envelope.hu_resp:type_name -> client.v1.HuResponse
-	26, // 30: client.v1.Envelope.initial_deal:type_name -> client.v1.InitialDealNotify
-	7,  // 31: client.v1.Envelope.list_rooms_req:type_name -> client.v1.ListRoomsRequest
-	8,  // 32: client.v1.Envelope.list_rooms_resp:type_name -> client.v1.ListRoomsResponse
-	9,  // 33: client.v1.Envelope.auto_match_req:type_name -> client.v1.AutoMatchRequest
-	10, // 34: client.v1.Envelope.auto_match_resp:type_name -> client.v1.AutoMatchResponse
-	11, // 35: client.v1.Envelope.create_room_req:type_name -> client.v1.CreateRoomRequest
-	12, // 36: client.v1.Envelope.create_room_resp:type_name -> client.v1.CreateRoomResponse
-	23, // 37: client.v1.Envelope.pass_req:type_name -> client.v1.PassRequest
-	24, // 38: client.v1.Envelope.pass_resp:type_name -> client.v1.PassResponse
-	0,  // 39: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 40: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	6,  // 41: client.v1.ListRoomsResponse.rooms:type_name -> client.v1.RoomMeta
-	0,  // 42: client.v1.ListRoomsResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 43: client.v1.AutoMatchResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 44: client.v1.CreateRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 45: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 46: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 47: client.v1.PongResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 48: client.v1.GangResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 49: client.v1.HuResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 50: client.v1.PassResponse.error_code:type_name -> client.v1.ErrorCode
-	30, // 51: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
-	31, // 52: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
-	32, // 53: client.v1.SettlementNotify.per_winner_breakdown:type_name -> client.v1.WinnerBreakdown
-	0,  // 54: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	0,  // 55: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
-	41, // 56: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
-	0,  // 57: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
-	46, // 58: client.v1.SnapshotNotify.claim_candidates:type_name -> client.v1.ClaimCandidate
-	41, // 59: client.v1.SnapshotNotify.discards_by_seat:type_name -> client.v1.SeatTiles
-	41, // 60: client.v1.SnapshotNotify.melds_by_seat:type_name -> client.v1.SeatTiles
-	61, // [61:61] is the sub-list for method output_type
-	61, // [61:61] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	14, // 4: client.v1.Envelope.ready_req:type_name -> client.v1.ReadyRequest
+	15, // 5: client.v1.Envelope.ready_resp:type_name -> client.v1.ReadyResponse
+	16, // 6: client.v1.Envelope.discard_req:type_name -> client.v1.DiscardRequest
+	17, // 7: client.v1.Envelope.discard_resp:type_name -> client.v1.DiscardResponse
+	18, // 8: client.v1.Envelope.pong_req:type_name -> client.v1.PongRequest
+	20, // 9: client.v1.Envelope.gang_req:type_name -> client.v1.GangRequest
+	22, // 10: client.v1.Envelope.hu_req:type_name -> client.v1.HuRequest
+	30, // 11: client.v1.Envelope.start_game:type_name -> client.v1.StartGameNotify
+	32, // 12: client.v1.Envelope.draw_tile:type_name -> client.v1.DrawTileNotify
+	33, // 13: client.v1.Envelope.action:type_name -> client.v1.ActionNotify
+	34, // 14: client.v1.Envelope.settlement:type_name -> client.v1.SettlementNotify
+	38, // 15: client.v1.Envelope.heartbeat_req:type_name -> client.v1.HeartbeatRequest
+	39, // 16: client.v1.Envelope.heartbeat_resp:type_name -> client.v1.HeartbeatResponse
+	40, // 17: client.v1.Envelope.leave_room_req:type_name -> client.v1.LeaveRoomRequest
+	41, // 18: client.v1.Envelope.leave_room_resp:type_name -> client.v1.LeaveRoomResponse
+	42, // 19: client.v1.Envelope.route_redirect:type_name -> client.v1.RouteRedirectNotify
+	43, // 20: client.v1.Envelope.exchange_three_req:type_name -> client.v1.ExchangeThreeRequest
+	44, // 21: client.v1.Envelope.exchange_three_resp:type_name -> client.v1.ExchangeThreeResponse
+	45, // 22: client.v1.Envelope.exchange_three_done:type_name -> client.v1.ExchangeThreeDoneNotify
+	47, // 23: client.v1.Envelope.que_men_req:type_name -> client.v1.QueMenRequest
+	48, // 24: client.v1.Envelope.que_men_resp:type_name -> client.v1.QueMenResponse
+	49, // 25: client.v1.Envelope.que_men_done:type_name -> client.v1.QueMenDoneNotify
+	50, // 26: client.v1.Envelope.snapshot:type_name -> client.v1.SnapshotNotify
+	19, // 27: client.v1.Envelope.pong_resp:type_name -> client.v1.PongResponse
+	21, // 28: client.v1.Envelope.gang_resp:type_name -> client.v1.GangResponse
+	23, // 29: client.v1.Envelope.hu_resp:type_name -> client.v1.HuResponse
+	31, // 30: client.v1.Envelope.initial_deal:type_name -> client.v1.InitialDealNotify
+	8,  // 31: client.v1.Envelope.list_rooms_req:type_name -> client.v1.ListRoomsRequest
+	9,  // 32: client.v1.Envelope.list_rooms_resp:type_name -> client.v1.ListRoomsResponse
+	10, // 33: client.v1.Envelope.auto_match_req:type_name -> client.v1.AutoMatchRequest
+	11, // 34: client.v1.Envelope.auto_match_resp:type_name -> client.v1.AutoMatchResponse
+	12, // 35: client.v1.Envelope.create_room_req:type_name -> client.v1.CreateRoomRequest
+	13, // 36: client.v1.Envelope.create_room_resp:type_name -> client.v1.CreateRoomResponse
+	24, // 37: client.v1.Envelope.pass_req:type_name -> client.v1.PassRequest
+	25, // 38: client.v1.Envelope.pass_resp:type_name -> client.v1.PassResponse
+	26, // 39: client.v1.Envelope.rename_req:type_name -> client.v1.RenameRequest
+	27, // 40: client.v1.Envelope.rename_resp:type_name -> client.v1.RenameResponse
+	28, // 41: client.v1.Envelope.add_bot_req:type_name -> client.v1.AddBotRequest
+	29, // 42: client.v1.Envelope.add_bot_resp:type_name -> client.v1.AddBotResponse
+	0,  // 43: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 44: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	6,  // 45: client.v1.JoinRoomResponse.seats:type_name -> client.v1.SeatInfo
+	7,  // 46: client.v1.ListRoomsResponse.rooms:type_name -> client.v1.RoomMeta
+	0,  // 47: client.v1.ListRoomsResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 48: client.v1.AutoMatchResponse.error_code:type_name -> client.v1.ErrorCode
+	6,  // 49: client.v1.AutoMatchResponse.seats:type_name -> client.v1.SeatInfo
+	0,  // 50: client.v1.CreateRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	6,  // 51: client.v1.CreateRoomResponse.seats:type_name -> client.v1.SeatInfo
+	0,  // 52: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 53: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 54: client.v1.PongResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 55: client.v1.GangResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 56: client.v1.HuResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 57: client.v1.PassResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 58: client.v1.RenameResponse.error_code:type_name -> client.v1.ErrorCode
+	6,  // 59: client.v1.AddBotResponse.added:type_name -> client.v1.SeatInfo
+	0,  // 60: client.v1.AddBotResponse.error_code:type_name -> client.v1.ErrorCode
+	35, // 61: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
+	36, // 62: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
+	37, // 63: client.v1.SettlementNotify.per_winner_breakdown:type_name -> client.v1.WinnerBreakdown
+	0,  // 64: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	0,  // 65: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
+	46, // 66: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
+	0,  // 67: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
+	51, // 68: client.v1.SnapshotNotify.claim_candidates:type_name -> client.v1.ClaimCandidate
+	46, // 69: client.v1.SnapshotNotify.discards_by_seat:type_name -> client.v1.SeatTiles
+	46, // 70: client.v1.SnapshotNotify.melds_by_seat:type_name -> client.v1.SeatTiles
+	6,  // 71: client.v1.SnapshotNotify.seats:type_name -> client.v1.SeatInfo
+	72, // [72:72] is the sub-list for method output_type
+	72, // [72:72] is the sub-list for method input_type
+	72, // [72:72] is the sub-list for extension type_name
+	72, // [72:72] is the sub-list for extension extendee
+	0,  // [0:72] is the sub-list for field type_name
 }
 
 func init() { file_client_v1_messages_proto_init() }
@@ -3838,6 +4310,10 @@ func file_client_v1_messages_proto_init() {
 		(*Envelope_CreateRoomResp)(nil),
 		(*Envelope_PassReq)(nil),
 		(*Envelope_PassResp)(nil),
+		(*Envelope_RenameReq)(nil),
+		(*Envelope_RenameResp)(nil),
+		(*Envelope_AddBotReq)(nil),
+		(*Envelope_AddBotResp)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -3845,7 +4321,7 @@ func file_client_v1_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v1_messages_proto_rawDesc), len(file_client_v1_messages_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   46,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

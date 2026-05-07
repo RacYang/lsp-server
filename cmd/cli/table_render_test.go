@@ -161,6 +161,30 @@ func TestRenderFrameMyTurnDiscardUnicode(t *testing.T) {
 	requireGolden(t, "table_my_turn_discard_unicode", dumpScreen(scr))
 }
 
+func TestRenderFrameWaitingWideASCII(t *testing.T) {
+	scr := makeSimScreen(t, 120, MinTableHeight)
+	view := newWaitingTableView()
+	view.Players[2].Discards = []string{"m1", "m2", "m3", "m4", "m5", "m6"}
+	view.Players[3].Discards = []string{"p1", "p2", "p3", "p4", "p5", "p6"}
+	layout, ok := CalcLayout(120, MinTableHeight)
+	require.True(t, ok)
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeASCII})
+	scr.Show()
+	requireGolden(t, "table_waiting_wide_ascii", dumpScreen(scr))
+}
+
+func TestRenderFrameWaitingWideUnicode(t *testing.T) {
+	scr := makeSimScreen(t, 120, MinTableHeight)
+	view := newWaitingTableView()
+	view.Players[2].Discards = []string{"m1", "m2", "m3", "m4", "m5", "m6"}
+	view.Players[3].Discards = []string{"p1", "p2", "p3", "p4", "p5", "p6"}
+	layout, ok := CalcLayout(120, MinTableHeight)
+	require.True(t, ok)
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeUnicode})
+	scr.Show()
+	requireGolden(t, "table_waiting_wide_unicode", dumpScreen(scr))
+}
+
 func TestRenderFrameSelfMeldsRendered(t *testing.T) {
 	// 自己也有碰/杠时,SelfMeldsArea 应该把它们渲染在手牌上方,
 	// 与对家/上家/下家的"鸣: ..."区块对齐,避免玩家看不到自己的鸣牌。
@@ -198,11 +222,11 @@ func TestCentralPromptStates(t *testing.T) {
 
 	v.ActingSeat = v.SeatIndex
 	v.WaitingAction = "discard"
-	require.Equal(t, "该 你 打 牌", centralPrompt(v, nil))
+	require.Equal(t, "◆ 该 你 出牌 ◆", centralPrompt(v, nil))
 
 	v.ActingSeat = v.SeatIndex
 	v.WaitingAction = "que_men"
-	require.Contains(t, centralPrompt(v, nil), "定 缺")
+	require.Contains(t, centralPrompt(v, nil), "定缺")
 
 	v.ActingSeat = 0
 	v.WaitingAction = "discard"
@@ -211,7 +235,7 @@ func TestCentralPromptStates(t *testing.T) {
 	v.ActingSeat = v.SeatIndex
 	v.WaitingAction = "discard"
 	cursor := &HandCursor{Mode: CursorModeSingle, Index: 0}
-	require.Contains(t, centralPrompt(v, cursor), "已选 m1")
+	require.Contains(t, centralPrompt(v, cursor), "已选 一万")
 	cursor.Pending = true
 	require.Contains(t, centralPrompt(v, cursor), "出牌中")
 
@@ -223,8 +247,8 @@ func TestCentralPromptStates(t *testing.T) {
 }
 
 func TestPrettifyMeld(t *testing.T) {
-	require.Equal(t, "[p5]碰", prettifyMeld("pong:p5"))
-	require.Equal(t, "[m5]杠", prettifyMeld("gang:m5"))
-	require.Equal(t, "[m1 m2 m3]吃", prettifyMeld("chow:m1 m2 m3"))
+	require.Equal(t, "[五筒]碰", prettifyMeld("pong:p5"))
+	require.Equal(t, "[五万]杠", prettifyMeld("gang:m5"))
+	require.Equal(t, "[一万 二万 三万]吃", prettifyMeld("chow:m1 m2 m3"))
 	require.Equal(t, "raw", prettifyMeld("raw"))
 }

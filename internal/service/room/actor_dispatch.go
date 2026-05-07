@@ -74,7 +74,26 @@ func (a *roomActor) doLeave(userID string) error {
 	if a.room == nil {
 		return fmt.Errorf("nil room")
 	}
-	return a.room.Leave(userID)
+	if !a.allowLeaveDuringPlay && a.room.FSM != nil && a.room.FSM.State() == domainroom.StatePlaying {
+		return fmt.Errorf("room not leaveable in state %s", a.room.FSM.State())
+	}
+	seat := -1
+	for i := 0; i < 4; i++ {
+		if a.room.PlayerIDs[i] == userID {
+			seat = i
+			break
+		}
+	}
+	if err := a.room.Leave(userID); err != nil {
+		return err
+	}
+	if seat >= 0 && a.room.Surrendered[seat] && a.round != nil {
+		if len(a.round.surrendered) < 4 {
+			a.round.surrendered = make([]bool, 4)
+		}
+		a.round.surrendered[seat] = true
+	}
+	return nil
 }
 
 func (a *roomActor) doDiscard(userID, tile string) ([]Notification, error) {

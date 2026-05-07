@@ -72,12 +72,14 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	}
 	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), cfg.RuleID)
 	svcCore.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
+	svcCore.SetAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay)
 	svcCore.SetTimeoutConfig(roomsvc.TimeoutConfig{
-		ExchangeThree: cfg.RoomTimeouts.ExchangeThree,
-		QueMen:        cfg.RoomTimeouts.QueMen,
-		ClaimWindow:   cfg.RoomTimeouts.ClaimWindow,
-		TsumoWindow:   cfg.RoomTimeouts.TsumoWindow,
-		Discard:       cfg.RoomTimeouts.Discard,
+		ExchangeThree:   cfg.RoomTimeouts.ExchangeThree,
+		QueMen:          cfg.RoomTimeouts.QueMen,
+		ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
+		TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
+		Discard:         cfg.RoomTimeouts.Discard,
+		SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 	})
 	svc := newRoomGRPCServer(svcCore, ev, gs, st, rcli)
 	svc.setIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)

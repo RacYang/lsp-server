@@ -89,3 +89,27 @@ func TestLeaveMovesReadyRoomBackToWaiting(t *testing.T) {
 		t.Fatalf("seat should be cleared: %#v %#v", r.PlayerIDs, r.Ready)
 	}
 }
+
+func TestLeaveDuringPlayingSurrendersSeat(t *testing.T) {
+	r := NewRoom("r-surrender")
+	for i := 0; i < 4; i++ {
+		if _, ok := r.JoinAutoSeat(fmt.Sprintf("u%d", i)); !ok {
+			t.Fatalf("join seat %d", i)
+		}
+	}
+	if err := r.FSM.Transition(StateReady); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.StartPlaying(); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Leave("u2"); err != nil {
+		t.Fatal(err)
+	}
+	if r.PlayerIDs[2] != "u2" {
+		t.Fatalf("surrender must keep user_id, got %#v", r.PlayerIDs)
+	}
+	if !r.Surrendered[2] {
+		t.Fatalf("seat should be surrendered: %#v", r.Surrendered)
+	}
+}

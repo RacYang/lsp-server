@@ -81,6 +81,7 @@ func RunLobby(ctx context.Context, p Prompter, gw LobbyGateway, cfg *Config) (Lo
 		p.PrintBlank()
 	}
 	for ctx.Err() == nil {
+		printLobbyStatus(p, cfg)
 		printMainMenu(p)
 		raw, err := p.AskLine("> ")
 		if err != nil {
@@ -131,11 +132,15 @@ func RunLobby(ctx context.Context, p Prompter, gw LobbyGateway, cfg *Config) (Lo
 			}
 		case "5":
 			handleChangeNickname(p, gw, cfg)
+		case "s", "S":
+			handleSettings(p, cfg)
+		case "t", "T":
+			printTutorial(p)
 		case "q", "Q", "quit", "exit":
 			p.Print("再见!")
 			return LobbyOutcome{Reason: LobbyExitQuit}, nil
 		default:
-			p.Printf("未知选项 %q,请输入 1-5 或 q", choice)
+			p.Printf("未知选项 %q,请输入 1-5、s、t 或 q", choice)
 			p.PrintBlank()
 		}
 	}
@@ -144,12 +149,26 @@ func RunLobby(ctx context.Context, p Prompter, gw LobbyGateway, cfg *Config) (Lo
 
 func printMainMenu(p Prompter) {
 	p.Print("请选择:")
-	p.Print("  1) 快速开始")
+	p.Print("  1) 快速开始 (人少自动加机器人)")
 	p.Print("  2) 查看公开房间")
 	p.Print("  3) 创建房间")
 	p.Print("  4) 输入房间码加入")
 	p.Print("  5) 修改昵称")
+	p.Print("  s) 设置")
+	p.Print("  t) 玩法说明")
 	p.Print("  q) 退出")
+}
+
+func printLobbyStatus(p Prompter, cfg *Config) {
+	server := cfg.ServerURL
+	if server == "" {
+		server = defaultServerURL
+	}
+	name := cfg.Nickname
+	if name == "" {
+		name = "(未设置)"
+	}
+	p.Printf("状态: 服务器 %s | 昵称 %s", server, name)
 }
 
 func handleAutoMatch(ctx context.Context, p Prompter, gw LobbyGateway) (LobbyJoinResult, error) {
@@ -256,6 +275,35 @@ func handleChangeNickname(p Prompter, gw LobbyGateway, cfg *Config) {
 	cfg.Nickname = name
 	gw.ChangeNickname(name)
 	p.Printf("昵称已更新为 %s", name)
+}
+
+func handleSettings(p Prompter, cfg *Config) {
+	p.Print("设置:")
+	p.Printf("  当前牌面主题: %s", ParseTileTheme(cfg.TileTheme).String())
+	raw, err := p.AskLine("切换主题? (y/N) > ")
+	if err != nil {
+		p.Printf("设置失败: %v", err)
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(raw), "y") || strings.EqualFold(strings.TrimSpace(raw), "yes") {
+		theme := ParseTileTheme(cfg.TileTheme)
+		if theme == TileThemeUnicode {
+			cfg.TileTheme = TileThemeASCII.String()
+		} else {
+			cfg.TileTheme = TileThemeUnicode.String()
+		}
+		p.Printf("牌面主题已切换为 %s", cfg.TileTheme)
+	}
+}
+
+func printTutorial(p Prompter) {
+	p.Print("玩法说明:")
+	p.Print("  目标: 缺一门后尽快胡牌,结算按番数计算。")
+	p.Print("  开局: 换三张后选择定缺花色,本局不能保留该花色到胡牌。")
+	p.Print("  牌桌: ←→ 选牌,Enter 出牌; 有碰/杠/胡窗口时按 p/g/h/n。")
+	p.Print("  机器人: 快速开始会自动补齐,牌桌 waiting 阶段可按 b/B 补位。")
+	p.Print("  离桌: 牌桌按 q 返回大厅; 断线后可用会话恢复。")
+	p.PrintBlank()
 }
 
 func askYesNo(p Prompter, label string, defaultYes bool) (bool, error) {

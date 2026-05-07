@@ -206,3 +206,29 @@ func (g *wsTableGateway) LeaveRoom(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (g *wsTableGateway) AddBot(ctx context.Context, count int32) ([]*clientv1.SeatInfo, error) {
+	id, ch := g.bus.Subscribe(func(e *clientv1.Envelope) bool { return e.GetAddBotResp() != nil }, 2)
+	defer g.bus.Unsubscribe(id)
+	opID := newReqID("addbot")
+	if err := g.client.Send(ctx, msgid.AddBotReq, &clientv1.Envelope{
+		ReqId:          opID,
+		IdempotencyKey: opID,
+		Body: &clientv1.Envelope_AddBotReq{AddBotReq: &clientv1.AddBotRequest{
+			Count:      count,
+			Difficulty: "normal",
+			OpId:       opID,
+		}},
+	}); err != nil {
+		return nil, err
+	}
+	env, err := awaitEnvelope(ctx, ch)
+	if err != nil {
+		return nil, err
+	}
+	resp := env.GetAddBotResp()
+	if errStr := envelopeError(resp.GetErrorCode(), resp.GetErrorMessage()); errStr != "" {
+		return nil, errors.New(errStr)
+	}
+	return resp.GetAdded(), nil
+}

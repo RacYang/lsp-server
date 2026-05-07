@@ -163,6 +163,21 @@ func (h *Hub) TouchHeartbeat(userID string) {
 	h.lastHeartbeat[userID] = h.clk.Now()
 }
 
+// IsRegistered 返回用户当前是否仍注册在指定房间连接中。
+func (h *Hub) IsRegistered(userID, roomID string) bool {
+	if h == nil || userID == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if roomID == "" {
+		_, ok := h.users[userID]
+		return ok
+	}
+	_, ok := h.rooms[roomID][userID]
+	return ok
+}
+
 // CloseExpiredHeartbeats 关闭超过心跳阈值的连接，但不改变房间业务状态。
 func (h *Hub) CloseExpiredHeartbeats() []string {
 	if h == nil {

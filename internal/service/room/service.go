@@ -15,33 +15,36 @@ import (
 
 // Service 编排房间命令；每房间在内部通过 roomActor 单协程串行化变更。
 type Service struct {
-	lobby           *RoomRegistry
-	mu              sync.Mutex
-	actors          map[string]*roomActor
-	engine          *Engine
-	clock           clock.Clock
-	tmo             TimeoutConfig
-	mailboxCapacity int
-	onAuto          func(context.Context, string, []Notification)
+	lobby                *RoomRegistry
+	mu                   sync.Mutex
+	actors               map[string]*roomActor
+	engine               *Engine
+	clock                clock.Clock
+	tmo                  TimeoutConfig
+	mailboxCapacity      int
+	onAuto               func(context.Context, string, []Notification)
+	allowLeaveDuringPlay bool
 }
 
 // TimeoutConfig 定义各等待态的服务端托管时长。
 type TimeoutConfig struct {
-	ExchangeThree time.Duration
-	QueMen        time.Duration
-	ClaimWindow   time.Duration
-	TsumoWindow   time.Duration
-	Discard       time.Duration
+	ExchangeThree   time.Duration
+	QueMen          time.Duration
+	ClaimWindow     time.Duration
+	TsumoWindow     time.Duration
+	Discard         time.Duration
+	SurrenderAction time.Duration
 }
 
 // DefaultTimeoutConfig 返回 Phase 5 定时器默认值。
 func DefaultTimeoutConfig() TimeoutConfig {
 	return TimeoutConfig{
-		ExchangeThree: 15 * time.Second,
-		QueMen:        15 * time.Second,
-		ClaimWindow:   5 * time.Second,
-		TsumoWindow:   5 * time.Second,
-		Discard:       15 * time.Second,
+		ExchangeThree:   15 * time.Second,
+		QueMen:          15 * time.Second,
+		ClaimWindow:     5 * time.Second,
+		TsumoWindow:     5 * time.Second,
+		Discard:         15 * time.Second,
+		SurrenderAction: time.Second,
 	}
 }
 
@@ -62,6 +65,9 @@ func (cfg TimeoutConfig) withDefaults() TimeoutConfig {
 	if cfg.Discard <= 0 {
 		cfg.Discard = def.Discard
 	}
+	if cfg.SurrenderAction <= 0 {
+		cfg.SurrenderAction = def.SurrenderAction
+	}
 	return cfg
 }
 
@@ -73,12 +79,13 @@ func NewService(l *RoomRegistry) *Service {
 // NewServiceWithRule 使用指定规则装配房间服务；ruleID 为空时回退默认四川血战规则。
 func NewServiceWithRule(l *RoomRegistry, ruleID string) *Service {
 	return &Service{
-		lobby:           l,
-		actors:          make(map[string]*roomActor),
-		engine:          NewEngine(ruleID),
-		clock:           clock.NewReal(),
-		tmo:             DefaultTimeoutConfig(),
-		mailboxCapacity: defaultMailboxCapacity,
+		lobby:                l,
+		actors:               make(map[string]*roomActor),
+		engine:               NewEngine(ruleID),
+		clock:                clock.NewReal(),
+		tmo:                  DefaultTimeoutConfig(),
+		mailboxCapacity:      defaultMailboxCapacity,
+		allowLeaveDuringPlay: true,
 	}
 }
 
@@ -107,6 +114,14 @@ func (s *Service) SetMailboxCapacity(capacity int) {
 		capacity = defaultMailboxCapacity
 	}
 	s.mailboxCapacity = capacity
+}
+
+// SetAllowLeaveDuringPlay 控制 playing 中 Leave 是否转换为 surrender；关闭时回退为拒绝离房。
+func (s *Service) SetAllowLeaveDuringPlay(allow bool) {
+	if s == nil {
+		return
+	}
+	s.allowLeaveDuringPlay = allow
 }
 
 // SetAutoTimeoutHandler 注册后台托管通知处理器。
@@ -150,6 +165,7 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	a.onExit = s.removeActor
 	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
 	a.onAuto = s.onAuto
+	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
 	s.actors[roomID] = a
 	go a.run()
 }
@@ -176,6 +192,7 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 	a.onExit = s.removeActor
 	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
 	a.onAuto = s.onAuto
+	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
 	s.actors[roomID] = a
 	s.mu.Unlock()
 	go a.run()
@@ -379,16 +396,18 @@ func (s *Service) RoomSnapshot(roomID string) (playerIDs []string, fsmState stri
 	if s == nil || s.lobby == nil {
 		return nil, "", false
 	}
-	r, ok := s.lobby.GetRoom(roomID)
-	if !ok || r == nil {
+	if a := s.getActor(roomID); a != nil {
+		players, state, err := a.submitRoomSnapshot(context.Background())
+		if err == nil {
+			return players, state, true
+		}
 		return nil, "", false
 	}
-	out := make([]string, 0, 4)
-	for _, id := range r.PlayerIDs {
-		if id != "" {
-			out = append(out, id)
-		}
+	r, exists := s.lobby.GetRoom(roomID)
+	if !exists || r == nil {
+		return nil, "", false
 	}
+	out := append([]string(nil), r.PlayerIDs[:]...)
 	st := ""
 	if r.FSM != nil {
 		st = string(r.FSM.State())

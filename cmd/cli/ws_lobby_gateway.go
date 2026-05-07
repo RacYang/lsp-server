@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/net/msgid"
@@ -26,7 +27,7 @@ func (g *wsLobbyGateway) AutoMatch(ctx context.Context, ruleID string) (LobbyJoi
 	defer g.bus.Unsubscribe(id)
 	if err := g.client.Send(ctx, msgid.AutoMatchReq, &clientv1.Envelope{
 		ReqId: newReqID("automatch"),
-		Body:  &clientv1.Envelope_AutoMatchReq{AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: ruleID}},
+		Body:  &clientv1.Envelope_AutoMatchReq{AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: ruleID, PadWithBots: true}},
 	}); err != nil {
 		return LobbyJoinResult{}, err
 	}
@@ -135,12 +136,23 @@ func (g *wsLobbyGateway) JoinRoom(ctx context.Context, roomID string) (LobbyJoin
 	}, nil
 }
 
-// ChangeNickname 仅在客户端本地切换；下次连接时 LoginReq 会带上新昵称。
-//
-// 协议层目前没有"在线改名"通道，所以实现是异步的：调高客户端 name 字段，
-// 服务端会在下次重连后看到新昵称。
 func (g *wsLobbyGateway) ChangeNickname(name string) {
 	g.client.SetConfig("", name)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		id, ch := g.bus.Subscribe(func(e *clientv1.Envelope) bool { return e.GetRenameResp() != nil }, 2)
+		defer g.bus.Unsubscribe(id)
+		_ = g.client.Send(ctx, msgid.RenameReq, &clientv1.Envelope{
+			ReqId: newReqID("rename"),
+			Body:  &clientv1.Envelope_RenameReq{RenameReq: &clientv1.RenameRequest{Nickname: name}},
+		})
+		if env, err := awaitEnvelope(ctx, ch); err == nil {
+			if applied := env.GetRenameResp().GetAppliedNickname(); applied != "" {
+				g.client.SetConfig("", applied)
+			}
+		}
+	}()
 }
 
 // awaitEnvelope 在 ctx 与 ch 上 select，封装通用的"等待响应"语义。

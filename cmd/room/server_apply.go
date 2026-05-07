@@ -76,6 +76,12 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 	case *clusterv1.ApplyEventRequest_QueMen:
 		notifications, err := s.rooms.QueMen(ctx, roomID, userID, req.GetQueMen().GetSuit())
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_Leave:
+		if err := s.rooms.Leave(ctx, roomID, userID); err != nil {
+			return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+		}
+		s.markIdempotency(ctx, roomID, idemKey)
+		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
 	default:
 		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
 	}

@@ -72,6 +72,10 @@ Phase 6 起，`RoundState` 在开局发牌后为四个座位各生成一条 `Ini
 
 `RoundView` 同时暴露四家手牌、弃牌与副露摘要；`SnapshotNotify` 只填充当前玩家自己的 `your_hand_tiles`，但完整返回 `discards_by_seat` 与 `melds_by_seat`。这样真实客户端不再依赖服务端托管的 `chooseExchangeTiles` fallback，也能在重连后恢复可继续操作的牌桌。
 
+### 6. Surrender 与离线座位
+
+主动离房与离线超时统一复用 room actor 的 `Leave -> Surrender` 状态机：waiting/ready/settling/closed 真离座，playing 中标记 surrender 并保留座位 `user_id`。`RoundState.surrendered` 由 actor 串行更新，后续 timeout 与 claim 窗口只通过 mailbox 投递托管动作，不允许 gate 或 lobby 直接改写局内状态。
+
 ## 后果
 
 - 端到端测试从“只等结算”改为“在收到 `draw_tile` 后由对应座位回发 `discard_req`”。

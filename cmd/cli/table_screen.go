@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 )
 
 // TableGateway 抽象牌桌阶段对网络层的动作能力。
@@ -23,6 +24,7 @@ type TableGateway interface {
 	Hu(ctx context.Context) error
 	Pass(ctx context.Context) error
 	LeaveRoom(ctx context.Context) error
+	AddBot(ctx context.Context, count int32) ([]*clientv1.SeatInfo, error)
 }
 
 // TableExitReason 描述牌桌主循环退出的原因。
@@ -61,7 +63,7 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 
 	w, h := scr.Size()
 	if w < MinTableWidth || h < MinTableHeight {
-		return TableExit{Reason: TableExitTerminalTooSmall, Err: errors.New("窗口太小,请放大终端到至少 64x20 后重试")}
+		return TableExit{Reason: TableExitTerminalTooSmall, Err: errors.New("窗口太小,请放大终端到至少 80x24 后重试")}
 	}
 
 	overlay := OverlayState{}
@@ -103,7 +105,7 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 		layout, ok := CalcLayout(w, h)
 		if !ok {
 			scr.Clear()
-			drawText(scr, 0, 0, defaultStyle(), "窗口太小,请放大终端到至少 64x20")
+			drawText(scr, 0, 0, defaultStyle(), "窗口太小,请放大终端到至少 80x24")
 			scr.Show()
 			return
 		}
@@ -148,7 +150,7 @@ func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppSta
 		case <-ctx.Done():
 			return TableExit{Reason: TableExitContextDone, Err: ctx.Err()}
 		case <-ticker.C:
-			if claimDialog != nil && !claimDialog.Pending && claimDialog.Expired(time.Now()) {
+			if !overlay.IsOpen() && claimDialog != nil && !claimDialog.Pending && claimDialog.Expired(time.Now()) {
 				claimDialog.Pending = true
 				go func() {
 					_ = gateway.Pass(ctx)
@@ -187,7 +189,7 @@ func handleTableEvent(ctx context.Context, ev tcell.Event, scr tcell.Screen, sta
 
 func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, gateway TableGateway, cursor *HandCursor, overlay *OverlayState, netOverlay *NetOverlayState, theme *TileTheme, cfg *Config, claimDialog *ClaimDialogState) tableEventResult {
 	if overlay.IsOpen() {
-		return handleOverlayKey(ctx, ev, gateway, overlay, theme, cfg)
+		return handleOverlayKey(ctx, ev, state, gateway, overlay, theme, cfg)
 	}
 	view := state.Snapshot()
 	model := DeriveInteractionModel(view)
@@ -204,10 +206,20 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		switch ev.Rune() {
 		case 'i', 'I':
 			overlay.Toggle(OverlayRoomInfo)
+		case '?':
+			overlay.Toggle(OverlayHelp)
 		case ' ':
 			cursor.ToggleMark()
 		case 'q', 'Q':
-			return leaveIfSettlement(ctx, gateway, model)
+			return leaveRoomFireAndForget(ctx, state, gateway, TableExitLeaveRoom)
+		case 'b':
+			return submitAddBot(ctx, state, gateway, 1)
+		case 'B':
+			return submitAddBot(ctx, state, gateway, emptySeatCount(view))
+		case 'r', 'R':
+			if model.Phase == PhaseSettlement {
+				go func() { _ = gateway.Ready(ctx) }()
+			}
 		case 'm', 'M':
 			return submitQueMen(ctx, gateway, model, 0)
 		case 'p', 'P':
@@ -247,7 +259,33 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 	return tableEventResult{}
 }
 
-func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, gateway TableGateway, overlay *OverlayState, theme *TileTheme, cfg *Config) tableEventResult {
+func submitAddBot(ctx context.Context, state *AppState, gateway TableGateway, count int32) tableEventResult {
+	if count <= 0 {
+		return tableEventResult{}
+	}
+	go func() {
+		added, err := gateway.AddBot(ctx, count)
+		if err != nil || len(added) == 0 || state == nil {
+			return
+		}
+		state.Mutate(func(v *RoomView) {
+			applySeatInfos(v, added)
+		})
+	}()
+	return tableEventResult{}
+}
+
+func emptySeatCount(view RoomView) int32 {
+	var n int32
+	for _, player := range view.Players {
+		if player.UserID == "" && player.Nickname == "" {
+			n++
+		}
+	}
+	return n
+}
+
+func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, state *AppState, gateway TableGateway, overlay *OverlayState, theme *TileTheme, cfg *Config) tableEventResult {
 	switch ev.Key() {
 	case tcell.KeyEscape:
 		overlay.Close()
@@ -267,6 +305,12 @@ func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, gateway TableGate
 			if overlay.Kind == OverlayRoomInfo {
 				overlay.Close()
 			}
+		case '?':
+			if overlay.Kind == OverlayHelp {
+				overlay.Close()
+			} else {
+				overlay.Toggle(OverlayHelp)
+			}
 		}
 	case tcell.KeyEnter, tcell.KeyCtrlJ:
 		// 非菜单类浮窗（房间信息 / 玩家详情）只承载只读展示,
@@ -276,30 +320,47 @@ func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, gateway TableGate
 			return tableEventResult{}
 		}
 		switch overlay.MenuSelect() {
-		case OverlayMenuActionToggleTheme:
-			if *theme == TileThemeUnicode {
-				*theme = TileThemeASCII
-			} else {
-				*theme = TileThemeUnicode
-			}
-			cfg.TileTheme = theme.String()
-			overlay.Close()
 		case OverlayMenuActionResume:
 			overlay.Close()
 		case OverlayMenuActionLeaveRoom:
-			_ = gateway.LeaveRoom(ctx)
-			return tableEventResult{exit: &TableExit{Reason: TableExitLeaveRoom}}
+			overlay.Close()
+			return leaveRoomFireAndForget(ctx, state, gateway, TableExitLeaveRoom)
 		}
 	}
 	return tableEventResult{}
 }
 
-func leaveIfSettlement(ctx context.Context, gateway TableGateway, model InteractionModel) tableEventResult {
-	if model.Phase != PhaseSettlement {
+func leaveRoomFireAndForget(ctx context.Context, state *AppState, gateway TableGateway, reason TableExitReason) tableEventResult {
+	roomID := ""
+	if state != nil {
+		roomID = state.LeaveRoomLocally("已返回大厅，正在通知服务端离房")
+	}
+	go retryLeaveRoom(ctx, gateway, 6, 5*time.Second)
+	if roomID == "" && reason == TableExitLeaveRoom {
 		return tableEventResult{}
 	}
-	_ = gateway.LeaveRoom(ctx)
-	return tableEventResult{exit: &TableExit{Reason: TableExitGameOver}}
+	return tableEventResult{exit: &TableExit{Reason: reason}}
+}
+
+func retryLeaveRoom(ctx context.Context, gateway TableGateway, attempts int, interval time.Duration) {
+	if attempts <= 0 {
+		attempts = 1
+	}
+	for i := 0; i < attempts; i++ {
+		if err := gateway.LeaveRoom(ctx); err == nil {
+			return
+		}
+		if i == attempts-1 {
+			return
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 }
 
 func submitQueMen(ctx context.Context, gateway TableGateway, model InteractionModel, suit int32) tableEventResult {

@@ -66,6 +66,14 @@ func (s *lobbyGRPCServer) JoinRoom(ctx context.Context, req *clusterv1.JoinRoomR
 	return &clusterv1.JoinRoomResponse{SeatIndex: seat}, nil
 }
 
+// LeaveRoom 立即清理大厅座位索引，让玩家离桌后可立刻加入新房。
+func (s *lobbyGRPCServer) LeaveRoom(ctx context.Context, req *clusterv1.LeaveRoomRequest) (*clusterv1.LeaveRoomResponse, error) {
+	if err := s.svc.LeaveRoom(ctx, req.GetRoomId(), req.GetUserId()); err != nil {
+		return &clusterv1.LeaveRoomResponse{Error: err.Error()}, nil
+	}
+	return &clusterv1.LeaveRoomResponse{}, nil
+}
+
 // GetRoom 查询房间当前归属的 room 节点。
 func (s *lobbyGRPCServer) GetRoom(ctx context.Context, req *clusterv1.GetRoomRequest) (*clusterv1.GetRoomResponse, error) {
 	nodeID, err := s.svc.GetRoom(ctx, req.GetRoomId())
@@ -99,6 +107,23 @@ func (s *lobbyGRPCServer) AutoMatch(ctx context.Context, req *clusterv1.AutoMatc
 	return &clusterv1.AutoMatchResponse{RoomId: roomID, RoomNodeId: s.roomNodeIDOrLocal(), SeatIndex: seat}, nil
 }
 
+func (s *lobbyGRPCServer) AddBot(ctx context.Context, req *clusterv1.AddBotRequest) (*clusterv1.AddBotResponse, error) {
+	added, err := s.svc.AddBot(ctx, req.GetRoomId(), req.GetCount(), 3)
+	if err != nil {
+		return &clusterv1.AddBotResponse{Error: err.Error()}, nil
+	}
+	out := make([]*clusterv1.SeatInfo, 0, len(added))
+	for _, bot := range added {
+		out = append(out, &clusterv1.SeatInfo{
+			SeatIndex: bot.SeatIndex,
+			UserId:    bot.UserID,
+			Nickname:  "机器人",
+			IsBot:     true,
+		})
+	}
+	return &clusterv1.AddBotResponse{Added: out}, nil
+}
+
 func (s *lobbyGRPCServer) roomNodeIDOrLocal() string {
 	if s != nil && s.roomNodeID != "" {
 		return s.roomNodeID
@@ -112,6 +137,8 @@ type lobbyService interface {
 	GetRoom(context.Context, *clusterv1.GetRoomRequest) (*clusterv1.GetRoomResponse, error)
 	ListRooms(context.Context, *clusterv1.ListRoomsRequest) (*clusterv1.ListRoomsResponse, error)
 	AutoMatch(context.Context, *clusterv1.AutoMatchRequest) (*clusterv1.AutoMatchResponse, error)
+	LeaveRoom(context.Context, *clusterv1.LeaveRoomRequest) (*clusterv1.LeaveRoomResponse, error)
+	AddBot(context.Context, *clusterv1.AddBotRequest) (*clusterv1.AddBotResponse, error)
 }
 
 // registerLobbyService 手工注册 ServiceDesc，避免命令层直接绑定生成的 server 接口。
@@ -125,6 +152,8 @@ func registerLobbyService(s grpc.ServiceRegistrar, srv lobbyService) {
 			{MethodName: "GetRoom", Handler: lobbyGetRoomHandler},
 			{MethodName: "ListRooms", Handler: lobbyListRoomsHandler},
 			{MethodName: "AutoMatch", Handler: lobbyAutoMatchHandler},
+			{MethodName: "LeaveRoom", Handler: lobbyLeaveRoomHandler},
+			{MethodName: "AddBot", Handler: lobbyAddBotHandler},
 		},
 		Streams:  []grpc.StreamDesc{},
 		Metadata: "cluster/v1/lobby.proto",
@@ -207,6 +236,36 @@ func lobbyAutoMatchHandler(srv interface{}, ctx context.Context, dec func(interf
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/AutoMatch"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(lobbyService).AutoMatch(ctx, req.(*clusterv1.AutoMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func lobbyLeaveRoomHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(clusterv1.LeaveRoomRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(lobbyService).LeaveRoom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/LeaveRoom"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(lobbyService).LeaveRoom(ctx, req.(*clusterv1.LeaveRoomRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func lobbyAddBotHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(clusterv1.AddBotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(lobbyService).AddBot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/AddBot"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(lobbyService).AddBot(ctx, req.(*clusterv1.AddBotRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -25,12 +25,13 @@ type roomActor struct {
 	// 当前实现保持“单房单命令在途”，避免房间关闭时遗留未消费命令造成悬挂。
 	ch chan any
 	// submitMu 串行化外部提交，保证房间关闭后不会再有新的发送者卡在无人接收的通道上。
-	submitMu  sync.Mutex
-	closed    atomic.Bool
-	onExit    func(roomID string)
-	engine    *Engine
-	scheduler *roomScheduler
-	onAuto    func(context.Context, string, []Notification)
+	submitMu             sync.Mutex
+	closed               atomic.Bool
+	onExit               func(roomID string)
+	engine               *Engine
+	scheduler            *roomScheduler
+	onAuto               func(context.Context, string, []Notification)
+	allowLeaveDuringPlay bool
 }
 
 type cmdJoin struct {
@@ -120,6 +121,15 @@ type cmdRoundView struct {
 	res chan roundViewResult
 }
 
+type cmdRoomSnapshot struct {
+	res chan roomSnapshotResult
+}
+
+type roomSnapshotResult struct {
+	playerIDs []string
+	fsmState  string
+}
+
 type roundViewResult struct {
 	view RoundView
 	ok   bool
@@ -137,9 +147,10 @@ func newRoomActorWithCapacity(r *domainroom.Room, initialRound *RoundState, capa
 		capacity = defaultMailboxCapacity
 	}
 	return &roomActor{
-		room:         r,
-		initialRound: initialRound,
-		ch:           make(chan any, capacity),
+		room:                 r,
+		initialRound:         initialRound,
+		ch:                   make(chan any, capacity),
+		allowLeaveDuringPlay: true,
 	}
 }
 
@@ -167,6 +178,7 @@ func (a *roomActor) run() {
 			m.res <- readyResult{notifications: notifications, err: err}
 		case cmdLeave:
 			m.res <- a.doLeave(m.userID)
+			a.resetScheduler()
 		case cmdDiscard:
 			notifications, err := a.doDiscard(m.userID, m.tile)
 			a.resetScheduler()
@@ -219,6 +231,13 @@ func (a *roomActor) run() {
 				break
 			}
 			m.res <- roundViewResult{view: a.round.SnapshotView(), ok: true}
+		case cmdRoomSnapshot:
+			out := append([]string(nil), a.room.PlayerIDs[:]...)
+			state := ""
+			if a.room.FSM != nil {
+				state = string(a.room.FSM.State())
+			}
+			m.res <- roomSnapshotResult{playerIDs: out, fsmState: state}
 		default:
 		}
 		if a.room != nil && a.room.FSM != nil && a.room.FSM.State() == domainroom.StateClosed {
@@ -411,6 +430,32 @@ func (a *roomActor) submitRoundView(ctx context.Context) (RoundView, bool, error
 		return rr.view, rr.ok, nil
 	case <-ctx.Done():
 		return RoundView{}, false, ctx.Err()
+	}
+}
+
+func (a *roomActor) submitRoomSnapshot(ctx context.Context) ([]string, string, error) {
+	if a == nil {
+		return nil, "", fmt.Errorf("nil actor")
+	}
+	a.submitMu.Lock()
+	defer a.submitMu.Unlock()
+	if a.closed.Load() {
+		return nil, "", fmt.Errorf("room closed")
+	}
+	res := make(chan roomSnapshotResult, 1)
+	cmd := cmdRoomSnapshot{res: res}
+	select {
+	case a.ch <- cmd:
+	default:
+		return nil, "", ErrRateLimited
+	case <-ctx.Done():
+		return nil, "", ctx.Err()
+	}
+	select {
+	case rr := <-res:
+		return rr.playerIDs, rr.fsmState, nil
+	case <-ctx.Done():
+		return nil, "", ctx.Err()
 	}
 }
 

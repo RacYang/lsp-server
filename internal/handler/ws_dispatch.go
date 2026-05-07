@@ -33,10 +33,14 @@ func dispatchFrame(
 		handleAutoMatch(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.CreateRoomReq:
 		handleCreateRoom(ctx, deps, conn, state, h.MsgID, h.Payload)
+	case msgid.AddBotReq:
+		handleAddBot(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.ReadyReq:
 		handleReady(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.HeartbeatReq:
 		handleHeartbeat(deps, conn, state, h.Payload)
+	case msgid.RenameReq:
+		handleRename(ctx, deps, conn, state, h.Payload)
 	case msgid.ExchangeThreeReq:
 		handleExchangeThree(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.QueMenReq:

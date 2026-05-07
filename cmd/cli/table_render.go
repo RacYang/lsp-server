@@ -22,13 +22,12 @@ type FrameInputs struct {
 // 都通过 FrameInputs 传入，让测试可以直接构造任意场景的 golden。
 func RenderFrame(scr tcell.Screen, inputs FrameInputs) {
 	scr.Clear()
+	drawStatusBar(scr, inputs)
 	drawTopArea(scr, inputs)
 	drawLeftRightAreas(scr, inputs)
-	drawCenterArea(scr, inputs)
-	drawSelfDiscardsArea(scr, inputs)
-	drawSelfMeldsArea(scr, inputs)
-	drawHandArea(scr, inputs)
-	drawHintArea(scr, inputs)
+	drawCenterInfo(scr, inputs)
+	drawSelfArea(scr, inputs)
+	drawKeybar(scr, inputs)
 }
 
 // drawText 在 (x, y) 起始位置写入一行字符；返回写入后的下一列坐标。
@@ -79,10 +78,7 @@ func drawTopArea(scr tcell.Screen, in FrameInputs) {
 	if mLine != "" {
 		drawText(scr, region.X, region.Y+2, defaultStyle(), centerVisual("鸣: "+mLine, region.Width))
 	}
-	dLine := formatDiscards(player.Discards)
-	if dLine != "" {
-		drawText(scr, region.X, region.Y+3, defaultStyle(), centerVisual("打: "+dLine, region.Width))
-	}
+	drawDiscardPile(scr, Region{X: region.X, Y: region.Y + 3, Width: region.Width, Height: region.Height - 3}, "打: ", player.Discards, in.Layout.DiscardColumns, defaultStyle())
 }
 
 // 左右家：分两栏并排显示，每栏 3 行。
@@ -108,23 +104,14 @@ func drawSidePlayer(scr tcell.Screen, in FrameInputs, region Region, pos SeatPos
 	if mLine := formatMelds(player.Melds); mLine != "" {
 		drawText(scr, region.X, region.Y+2, defaultStyle(), "鸣: "+mLine)
 	}
-	if dLine := formatDiscards(player.Discards); dLine != "" {
-		drawText(scr, region.X, region.Y+3, defaultStyle(), "打: "+dLine)
-	}
+	drawDiscardPile(scr, Region{X: region.X, Y: region.Y + 3, Width: region.Width, Height: region.Height - 3}, "打: ", player.Discards, in.Layout.DiscardColumns, defaultStyle())
 }
 
-// 中央提示语：根据 stage / acting_seat 派生玩家可读短语。
-func drawCenterArea(scr tcell.Screen, in FrameInputs) {
-	region := in.Layout.CenterArea
-	if region.Empty() {
-		return
-	}
-	prompt := centralPrompt(in.View, in.Cursor)
-	if prompt == "" {
-		return
-	}
-	y := region.Y + region.Height/2
-	drawText(scr, region.X, y, defaultStyle(), centerVisual(prompt, region.Width))
+// drawSelfArea 统一渲染自家牌河、鸣牌与手牌，避免 B0 后自家区域被拆散到多个调用点。
+func drawSelfArea(scr tcell.Screen, in FrameInputs) {
+	drawSelfDiscardsArea(scr, in)
+	drawSelfMeldsArea(scr, in)
+	drawHandArea(scr, in)
 }
 
 // drawSelfMeldsArea 在手牌正上方渲染玩家自己的鸣牌（碰/杠/吃），
@@ -156,11 +143,7 @@ func drawSelfDiscardsArea(scr tcell.Screen, in FrameInputs) {
 		return
 	}
 	discards := in.View.Players[in.View.SeatIndex].Discards
-	dLine := formatDiscards(discards)
-	if dLine == "" {
-		return
-	}
-	drawText(scr, region.X, region.Y, defaultStyle(), centerVisual("打: "+dLine, region.Width))
+	drawDiscardPile(scr, region, "打: ", discards, in.Layout.DiscardColumns, defaultStyle())
 }
 
 // 自己的手牌：用 tile_art 渲染每张牌，光标处的牌整体上移一行（凸起）。
@@ -210,19 +193,6 @@ func drawHandArea(scr tcell.Screen, in FrameInputs) {
 	}
 }
 
-// 屏幕最下方的提示行：根据光标状态展示"按 Enter 出牌 / Esc 取消"等。
-func drawHintArea(scr tcell.Screen, in FrameInputs) {
-	region := in.Layout.HintArea
-	if region.Empty() {
-		return
-	}
-	hint := bottomHint(in.View, in.Cursor)
-	if hint == "" {
-		return
-	}
-	drawText(scr, region.X, region.Y, defaultStyle(), centerVisual(hint, region.Width))
-}
-
 // relativeSeatIndex 把目标方位反查回绝对座位号；玩家未入座或方位不合法时返回 -1。
 //
 // 与 RelativeSeat 保持互逆：left 是下家 (self+1)，right 是上家 (self+3)。
@@ -252,6 +222,12 @@ func seatLabel(prefix string, p PlayerView) string {
 			name = "(空座)"
 		}
 	}
+	if p.IsBot {
+		name += " [BOT]"
+	}
+	if p.Surrendered {
+		name += " (托管中)"
+	}
 	return prefix + " " + name
 }
 
@@ -280,19 +256,20 @@ func prettifyMeld(raw string) string {
 		case "chow":
 			label = "吃"
 		}
-		return "[" + tile + "]" + label
+		return "[" + prettifyTileList(tile) + "]" + label
 	}
 	return raw
 }
 
-func formatDiscards(discards []string) string {
-	if len(discards) == 0 {
-		return ""
+func prettifyTileList(raw string) string {
+	parts := strings.Fields(raw)
+	if len(parts) == 0 {
+		return TileName(raw)
 	}
-	if len(discards) > 6 {
-		discards = discards[len(discards)-6:]
+	for i, part := range parts {
+		parts[i] = TileName(part)
 	}
-	return strings.Join(discards, " ")
+	return strings.Join(parts, " ")
 }
 
 // centralPrompt 是中央区域的玩家可读提示语，纯函数便于单测。
@@ -311,7 +288,7 @@ func centralPrompt(view RoomView, cursor *HandCursor) string {
 	if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
 		hand := view.Players[view.SeatIndex].Hand
 		if cursor.Index < len(hand) {
-			tile := hand[cursor.Index]
+			tile := TileName(hand[cursor.Index])
 			if cursor.Pending {
 				return fmt.Sprintf("→ 出牌中... %s", tile)
 			}
@@ -321,13 +298,13 @@ func centralPrompt(view RoomView, cursor *HandCursor) string {
 	if view.SeatIndex >= 0 && view.SeatIndex == view.ActingSeat {
 		switch model.Phase {
 		case PhaseDiscard:
-			return "该 你 打 牌"
+			return "◆ 该 你 出牌 ◆"
 		case PhaseQueMen:
-			return "请 定 缺 (m / p / s)"
+			return "请定缺 (m / p / s)"
 		case PhaseExchange:
-			return "请 选 三 张 换 三 张"
+			return "请选择三张换三张"
 		case PhaseClaim, PhaseTsumo:
-			return "请 决 定"
+			return "请决定"
 		}
 	}
 	if view.ActingSeat >= 0 && view.ActingSeat < 4 {
@@ -338,6 +315,9 @@ func centralPrompt(view RoomView, cursor *HandCursor) string {
 		return fmt.Sprintf("等待 %s", name)
 	}
 	if view.Phase == phaseTable {
+		if emptySeatCount(view) > 0 {
+			return "座位未满 - b 补一个 / B 补满"
+		}
 		return "已自动准备,等待其他玩家就位"
 	}
 	return "等待开始"
@@ -350,10 +330,13 @@ func bottomHint(view RoomView, cursor *HandCursor) string {
 		return "←→ 选牌    Space 标记/取消    Enter 提交    Esc 取消    i 房间信息"
 	}
 	if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && !cursor.Pending {
-		return "←→ 选牌    Enter 出牌    Esc 取消    i 房间信息    Esc 菜单"
+		return "←→ 选牌    Enter 出牌    Esc 取消    i 房间信息"
 	}
 	if view.SeatIndex >= 0 && view.SeatIndex == view.ActingSeat && model.Phase == PhaseDiscard {
 		return "←→ 选牌    Enter 出牌    i 房间信息    Esc 菜单"
+	}
+	if emptySeatCount(view) > 0 {
+		return "b 补 1 个机器人    B 补满    Enter 等真人    Esc 菜单"
 	}
 	return "i 房间信息    Tab 查看玩家    Esc 菜单"
 }

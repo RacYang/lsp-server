@@ -41,12 +41,17 @@ type RoomTimeouts struct {
 
 // RuntimeConfig 定义可在运行时 YAML 中调整的容量与限流参数。
 type RuntimeConfig struct {
-	GateWSRateLimitPerSecond float64
-	GateWSRateLimitBurst     float64
-	GateWSIdempotencyCache   int
-	RoomMailboxCapacity      int
-	RedisIdempotencyTTL      time.Duration
-	Logging                  LoggingConfig
+	GateWSRateLimitPerSecond   float64
+	GateWSRateLimitBurst       float64
+	GateWSIdempotencyCache     int
+	RoomMailboxCapacity        int
+	RoomSurrenderActionTimeout time.Duration
+	RoomSurrenderAfterOffline  time.Duration
+	RoomAllowLeaveDuringPlay   bool
+	LobbyBotSupervisorEnabled  bool
+	LobbyMaxBotsPerRoom        int
+	RedisIdempotencyTTL        time.Duration
+	Logging                    LoggingConfig
 }
 
 // LoggingConfig 定义日志门面的运行时开关。
@@ -68,14 +73,17 @@ type LoggingSamplingConfig struct {
 }
 
 const (
-	defaultGateWSRateLimitPerSecond = 20
-	defaultGateWSRateLimitBurst     = 40
-	defaultGateWSIdempotencyCache   = 4096
-	defaultRoomMailboxCapacity      = 96
-	defaultRedisIdempotencyTTL      = 10 * time.Minute
-	defaultLoggingLevel             = "info"
-	defaultLoggingFormat            = "json"
-	defaultLoggingSamplingTick      = time.Second
+	defaultGateWSRateLimitPerSecond   = 20
+	defaultGateWSRateLimitBurst       = 40
+	defaultGateWSIdempotencyCache     = 4096
+	defaultRoomMailboxCapacity        = 96
+	defaultRoomSurrenderActionTimeout = time.Second
+	defaultRoomSurrenderAfterOffline  = 30 * time.Second
+	defaultLobbyMaxBotsPerRoom        = 3
+	defaultRedisIdempotencyTTL        = 10 * time.Minute
+	defaultLoggingLevel               = "info"
+	defaultLoggingFormat              = "json"
+	defaultLoggingSamplingTick        = time.Second
 )
 
 func (cfg RuntimeConfig) withDefaults() RuntimeConfig {
@@ -90,6 +98,15 @@ func (cfg RuntimeConfig) withDefaults() RuntimeConfig {
 	}
 	if cfg.RoomMailboxCapacity <= 0 {
 		cfg.RoomMailboxCapacity = defaultRoomMailboxCapacity
+	}
+	if cfg.RoomSurrenderActionTimeout <= 0 {
+		cfg.RoomSurrenderActionTimeout = defaultRoomSurrenderActionTimeout
+	}
+	if cfg.RoomSurrenderAfterOffline <= 0 {
+		cfg.RoomSurrenderAfterOffline = defaultRoomSurrenderAfterOffline
+	}
+	if cfg.LobbyMaxBotsPerRoom <= 0 {
+		cfg.LobbyMaxBotsPerRoom = defaultLobbyMaxBotsPerRoom
 	}
 	if cfg.RedisIdempotencyTTL <= 0 {
 		cfg.RedisIdempotencyTTL = defaultRedisIdempotencyTTL
@@ -116,6 +133,8 @@ func (cfg LoggingConfig) withDefaults() LoggingConfig {
 func Load(path string) (Config, error) {
 	v := viper.New()
 	v.SetConfigType("yaml")
+	v.SetDefault("runtime.room.allow_leave_during_play", true)
+	v.SetDefault("runtime.lobby.bot_supervisor_enabled", true)
 	if strings.TrimSpace(path) == "" {
 		path = "configs/dev.yaml"
 	}
@@ -142,11 +161,16 @@ func Load(path string) (Config, error) {
 			Discard:       v.GetDuration("room.timeout.discard"),
 		},
 		Runtime: RuntimeConfig{
-			GateWSRateLimitPerSecond: v.GetFloat64("runtime.gate.ws_rate_limit_per_second"),
-			GateWSRateLimitBurst:     v.GetFloat64("runtime.gate.ws_rate_limit_burst"),
-			GateWSIdempotencyCache:   v.GetInt("runtime.gate.ws_idempotency_cache"),
-			RoomMailboxCapacity:      v.GetInt("runtime.room.mailbox_capacity"),
-			RedisIdempotencyTTL:      v.GetDuration("runtime.redis.idempotency_ttl"),
+			GateWSRateLimitPerSecond:   v.GetFloat64("runtime.gate.ws_rate_limit_per_second"),
+			GateWSRateLimitBurst:       v.GetFloat64("runtime.gate.ws_rate_limit_burst"),
+			GateWSIdempotencyCache:     v.GetInt("runtime.gate.ws_idempotency_cache"),
+			RoomMailboxCapacity:        v.GetInt("runtime.room.mailbox_capacity"),
+			RoomSurrenderActionTimeout: v.GetDuration("runtime.room.surrender_action_timeout"),
+			RoomSurrenderAfterOffline:  v.GetDuration("runtime.room.surrender_after_offline"),
+			RoomAllowLeaveDuringPlay:   v.GetBool("runtime.room.allow_leave_during_play"),
+			LobbyBotSupervisorEnabled:  v.GetBool("runtime.lobby.bot_supervisor_enabled"),
+			LobbyMaxBotsPerRoom:        v.GetInt("runtime.lobby.max_bots_per_room"),
+			RedisIdempotencyTTL:        v.GetDuration("runtime.redis.idempotency_ttl"),
 			Logging: LoggingConfig{
 				Level:        v.GetString("runtime.logging.level"),
 				Format:       v.GetString("runtime.logging.format"),

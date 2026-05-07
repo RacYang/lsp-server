@@ -69,6 +69,15 @@ func RenderTile(name string, theme TileTheme) TileArt {
 	}
 }
 
+// TileName 把协议层牌名转为玩家可读中文名；异常输入原样返回，便于排查服务端数据。
+func TileName(name string) string {
+	face := decodeTile(name)
+	if face.rank == "?" && face.suit == "?" {
+		return name
+	}
+	return face.rank + face.suit
+}
+
 // tileFace 把协议字符串解析后的"两个中文字符"或"ASCII 短码"做统一表示。
 type tileFace struct {
 	rank string // 中文数字或 ASCII 数字（双宽时长度=3 字节，例如 "一"）

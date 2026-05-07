@@ -39,6 +39,9 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 			rs.closeOpeningClaimWindow()
 			return e.drawForCurrentTurn(rs)
 		}
+		if rs.isSurrendered(candidate.seat) {
+			return e.ApplyPass(ctx, rs, candidate.seat)
+		}
 		if hasAction(candidate.actions, "hu") {
 			return e.ApplyHu(ctx, rs, candidate.seat)
 		}
@@ -56,4 +59,8 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 		return e.ApplyDiscard(ctx, rs, rs.turn, discard.String())
 	}
 	return nil, fmt.Errorf("round not waiting for action")
+}
+
+func (rs *RoundState) isSurrendered(seat Seat) bool {
+	return rs != nil && int(seat) >= 0 && int(seat) < len(rs.surrendered) && rs.surrendered[seat]
 }

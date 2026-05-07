@@ -10,6 +10,7 @@ import (
 	"racoo.cn/lsp/internal/net/frame"
 	"racoo.cn/lsp/internal/net/msgid"
 	"racoo.cn/lsp/internal/session"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // handleJoinRoom 走"加入房间 → 绑定 session 的房间字段 → Hub 注册"三步；
@@ -46,6 +47,7 @@ func handleJoinRoom(
 		SeatIndex:   int32(seat), //nolint:gosec // G115：座位号 0..3
 		RuleId:      defaultClientRuleID,
 		DisplayName: state.roomID,
+		Seats:       selfSeatInfo(ctx, deps, int32(seat), state.userID), //nolint:gosec // 座位号 0..3
 	}}}
 	b, _ := proto.Marshal(resp)
 	_ = session.WriteBinary(conn, frame.Encode(msgid.JoinRoomResp, b))
@@ -130,6 +132,7 @@ func handleLeaveRoom(
 	if after != nil {
 		after()
 	}
+	logx.Info(logx.WithRoomID(logx.WithUserID(ctx, state.userID), oldRoomID), "玩家离开房间")
 }
 
 // handleExchangeThree / handleQueMen / handleDiscard / handlePong / handleGang / handleHu

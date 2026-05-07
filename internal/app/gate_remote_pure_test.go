@@ -291,7 +291,7 @@ func TestRemoteRoomGatewayNilReceiverMethods(t *testing.T) {
 	require.Error(t, err)
 	_, _, err = g.ListRooms(ctx, 20, "")
 	require.Error(t, err)
-	_, _, err = g.AutoMatch(ctx, "", "user")
+	_, _, err = g.AutoMatch(ctx, "", "user", false)
 	require.Error(t, err)
 	_, _, err = g.CreateRoom(ctx, "", "", false, "user")
 	require.Error(t, err)
@@ -341,7 +341,7 @@ func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
 	require.Equal(t, "next", next)
 	require.Equal(t, "ROOM01", rooms[0].GetRoomId())
 
-	roomID, seat, err := g.AutoMatch(ctx, "sichuan_xzdd", "u2")
+	roomID, seat, err := g.AutoMatch(ctx, "sichuan_xzdd", "u2", false)
 	require.NoError(t, err)
 	require.Equal(t, "ROOM01", roomID)
 	require.Equal(t, 1, seat)
@@ -381,4 +381,12 @@ func (f *fakeLobbyClient) ListRooms(_ context.Context, _ *clusterv1.ListRoomsReq
 
 func (f *fakeLobbyClient) AutoMatch(_ context.Context, _ *clusterv1.AutoMatchRequest, _ ...grpc.CallOption) (*clusterv1.AutoMatchResponse, error) {
 	return &clusterv1.AutoMatchResponse{RoomId: "ROOM01", SeatIndex: 1}, nil
+}
+
+func (f *fakeLobbyClient) AddBot(_ context.Context, _ *clusterv1.AddBotRequest, _ ...grpc.CallOption) (*clusterv1.AddBotResponse, error) {
+	return &clusterv1.AddBotResponse{}, nil
+}
+
+func (f *fakeLobbyClient) LeaveRoom(_ context.Context, _ *clusterv1.LeaveRoomRequest, _ ...grpc.CallOption) (*clusterv1.LeaveRoomResponse, error) {
+	return &clusterv1.LeaveRoomResponse{}, nil
 }

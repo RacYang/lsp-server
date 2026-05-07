@@ -80,6 +80,50 @@ func TestApplyLoginResetsLobbyStateWhenNotResumed(t *testing.T) {
 	require.Nil(t, view.LastSettlement)
 }
 
+func TestApplyLoginResumedDoesNotForceTable(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{
+		UserId:  "u0",
+		Resumed: true,
+	}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Snapshot{Snapshot: &clientv1.SnapshotNotify{RoomId: "r1", State: "playing"}}})
+
+	view := st.Snapshot()
+	require.Equal(t, phaseLobby, view.Phase)
+	require.Empty(t, view.RoomID)
+	require.Equal(t, "r1", view.ResumeRoomID)
+	require.True(t, view.SuppressAutoResume)
+}
+
+func TestLeaveRoomLocallyDropsStaleSnapshot(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	roomID := st.LeaveRoomLocally("")
+	require.Equal(t, "r1", roomID)
+
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Snapshot{Snapshot: &clientv1.SnapshotNotify{RoomId: "r1", State: "playing"}}})
+	view := st.Snapshot()
+	require.Equal(t, phaseLobby, view.Phase)
+	require.Empty(t, view.RoomID)
+	require.Equal(t, "r1", view.PendingLeaveRoomID)
+}
+
+func TestApplySeatInfosUpdatesPlayerLabels(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Snapshot{Snapshot: &clientv1.SnapshotNotify{
+		RoomId: "r1",
+		Seats: []*clientv1.SeatInfo{
+			{SeatIndex: 0, UserId: "u0", Nickname: "alice"},
+			{SeatIndex: 1, UserId: "bot:r1:1", Nickname: "机器人", IsBot: true, Surrendered: true},
+		},
+	}}})
+	view := st.Snapshot()
+	require.Equal(t, "alice", view.Players[0].Nickname)
+	require.True(t, view.Players[1].IsBot)
+	require.True(t, view.Players[1].Surrendered)
+}
+
 func TestApplyRouteRedirectMarksReconnecting(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_RouteRedirect{RouteRedirect: &clientv1.RouteRedirectNotify{

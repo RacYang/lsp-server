@@ -55,11 +55,12 @@ type remoteRoomGateway struct {
 	router            *router.Etcd
 	discovery         *discovery.Etcd
 
-	streamCtx   context.Context
-	streamMu    sync.Mutex
-	roomStreams map[string]*roomStreamHandle
-	seatMu      sync.Mutex
-	roomSeats   map[string]map[int32]string
+	streamCtx             context.Context
+	streamMu              sync.Mutex
+	roomStreams           map[string]*roomStreamHandle
+	seatMu                sync.Mutex
+	roomSeats             map[string]map[int32]string
+	offlineSurrenderAfter time.Duration
 
 	connMu      sync.Mutex
 	roomConnMap map[string]*grpc.ClientConn
@@ -96,20 +97,21 @@ func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Man
 	}
 	streamCtx, cancel := context.WithCancel(context.Background())
 	gateway := &remoteRoomGateway{
-		lobby:             clusterv1.NewLobbyServiceClient(lobbyConn),
-		defaultRoomAddr:   cfg.ClusterRoomAddr,
-		defaultRoomClient: clusterv1.NewRoomServiceClient(roomConn),
-		hub:               hub,
-		sess:              sess,
-		routeCache:        routeCache,
-		settlementStore:   settlementStore,
-		router:            roomRoute,
-		discovery:         roomDisc,
-		streamCtx:         streamCtx,
-		roomStreams:       make(map[string]*roomStreamHandle),
-		roomSeats:         make(map[string]map[int32]string),
-		roomConnMap:       map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
-		roomClients:       map[string]clusterv1.RoomServiceClient{cfg.ClusterRoomAddr: clusterv1.NewRoomServiceClient(roomConn)},
+		lobby:                 clusterv1.NewLobbyServiceClient(lobbyConn),
+		defaultRoomAddr:       cfg.ClusterRoomAddr,
+		defaultRoomClient:     clusterv1.NewRoomServiceClient(roomConn),
+		hub:                   hub,
+		sess:                  sess,
+		routeCache:            routeCache,
+		settlementStore:       settlementStore,
+		router:                roomRoute,
+		discovery:             roomDisc,
+		offlineSurrenderAfter: cfg.Runtime.RoomSurrenderAfterOffline,
+		streamCtx:             streamCtx,
+		roomStreams:           make(map[string]*roomStreamHandle),
+		roomSeats:             make(map[string]map[int32]string),
+		roomConnMap:           map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
+		roomClients:           map[string]clusterv1.RoomServiceClient{cfg.ClusterRoomAddr: clusterv1.NewRoomServiceClient(roomConn)},
 	}
 	cleanup := func() {
 		cancel()
@@ -181,7 +183,7 @@ func (g *remoteRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageT
 	return clusterRoomMetasToClient(resp.GetRooms()), resp.GetNextPageToken(), nil
 }
 
-func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string) (string, int, error) {
+func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error) {
 	if g == nil {
 		return "", -1, fmt.Errorf("nil remote room gateway")
 	}
@@ -189,8 +191,9 @@ func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string
 	err := retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
 		resp, callErr = g.lobby.AutoMatch(withOutgoingTrace(callCtx), &clusterv1.AutoMatchRequest{
-			RuleId: ruleID,
-			UserId: userID,
+			RuleId:      ruleID,
+			UserId:      userID,
+			PadWithBots: padWithBots,
 		})
 		return callErr
 	})
@@ -207,6 +210,26 @@ func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string
 	}
 	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
 	return roomID, int(resp.GetSeatIndex()), nil
+}
+
+func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, error) {
+	if g == nil {
+		return nil, fmt.Errorf("nil remote room gateway")
+	}
+	resp, err := g.lobby.AddBot(withOutgoingTrace(ctx), &clusterv1.AddBotRequest{
+		RoomId:     roomID,
+		UserId:     userID,
+		Count:      count,
+		Difficulty: difficulty,
+		OpId:       opID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetError() != "" {
+		return nil, errors.New(resp.GetError())
+	}
+	return clusterSeatsToClient(resp.GetAdded()), nil
 }
 
 func (g *remoteRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error) {
@@ -269,11 +292,77 @@ func (g *remoteRoomGateway) Ready(ctx context.Context, roomID, userID string) (f
 	return nil, nil
 }
 
-func (g *remoteRoomGateway) Leave(_ context.Context, _, _ string) (func(), error) {
+func (g *remoteRoomGateway) Leave(ctx context.Context, roomID, userID string) (func(), error) {
 	if g == nil {
 		return nil, fmt.Errorf("nil remote room gateway")
 	}
-	return nil, fmt.Errorf("集群模式暂不支持离房")
+	if roomID == "" || userID == "" {
+		return nil, fmt.Errorf("empty room_id or user_id")
+	}
+	lobbyResp, err := g.lobby.LeaveRoom(withOutgoingTrace(ctx), &clusterv1.LeaveRoomRequest{RoomId: roomID, UserId: userID})
+	if err != nil {
+		return nil, err
+	}
+	if lobbyResp.GetError() != "" {
+		return nil, errors.New(lobbyResp.GetError())
+	}
+	roomClient, _, err := g.roomClientForRoom(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_Leave{Leave: &clusterv1.LeaveEvent{}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetError() != "" {
+		return nil, errors.New(resp.GetError())
+	}
+	if !resp.GetAccepted() {
+		return nil, fmt.Errorf("room apply leave rejected")
+	}
+	g.streamMu.Lock()
+	if cur := g.roomStreams[roomID]; cur != nil {
+		cur.cancel()
+		delete(g.roomStreams, roomID)
+	}
+	g.streamMu.Unlock()
+	return nil, nil
+}
+
+func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID string) error {
+	if g == nil || roomID == "" || userID == "" {
+		return nil
+	}
+	delay := g.offlineSurrenderAfter
+	if delay <= 0 {
+		delay = 30 * time.Second
+	}
+	go func() {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		if g.hub != nil && g.hub.IsRegistered(userID, roomID) {
+			return
+		}
+		roomClient, _, err := g.roomClientForRoom(context.Background(), roomID)
+		if err != nil {
+			return
+		}
+		_, _ = roomClient.ApplyEvent(context.Background(), &clusterv1.ApplyEventRequest{
+			RoomId: roomID,
+			UserId: userID,
+			Body:   &clusterv1.ApplyEventRequest_Leave{Leave: &clusterv1.LeaveEvent{}},
+		})
+	}()
+	return nil
 }
 
 // Discard 将当前轮次出牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
@@ -477,6 +566,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 	snap := &clientv1.SnapshotNotify{
 		RoomId:           srec.RoomID,
 		PlayerIds:        append([]string(nil), snapResp.GetPlayerIds()...),
+		Seats:            clusterSeatsToClient(snapResp.GetSeats()),
 		QueSuitBySeat:    append([]int32(nil), snapResp.GetQueSuitBySeat()...),
 		Cursor:           snapResp.GetCursor(),
 		State:            snapResp.GetState(),
@@ -552,6 +642,20 @@ func clusterSeatTilesToClient(items []*clusterv1.SeatTiles) []*clientv1.SeatTile
 		out = append(out, &clientv1.SeatTiles{
 			SeatIndex: item.GetSeatIndex(),
 			Tiles:     append([]string(nil), item.GetTiles()...),
+		})
+	}
+	return out
+}
+
+func clusterSeatsToClient(items []*clusterv1.SeatInfo) []*clientv1.SeatInfo {
+	out := make([]*clientv1.SeatInfo, 0, len(items))
+	for _, item := range items {
+		out = append(out, &clientv1.SeatInfo{
+			SeatIndex:   item.GetSeatIndex(),
+			UserId:      item.GetUserId(),
+			Nickname:    item.GetNickname(),
+			IsBot:       item.GetIsBot(),
+			Surrendered: item.GetSurrendered(),
 		})
 	}
 	return out

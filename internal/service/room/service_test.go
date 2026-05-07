@@ -732,6 +732,42 @@ func TestServiceMailboxCapacityOverride(t *testing.T) {
 	require.Equal(t, 3, cap(a.ch))
 }
 
+func TestServiceLeaveDuringPlayMarksSurrender(t *testing.T) {
+	ctx := context.Background()
+	svc := NewServiceWithRule(NewLobby(), "sichuan_xzdd")
+	roomID := "r-leave-playing"
+	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
+		_, err := svc.Join(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
+		_, err := svc.Ready(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+	require.NoError(t, svc.Leave(ctx, roomID, "u2"))
+	a := svc.getActor(roomID)
+	require.NotNil(t, a)
+	require.True(t, a.room.Surrendered[2])
+	require.Equal(t, "u2", a.room.PlayerIDs[2])
+	require.True(t, a.round.surrendered[2])
+}
+
+func TestServiceLeaveDuringPlayCanBeDisabled(t *testing.T) {
+	ctx := context.Background()
+	svc := NewServiceWithRule(NewLobby(), "sichuan_xzdd")
+	svc.SetAllowLeaveDuringPlay(false)
+	roomID := "r-leave-disabled"
+	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
+		_, err := svc.Join(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
+		_, err := svc.Ready(ctx, roomID, uid)
+		require.NoError(t, err)
+	}
+	require.Error(t, svc.Leave(ctx, roomID, "u2"))
+}
+
 func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 	t.Parallel()
 

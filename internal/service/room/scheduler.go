@@ -62,6 +62,9 @@ func (s *roomScheduler) durationFor(rs *RoundState) time.Duration {
 	if rs == nil || rs.closed {
 		return 0
 	}
+	if s.surrenderedSeatWaiting(rs) {
+		return s.cfg.SurrenderAction
+	}
 	switch {
 	case rs.waitingExchange:
 		return s.cfg.ExchangeThree
@@ -76,6 +79,32 @@ func (s *roomScheduler) durationFor(rs *RoundState) time.Duration {
 	default:
 		return 0
 	}
+}
+
+func (s *roomScheduler) surrenderedSeatWaiting(rs *RoundState) bool {
+	if rs == nil {
+		return false
+	}
+	switch {
+	case rs.waitingExchange:
+		for seat, done := range rs.exchangeSubmitted {
+			if !done && rs.isSurrendered(Seat(seat)) {
+				return true
+			}
+		}
+	case rs.waitingQueMen:
+		for seat, done := range rs.queSubmitted {
+			if !done && rs.isSurrendered(Seat(seat)) {
+				return true
+			}
+		}
+	case rs.claimWindowOpen:
+		candidate, ok := rs.bestClaimCandidate()
+		return ok && rs.isSurrendered(candidate.seat)
+	case rs.waitingTsumo, rs.waitingDiscard:
+		return rs.isSurrendered(rs.turn)
+	}
+	return false
 }
 
 func (s *roomScheduler) fire() {

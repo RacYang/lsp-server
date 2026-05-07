@@ -26,3 +26,8 @@ func RoomRouteCacheKey(roomID string) string {
 func RoomSnapshotMetaKey(roomID string) string {
 	return fmt.Sprintf("lsp:room:snapmeta:%s", roomID)
 }
+
+// UserProfileKey 返回 lsp:user:profile:{userID} 形式的用户资料键。
+func UserProfileKey(userID string) string {
+	return fmt.Sprintf("lsp:user:profile:%s", userID)
+}

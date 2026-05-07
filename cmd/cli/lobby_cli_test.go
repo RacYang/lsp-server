@@ -106,6 +106,15 @@ func TestRunLobbyAutoMatchFailureKeepsLoop(t *testing.T) {
 	require.Contains(t, out.String(), "匹配失败")
 }
 
+func TestRunLobbyTutorialThenQuit(t *testing.T) {
+	p, out := newPrompterFromInput([]string{"t", "q"})
+	outcome, err := RunLobby(context.Background(), p, &fakeGateway{}, &Config{})
+	require.NoError(t, err)
+	require.Equal(t, LobbyExitQuit, outcome.Reason)
+	require.Contains(t, out.String(), "玩法说明")
+	require.Contains(t, out.String(), "牌桌: ←→ 选牌")
+}
+
 func TestRunLobbyListRoomsAndJoinByIndex(t *testing.T) {
 	p, _ := newPrompterFromInput([]string{"2", "1"})
 	gw := &fakeGateway{

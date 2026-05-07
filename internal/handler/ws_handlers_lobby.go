@@ -11,6 +11,7 @@ import (
 	"racoo.cn/lsp/internal/net/frame"
 	"racoo.cn/lsp/internal/net/msgid"
 	"racoo.cn/lsp/internal/session"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 const defaultClientRuleID = "sichuan_xzdd"
@@ -70,7 +71,7 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	roomID, seat, err := deps.Rooms.AutoMatch(ctx, req.GetRuleId(), state.userID)
+	roomID, seat, err := deps.Rooms.AutoMatch(ctx, req.GetRuleId(), state.userID, req.GetPadWithBots())
 	if err != nil {
 		writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
@@ -98,8 +99,36 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 			SeatIndex:   int32(seat), //nolint:gosec // 座位号固定为 0..3
 			RuleId:      normalizeClientRuleID(req.GetRuleId()),
 			DisplayName: roomID,
+			Seats:       selfSeatInfo(ctx, deps, int32(seat), state.userID), //nolint:gosec // 座位号固定为 0..3
 		}},
 	})
+}
+
+func handleAddBot(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, msgID uint16, payload []byte) {
+	var env clientv1.Envelope
+	if err := proto.Unmarshal(payload, &env); err != nil {
+		return
+	}
+	req := env.GetAddBotReq()
+	if req == nil || state.userID == "" || state.roomID == "" {
+		return
+	}
+	if shouldDropRequest(&env, msgID, state.userID) {
+		return
+	}
+	added, err := deps.Rooms.AddBot(ctx, state.roomID, state.userID, req.GetCount(), req.GetDifficulty(), req.GetOpId())
+	resp := &clientv1.AddBotResponse{Added: added}
+	if err != nil {
+		resp.ErrorCode = clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
+		resp.ErrorMessage = err.Error()
+	}
+	writeLobbyResponse(conn, msgid.AddBotResp, &clientv1.Envelope{
+		ReqId: env.ReqId,
+		Body:  &clientv1.Envelope_AddBotResp{AddBotResp: resp},
+	})
+	if err == nil {
+		logx.Info(logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID), "玩家添加机器人", "count", len(added))
+	}
 }
 
 // handleCreateRoom 创建房间后直接让创建者入座；私密房只可凭 room_id 手动加入。
@@ -153,6 +182,7 @@ func handleCreateRoom(ctx context.Context, deps Deps, conn *websocket.Conn, stat
 			SeatIndex:   int32(seat), //nolint:gosec // 座位号固定为 0..3
 			RuleId:      normalizeClientRuleID(req.GetRuleId()),
 			DisplayName: normalizeClientDisplayName(req.GetDisplayName(), roomID),
+			Seats:       selfSeatInfo(ctx, deps, int32(seat), state.userID), //nolint:gosec // 座位号固定为 0..3
 		}},
 	})
 }

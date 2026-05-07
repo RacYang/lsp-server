@@ -21,6 +21,12 @@ runtime:
     ws_idempotency_cache: 4096
   room:
     mailbox_capacity: 96
+    surrender_action_timeout: 1s
+    surrender_after_offline: 30s
+    allow_leave_during_play: true
+  lobby:
+    bot_supervisor_enabled: true
+    max_bots_per_room: 3
   redis:
     idempotency_ttl: 10m
   logging:

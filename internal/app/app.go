@@ -105,21 +105,26 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		lb := roomsvc.NewLobby()
 		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID)
 		rs.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
+		rs.SetAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay)
 		rs.SetTimeoutConfig(roomsvc.TimeoutConfig{
-			ExchangeThree: cfg.RoomTimeouts.ExchangeThree,
-			QueMen:        cfg.RoomTimeouts.QueMen,
-			ClaimWindow:   cfg.RoomTimeouts.ClaimWindow,
-			TsumoWindow:   cfg.RoomTimeouts.TsumoWindow,
-			Discard:       cfg.RoomTimeouts.Discard,
+			ExchangeThree:   cfg.RoomTimeouts.ExchangeThree,
+			QueMen:          cfg.RoomTimeouts.QueMen,
+			ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
+			TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
+			Discard:         cfg.RoomTimeouts.Discard,
+			SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 		})
 		gateway = handler.NewLocalRoomGateway(rs, hub, sessMgr)
+		if local, ok := gateway.(*handler.LocalRoomGateway); ok {
+			local.SetOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline)
+		}
 		cleanup = func() {
 			if redisCleanup != nil {
 				redisCleanup()
 			}
 		}
 	}
-	deps := handler.Deps{Rooms: gateway, Hub: hub, Session: sessMgr, AllowedOrigins: append([]string(nil), cfg.WSAllowedOrigins...)}
+	deps := handler.Deps{Rooms: gateway, Hub: hub, Session: sessMgr, Users: session.NewUserDirectory(redisClient), AllowedOrigins: append([]string(nil), cfg.WSAllowedOrigins...)}
 	obsStop, errObs := StartObsHTTP(cfg.ObsAddr, redisClient)
 	if errObs != nil {
 		if redisCleanup != nil {

@@ -125,6 +125,38 @@ func TestHubUnregister(t *testing.T) {
 	}
 }
 
+func TestHubIsRegistered(t *testing.T) {
+	h := NewHub()
+	if h.IsRegistered("u1", "room1") {
+		t.Fatal("empty hub should not report registered user")
+	}
+	h.Register("u1", "room1", nil)
+	if !h.IsRegistered("u1", "room1") {
+		t.Fatal("registered room membership should be visible")
+	}
+	if h.IsRegistered("u1", "room2") {
+		t.Fatal("different room should not match")
+	}
+	h.Unregister("u1", "room1")
+	if h.IsRegistered("u1", "room1") {
+		t.Fatal("unregistered user should be absent")
+	}
+}
+
+func TestUserDirectoryInMemory(t *testing.T) {
+	dir := NewUserDirectory(nil)
+	if _, ok, err := dir.Get(t.Context(), "u1"); err != nil || ok {
+		t.Fatalf("empty directory get = ok:%v err:%v", ok, err)
+	}
+	if err := dir.Set(t.Context(), "u1", UserProfile{Nickname: "alice"}); err != nil {
+		t.Fatalf("set profile: %v", err)
+	}
+	profile, ok, err := dir.Get(t.Context(), "u1")
+	if err != nil || !ok || profile.Nickname != "alice" {
+		t.Fatalf("profile mismatch: %+v ok=%v err=%v", profile, ok, err)
+	}
+}
+
 func TestHubHeartbeatTimeoutUsesClock(t *testing.T) {
 	fc := clock.NewFake(time.Unix(0, 0))
 	h := NewHub()

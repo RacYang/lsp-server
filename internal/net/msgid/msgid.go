@@ -50,4 +50,8 @@ const (
 	CreateRoomResp uint16 = 37
 	PassReq        uint16 = 38
 	PassResp       uint16 = 39
+	RenameReq      uint16 = 40
+	RenameResp     uint16 = 41
+	AddBotReq      uint16 = 42
+	AddBotResp     uint16 = 43
 )

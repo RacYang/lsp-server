@@ -49,6 +49,7 @@ func (g *actionStubGateway) Ready(_ context.Context, _, _ string) (func(), error
 func (g *actionStubGateway) Leave(_ context.Context, _, _ string) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
+func (g *actionStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
 func (g *actionStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
@@ -73,11 +74,14 @@ func (g *actionStubGateway) Pass(_ context.Context, _, _ string) (func(), error)
 func (g *actionStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
 }
-func (g *actionStubGateway) AutoMatch(_ context.Context, _, _ string) (string, int, error) {
+func (g *actionStubGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (string, int, error) {
 	return "", 0, nil
 }
 func (g *actionStubGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
 	return "", 0, nil
+}
+func (g *actionStubGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, error) {
+	return nil, nil
 }
 func (g *actionStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	return nil, fmt.Errorf("not implemented")

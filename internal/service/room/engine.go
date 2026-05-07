@@ -48,15 +48,16 @@ type Engine struct {
 
 // RoundState 保存交互式单局运行态，仅在 room actor 内被串行访问。
 type RoundState struct {
-	roomID    string
-	ruleID    string
-	playerIDs [4]string
-	rule      rules.Rule
-	wall      *wall.Wall
-	hands     []*hand.Hand
-	queBySeat []int32
-	discards  [][]tile.Tile
-	melds     [][]string
+	roomID      string
+	ruleID      string
+	playerIDs   [4]string
+	surrendered []bool
+	rule        rules.Rule
+	wall        *wall.Wall
+	hands       []*hand.Hand
+	queBySeat   []int32
+	discards    [][]tile.Tile
+	melds       [][]string
 
 	waitingExchange        bool
 	exchangeDirection      int32
@@ -172,6 +173,7 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 		roomID:            roomID,
 		ruleID:            e.ruleID,
 		playerIDs:         playerIDs,
+		surrendered:       make([]bool, 4),
 		rule:              rule,
 		wall:              rule.BuildWall(ctx, int64(seedFromRoomID(roomID)&0x7fff_ffff_ffff_ffff)), //nolint:gosec // 已清零最高位
 		hands:             make([]*hand.Hand, 4),

@@ -17,6 +17,7 @@ enum ErrorCode {
   ERROR_CODE_ROUTE_REDIRECT = 6;
   ERROR_CODE_RATE_LIMITED = 7;
   ERROR_CODE_RECONNECTING = 8;
+  ERROR_CODE_FEATURE_DISABLED = 9;
 }
 
 // Envelope 为请求/响应通用外壳；body 使用 oneof 承载具体消息。
@@ -70,6 +71,10 @@ message Envelope {
     // Phase 8 玩家客户端闭环：显式放弃当前抢答/自摸选择。
     PassRequest pass_req = 40;
     PassResponse pass_resp = 41;
+    RenameRequest rename_req = 42;
+    RenameResponse rename_resp = 43;
+    AddBotRequest add_bot_req = 44;
+    AddBotResponse add_bot_resp = 45;
   }
 }
 
@@ -101,6 +106,15 @@ message JoinRoomResponse {
   string error_message = 3;
   string rule_id = 4;
   string display_name = 5;
+  repeated SeatInfo seats = 6;
+}
+
+message SeatInfo {
+  int32 seat_index = 1;
+  string user_id = 2;
+  string nickname = 3;
+  bool is_bot = 4;
+  bool surrendered = 5;
 }
 
 // RoomMeta 是大厅页展示的公开房间摘要；私密房不会出现在列表中。
@@ -130,6 +144,7 @@ message ListRoomsResponse {
 // AutoMatchRequest 让大厅选择一个可加入房间；没有空位时会创建公开房间。
 message AutoMatchRequest {
   string rule_id = 1;
+  bool pad_with_bots = 2;
 }
 
 message AutoMatchResponse {
@@ -139,6 +154,7 @@ message AutoMatchResponse {
   string error_message = 4;
   string rule_id = 5;
   string display_name = 6;
+  repeated SeatInfo seats = 7;
 }
 
 // CreateRoomRequest 创建一个房间并直接让创建者占座；private=true 时不出现在大厅列表。
@@ -155,6 +171,7 @@ message CreateRoomResponse {
   string error_message = 4;
   string rule_id = 5;
   string display_name = 6;
+  repeated SeatInfo seats = 7;
 }
 
 message ReadyRequest {}
@@ -201,6 +218,29 @@ message PassRequest {}
 message PassResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+}
+
+message RenameRequest {
+  string nickname = 1;
+}
+
+message RenameResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+  string applied_nickname = 3;
+}
+
+message AddBotRequest {
+  string room_id = 1;
+  int32 count = 2;
+  string difficulty = 3;
+  string op_id = 4;
+}
+
+message AddBotResponse {
+  repeated SeatInfo added = 1;
+  ErrorCode error_code = 2;
+  string error_message = 3;
 }
 
 // StartGameNotify 表示房间开局（服务端推送）。
@@ -342,7 +382,7 @@ message QueMenDoneNotify {
 // waiting_action 表示局内 UI 阶段（exchange_three/que_men/discard/claim_window/tsumo_window/none）。
 message SnapshotNotify {
   string room_id = 1;
-  repeated string player_ids = 2;
+  repeated string player_ids = 2 [deprecated = true];
   repeated int32 que_suit_by_seat = 3;
   string cursor = 4;
   string state = 5;
@@ -357,6 +397,7 @@ message SnapshotNotify {
   repeated SeatTiles discards_by_seat = 12;
   // melds_by_seat 按座位返回副露文本编码，用于重连后恢复牌桌。
   repeated SeatTiles melds_by_seat = 13;
+  repeated SeatInfo seats = 14;
 }
 
 // ClaimCandidate 表示快照中仍然有效的抢答候选。

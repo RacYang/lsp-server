@@ -43,27 +43,32 @@ type RoomView struct {
 	QueBySeat        [4]int32
 	Players          [4]PlayerView
 
-	LastSettlement *clientv1.SettlementNotify
-	RoomList       []*clientv1.RoomMeta
-	NextRoomPage   string
-	Log            []LogEntry
-	LastError      string
-	RTTms          int64
-	Reconnecting   bool
-	Connected      bool
-	UpdatedAt      time.Time
+	LastSettlement     *clientv1.SettlementNotify
+	RoomList           []*clientv1.RoomMeta
+	NextRoomPage       string
+	PendingLeaveRoomID string
+	SuppressAutoResume bool
+	ResumeRoomID       string
+	Log                []LogEntry
+	LastError          string
+	RTTms              int64
+	Reconnecting       bool
+	Connected          bool
+	UpdatedAt          time.Time
 }
 
 // PlayerView 保存单个座位的客户端可见视图。
 type PlayerView struct {
-	UserID   string
-	Nickname string
-	Ready    bool
-	Hand     []string
-	HandCnt  int
-	Melds    []string
-	Discards []string
-	Hued     bool
+	UserID      string
+	Nickname    string
+	Ready       bool
+	IsBot       bool
+	Surrendered bool
+	Hand        []string
+	HandCnt     int
+	Melds       []string
+	Discards    []string
+	Hued        bool
 }
 
 // LogEntry 是事件流中的一行可读消息。
@@ -103,6 +108,23 @@ func (s *AppState) AddLog(text string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.addLogLocked(text)
+}
+
+// LeaveRoomLocally 让客户端先回到大厅，服务端离房请求在后台继续重试。
+func (s *AppState) LeaveRoomLocally(reason string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	roomID := s.view.RoomID
+	if roomID == "" {
+		return ""
+	}
+	s.view.PendingLeaveRoomID = roomID
+	resetRoomToLobby(&s.view, true)
+	if reason == "" {
+		reason = "已本地返回大厅"
+	}
+	s.addLogLocked(reason)
+	return roomID
 }
 
 func (s *AppState) addLogLocked(text string) {

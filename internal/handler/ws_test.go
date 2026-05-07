@@ -37,6 +37,7 @@ func (f *fakeResumeGateway) Ready(_ context.Context, _, _ string) (func(), error
 func (f *fakeResumeGateway) Leave(_ context.Context, _, _ string) (func(), error) {
 	return nil, nil
 }
+func (f *fakeResumeGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
 func (f *fakeResumeGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
 	return nil, nil
 }
@@ -61,11 +62,14 @@ func (f *fakeResumeGateway) Pass(_ context.Context, _, _ string) (func(), error)
 func (f *fakeResumeGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
 }
-func (f *fakeResumeGateway) AutoMatch(_ context.Context, _, _ string) (string, int, error) {
+func (f *fakeResumeGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (string, int, error) {
 	return "", 0, nil
 }
 func (f *fakeResumeGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
 	return "", 0, nil
+}
+func (f *fakeResumeGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, error) {
+	return nil, nil
 }
 func (f *fakeResumeGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	if f.resumeErr != nil {
@@ -95,6 +99,7 @@ func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) 
 	return nil, nil
 }
 func (g *joinStubGateway) Leave(_ context.Context, _, _ string) (func(), error) { return nil, nil }
+func (g *joinStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
 func (g *joinStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
 	return nil, nil
 }
@@ -119,11 +124,14 @@ func (g *joinStubGateway) Pass(_ context.Context, _, _ string) (func(), error) {
 func (g *joinStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
 }
-func (g *joinStubGateway) AutoMatch(_ context.Context, _, _ string) (string, int, error) {
+func (g *joinStubGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (string, int, error) {
 	return "", 0, nil
 }
 func (g *joinStubGateway) CreateRoom(_ context.Context, _, _ string, _ bool, _ string) (string, int, error) {
 	return "", 0, nil
+}
+func (g *joinStubGateway) AddBot(_ context.Context, _, _ string, _ int32, _, _ string) ([]*clientv1.SeatInfo, error) {
+	return nil, nil
 }
 func (g *joinStubGateway) Resume(_ context.Context, _ string) (*ResumeResult, error) {
 	return nil, fmt.Errorf("not implemented")
@@ -218,6 +226,29 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	env = readEnv(t, conn, msgid.JoinRoomResp)
 	if env.GetJoinRoomResp().GetSeatIndex() < 0 {
 		t.Fatal("seat")
+	}
+
+	addBot := &clientv1.Envelope{ReqId: "bot", Body: &clientv1.Envelope_AddBotReq{
+		AddBotReq: &clientv1.AddBotRequest{Count: 1, OpId: "op-test"},
+	}}
+	pb, _ = proto.Marshal(addBot)
+	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
+		t.Fatal(err)
+	}
+	env = readEnv(t, conn, msgid.AddBotResp)
+	if len(env.GetAddBotResp().GetAdded()) != 1 {
+		t.Fatalf("add bot got %d seats", len(env.GetAddBotResp().GetAdded()))
+	}
+	badBot := &clientv1.Envelope{ReqId: "bot-bad", Body: &clientv1.Envelope_AddBotReq{
+		AddBotReq: &clientv1.AddBotRequest{Count: 0, OpId: "op-bad"},
+	}}
+	pb, _ = proto.Marshal(badBot)
+	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
+		t.Fatal(err)
+	}
+	env = readEnv(t, conn, msgid.AddBotResp)
+	if env.GetAddBotResp().GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+		t.Fatal("invalid add bot request should return an error")
 	}
 
 	rd := &clientv1.Envelope{ReqId: "c", Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}}

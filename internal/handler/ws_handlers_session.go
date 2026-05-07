@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -118,6 +119,10 @@ func handleLoginIssue(
 	env *clientv1.Envelope,
 ) {
 	state.userID = roomsvc.NewUserID()
+	nickname := sanitizeNickname(env.GetLoginReq().GetNickname())
+	if deps.Users != nil {
+		_ = deps.Users.Set(ctx, state.userID, session.UserProfile{Nickname: nickname})
+	}
 	var plainTok string
 	if deps.Session != nil {
 		var err error
@@ -131,6 +136,62 @@ func handleLoginIssue(
 	respEnv := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LoginResp{LoginResp: login}}
 	b, _ := proto.Marshal(respEnv)
 	_ = session.WriteBinary(conn, frame.Encode(msgid.LoginResp, b))
+	logx.Info(logx.WithUserID(ctx, state.userID), "玩家登录成功")
+}
+
+func handleRename(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, payload []byte) {
+	var env clientv1.Envelope
+	if err := proto.Unmarshal(payload, &env); err != nil {
+		return
+	}
+	req := env.GetRenameReq()
+	if req == nil {
+		return
+	}
+	if state.userID == "" {
+		writeRenameResponse(conn, env.ReqId, clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED, "尚未登录", "")
+		return
+	}
+	nickname := sanitizeNickname(req.GetNickname())
+	if nickname == "" {
+		writeRenameResponse(conn, env.ReqId, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, "昵称不能为空", "")
+		return
+	}
+	if deps.Users != nil {
+		if err := deps.Users.Set(ctx, state.userID, session.UserProfile{Nickname: nickname}); err != nil {
+			writeRenameResponse(conn, env.ReqId, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, err.Error(), "")
+			return
+		}
+	}
+	writeRenameResponse(conn, env.ReqId, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, "", nickname)
+}
+
+func sanitizeNickname(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range raw {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+		if b.Len() >= 64 {
+			break
+		}
+	}
+	return b.String()
+}
+
+func writeRenameResponse(conn *websocket.Conn, reqID string, code clientv1.ErrorCode, msg, applied string) {
+	resp := &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_RenameResp{RenameResp: &clientv1.RenameResponse{
+		ErrorCode:       code,
+		ErrorMessage:    msg,
+		AppliedNickname: applied,
+	}}}
+	b, _ := proto.Marshal(resp)
+	_ = session.WriteBinary(conn, frame.Encode(msgid.RenameResp, b))
 }
 
 func writeLoginError(conn *websocket.Conn, reqID string, code clientv1.ErrorCode, msg string) {

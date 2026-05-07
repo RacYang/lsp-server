@@ -24,6 +24,8 @@ const (
 	LobbyService_GetRoom_FullMethodName    = "/cluster.v1.LobbyService/GetRoom"
 	LobbyService_ListRooms_FullMethodName  = "/cluster.v1.LobbyService/ListRooms"
 	LobbyService_AutoMatch_FullMethodName  = "/cluster.v1.LobbyService/AutoMatch"
+	LobbyService_LeaveRoom_FullMethodName  = "/cluster.v1.LobbyService/LeaveRoom"
+	LobbyService_AddBot_FullMethodName     = "/cluster.v1.LobbyService/AddBot"
 )
 
 // LobbyServiceClient is the client API for LobbyService service.
@@ -37,6 +39,8 @@ type LobbyServiceClient interface {
 	GetRoom(ctx context.Context, in *GetRoomRequest, opts ...grpc.CallOption) (*GetRoomResponse, error)
 	ListRooms(ctx context.Context, in *ListRoomsRequest, opts ...grpc.CallOption) (*ListRoomsResponse, error)
 	AutoMatch(ctx context.Context, in *AutoMatchRequest, opts ...grpc.CallOption) (*AutoMatchResponse, error)
+	LeaveRoom(ctx context.Context, in *LeaveRoomRequest, opts ...grpc.CallOption) (*LeaveRoomResponse, error)
+	AddBot(ctx context.Context, in *AddBotRequest, opts ...grpc.CallOption) (*AddBotResponse, error)
 }
 
 type lobbyServiceClient struct {
@@ -97,6 +101,26 @@ func (c *lobbyServiceClient) AutoMatch(ctx context.Context, in *AutoMatchRequest
 	return out, nil
 }
 
+func (c *lobbyServiceClient) LeaveRoom(ctx context.Context, in *LeaveRoomRequest, opts ...grpc.CallOption) (*LeaveRoomResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LeaveRoomResponse)
+	err := c.cc.Invoke(ctx, LobbyService_LeaveRoom_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *lobbyServiceClient) AddBot(ctx context.Context, in *AddBotRequest, opts ...grpc.CallOption) (*AddBotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddBotResponse)
+	err := c.cc.Invoke(ctx, LobbyService_AddBot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LobbyServiceServer is the server API for LobbyService service.
 // All implementations must embed UnimplementedLobbyServiceServer
 // for forward compatibility.
@@ -108,6 +132,8 @@ type LobbyServiceServer interface {
 	GetRoom(context.Context, *GetRoomRequest) (*GetRoomResponse, error)
 	ListRooms(context.Context, *ListRoomsRequest) (*ListRoomsResponse, error)
 	AutoMatch(context.Context, *AutoMatchRequest) (*AutoMatchResponse, error)
+	LeaveRoom(context.Context, *LeaveRoomRequest) (*LeaveRoomResponse, error)
+	AddBot(context.Context, *AddBotRequest) (*AddBotResponse, error)
 	mustEmbedUnimplementedLobbyServiceServer()
 }
 
@@ -132,6 +158,12 @@ func (UnimplementedLobbyServiceServer) ListRooms(context.Context, *ListRoomsRequ
 }
 func (UnimplementedLobbyServiceServer) AutoMatch(context.Context, *AutoMatchRequest) (*AutoMatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AutoMatch not implemented")
+}
+func (UnimplementedLobbyServiceServer) LeaveRoom(context.Context, *LeaveRoomRequest) (*LeaveRoomResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LeaveRoom not implemented")
+}
+func (UnimplementedLobbyServiceServer) AddBot(context.Context, *AddBotRequest) (*AddBotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddBot not implemented")
 }
 func (UnimplementedLobbyServiceServer) mustEmbedUnimplementedLobbyServiceServer() {}
 func (UnimplementedLobbyServiceServer) testEmbeddedByValue()                      {}
@@ -244,6 +276,42 @@ func _LobbyService_AutoMatch_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LobbyService_LeaveRoom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaveRoomRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LobbyServiceServer).LeaveRoom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LobbyService_LeaveRoom_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LobbyServiceServer).LeaveRoom(ctx, req.(*LeaveRoomRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LobbyService_AddBot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddBotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LobbyServiceServer).AddBot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LobbyService_AddBot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LobbyServiceServer).AddBot(ctx, req.(*AddBotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LobbyService_ServiceDesc is the grpc.ServiceDesc for LobbyService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -270,6 +338,14 @@ var LobbyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AutoMatch",
 			Handler:    _LobbyService_AutoMatch_Handler,
+		},
+		{
+			MethodName: "LeaveRoom",
+			Handler:    _LobbyService_LeaveRoom_Handler,
+		},
+		{
+			MethodName: "AddBot",
+			Handler:    _LobbyService_AddBot_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

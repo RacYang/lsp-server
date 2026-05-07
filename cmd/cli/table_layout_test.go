@@ -37,6 +37,10 @@ func TestRelativeSeatGuardsAgainstInvalidIndices(t *testing.T) {
 func TestCalcLayoutRejectsTinyTerminal(t *testing.T) {
 	_, ok := CalcLayout(40, 12)
 	require.False(t, ok)
+	_, ok = CalcLayout(79, MinTableHeight)
+	require.False(t, ok)
+	_, ok = CalcLayout(MinTableWidth, 23)
+	require.False(t, ok)
 }
 
 func TestCalcLayoutMinimum(t *testing.T) {
@@ -44,10 +48,14 @@ func TestCalcLayoutMinimum(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, MinTableWidth, l.Width)
 	require.Equal(t, MinTableHeight, l.Height)
-	require.Equal(t, 0, l.TopArea.Y)
-	require.Equal(t, 4, l.TopArea.Height)
+	require.Equal(t, 0, l.StatusBar.Y)
+	require.Equal(t, 1, l.StatusBar.Height)
+	require.Equal(t, 1, l.TopArea.Y)
+	require.Equal(t, 5, l.TopArea.Height)
 	require.Equal(t, MinTableHeight-1, l.HintArea.Y)
 	require.Equal(t, 1, l.HintArea.Height)
+	require.Equal(t, l.KeyBar, l.HintArea)
+	require.Equal(t, 4, l.DiscardColumns)
 	require.False(t, l.HandArea.Empty())
 	require.False(t, l.CenterArea.Empty())
 	require.Greater(t, l.RightArea.X, l.LeftArea.X)
@@ -72,4 +80,11 @@ func TestCalcLayoutLargeTerminalGrowsCenterArea(t *testing.T) {
 	bigL, ok := CalcLayout(MinTableWidth, MinTableHeight+10)
 	require.True(t, ok)
 	require.Greater(t, bigL.CenterArea.Height, smallL.CenterArea.Height)
+}
+
+func TestCalcLayoutWideTerminalUsesMoreDiscardColumns(t *testing.T) {
+	l, ok := CalcLayout(120, MinTableHeight)
+	require.True(t, ok)
+	require.True(t, l.Wide)
+	require.Equal(t, 6, l.DiscardColumns)
 }

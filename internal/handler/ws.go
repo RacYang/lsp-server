@@ -20,6 +20,7 @@ type Deps struct {
 	Rooms   RoomGateway
 	Hub     *session.Hub
 	Session *session.Manager
+	Users   *session.UserDirectory
 	// AllowedOrigins 非空时表示允许跨站 WebSocket 的白名单；为空时退回同源校验。
 	AllowedOrigins []string
 }
@@ -29,6 +30,7 @@ type RoomGateway interface {
 	Join(ctx context.Context, roomID, userID string) (int, error)
 	Ready(ctx context.Context, roomID, userID string) (func(), error)
 	Leave(ctx context.Context, roomID, userID string) (func(), error)
+	MarkSeatOffline(ctx context.Context, roomID, userID string) error
 	ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error)
 	QueMen(ctx context.Context, roomID, userID string, suit int32) (func(), error)
 	Discard(ctx context.Context, roomID, userID, tile string) (func(), error)
@@ -37,8 +39,9 @@ type RoomGateway interface {
 	Hu(ctx context.Context, roomID, userID string) (func(), error)
 	Pass(ctx context.Context, roomID, userID string) (func(), error)
 	ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error)
-	AutoMatch(ctx context.Context, ruleID, userID string) (string, int, error)
+	AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error)
 	CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error)
+	AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, error)
 	Resume(ctx context.Context, sessionToken string) (*ResumeResult, error)
 	EnsureRoomEventSubscription(ctx context.Context, roomID, sinceCursor string) error
 }
@@ -65,6 +68,9 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 	}
 	state := wsConnState{}
 	defer func() {
+		if deps.Rooms != nil && state.userID != "" && state.roomID != "" {
+			_ = deps.Rooms.MarkSeatOffline(context.Background(), state.roomID, state.userID)
+		}
 		if deps.Hub != nil && state.userID != "" {
 			deps.Hub.Unregister(state.userID, state.roomID)
 		}

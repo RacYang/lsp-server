@@ -31,6 +31,26 @@ func TestCreateJoinGetRoom(t *testing.T) {
 	require.Equal(t, "room-local", got)
 }
 
+func TestLeaveRoomFreesSeatForImmediateAutoMatch(t *testing.T) {
+	t.Parallel()
+	s := New()
+	ctx := context.Background()
+	roomID, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xzdd", "公开桌", false, "u1")
+	require.NoError(t, err)
+	for _, userID := range []string{"u2", "u3", "u4"} {
+		_, err = s.JoinRoom(ctx, roomID, userID)
+		require.NoError(t, err)
+	}
+	_, err = s.JoinRoom(ctx, roomID, "u5")
+	require.ErrorIs(t, err, ErrRoomFull)
+
+	require.NoError(t, s.LeaveRoom(ctx, roomID, "u2"))
+	joined, seat, err := s.AutoMatch(ctx, "sichuan_xzdd", "u5")
+	require.NoError(t, err)
+	require.Equal(t, roomID, joined)
+	require.EqualValues(t, 1, seat)
+}
+
 func TestListRoomsFiltersPrivateAndFullRooms(t *testing.T) {
 	t.Parallel()
 	s := New()

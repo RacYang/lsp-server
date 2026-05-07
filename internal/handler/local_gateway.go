@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/net/frame"
@@ -13,21 +14,29 @@ import (
 
 // LocalRoomGateway 适配进程内房间服务，供 `cmd/all` 与本地 gate 冒烟复用。
 type LocalRoomGateway struct {
-	rooms *roomsvc.Service
-	lobby *lobbysvc.Service
-	hub   *session.Hub
-	sess  *session.Manager
+	rooms                 *roomsvc.Service
+	lobby                 *lobbysvc.Service
+	hub                   *session.Hub
+	sess                  *session.Manager
+	offlineSurrenderAfter time.Duration
 }
 
 // NewLocalRoomGateway 创建进程内房间网关；sess 可为 nil 表示不启用 Redis 会话。
 func NewLocalRoomGateway(rooms *roomsvc.Service, hub *session.Hub, sess *session.Manager) *LocalRoomGateway {
-	g := &LocalRoomGateway{rooms: rooms, lobby: lobbysvc.New(), hub: hub, sess: sess}
+	g := &LocalRoomGateway{rooms: rooms, lobby: lobbysvc.New(), hub: hub, sess: sess, offlineSurrenderAfter: 30 * time.Second}
 	if rooms != nil {
 		rooms.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []roomsvc.Notification) {
 			g.broadcastAfter(roomID, notifications)()
 		})
 	}
 	return g
+}
+
+func (g *LocalRoomGateway) SetOfflineSurrenderAfter(d time.Duration) {
+	if g == nil || d <= 0 {
+		return
+	}
+	g.offlineSurrenderAfter = d
 }
 
 // Join 直接走本地房间服务加入逻辑。
@@ -54,7 +63,7 @@ func (g *LocalRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageTo
 	return lobbyRoomMetasToClient(rooms), next, nil
 }
 
-func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string) (string, int, error) {
+func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error) {
 	if g == nil || g.lobby == nil || g.rooms == nil {
 		return "", -1, fmt.Errorf("nil local lobby gateway")
 	}
@@ -65,6 +74,13 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string)
 	seat, err := g.rooms.Join(ctx, roomID, userID)
 	if err != nil {
 		return "", -1, err
+	}
+	if padWithBots {
+		added, err := g.AddBot(ctx, roomID, userID, 3, "normal", "automatch:"+roomID+":"+userID)
+		if err != nil {
+			return "", -1, err
+		}
+		_ = added
 	}
 	return roomID, seat, nil
 }
@@ -84,6 +100,29 @@ func (g *LocalRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName s
 	return roomID, seat, nil
 }
 
+func (g *LocalRoomGateway) AddBot(ctx context.Context, roomID, userID string, count int32, _ string, _ string) ([]*clientv1.SeatInfo, error) {
+	if g == nil || g.lobby == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local lobby gateway")
+	}
+	added, err := g.lobby.AddBot(ctx, roomID, count, 3)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*clientv1.SeatInfo, 0, len(added))
+	for _, bot := range added {
+		if _, err := g.rooms.Join(ctx, roomID, bot.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, &clientv1.SeatInfo{
+			SeatIndex: bot.SeatIndex,
+			UserId:    bot.UserID,
+			Nickname:  "机器人",
+			IsBot:     true,
+		})
+	}
+	return out, nil
+}
+
 // Ready 触发本地 worker，并返回一个在 ReadyResp 之后执行的广播回调。
 func (g *LocalRoomGateway) Ready(ctx context.Context, roomID, userID string) (func(), error) {
 	if g == nil || g.rooms == nil {
@@ -100,10 +139,34 @@ func (g *LocalRoomGateway) Leave(ctx context.Context, roomID, userID string) (fu
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
+	if g.lobby != nil {
+		_ = g.lobby.LeaveRoom(ctx, roomID, userID)
+	}
 	if err := g.rooms.Leave(ctx, roomID, userID); err != nil {
 		return nil, err
 	}
 	return nil, nil
+}
+
+func (g *LocalRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID string) error {
+	if g == nil || g.rooms == nil || roomID == "" || userID == "" {
+		return nil
+	}
+	delay := g.offlineSurrenderAfter
+	go func() {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			if g.hub != nil && g.hub.IsRegistered(userID, roomID) {
+				return
+			}
+			_ = g.rooms.Leave(context.Background(), roomID, userID)
+		}
+	}()
+	return nil
 }
 
 // Discard 触发本地房间推进一轮，并返回在响应之后执行的广播回调。
@@ -243,6 +306,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 	snap := &clientv1.SnapshotNotify{
 		RoomId:           srec.RoomID,
 		PlayerIds:        append([]string(nil), players...),
+		Seats:            clientSeatsFromPlayerIDs(players),
 		QueSuitBySeat:    append([]int32(nil), queSuits...),
 		Cursor:           srec.LastCursor,
 		State:            state,
@@ -262,6 +326,18 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		Snapshot:            snap,
 		SnapshotSinceCursor: srec.LastCursor,
 	}, nil
+}
+
+func clientSeatsFromPlayerIDs(players []string) []*clientv1.SeatInfo {
+	seats := make([]*clientv1.SeatInfo, 0, 4)
+	for i := 0; i < 4; i++ {
+		info := &clientv1.SeatInfo{SeatIndex: int32(i)} //nolint:gosec // 固定座位范围 0..3
+		if i < len(players) {
+			info.UserId = players[i]
+		}
+		seats = append(seats, info)
+	}
+	return seats
 }
 
 func seatIndexForUser(players []string, userID string) int {

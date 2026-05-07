@@ -17,18 +17,19 @@ const (
 	OverlayRoomInfo
 	// OverlayPlayers 玩家详情叠加层（Tab 键）：每家昵称、积分、状态。
 	OverlayPlayers
-	// OverlayMenu 局内菜单（Esc 键）：切换主题、重新连接、离桌等。
+	// OverlayMenu 局内菜单（Esc 键）：返回大厅或继续游戏。
 	OverlayMenu
+	// OverlayHelp 快速参考叠加层（? 键）：展示牌桌核心键位。
+	OverlayHelp
 )
 
 // OverlayMenuAction 是局内菜单项可触发的高层动作。
 type OverlayMenuAction string
 
 const (
-	OverlayMenuActionNone        OverlayMenuAction = ""
-	OverlayMenuActionToggleTheme OverlayMenuAction = "toggle_theme"
-	OverlayMenuActionLeaveRoom   OverlayMenuAction = "leave_room"
-	OverlayMenuActionResume      OverlayMenuAction = "resume"
+	OverlayMenuActionNone      OverlayMenuAction = ""
+	OverlayMenuActionLeaveRoom OverlayMenuAction = "leave_room"
+	OverlayMenuActionResume    OverlayMenuAction = "resume"
 )
 
 // OverlayState 维护当前叠加层种类与菜单选中项；非菜单类叠加层仅依赖 Kind。
@@ -88,7 +89,6 @@ type overlayMenuItem struct {
 
 func overlayMenuItems() []overlayMenuItem {
 	return []overlayMenuItem{
-		{Label: "切换牌面主题 (拟物 / ASCII)", Action: OverlayMenuActionToggleTheme},
 		{Label: "返回大厅", Action: OverlayMenuActionLeaveRoom},
 		{Label: "继续游戏", Action: OverlayMenuActionResume},
 	}
@@ -116,6 +116,8 @@ func DrawOverlay(scr tcell.Screen, layout TableLayout, view RoomView, ctx Overla
 		drawOverlayBox(scr, layout, "玩 家 详 情", overlayPlayersLines(view))
 	case OverlayMenu:
 		drawOverlayMenu(scr, layout, o.SelectedIndex)
+	case OverlayHelp:
+		drawOverlayBox(scr, layout, "快 速 参 考", overlayHelpLines())
 	}
 }
 
@@ -163,11 +165,31 @@ func overlayPlayersLines(view RoomView) []string {
 		if p.Ready {
 			ready = "  ✓ ready"
 		}
+		if p.IsBot {
+			ready += "  [BOT]"
+		}
+		if p.Surrendered {
+			ready += "  托管中"
+		}
 		lines = append(lines, fmt.Sprintf(" %s %d 号位  %-12s 手:%2d%s", mark, i+1, nickname, p.HandCnt, ready))
 	}
 	lines = append(lines, "")
 	lines = append(lines, "按 Tab 关闭")
 	return lines
+}
+
+func overlayHelpLines() []string {
+	return []string{
+		"←→ 选牌    Enter 出牌 / 确认",
+		"换三张: 空格标记三张,Enter 提交",
+		"定缺: m 万 / p 筒 / s 条",
+		"碰杠胡: p 碰 / g 杠 / h 胡 / n 过",
+		"机器人: waiting 阶段 b 补一个 / B 补满",
+		"信息: i 房间信息 / Tab 玩家详情",
+		"离桌: q 返回大厅 / Esc 菜单",
+		"",
+		"按 ? 或 Enter 关闭",
+	}
 }
 
 func drawOverlayMenu(scr tcell.Screen, layout TableLayout, selectedIdx int) {

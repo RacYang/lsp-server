@@ -59,3 +59,4 @@
 - [ADR-0034 日志动态级别管控](0034-logging-dynamic-level-control.md)：已采纳；限定 Phase 1 仅提供 AtomicLevel Go API，不开放未鉴权 HTTP 写端点。
 - [ADR-0035 OTel Logs Bridge 评估](0035-otel-logs-bridge.md)：已采纳；默认关闭 OTel 日志桥接，以 build tag 预留 trace/span 注入路径。
 - [ADR-0036 静态分析与 nolint 治理策略](0036-static-analysis-and-lint-policy.md)：已采纳；定义 golangci-lint SSOT、全局排除与行级 nolint 豁免边界。
+- [ADR-0037 Bot Supervisor 与 AddBot RPC](0037-bot-supervisor-and-add-bot-rpc.md)：已采纳；定义一键补位机器人、AddBot RPC 与 supervisor 后续边界。

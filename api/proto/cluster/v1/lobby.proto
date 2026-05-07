@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package cluster.v1;
 
+import "cluster/v1/room.proto";
+
 option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
 
 // LobbyService 提供房间创建、加入与元数据查询（集群内 gRPC，非客户端直连接口）。
@@ -11,6 +13,8 @@ service LobbyService {
   rpc GetRoom(GetRoomRequest) returns (GetRoomResponse);
   rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
   rpc AutoMatch(AutoMatchRequest) returns (AutoMatchResponse);
+  rpc LeaveRoom(LeaveRoomRequest) returns (LeaveRoomResponse);
+  rpc AddBot(AddBotRequest) returns (AddBotResponse);
 }
 
 message CreateRoomRequest {
@@ -38,6 +42,15 @@ message JoinRoomRequest {
 message JoinRoomResponse {
   int32 seat_index = 1;
   string error = 2;
+}
+
+message LeaveRoomRequest {
+  string room_id = 1;
+  string user_id = 2;
+}
+
+message LeaveRoomResponse {
+  string error = 1;
 }
 
 message GetRoomRequest {
@@ -75,6 +88,7 @@ message ListRoomsResponse {
 message AutoMatchRequest {
   string rule_id = 1;
   string user_id = 2;
+  bool pad_with_bots = 3;
 }
 
 message AutoMatchResponse {
@@ -82,4 +96,17 @@ message AutoMatchResponse {
   string room_node_id = 2;
   int32 seat_index = 3;
   string error = 4;
+}
+
+message AddBotRequest {
+  string room_id = 1;
+  string user_id = 2;
+  int32 count = 3;
+  string difficulty = 4;
+  string op_id = 5;
+}
+
+message AddBotResponse {
+  repeated SeatInfo added = 1;
+  string error = 2;
 }

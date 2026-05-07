@@ -4,10 +4,11 @@ import "fmt"
 
 // Room 为房间聚合根（Phase 1 内存版），包含状态机与座位绑定。
 type Room struct {
-	ID        string
-	FSM       *FSM
-	PlayerIDs [4]string
-	Ready     [4]bool
+	ID          string
+	FSM         *FSM
+	PlayerIDs   [4]string
+	Ready       [4]bool
+	Surrendered [4]bool
 }
 
 // NewRoom 创建空房间并进入 waiting（等待玩家加入）。
@@ -50,16 +51,18 @@ func (r *Room) JoinAutoSeat(userID string) (int, bool) {
 	return -1, false
 }
 
-// Leave 将玩家移出房间；开局后不允许离房，避免破坏进行中局面。
+// Leave 将玩家移出房间；playing 中改为 surrender，保留 user_id 以保证结算归属稳定。
 func (r *Room) Leave(userID string) error {
 	if r == nil || userID == "" {
 		return nil
 	}
-	if r.FSM != nil {
-		switch r.FSM.State() {
-		case StatePlaying, StateSettling, StateClosed:
-			return fmt.Errorf("room not leaveable in state %s", r.FSM.State())
+	if r.FSM != nil && r.FSM.State() == StatePlaying {
+		for i := 0; i < 4; i++ {
+			if r.PlayerIDs[i] == userID {
+				return r.Surrender(Seat(i))
+			}
 		}
+		return fmt.Errorf("not in room")
 	}
 	for i := 0; i < 4; i++ {
 		if r.PlayerIDs[i] != userID {
@@ -67,12 +70,25 @@ func (r *Room) Leave(userID string) error {
 		}
 		r.PlayerIDs[i] = ""
 		r.Ready[i] = false
+		r.Surrendered[i] = false
 		if r.FSM != nil && r.FSM.State() == StateReady {
 			return r.FSM.Transition(StateWaiting)
 		}
 		return nil
 	}
 	return fmt.Errorf("not in room")
+}
+
+// Surrender 标记座位托管，但不清除 user_id；用于进行中牌局的主动离房与断线兜底。
+func (r *Room) Surrender(seat Seat) error {
+	if r == nil || !seat.Valid() {
+		return nil
+	}
+	if r.PlayerIDs[seat] == "" {
+		return fmt.Errorf("empty seat")
+	}
+	r.Surrendered[seat] = true
+	return nil
 }
 
 // SetReady 标记座位准备状态；若四人全准备则切到 ready 态。

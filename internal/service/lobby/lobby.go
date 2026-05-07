@@ -39,6 +39,11 @@ type RoomMeta struct {
 	Stage       string
 }
 
+type BotSeat struct {
+	SeatIndex int32
+	UserID    string
+}
+
 type roomMeta struct {
 	ruleID      string
 	displayName string
@@ -220,13 +225,81 @@ func (s *Service) JoinRoom(_ context.Context, roomID, userID string) (int32, err
 	if seat, ok := s.seats[roomID][userID]; ok {
 		return seat, nil
 	}
-	seatCount := len(s.seats[roomID])
-	if seatCount >= 4 {
+	used := make(map[int32]bool, len(s.seats[roomID]))
+	for _, seat := range s.seats[roomID] {
+		used[seat] = true
+	}
+	if len(used) >= 4 {
 		return 0, ErrRoomFull
 	}
-	seat := int32(seatCount) //nolint:gosec // 最大仅 0..3，已由上方边界限制
+	var seat int32
+	for ; seat < 4; seat++ {
+		if !used[seat] {
+			break
+		}
+	}
 	s.seats[roomID][userID] = seat
 	return seat, nil
+}
+
+// LeaveRoom 立即从大厅座位索引中移除用户，不等待 room actor 完成托管或结算。
+func (s *Service) LeaveRoom(_ context.Context, roomID, userID string) error {
+	if s == nil {
+		return fmt.Errorf("nil lobby service")
+	}
+	if roomID == "" || userID == "" {
+		return fmt.Errorf("%w: empty room_id or user_id", ErrInvalidArgument)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seats, ok := s.seats[roomID]
+	if !ok {
+		return ErrRoomNotFound
+	}
+	delete(seats, userID)
+	return nil
+}
+
+// AddBot 在等待态房间中分配机器人座位；真实出牌由上层 bot supervisor 驱动。
+func (s *Service) AddBot(_ context.Context, roomID string, count int32, maxBots int) ([]BotSeat, error) {
+	if s == nil {
+		return nil, fmt.Errorf("nil lobby service")
+	}
+	if roomID == "" || count <= 0 {
+		return nil, fmt.Errorf("%w: invalid add bot request", ErrInvalidArgument)
+	}
+	if maxBots <= 0 {
+		maxBots = 3
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.roomIDs[roomID]; !ok {
+		return nil, ErrRoomNotFound
+	}
+	used := make(map[int32]bool, len(s.seats[roomID]))
+	bots := 0
+	for userID, seat := range s.seats[roomID] {
+		used[seat] = true
+		if strings.HasPrefix(userID, "bot:") {
+			bots++
+		}
+	}
+	target := int(count)
+	added := make([]BotSeat, 0, target)
+	for len(added) < target && len(used) < 4 && bots < maxBots {
+		var seat int32
+		for ; seat < 4; seat++ {
+			if !used[seat] {
+				break
+			}
+		}
+		userID := fmt.Sprintf("bot:%s:%d", roomID, seat)
+		s.seats[roomID][userID] = seat
+		used[seat] = true
+		bots++
+		added = append(added, BotSeat{SeatIndex: seat, UserID: userID})
+	}
+	return added, nil
 }
 
 // GetRoom 查询房间归属节点。

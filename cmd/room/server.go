@@ -221,6 +221,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 				return &clusterv1.SnapshotRoomResponse{
 					Cursor:           cur,
 					PlayerIds:        append([]string(nil), meta.PlayerIDs...),
+					Seats:            clusterSeatsFromPlayerIDs(meta.PlayerIDs),
 					QueSuitBySeat:    append([]int32(nil), meta.QueSuits...),
 					State:            meta.State,
 					ActingSeat:       view.ActingSeat,
@@ -252,6 +253,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	return &clusterv1.SnapshotRoomResponse{
 		Cursor:           cur,
 		PlayerIds:        players,
+		Seats:            clusterSeatsFromPlayerIDs(players),
 		QueSuitBySeat:    qs,
 		State:            state,
 		ActingSeat:       view.ActingSeat,
@@ -279,6 +281,18 @@ func handForSeat(hands [][]string, seat int) []string {
 		return nil
 	}
 	return append([]string(nil), hands[seat]...)
+}
+
+func clusterSeatsFromPlayerIDs(players []string) []*clusterv1.SeatInfo {
+	seats := make([]*clusterv1.SeatInfo, 0, 4)
+	for i := 0; i < 4; i++ {
+		info := &clusterv1.SeatInfo{SeatIndex: int32(i)} //nolint:gosec // 固定座位范围 0..3
+		if i < len(players) {
+			info.UserId = players[i]
+		}
+		seats = append(seats, info)
+	}
+	return seats
 }
 
 func stringMatrixToClusterSeatTiles(items [][]string) []*clusterv1.SeatTiles {
