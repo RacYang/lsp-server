@@ -17,40 +17,105 @@ fi
 
 mkdir -p "${OUTPUT_DIR}"
 
-generated_marker="$(yq -r '.paths.generated_marker' "${CONFIG_FILE}")"
-golangci_enable="$(yq -r '.lint.golangci.enable[]' "${CONFIG_FILE}")"
-revive_disable_rules="$(yq -r '(.lint.golangci.revive // {} | .disable_rules // [])[]' "${CONFIG_FILE}")"
+CONFIG_FILE="${CONFIG_FILE}" OUTPUT_FILE="${OUTPUT_DIR}/.golangci.yml" \
+HEADER="${HEADER}" python3 - <<'PY'
+import json
+import os
+import subprocess
 
-{
-  printf '%s\n' "${HEADER}"
-  printf 'version: "2"\n'
-  printf 'linters:\n'
-  printf '  default: none\n'
-  printf '  enable:\n'
-  printf '%s\n' "${golangci_enable}" | sed 's/^/    - /'
-  if [[ -n "${revive_disable_rules}" ]]; then
-    printf '  settings:\n'
-    printf '    revive:\n'
-    printf '      rules:\n'
-    while IFS= read -r rule; do
-      [[ -z "${rule}" ]] && continue
-      printf '        - name: %s\n' "${rule}"
-      printf '          disabled: true\n'
-    done <<<"${revive_disable_rules}"
-  fi
-  printf '  exclusions:\n'
-  printf '    paths:\n'
-  printf '      - ".*/%s/.*"\n' "${generated_marker}"
-  printf 'formatters:\n'
-  printf '  enable:\n'
-  printf '    - gofmt\n'
-  printf '    - goimports\n'
-  printf '  exclusions:\n'
-  printf '    paths:\n'
-  printf '      - ".*/%s/.*"\n' "${generated_marker}"
-  printf 'run:\n'
-  printf '  timeout: 5m\n'
-} >"${OUTPUT_DIR}/.golangci.yml"
+config_file = os.environ["CONFIG_FILE"]
+output_file = os.environ["OUTPUT_FILE"]
+header = os.environ["HEADER"]
+
+raw = subprocess.check_output(["yq", "-o=json", ".", config_file])
+config = json.loads(raw)
+generated_marker = config["paths"]["generated_marker"]
+golangci = config["lint"]["golangci"]
+
+
+def scalar(value):
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def emit_rule(lines, rule, indent):
+    lines.append(f"{indent}-")
+    nested = indent + "  "
+    for key in ("path", "path_except", "linters", "text", "source"):
+        if key not in rule:
+            continue
+        yaml_key = "path-except" if key == "path_except" else key
+        value = rule[key]
+        if isinstance(value, list):
+            lines.append(f"{nested}{yaml_key}:")
+            for item in value:
+                lines.append(f"{nested}  - {scalar(item)}")
+        else:
+            lines.append(f"{nested}{yaml_key}: {scalar(value)}")
+
+
+settings = golangci.get("settings") or {}
+legacy_revive = golangci.get("revive") or {}
+revive = settings.get("revive") or legacy_revive
+gosec = settings.get("gosec") or {}
+exclusions = golangci.get("exclusions") or {}
+exclude_paths = [f".*/{generated_marker}/.*", *exclusions.get("paths", [])]
+
+lines = [
+    header,
+    'version: "2"',
+    "linters:",
+    "  default: none",
+    "  enable:",
+]
+for linter in golangci.get("enable") or []:
+    lines.append(f"    - {linter}")
+
+if revive or gosec:
+    lines.append("  settings:")
+    disable_rules = revive.get("disable_rules") or []
+    if disable_rules:
+        lines.append("    revive:")
+        lines.append("      rules:")
+        for rule in disable_rules:
+            lines.append(f"        - name: {rule}")
+            lines.append("          disabled: true")
+    gosec_excludes = gosec.get("excludes") or []
+    if gosec_excludes:
+        lines.append("    gosec:")
+        lines.append("      excludes:")
+        for rule in gosec_excludes:
+            lines.append(f"        - {rule}")
+
+lines.append("  exclusions:")
+lines.append("    paths:")
+for path in exclude_paths:
+    lines.append(f"      - {scalar(path)}")
+
+rules = exclusions.get("rules") or []
+if rules:
+    lines.append("    rules:")
+    for rule in rules:
+        emit_rule(lines, rule, "      ")
+
+lines.extend([
+    "formatters:",
+    "  enable:",
+    "    - gofmt",
+    "    - goimports",
+    "  exclusions:",
+    "    paths:",
+])
+for path in exclude_paths:
+    lines.append(f"      - {scalar(path)}")
+
+lines.extend([
+    "run:",
+    "  timeout: 5m",
+])
+
+with open(output_file, "w") as fh:
+    fh.write("\n".join(lines) + "\n")
+PY
 
 # go-arch-lint v3: derived from .build/config.yaml lint.arch
 CONFIG_FILE="${CONFIG_FILE}" OUTPUT_FILE="${OUTPUT_DIR}/.go-arch-lint.yml" \

@@ -20,7 +20,7 @@ func TestJoinAndReadyFlow(t *testing.T) {
 		t.Fatal("expected full")
 	}
 	for i := 0; i < 4; i++ {
-		if err := r.SetReady(i, true); err != nil {
+		if err := r.SetReady(Seat(i), true); err != nil {
 			t.Fatalf("ready %d: %v", i, err)
 		}
 	}
@@ -72,7 +72,7 @@ func TestLeaveMovesReadyRoomBackToWaiting(t *testing.T) {
 		if _, ok := r.JoinAutoSeat(fmt.Sprintf("u%d", i)); !ok {
 			t.Fatalf("join seat %d", i)
 		}
-		if err := r.SetReady(i, true); err != nil {
+		if err := r.SetReady(Seat(i), true); err != nil {
 			t.Fatalf("ready %d: %v", i, err)
 		}
 	}

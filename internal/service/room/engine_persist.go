@@ -29,7 +29,7 @@ func (rs *RoundState) SnapshotView() RoundView {
 	}
 }
 
-func (rs *RoundState) recordDiscard(seat int, t tile.Tile) {
+func (rs *RoundState) recordDiscard(seat Seat, t tile.Tile) {
 	if rs == nil || seat < 0 || seat > 3 {
 		return
 	}
@@ -39,8 +39,8 @@ func (rs *RoundState) recordDiscard(seat int, t tile.Tile) {
 	rs.discards[seat] = append(rs.discards[seat], t)
 }
 
-func (rs *RoundState) removeLastDiscard(seat int, t tile.Tile) {
-	if rs == nil || seat < 0 || seat > 3 || seat >= len(rs.discards) {
+func (rs *RoundState) removeLastDiscard(seat Seat, t tile.Tile) {
+	if rs == nil || seat < 0 || seat > 3 || int(seat) >= len(rs.discards) {
 		return
 	}
 	ds := rs.discards[seat]
@@ -50,7 +50,7 @@ func (rs *RoundState) removeLastDiscard(seat int, t tile.Tile) {
 	rs.discards[seat] = ds[:len(ds)-1]
 }
 
-func (rs *RoundState) recordMeld(seat int, meld string) {
+func (rs *RoundState) recordMeld(seat Seat, meld string) {
 	if rs == nil || seat < 0 || seat > 3 || meld == "" {
 		return
 	}
@@ -102,7 +102,7 @@ func (rs *RoundState) roundClaimCandidates() []RoundClaimCandidate {
 	out := make([]RoundClaimCandidate, 0, len(rs.claimCandidates))
 	for _, candidate := range rs.claimCandidates {
 		out = append(out, RoundClaimCandidate{
-			Seat:    int32(candidate.seat), //nolint:gosec // 座位范围固定
+			Seat:    candidate.seat.Proto(),
 			Actions: append([]string(nil), candidate.actions...),
 		})
 	}
@@ -116,14 +116,14 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 	if rs.waitingExchange {
 		for seat, done := range rs.exchangeSubmitted {
 			if !done {
-				return int32(seat), "exchange_three", "", []string{"exchange_three"} //nolint:gosec // 座位范围固定
+				return Seat(seat).Proto(), "exchange_three", "", []string{"exchange_three"}
 			}
 		}
 	}
 	if rs.waitingQueMen {
 		for seat, done := range rs.queSubmitted {
 			if !done {
-				return int32(seat), "que_men", "", []string{"que_men"} //nolint:gosec // 座位范围固定
+				return Seat(seat).Proto(), "que_men", "", []string{"que_men"}
 			}
 		}
 	}
@@ -139,11 +139,11 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 			actions = append(actions, "pong")
 		}
 		if len(actions) > 0 {
-			return int32(seat), "claim_window", rs.lastDiscard.String(), actions //nolint:gosec // 座位范围固定
+			return seat.Proto(), "claim_window", rs.lastDiscard.String(), actions
 		}
 	}
 	if rs.waitingTsumo {
-		return int32(rs.turn), "tsumo_window", rs.pendingDraw.String(), []string{"hu", "pass"} //nolint:gosec // 座位范围固定
+		return rs.turn.Proto(), "tsumo_window", rs.pendingDraw.String(), []string{"hu", "pass"}
 	}
 	if rs.waitingDiscard {
 		actions := []string{"discard"}
@@ -153,7 +153,7 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 				break
 			}
 		}
-		return int32(rs.turn), "discard", "", actions //nolint:gosec // 座位范围固定
+		return rs.turn.Proto(), "discard", "", actions
 	}
 	return -1, "", "", nil
 }
@@ -176,16 +176,16 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		WaitingQueMen:          rs.waitingQueMen,
 		ExchangeDone:           append([]bool(nil), rs.exchangeSubmitted...),
 		QueDone:                append([]bool(nil), rs.queSubmitted...),
-		Turn:                   rs.turn,
+		Turn:                   int(rs.turn),
 		Step:                   rs.step,
-		DealerSeat:             rs.dealerSeat,
-		OpeningDrawSeat:        rs.openingDrawSeat,
+		DealerSeat:             int(rs.dealerSeat),
+		OpeningDrawSeat:        int(rs.openingDrawSeat),
 		DealerFirstDiscardOpen: rs.dealerFirstDiscardOpen,
 		WaitingDiscard:         rs.waitingDiscard,
 		WaitingTsumo:           rs.waitingTsumo,
 		ClaimWindowOpen:        rs.claimWindowOpen,
 		QiangGangWindow:        rs.qiangGangWindow,
-		WinnerSeats:            append([]int(nil), rs.winnerSeats...),
+		WinnerSeats:            seatsToPersist(rs.winnerSeats),
 		HuedSeats:              append([]bool(nil), rs.huedSeats...),
 		Ledger:                 append([]sichuanxzdd.ScoreEntry(nil), rs.ledger...),
 		GangRecords:            append([]rules.GangRecord(nil), rs.gangRecords...),
@@ -200,7 +200,7 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		rp.ClaimCandidates = make([]claimCandidatePersist, 0, len(rs.claimCandidates))
 		for _, candidate := range rs.claimCandidates {
 			rp.ClaimCandidates = append(rp.ClaimCandidates, claimCandidatePersist{
-				Seat:    candidate.seat,
+				Seat:    int(candidate.seat),
 				Actions: append([]string(nil), candidate.actions...),
 			})
 		}
@@ -213,7 +213,7 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 	}
 	if rs.lastDiscard != 0 {
 		rp.LastDiscard = rs.lastDiscard.String()
-		rp.LastDiscardSeat = rs.lastDiscardSeat
+		rp.LastDiscardSeat = int(rs.lastDiscardSeat)
 	}
 	for seat := 0; seat < 4; seat++ {
 		var ts []tile.Tile
@@ -331,12 +331,12 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		waitingTsumo:           rp.WaitingTsumo,
 		claimWindowOpen:        rp.ClaimWindowOpen,
 		qiangGangWindow:        rp.QiangGangWindow,
-		turn:                   rp.Turn,
+		turn:                   SeatFromInt(rp.Turn),
 		step:                   rp.Step,
-		dealerSeat:             rp.DealerSeat,
-		openingDrawSeat:        rp.OpeningDrawSeat,
+		dealerSeat:             SeatFromInt(rp.DealerSeat),
+		openingDrawSeat:        SeatFromInt(rp.OpeningDrawSeat),
 		dealerFirstDiscardOpen: rp.DealerFirstDiscardOpen,
-		winnerSeats:            append([]int(nil), rp.WinnerSeats...),
+		winnerSeats:            seatsFromPersist(rp.WinnerSeats),
 		huedSeats:              append([]bool(nil), rp.HuedSeats...),
 		ledger:                 append([]sichuanxzdd.ScoreEntry(nil), rp.Ledger...),
 		gangRecords:            append([]rules.GangRecord(nil), rp.GangRecords...),
@@ -368,9 +368,9 @@ func decodeTileFieldsIntoRound(rs *RoundState, rp *roundPersist) error {
 			return fmt.Errorf("parse last discard: %w", err)
 		}
 		rs.lastDiscard = t
-		rs.lastDiscardSeat = rp.LastDiscardSeat
+		rs.lastDiscardSeat = SeatFromInt(rp.LastDiscardSeat)
 	} else {
-		rs.lastDiscardSeat = -1
+		rs.lastDiscardSeat = SeatInvalid
 	}
 	return nil
 }
@@ -410,7 +410,7 @@ func decodeClaimCandidatesIntoRound(rs *RoundState, rp *roundPersist) error {
 			}
 		}
 		if len(actions) > 0 {
-			rs.claimCandidates = append(rs.claimCandidates, claimCandidate{seat: candidate.Seat, actions: actions})
+			rs.claimCandidates = append(rs.claimCandidates, claimCandidate{seat: Seat(candidate.Seat), actions: actions})
 		}
 	}
 	if rs.claimWindowOpen && len(rs.claimCandidates) == 0 {

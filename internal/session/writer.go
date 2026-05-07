@@ -44,12 +44,12 @@ func getConnWriter(c *websocket.Conn) *connWriter {
 		return nil
 	}
 	if v, ok := writerRegistry.Load(c); ok {
-		return v.(*connWriter) //nolint:forcetypeassert // 注册表仅存 *connWriter
+		return v.(*connWriter)
 	}
 	cw := newConnWriter(c)
 	actual, loaded := writerRegistry.LoadOrStore(c, cw)
 	if loaded {
-		return actual.(*connWriter) //nolint:forcetypeassert // 同上
+		return actual.(*connWriter)
 	}
 	go cw.run()
 	return cw
@@ -79,7 +79,7 @@ func CloseConn(c *websocket.Conn) error {
 		return nil
 	}
 	if v, ok := writerRegistry.Load(c); ok {
-		cw := v.(*connWriter) //nolint:forcetypeassert // 注册表仅存 *connWriter
+		cw := v.(*connWriter)
 		cw.once.Do(func() {
 			writerRegistry.Delete(c)
 			close(cw.ch)

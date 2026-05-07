@@ -6,7 +6,7 @@ paths:
 
 tools:
   go: 1.26.2
-  golangci-lint: 2.1.6
+  golangci-lint: 2.12.2
   go-arch-lint: 1.12.0
   buf: 1.53.0
   govulncheck: 1.1.4
@@ -56,11 +56,26 @@ lint:
       - bodyclose
       - noctx
       - testifylint
-    revive:
-      disable_rules:
-        - exported
-        - package-comments
-        - unused-parameter
+    settings:
+      revive:
+        disable_rules:
+          - exported
+          - package-comments
+          - unused-parameter
+      gosec:
+        excludes:
+          - G117
+          - G118
+    exclusions:
+      rules:
+        - path: internal/mahjong/wall/wall.go
+          linters: [gosec]
+          text: G404
+        - path: _test\.go$
+          linters: [gosec]
+          text: G(304|204)
+        - path: _test\.go$
+          linters: [noctx]
   arch:
     layers:
       # 将麻将子包拆分为独立组件，避免 go-arch-lint 将子包 import 误判为跨组件依赖

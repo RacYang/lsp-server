@@ -45,7 +45,7 @@ func TestSetReadyBackToWaiting(t *testing.T) {
 		_, _ = r.JoinAutoSeat("u" + string(rune('0'+i)))
 	}
 	for i := 0; i < 4; i++ {
-		if err := r.SetReady(i, true); err != nil {
+		if err := r.SetReady(Seat(i), true); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -66,7 +66,7 @@ func TestPlayingLifecycle(t *testing.T) {
 		_, _ = r.JoinAutoSeat("p" + string(rune('0'+i)))
 	}
 	for i := 0; i < 4; i++ {
-		_ = r.SetReady(i, true)
+		_ = r.SetReady(Seat(i), true)
 	}
 	if err := r.StartPlaying(); err != nil {
 		t.Fatal(err)

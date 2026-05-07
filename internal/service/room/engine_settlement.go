@@ -26,10 +26,10 @@ func (rs *RoundState) finishRound() (Notification, error) {
 	return Notification{Kind: KindSettlement, Payload: settlementPayload, TargetSeat: BroadcastSeat}, nil
 }
 
-func buildSettlementNotification(roomID string, playerIDs [4]string, winnerSeats []int, seatScores []*clientv1.SeatScore, penalties []*clientv1.PenaltyItem, breakdowns []*clientv1.WinnerBreakdown, detail string) ([]byte, error) {
+func buildSettlementNotification(roomID string, playerIDs [4]string, winnerSeats []Seat, seatScores []*clientv1.SeatScore, penalties []*clientv1.PenaltyItem, breakdowns []*clientv1.WinnerBreakdown, detail string) ([]byte, error) {
 	winnerIDs := make([]string, 0, len(winnerSeats))
 	for _, seat := range winnerSeats {
-		if seat >= 0 && seat < len(playerIDs) {
+		if seat >= 0 && int(seat) < len(playerIDs) {
 			winnerIDs = append(winnerIDs, playerIDs[seat])
 		}
 	}

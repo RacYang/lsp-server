@@ -75,14 +75,14 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	out = append(out, Notification{Kind: KindStartGame, Payload: startPayload, TargetSeat: BroadcastSeat})
 
 	ledger := make([]sichuanxzdd.ScoreEntry, 0, 8)
-	winnerSeat := -1
-	turn := 0
+	winnerSeat := SeatInvalid
+	turn := Seat(0)
 	for step := 0; step < autoRoundStepLimit && w.Remaining() > 0; step++ {
 		drawn, err := w.Draw()
 		if err != nil {
 			return nil, err
 		}
-		seatIndex := int32(turn) //nolint:gosec // G115：turn 仅在 0..3 间轮转
+		seatIndex := turn.Proto()
 		drawPayload, err := marshalEnvelope(&clientv1.Envelope{
 			ReqId: fmt.Sprintf("draw-%d", step),
 			Body: &clientv1.Envelope_DrawTile{
@@ -101,7 +101,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 				IsTsumo:       true,
 				IsOpeningDraw: step == 0 && turn == 0,
 			})
-			for other := 0; other < 4; other++ {
+			for other := Seat(0); other < SeatCount; other++ {
 				if other == turn {
 					continue
 				}
@@ -122,6 +122,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		}
 
 		hands[turn].Add(drawn)
+		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 		discard := chooseDiscard(hands[turn], tile.Suit(queBySeat[turn]))
 		if err := hands[turn].Remove(discard); err != nil {
 			return nil, err
@@ -139,7 +140,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		turn = (turn + 1) % 4
 	}
 
-	var winnerSeats []int
+	var winnerSeats []Seat
 	if winnerSeat >= 0 {
 		winnerSeats = append(winnerSeats, winnerSeat)
 	}

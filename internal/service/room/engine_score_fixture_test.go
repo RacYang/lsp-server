@@ -49,7 +49,7 @@ func TestScoreLedgerYAMLFixtures(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			rs := scoreRoundState()
 			if tc.GangKind != "" {
-				appendGangEntries(rs, tc.Seat, tile.Must(tile.SuitCharacters, 5), fixtureLedgerGangKind(t, tc.GangKind), -1)
+				appendGangEntries(rs, SeatFromInt(tc.Seat), tile.Must(tile.SuitCharacters, 5), fixtureLedgerGangKind(t, tc.GangKind), SeatInvalid)
 				for _, entry := range rs.ledger {
 					if entry.Amount != tc.AmountPerPayer {
 						t.Fatalf("amount = %d, want %d", entry.Amount, tc.AmountPerPayer)
@@ -59,7 +59,7 @@ func TestScoreLedgerYAMLFixtures(t *testing.T) {
 			}
 			breakdown := fan.Breakdown{}
 			breakdown.Add(fan.KindPingHu, tc.Fan, "平胡")
-			appendHuEntries(rs, tc.Winner, tc.Fan, fixtureHuSource(t, tc.Source), tc.Payer, breakdown)
+			appendHuEntries(rs, SeatFromInt(tc.Winner), tc.Fan, fixtureHuSource(t, tc.Source), SeatFromInt(tc.Payer), breakdown)
 			for _, want := range tc.ExpectEntries {
 				if !ledgerHasEntry(rs.ledger, want) {
 					t.Fatalf("missing ledger entry %+v in %+v", want, rs.ledger)
@@ -104,7 +104,7 @@ func fixtureLedgerGangKind(t *testing.T, raw string) rules.GangKind {
 
 func ledgerHasEntry(entries []sichuanxzdd.ScoreEntry, want fixtureLedgerEntry) bool {
 	for _, entry := range entries {
-		if entry.FromSeat == want.From && entry.ToSeat == want.To && entry.Amount == want.Amount {
+		if entry.FromSeat == SeatFromInt(want.From) && entry.ToSeat == SeatFromInt(want.To) && entry.Amount == want.Amount {
 			return true
 		}
 	}

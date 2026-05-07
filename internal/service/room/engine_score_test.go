@@ -80,7 +80,7 @@ func scoreRoundState() *RoundState {
 		queBySeat:       make([]int32, 4),
 		lastDiscardSeat: -1,
 		huedSeats:       make([]bool, 4),
-		winnerSeats:     make([]int, 0, 3),
+		winnerSeats:     make([]Seat, 0, 3),
 		ledger:          make([]sichuanxzdd.ScoreEntry, 0, 4),
 	}
 }

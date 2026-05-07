@@ -12,7 +12,7 @@ import (
 
 func TestFinishRoundBuildsSettlementEnvelope(t *testing.T) {
 	rs := scoreRoundState()
-	rs.winnerSeats = []int{1}
+	rs.winnerSeats = []Seat{1}
 	rs.ledger = []sichuanxzdd.ScoreEntry{{
 		Reason:     sichuanxzdd.ReasonHuDiscard,
 		FromSeat:   0,

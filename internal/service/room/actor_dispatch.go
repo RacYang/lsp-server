@@ -44,7 +44,7 @@ func (a *roomActor) doReady(userID string) ([]Notification, error) {
 	if seat < 0 {
 		return nil, fmt.Errorf("not in room")
 	}
-	if err := r.SetReady(seat, true); err != nil {
+	if err := r.SetReady(domainroom.Seat(seat), true); err != nil {
 		return nil, err
 	}
 	if r.FSM.State() == domainroom.StateReady {
@@ -185,19 +185,19 @@ func (a *roomActor) doQueMen(userID string, suit int32) ([]Notification, error) 
 	return a.engine.ApplyQueMen(context.Background(), a.round, seat, suit)
 }
 
-func (a *roomActor) seatOf(userID string) (int, error) {
+func (a *roomActor) seatOf(userID string) (Seat, error) {
 	if a.room == nil {
-		return -1, fmt.Errorf("nil room")
+		return SeatInvalid, fmt.Errorf("nil room")
 	}
 	if a.round == nil {
-		return -1, fmt.Errorf("round not started")
+		return SeatInvalid, fmt.Errorf("round not started")
 	}
 	for i := 0; i < 4; i++ {
 		if a.room.PlayerIDs[i] == userID {
-			return i, nil
+			return Seat(i), nil
 		}
 	}
-	return -1, fmt.Errorf("not in room")
+	return SeatInvalid, fmt.Errorf("not in room")
 }
 
 func (a *roomActor) closeRoomAfterRound() {

@@ -30,7 +30,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		logx.Error(ctx, "聚合入口配置加载失败", "err", err.Error())
 		return 1
 	}
-	a, err := app.NewAllInProcess(cfg)
+	a, err := app.NewAllInProcess(ctx, cfg)
 	if err != nil {
 		logx.Error(ctx, "聚合入口装配失败", "err", err.Error())
 		return 1

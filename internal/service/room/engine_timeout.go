@@ -21,14 +21,14 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 	if rs.waitingExchange {
 		for seat, done := range rs.exchangeSubmitted {
 			if !done {
-				return e.ApplyExchangeThree(ctx, rs, seat, nil, defaultExchangeDirection)
+				return e.ApplyExchangeThree(ctx, rs, Seat(seat), nil, defaultExchangeDirection)
 			}
 		}
 	}
 	if rs.waitingQueMen {
 		for seat, done := range rs.queSubmitted {
 			if !done {
-				return e.ApplyQueMen(ctx, rs, seat, 0)
+				return e.ApplyQueMen(ctx, rs, Seat(seat), 0)
 			}
 		}
 	}
@@ -51,6 +51,7 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 		return e.ApplyDiscard(ctx, rs, rs.turn, rs.pendingDraw.String())
 	}
 	if rs.waitingDiscard {
+		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 		discard := chooseDiscard(rs.hands[rs.turn], tile.Suit(rs.queBySeat[rs.turn]))
 		return e.ApplyDiscard(ctx, rs, rs.turn, discard.String())
 	}

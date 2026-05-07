@@ -17,8 +17,9 @@ type GRPCApp struct {
 }
 
 // NewGRPC 根据监听地址与注册回调装配 gRPC 服务。
-func NewGRPC(addr string, register func(*grpc.Server)) (*GRPCApp, error) {
-	ln, err := net.Listen("tcp", addr)
+func NewGRPC(ctx context.Context, addr string, register func(*grpc.Server)) (*GRPCApp, error) {
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("监听 gRPC 地址失败: %w", err)
 	}

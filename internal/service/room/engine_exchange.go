@@ -11,7 +11,7 @@ import (
 )
 
 // ApplyExchangeThree 记录某座位已完成换三张确认；四家齐备后再统一换牌并进入定缺阶段。
-func (e *Engine) ApplyExchangeThree(_ context.Context, rs *RoundState, seat int, tiles []string, direction int32) ([]Notification, error) {
+func (e *Engine) ApplyExchangeThree(_ context.Context, rs *RoundState, seat Seat, tiles []string, direction int32) ([]Notification, error) {
 	if e == nil {
 		return nil, fmt.Errorf("nil engine")
 	}
@@ -76,7 +76,7 @@ func (rs *RoundState) initRoundNotifications() ([]Notification, error) {
 func (rs *RoundState) promptSeatActions(action string) []Notification {
 	out := make([]Notification, 0, 4)
 	for seat := 0; seat < 4; seat++ {
-		seatIndex := int32(seat) //nolint:gosec // 座位范围固定
+		seatIndex := SeatFromInt(seat).Proto()
 		payload, err := marshalEnvelope(&clientv1.Envelope{
 			ReqId: fmt.Sprintf("%s-%d", action, seat),
 			Body: &clientv1.Envelope_Action{
@@ -103,7 +103,7 @@ func exchangeThree(hands []*hand.Hand) []*clientv1.SeatTiles {
 	perSeat := make([]*clientv1.SeatTiles, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		from := (seat + int(defaultExchangeDirection)) % 4
-		seatIndex := int32(seat) //nolint:gosec // G115：seat 仅在 0..3 范围
+		seatIndex := SeatFromInt(seat).Proto()
 		for _, t := range exchanged[from] {
 			hands[seat].Add(t)
 		}
@@ -134,7 +134,7 @@ func exchangeThreeWithSelections(hands []*hand.Hand, selections [][]tile.Tile, d
 	perSeat := make([]*clientv1.SeatTiles, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		from := (seat + int(offset)) % 4
-		seatIndex := int32(seat) //nolint:gosec // G115：seat 仅在 0..3 范围
+		seatIndex := SeatFromInt(seat).Proto()
 		for _, t := range exchanged[from] {
 			hands[seat].Add(t)
 		}

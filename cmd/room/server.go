@@ -97,7 +97,7 @@ func (s *roomGRPCServer) persistNotifications(ctx context.Context, roomID string
 			rows = append(rows, postgres.RoomEventRow{
 				Kind:       string(notification.Kind),
 				Payload:    append([]byte(nil), notification.Payload...),
-				TargetSeat: notification.TargetSeat,
+				TargetSeat: notification.TargetSeat.Proto(),
 			})
 		}
 		persistedRows, err := s.ev.AppendEvents(ctx, roomID, rows)
@@ -441,7 +441,7 @@ func (s *roomGRPCServer) removeStream(roomID string, target chan *clusterv1.Room
 }
 
 func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*clusterv1.RoomServiceStreamEventsResponse, error) {
-	n := roomsvc.Notification{Kind: roomsvc.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...), TargetSeat: row.TargetSeat}
+	n := roomsvc.Notification{Kind: roomsvc.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...), TargetSeat: roomsvc.Seat(row.TargetSeat)}
 	cur := fmt.Sprintf("%s:%d", roomID, row.Seq)
 	return mapNotificationToEvent(roomID, cur, n)
 }
@@ -455,7 +455,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 	resp := &clusterv1.RoomServiceStreamEventsResponse{
 		RoomId:     roomID,
 		Cursor:     cursor,
-		TargetSeat: notification.TargetSeat,
+		TargetSeat: notification.TargetSeat.Proto(),
 	}
 	switch notification.Kind {
 	case roomsvc.KindInitialDeal:

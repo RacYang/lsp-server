@@ -20,7 +20,8 @@ import (
 // freePort 借助内核分配一个随机可用端口；返回 host:port 字符串与立刻关闭的 listener 副作用，避免端口冲突。
 func freePort(t *testing.T) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := ln.Addr().String()
 	require.NoError(t, ln.Close())
@@ -73,12 +74,13 @@ func TestStartObsHTTPEndpoints(t *testing.T) {
 	t.Cleanup(stop)
 
 	base := "http://" + addr
+	dialer := &net.Dialer{Timeout: 100 * time.Millisecond}
 	waitFor(t, func() bool {
 		_, _, err := net.SplitHostPort(addr)
 		if err != nil {
 			return false
 		}
-		conn, derr := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		conn, derr := dialer.DialContext(t.Context(), "tcp", addr)
 		if derr != nil {
 			return false
 		}
@@ -115,8 +117,9 @@ func TestStartObsHTTPReadyzReportsRedisFailure(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(stop)
 
+	dialer := &net.Dialer{Timeout: 100 * time.Millisecond}
 	waitFor(t, func() bool {
-		conn, derr := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		conn, derr := dialer.DialContext(t.Context(), "tcp", addr)
 		if derr != nil {
 			return false
 		}

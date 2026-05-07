@@ -1,0 +1,5 @@
+package negative
+
+func missingReason() {
+	_ = 1 //nolint:gosec
+}

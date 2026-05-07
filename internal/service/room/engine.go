@@ -32,18 +32,13 @@ const (
 	KindSettlement        Kind = "settlement"
 )
 
-const (
-	// BroadcastSeat 表示通知面向房间内所有座位广播。
-	BroadcastSeat int32 = -1
-
-	defaultExchangeDirection int32 = 3
-)
+const defaultExchangeDirection int32 = 3
 
 // Notification 为 room 服务产出的通知载荷；payload 已是 client.v1.Envelope 的序列化结果。
 type Notification struct {
 	Kind       Kind
 	Payload    []byte
-	TargetSeat int32
+	TargetSeat Seat
 }
 
 // Engine 负责在单房上下文内生成确定性的血战流程通知。
@@ -74,17 +69,17 @@ type RoundState struct {
 	pendingDraw            tile.Tile
 	currentDraw            tile.Tile
 	lastDiscard            tile.Tile
-	lastDiscardSeat        int
+	lastDiscardSeat        Seat
 	claimWindowOpen        bool
 	claimCandidates        []claimCandidate
 	qiangGangWindow        bool
-	turn                   int
+	turn                   Seat
 	step                   int
-	dealerSeat             int
-	openingDrawSeat        int
+	dealerSeat             Seat
+	openingDrawSeat        Seat
 	dealerFirstDiscardOpen bool
 	huedSeats              []bool
-	winnerSeats            []int
+	winnerSeats            []Seat
 	ledger                 []sichuanxzdd.ScoreEntry
 	gangRecords            []rules.GangRecord
 	lastGangFollowUp       bool
@@ -93,7 +88,7 @@ type RoundState struct {
 }
 
 type claimCandidate struct {
-	seat    int
+	seat    Seat
 	actions []string
 }
 
@@ -191,7 +186,7 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 		dealerSeat:        0,
 		openingDrawSeat:   0,
 		huedSeats:         make([]bool, 4),
-		winnerSeats:       make([]int, 0, 3),
+		winnerSeats:       make([]Seat, 0, 3),
 		ledger:            make([]sichuanxzdd.ScoreEntry, 0, 16),
 	}
 	for i := range rs.hands {
@@ -224,7 +219,8 @@ func (rs *RoundState) initialDealNotifications() ([]Notification, error) {
 	}
 	out := make([]Notification, 0, 4)
 	for seat := 0; seat < 4; seat++ {
-		seatIndex := int32(seat) //nolint:gosec // 座位范围固定
+		seatID := Seat(seat)
+		seatIndex := seatID.Proto()
 		payload, err := marshalEnvelope(&clientv1.Envelope{
 			ReqId: fmt.Sprintf("initial-deal-%d", seat),
 			Body: &clientv1.Envelope_InitialDeal{
@@ -237,7 +233,7 @@ func (rs *RoundState) initialDealNotifications() ([]Notification, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, Notification{Kind: KindInitialDeal, Payload: payload, TargetSeat: seatIndex})
+		out = append(out, Notification{Kind: KindInitialDeal, Payload: payload, TargetSeat: seatID})
 	}
 	return out, nil
 }

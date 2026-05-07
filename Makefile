@@ -16,7 +16,7 @@ HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 .PHONY: bootstrap generate fix fix-file build-cli build-bot build-cli-all verify verify-fast verify-pre-commit verify-image verify-bench \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
-	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang verify-domain verify-redis-keys verify-metrics-naming verify-gate-session-routing \
+	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang verify-nolint-policy verify-domain verify-redis-keys verify-metrics-naming verify-gate-session-routing \
 	verify-cli-release-targets verify-git-repo verify-git-local verify-git-push
 
 bootstrap:
@@ -61,9 +61,9 @@ build-cli-all:
 	done
 	@(cd dist && files="$$(find . -maxdepth 1 -type f -name 'lsp-cli_*' -print | sort)"; if command -v shasum >/dev/null 2>&1; then shasum -a 256 $$files > SHA256SUMS; else sha256sum $$files > SHA256SUMS; fi)
 
-verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-tools verify-determinism verify-cli-release-targets verify-git-repo verify-lang verify-domain
+verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-tools verify-determinism verify-cli-release-targets verify-git-repo verify-lang verify-nolint-policy verify-domain
 
-verify-fast: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-test-fast verify-secrets verify-meta verify-config verify-tools verify-determinism verify-cli-release-targets verify-git-repo verify-lang verify-domain
+verify-fast: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-test-fast verify-secrets verify-meta verify-config verify-tools verify-determinism verify-cli-release-targets verify-git-repo verify-lang verify-nolint-policy verify-domain
 
 verify-git-repo:
 	@python3 scripts/verify-repo-hygiene.py
@@ -243,6 +243,9 @@ verify-lang:
 	@python3 scripts/verify-no-direct-logging.py
 	@python3 scripts/verify-log-calls.py
 	@python3 scripts/verify-log-boundaries.py
+
+verify-nolint-policy:
+	@python3 scripts/verify-nolint-policy.py
 
 verify-domain: verify-redis-keys verify-metrics-naming verify-gate-session-routing
 

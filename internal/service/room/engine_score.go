@@ -8,7 +8,7 @@ import (
 )
 
 // appendHuEntries 把一次胡牌转换为可审计结算流水；自摸三家支付，点炮与抢杠只由责任座位支付。
-func appendHuEntries(rs *RoundState, winner, fanTotal int, source rules.HuSource, payer int, breakdown fan.Breakdown) {
+func appendHuEntries(rs *RoundState, winner Seat, fanTotal int, source rules.HuSource, payer Seat, breakdown fan.Breakdown) {
 	if rs == nil || winner < 0 || winner > 3 || fanTotal <= 0 {
 		return
 	}
@@ -25,7 +25,7 @@ func appendHuEntries(rs *RoundState, winner, fanTotal int, source rules.HuSource
 		names = append(names, sichuanxzdd.ReasonBaoPai)
 	}
 	if source == rules.HuSourceTsumo {
-		for other := 0; other < 4; other++ {
+		for other := Seat(0); other < SeatCount; other++ {
 			if other == winner || rs.isHued(other) {
 				continue
 			}
@@ -39,7 +39,7 @@ func appendHuEntries(rs *RoundState, winner, fanTotal int, source rules.HuSource
 }
 
 // appendGangEntries 记录一笔杠分流水，并保留原始 GangRecord 供抢杠、退税与番种计算使用。
-func appendGangEntries(rs *RoundState, seat int, gangTile tile.Tile, kind rules.GangKind, fromSeat int) {
+func appendGangEntries(rs *RoundState, seat Seat, gangTile tile.Tile, kind rules.GangKind, fromSeat Seat) {
 	if rs == nil || seat < 0 || seat > 3 {
 		return
 	}
@@ -52,7 +52,7 @@ func appendGangEntries(rs *RoundState, seat int, gangTile tile.Tile, kind rules.
 	case rules.GangKindBu:
 		reason = sichuanxzdd.ReasonGangBu
 	}
-	for other := 0; other < 4; other++ {
+	for other := Seat(0); other < SeatCount; other++ {
 		if other == seat || rs.isHued(other) {
 			continue
 		}
@@ -62,7 +62,7 @@ func appendGangEntries(rs *RoundState, seat int, gangTile tile.Tile, kind rules.
 			ToSeat:     seat,
 			Amount:     amount,
 			Step:       rs.step,
-			WinnerSeat: -1,
+			WinnerSeat: SeatInvalid,
 		})
 	}
 	rs.gangRecords = append(rs.gangRecords, rules.GangRecord{
@@ -77,7 +77,7 @@ func appendGangEntries(rs *RoundState, seat int, gangTile tile.Tile, kind rules.
 }
 
 // huScoreEntry 统一胡牌流水字段，避免各个动作分支分别拼装结算结构。
-func huScoreEntry(reason string, from, to int, amount int32, step, winner int, names []string) sichuanxzdd.ScoreEntry {
+func huScoreEntry(reason string, from, to Seat, amount int32, step int, winner Seat, names []string) sichuanxzdd.ScoreEntry {
 	return sichuanxzdd.ScoreEntry{
 		Reason:     reason,
 		FromSeat:   from,
