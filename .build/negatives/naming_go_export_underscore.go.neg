@@ -1,0 +1,3 @@
+package sample
+
+type Bad_Name struct{}

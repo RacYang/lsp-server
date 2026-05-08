@@ -1,0 +1,10 @@
+id: runbook
+purpose: 运维运行手册骨架
+applies_to_glob: "docs/**/*.md"
+coverage_cell: operate/runbook
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "## 背景[\\s\\S]+## 操作步骤[\\s\\S]+## 回滚"
+related_rules: [docs-chinese]
+related_skills: [add-deploy-overlay]

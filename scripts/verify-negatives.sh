@@ -254,6 +254,28 @@ run_gate_session_routing_negative() {
   fi
 }
 
+run_source_shape_negative() {
+  local negative_file="$1"
+  local check="$2"
+  if python3 "${ROOT_DIR}/scripts/verify-source-shape.py" --check "${check}" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
+run_skill_shape_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --skill-file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
+run_template_shape_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --manifest-file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
 run_nolint_policy_negatives() {
   local negative_file
   for negative_file in "${ROOT_DIR}"/.build/negatives/nolint_policy_*.go.neg; do
@@ -340,6 +362,30 @@ for rule in "${RULES_DIR}"/*.mdc; do
       ;;
     *gate_session_routing*.go.neg)
       run_gate_session_routing_negative "${negative_file}"
+      ;;
+    *naming_go*.go.neg)
+      run_source_shape_negative "${negative_file}" "naming"
+      ;;
+    *package_doc*.go.neg)
+      run_source_shape_negative "${negative_file}" "package-doc"
+      ;;
+    *generated_marker*.go.neg)
+      run_source_shape_negative "${negative_file}" "generated-marker"
+      ;;
+    *test_layout*.go.neg)
+      run_source_shape_negative "${negative_file}" "test-layout"
+      ;;
+    *file_header*.sh.neg|*file_header*.py.neg)
+      run_source_shape_negative "${negative_file}" "file-header"
+      ;;
+    *rule_shape*.mdc.neg)
+      run_source_shape_negative "${negative_file}" "rule-shape"
+      ;;
+    *skill_shape*.md.neg)
+      run_skill_shape_negative "${negative_file}"
+      ;;
+    *template_shape*.yaml.neg|*template_shape*.yml.neg)
+      run_template_shape_negative "${negative_file}"
       ;;
     *nolint_policy*.go.neg)
       run_nolint_policy_negatives

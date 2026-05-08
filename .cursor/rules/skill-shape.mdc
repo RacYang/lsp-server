@@ -1,0 +1,13 @@
+---
+kind: constraint
+description: Skill 文档必须使用四锚点结构
+globs: ".cursor/skills/**/SKILL.md"
+adr: docs/adr/0042-agent-governance.md
+enforcer: scripts/verify-skeleton.py
+negative_test: .build/negatives/skill_shape_missing_anchor.md.neg
+---
+
+# Skill 形态
+
+- 每个 SKILL.md 必须包含 `When to use`、`Inputs`、`Steps`、`Verify`。
+- Skill 只描述流程，不复述 rule 的负例与执行器细节。

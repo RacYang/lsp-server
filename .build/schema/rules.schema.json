@@ -6,7 +6,7 @@
   "properties": {
     "kind": {
       "type": "string",
-      "enum": ["constraint", "norm"]
+      "const": "constraint"
     },
     "description": {
       "type": "string",
@@ -41,20 +41,6 @@
       },
       "then": {
         "required": ["enforcer", "negative_test"]
-      }
-    },
-    {
-      "if": {
-        "properties": { "kind": { "const": "norm" } }
-      },
-      "then": {
-        "not": {
-          "anyOf": [
-            { "required": ["globs"] },
-            { "required": ["enforcer"] },
-            { "required": ["negative_test"] }
-          ]
-        }
       }
     },
     {

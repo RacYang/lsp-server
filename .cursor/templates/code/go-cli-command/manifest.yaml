@@ -1,0 +1,9 @@
+id: go-cli-command
+purpose: CLI 子命令骨架
+applies_to_glob: "cmd/cli/**"
+coverage_cell: build/cli
+verify:
+  - kind: presence
+    path: "{target}/doc.go"
+related_rules: [cli-release-targets, package-doc]
+related_skills: [scaffold-package]

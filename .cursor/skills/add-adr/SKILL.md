@@ -19,7 +19,7 @@ description: 新增架构决策记录。用于引入新的治理、架构、协�
 
 1. 在 `docs/adr/` 新增 ADR 文件，frontmatter 必须包含 `title`、`status`、`date`。
 2. 正文至少包含 `## 状态`、`## 背景`、`## 决策`、`## 后果`。
-3. 如 ADR 引入硬约束，同时补 `.cursor/rules/*.mdc`、enforcer 与 `.build/negatives/*.neg`。
+3. 如 ADR 引入硬约束，本技能只记录决策；随后必须切换到 `add-constraint` 完成 rule、enforcer 与负例闭环。
 4. 更新 `docs/adr/README.md` 的分阶段索引。
 5. 按影响面同步 `README.md`、`CHANGELOG.md` 与专题文档。
 

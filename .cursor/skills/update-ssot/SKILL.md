@@ -9,6 +9,8 @@ description: 修改治理 SSOT。用于编辑 .build/config.yaml、同步 schema
 
 当需要改变治理阈值、工具版本、lint/arch/deps/proto/git/language/logging 等工程规则，或新增被 enforcer 读取的配置节时使用。
 
+边界：改阈值、版本、白名单、列表项或既有配置结构时使用本技能；新增一条可执行规则维度时先使用 `add-adr` 决策，再使用 `add-constraint` 落地。
+
 ## Inputs
 
 - SSOT 字段：`.build/config.yaml` 中的路径与新值。
@@ -20,7 +22,7 @@ description: 修改治理 SSOT。用于编辑 .build/config.yaml、同步 schema
 1. 先编辑 `.build/config.yaml`，不要直接改派生产物作为事实源。
 2. 同步 `.build/schema/config.schema.json`，确保新字段被 schema 接纳。
 3. 如字段参与派生，更新 `.build/derive.sh` 并运行 `make generate`。
-4. 如字段参与校验，更新对应 `scripts/verify-*`、`.cursor/rules/*.mdc` 与 `.build/negatives/*.neg`。
+4. 如字段参与校验，更新对应校验脚本、rule 与负例样本。
 5. 确认 hook/CI 映射仍符合 `git.ci_parity`。
 
 ## Verify

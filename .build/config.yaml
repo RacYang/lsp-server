@@ -387,6 +387,17 @@ release:
     - linux/arm64
     - windows/amd64
 
+governance:
+  agents_md_max_lines: 80
+  rules_max_count: 45
+  skills_max_count: 25
+  templates_max_count: 25
+  agents_md_required_anchors:
+    - "## 总纪律"
+    - "## 任务路由"
+    - "## 导航"
+    - "## 边界声明"
+
 stage_gates:
   bootstrap:
     cover_strict: false

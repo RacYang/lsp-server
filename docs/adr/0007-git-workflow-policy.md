@@ -33,8 +33,15 @@ date: 2026-04-22
 - 推送前校验与 CI 共享同一套 `make verify` 目标集合，减少「本地过、CI 挂」的漂移。
 - 后续若引入 `develop` 或多保护分支，仅需扩展 SSOT 与放行列表，并评估是否修订本 ADR。
 
+## 操作建议
+
+- 向 `main` 的合并在托管侧以 squash merge 为主；禁止普通 merge commit 直接落到 `main` 主要由托管侧「仅允许 squash」按钮与分支保护实现，本地 hook 无法完整替代。
+- 向非受保护分支强推时，优先使用 `git push --force-with-lease`，降低覆盖他人新提交的风险；`pre-push` 无法区分 `--force` 与 `--force-with-lease`，因此本项为流程规范，不作为本地硬校验。
+- `git.signing.policy` 当前为 `recommended`：鼓励在本地与 CI 逐步启用签名提交；若未来改为强制，应同步修订 ADR、SSOT、enforcer 与负例。
+
 ## 相关
 
 - [ADR-0000](0000-engineering-charter.md) 工程宪章
 - [ADR-0004](0004-language-and-writing-policy.md) 语言与书写策略
+- [ADR-0029](0029-signed-commit-required.md) 签名提交升级评估
 - `.cursor/rules/git-*.mdc` 可执行规则

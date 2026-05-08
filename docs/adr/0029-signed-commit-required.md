@@ -44,3 +44,4 @@ date: 2026-04-28
 - `.github/workflows/ci.yml` 已通过 `scripts/verify-signed-commit-trial.sh` 接入不阻断试运行，未签名提交或未受信公钥只输出 warning。
 - 待签名试运行完成后，再以独立 PR 把 `git.signing.policy` 改为 `required`。
 - 若升级，需同步修订 ADR-0007 与 `.cursor/rules/git-signed-commits.mdc`。
+- 当前 `recommended` 阶段不在 `.cursor/rules/` 保留独立 norm 规则；相关操作建议归并到 ADR-0007 与本文档。

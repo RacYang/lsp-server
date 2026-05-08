@@ -1,0 +1,10 @@
+id: exported-func
+purpose: 导出函数中文注释样板
+applies_to_glob: "**/*.go"
+coverage_cell: crosscut/comment
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "// [A-Z][A-Za-z0-9]+ .*[\\u4e00-\\u9fff]"
+related_rules: [code-comments-chinese]
+related_skills: [scaffold-package]

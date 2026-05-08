@@ -1,0 +1,10 @@
+---
+kind: constraint
+description: 缺少 enforcer
+adr: docs/adr/0042-agent-governance.md
+negative_test: .build/negatives/rule_shape_missing_enforcer.mdc.neg
+---
+
+# Bad Rule
+
+- 缺少 enforcer。

@@ -9,6 +9,8 @@ description: 新增压测场景。用于扩展 bench/scenarios、cmd/loadgen 场
 
 当需要新增 Phase 6 容量场景、预发压测剧本、重连冲击模型或新的可重复 loadgen 运行路径时使用。
 
+压测场景属于 workflow 资产，不需要为每个场景新增 rule；只有当压测规则本身变成长期硬约束时，才另行使用 `add-constraint`。
+
 ## Inputs
 
 - 场景代号：使用小写字母或 snake_case，与 `scenario_*` 文件一致。

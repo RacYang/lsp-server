@@ -11,18 +11,17 @@ description: 端到端新增仓库硬约束。用于引入新的工程硬规则�
 
 ## Inputs
 
-- 约束来源：已有 ADR，或需要新增的 ADR。
+- 约束来源：必须已有 ADR；没有 ADR 时先使用 `add-adr`。
 - SSOT 字段：优先落在 `.build/config.yaml`，必要时同步 `.build/schema/config.schema.json`。
 - 负例意图：必须能稳定触发对应 enforcer 失败。
 
 ## Steps
 
-1. 判断是否已有 ADR 背书；没有则先新增 ADR，不要只在 rule 中发明规则。
-2. 如需配置，先编辑 `.build/config.yaml`，并同步 `.build/schema/config.schema.json`。
-3. 新增或更新 `scripts/verify-*.py` / `scripts/verify-*.sh`，保持脚本可单独运行。
-4. 在 `.build/negatives/` 增加最小隔离负例，命名需能表达失败原因。
-5. 新增或更新 `.cursor/rules/*.mdc`，保持 `kind` / `adr` / `enforcer` / `negative_test` 三元组一致。
-6. 如新增负例类型，扩展 `scripts/verify-negatives.sh` 的分派逻辑。
+1. 如需配置，先编辑 `.build/config.yaml`，并同步 `.build/schema/config.schema.json`。
+2. 新增或更新 `scripts/verify-*.py` / `scripts/verify-*.sh`，保持脚本可单独运行。
+3. 在 `.build/negatives/` 增加最小隔离负例，命名需能表达失败原因。
+4. 新增或更新 `.cursor/rules/*.mdc`，保持 `kind` / `adr` / `enforcer` / `negative_test` 三元组一致。
+5. 如新增负例类型，扩展 `scripts/verify-negatives.sh` 的分派逻辑。
 
 ## Verify
 

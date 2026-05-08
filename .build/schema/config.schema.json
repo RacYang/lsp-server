@@ -19,6 +19,7 @@
     "redis",
     "metrics",
     "release",
+    "governance",
     "stage_gates"
   ],
   "properties": {
@@ -137,7 +138,7 @@
             "layers": {
               "type": "object",
               "patternProperties": {
-                "^[a-z0-9-]+$": { "type": "string", "minLength": 1 }
+                "^[a-z0-9_-]+$": { "type": "string", "minLength": 1 }
               },
               "additionalProperties": false
             },
@@ -346,6 +347,11 @@
             "allow_large_file_globs": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 }
+            },
+            "workspace_space_dirs_blocked": { "type": "boolean" },
+            "workspace_scan_excludes": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
             }
           },
           "additionalProperties": false
@@ -545,6 +551,29 @@
           "type": "array",
           "minItems": 1,
           "items": { "type": "string", "pattern": "^[a-z0-9]+/[a-z0-9]+$" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "governance": {
+      "type": "object",
+      "required": [
+        "agents_md_max_lines",
+        "rules_max_count",
+        "skills_max_count",
+        "templates_max_count",
+        "agents_md_required_anchors"
+      ],
+      "properties": {
+        "agents_md_max_lines": { "type": "integer", "minimum": 1 },
+        "rules_max_count": { "type": "integer", "minimum": 1 },
+        "skills_max_count": { "type": "integer", "minimum": 1 },
+        "templates_max_count": { "type": "integer", "minimum": 1 },
+        "agents_md_required_anchors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true
         }
       },

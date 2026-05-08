@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import pathlib
+import shutil
+import subprocess
 import sys
 from collections.abc import Iterable
 
@@ -10,6 +12,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 RULES_DIR = ROOT / ".cursor" / "rules"
 CONFIG_FILE = ROOT / ".build" / "config.yaml"
 RULE_SCHEMA_FILE = ROOT / ".build" / "schema" / "rules.schema.json"
+AGENTS_FILE = ROOT / "AGENTS.md"
+SKILLS_DIR = ROOT / ".cursor" / "skills"
+TEMPLATES_DIR = ROOT / ".cursor" / "templates"
 ALLOWED_FIELDS = ("kind", "description", "alwaysApply", "globs", "adr", "enforcer", "negative_test")
 ENFORCER_CONFIGS = {".commitlintrc.json", ".go-arch-lint.yml", ".golangci.yml", "buf.yaml"}
 
@@ -70,30 +75,66 @@ def validate_rules() -> None:
         data, order = parse_frontmatter(rule_file)
         require_order(order, rule_file)
         kind = data.get("kind")
-        if kind not in {"constraint", "norm"}:
-            raise ValueError(f"{rule_file}: invalid kind")
+        if kind != "constraint":
+            raise ValueError(f"{rule_file}: rules must be kind: constraint")
         if not data.get("description"):
             raise ValueError(f"{rule_file}: missing description")
         if "alwaysApply" in data and "globs" in data:
             raise ValueError(f"{rule_file}: alwaysApply and globs are mutually exclusive")
         if "alwaysApply" in data and data["alwaysApply"] != "true":
             raise ValueError(f"{rule_file}: alwaysApply must be true")
-        if kind == "constraint":
-            for key in ("adr", "enforcer", "negative_test"):
-                if not data.get(key):
-                    raise ValueError(f"{rule_file}: missing {key}")
-            require_file(data["adr"], rule_file)
-            validate_enforcer(data["enforcer"], rule_file)
-            require_file(data["negative_test"], rule_file)
-            if not data["negative_test"].endswith(".neg"):
-                raise ValueError(f"{rule_file}: negative_test must end with .neg")
-        else:
-            if not data.get("adr"):
-                raise ValueError(f"{rule_file}: norm rules require adr")
-            require_file(data["adr"], rule_file)
-            for key in ("globs", "enforcer", "negative_test"):
-                if key in data:
-                    raise ValueError(f"{rule_file}: norm rules must not define {key}")
+        for key in ("adr", "enforcer", "negative_test"):
+            if not data.get(key):
+                raise ValueError(f"{rule_file}: missing {key}")
+        require_file(data["adr"], rule_file)
+        validate_enforcer(data["enforcer"], rule_file)
+        require_file(data["negative_test"], rule_file)
+        if not data["negative_test"].endswith(".neg"):
+            raise ValueError(f"{rule_file}: negative_test must end with .neg")
+
+
+def find_yq() -> str:
+    yq = shutil.which("yq")
+    if yq is None:
+        gopath = subprocess.run(["go", "env", "GOPATH"], check=True, capture_output=True, text=True).stdout.strip()
+        candidate = pathlib.Path(gopath) / "bin" / "yq"
+        yq = str(candidate) if candidate.exists() else "yq"
+    return yq
+
+
+def yq_value(expr: str) -> str:
+    return subprocess.run(
+        [find_yq(), "-r", expr, str(CONFIG_FILE)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def validate_agents_file() -> None:
+    text = AGENTS_FILE.read_text()
+    max_lines = int(yq_value(".governance.agents_md_max_lines"))
+    line_count = len(text.splitlines())
+    if line_count > max_lines:
+        raise ValueError(f"{AGENTS_FILE}: line count {line_count} exceeds {max_lines}")
+    anchors = yq_value(".governance.agents_md_required_anchors[]").splitlines()
+    for anchor in anchors:
+        if anchor not in text:
+            raise ValueError(f"{AGENTS_FILE}: missing required anchor {anchor}")
+
+
+def validate_governance_counts() -> None:
+    rules_count = len(list(RULES_DIR.glob("*.mdc")))
+    skills_count = len(list(SKILLS_DIR.glob("*/SKILL.md")))
+    templates_count = len(list(TEMPLATES_DIR.glob("**/manifest.yaml"))) if TEMPLATES_DIR.exists() else 0
+    limits = {
+        "rules": (rules_count, int(yq_value(".governance.rules_max_count"))),
+        "skills": (skills_count, int(yq_value(".governance.skills_max_count"))),
+        "templates": (templates_count, int(yq_value(".governance.templates_max_count"))),
+    }
+    for name, (actual, limit) in limits.items():
+        if actual > limit:
+            raise ValueError(f"{name} count {actual} exceeds {limit}")
 
 
 def validate_config_exists() -> None:
@@ -107,7 +148,9 @@ def main() -> int:
     try:
         validate_config_exists()
         validate_rules()
-    except ValueError as exc:
+        validate_agents_file()
+        validate_governance_counts()
+    except (ValueError, subprocess.CalledProcessError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     return 0

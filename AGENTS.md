@@ -1,13 +1,38 @@
 # AGENTS
 
-请遵守本仓库的治理流水线：
+本文件是 agent 入口路由；长期决策见 `docs/adr/`，硬约束见 `.cursor/rules/`，任务流程见 `.cursor/skills/`，骨架样板见 `.cursor/templates/`。
 
-1. 治理源变更请编辑 `.build/config.yaml`。
-2. 派生产物请运行 `make generate`。
-3. 在完成实质性工作前运行 `make verify`。
-4. 保持麻将逻辑与传输层、存储层代码隔离。
-5. 文档、注释与日志 message 以中文为主（见 ADR-0004～0006 与 `make verify-lang`）。
-6. Git 工作流见 [ADR-0007](docs/adr/0007-git-workflow-policy.md)：在 `main` 外使用 `feat/`、`fix/` 等 topic 分支命名；不要依赖 `--no-verify` 跳过 hook，除非人类维护者明确授权。
-7. 完整 ADR 索引见 [docs/adr/README.md](docs/adr/README.md)；AGENTS.md 只保留执行纪律。
-8. 麻将规则组合与完整对局契约见 [ADR-0040](docs/adr/0040-composable-mahjong-rule-capabilities.md)、[docs/RULE-ENGINE.md](docs/RULE-ENGINE.md)、[docs/ROOM-FSM.md](docs/ROOM-FSM.md) 与 [docs/cli-tui-backend-gaps.md](docs/cli-tui-backend-gaps.md)。
-9. 新增工程硬约束须同时落 `.cursor/rules/*.mdc`、enforcer 与 `.build/negatives/*.neg`；具体流程见 `.cursor/skills/add-constraint/`。
+## 总纪律
+
+1. 治理源变更先改 `.build/config.yaml`；派生产物通过 `make generate` 更新。
+2. 实质性改动完成前运行与影响面匹配的 verify，默认最终运行 `make verify`。
+3. 不绕过 Git hook，不提交密钥、私有配置、临时产物或无关改动。
+4. 麻将规则逻辑与传输、会话、存储、集群和 app 层保持隔离。
+
+## 任务路由
+
+| 想做的事 | 先看 |
+|----------|------|
+| 新增或修订长期决策 | `.cursor/skills/add-adr/SKILL.md` |
+| 新增硬约束、enforcer 或负例 | `.cursor/skills/add-constraint/SKILL.md` |
+| 修改治理阈值、工具版本或白名单 | `.cursor/skills/update-ssot/SKILL.md` |
+| 新增 Go 包、handler、service、actor 或 CLI 子命令 | `.cursor/skills/scaffold-package/SKILL.md` |
+| 新增 proto 消息或 RPC 契约 | `.cursor/skills/add-pb-message/SKILL.md` |
+| 新增麻将规则、番种或 YAML 夹具 | `.cursor/skills/add-mahjong-rule/SKILL.md`、`.cursor/skills/add-fan-type/SKILL.md`、`.cursor/skills/mahjong-test-case/SKILL.md` |
+| 新增测试、集成链路或压测场景 | `.cursor/skills/add-table-test/SKILL.md`、`.cursor/skills/add-integration-test/SKILL.md`、`.cursor/skills/add-bench-scenario/SKILL.md` |
+| 新增指标、日志边界或部署覆盖 | `.cursor/skills/add-metric/SKILL.md`、`.cursor/skills/add-log-boundary/SKILL.md`、`.cursor/skills/add-deploy-overlay/SKILL.md` |
+| 修 bug、升级依赖、移动 proto 基线或弃用功能 | `.cursor/skills/fix-bug/SKILL.md`、`.cursor/skills/bump-dependency/SKILL.md`、`.cursor/skills/bump-proto-baseline/SKILL.md`、`.cursor/skills/deprecate-feature/SKILL.md` |
+| 新增或退役 skill/template/rule | `.cursor/skills/add-skill/SKILL.md`、`.cursor/skills/add-template/SKILL.md`、`.cursor/skills/retire-rule/SKILL.md`、`.cursor/skills/retire-skill/SKILL.md`、`.cursor/skills/retire-template/SKILL.md` |
+
+## 导航
+
+- 工程宪章与 SSOT：`docs/adr/0000-engineering-charter.md`
+- Git 工作流：`docs/adr/0007-git-workflow-policy.md`
+- 注释体系：`docs/adr/0005-comment-system.md`
+- 日志体系：`docs/adr/0006-logging-system-and-facade.md`、`docs/adr/0033-logging-sampling-and-pii-redaction.md`、`docs/adr/0034-logging-dynamic-level-control.md`、`docs/adr/0035-otel-logs-bridge.md`
+- 麻将规则组合与房间契约：`docs/adr/0040-composable-mahjong-rule-capabilities.md`、`docs/RULE-ENGINE.md`、`docs/ROOM-FSM.md`、`docs/cli-tui-backend-gaps.md`
+- Agent 治理体系：`docs/adr/0042-agent-governance.md`、`docs/agent-governance/coverage-matrix.md`
+
+## 边界声明
+
+`AGENTS.md` 只做入口，不复述 `.cursor/rules/*.mdc` 的硬约束细节。扩展本体系时同步更新覆盖矩阵，并运行 `make verify-meta`、`make verify-skeleton` 与相关 verify 目标。

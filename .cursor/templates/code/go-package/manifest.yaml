@@ -1,0 +1,9 @@
+id: go-package
+purpose: 新增通用 Go 包骨架
+applies_to_glob: "internal/**"
+coverage_cell: build/go-package
+verify:
+  - kind: presence
+    path: "{target}/doc.go"
+related_rules: [package-doc, naming-go]
+related_skills: [scaffold-package]

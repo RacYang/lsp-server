@@ -64,3 +64,4 @@
 - [ADR-0039 四川血战权威局内契约](0039-sichuan-xuezhandaodi-authoritative-round-contract.md)：已采纳；定义玩家/托管命令分流、权威阶段、局共识、每座位投影与客户端 req_id 关联。
 - [ADR-0040 组合式麻将规则能力](0040-composable-mahjong-rule-capabilities.md)：已采纳；定义换三张、定缺、吃碰杠胡、轮转、计分与结算的规则能力组合边界。
 - [ADR-0041 麻将规则 ID 命名规范](0041-mahjong-rule-id-naming.md)：已采纳；统一 `<region>_<variant>_<option>` 全拼音规则 ID，并禁止缩写与混合语言。
+- [ADR-0042 Agent 治理体系职责边界](0042-agent-governance.md)：已采纳；定义 AGENTS、ADR、rules、skills、templates 与 harness 的职责边界。
