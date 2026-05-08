@@ -88,6 +88,95 @@ type GameState struct {
 	HuedPlayers int
 }
 
+// ActionName 是局内动作的稳定内部名称；对外协议仍以字符串追加兼容。
+type ActionName string
+
+const (
+	ActionHu   ActionName = "hu"
+	ActionGang ActionName = "gang"
+	ActionPong ActionName = "pong"
+	ActionChi  ActionName = "chi"
+)
+
+// RuleMetadata 描述客户端与大厅可读的规则能力摘要。
+type RuleMetadata struct {
+	DisplayName     string
+	ShortDesc       string
+	EnabledFeatures []string
+	MaxHands        int32
+}
+
+// CapabilitySet 是规则门面暴露给 room engine 的能力组合。
+type CapabilitySet struct {
+	Metadata    RuleMetadata
+	Opening     OpeningFlow
+	Claims      ClaimPolicy
+	Turn        TurnFlow
+	Scoring     ScoringPolicy
+	Settlement  SettlementPolicy
+	Termination TerminationPolicy
+	Projection  RoundProjection
+}
+
+// OpeningFlow 描述规则开局子流程，如换三张、定缺与选庄。
+type OpeningFlow interface {
+	Steps() []string
+}
+
+// TurnFlow 描述摸牌、自摸窗口、杠后补牌与海底处理等轮转能力。
+type TurnFlow interface {
+	FeatureFlags() []string
+}
+
+// ScoringPolicy 是规则计分能力的标记接口；具体计分仍由 Rule.ScoreFans 承担。
+type ScoringPolicy interface {
+	FeatureFlags() []string
+}
+
+// SettlementPolicy 是规则结算能力的标记接口；房间层不得依赖具体规则包类型。
+type SettlementPolicy interface {
+	FeatureFlags() []string
+}
+
+// TerminationPolicy 是终局能力的标记接口；具体终局仍由 Rule.GameOver 承担。
+type TerminationPolicy interface {
+	FeatureFlags() []string
+}
+
+// RoundProjection 是规则投影能力的标记接口，供快照与 TUI 契约演进时接入。
+type RoundProjection interface {
+	FeatureFlags() []string
+}
+
+// ClaimAction 描述一个抢答动作颗粒及其优先级。
+type ClaimAction struct {
+	Name         ActionName
+	ChoiceAction string
+	Priority     int
+}
+
+// ClaimContext 是规则判断吃碰杠胡候选时可见的确定性上下文。
+type ClaimContext struct {
+	Seat            domainroom.Seat
+	SourceSeat      domainroom.Seat
+	Tile            tile.Tile
+	Hand            *hand.Hand
+	QiangGangWindow bool
+	Hued            bool
+	HuContext       HuContext
+	CheckHu         func(*hand.Hand, tile.Tile, HuContext) (HuResult, bool)
+}
+
+// ClaimPolicy 决定吃碰杠胡等动作颗粒是否可用及其优先级。
+type ClaimPolicy interface {
+	Candidates(ctx ClaimContext) []ClaimAction
+}
+
+// RuleCapabilitiesProvider 由具备组合能力声明的规则实现。
+type RuleCapabilitiesProvider interface {
+	Capabilities() CapabilitySet
+}
+
 // Rule 为玩法变体接口；房间层只应依赖本接口而非具体实现包。
 type Rule interface {
 	ID() string
@@ -96,6 +185,76 @@ type Rule interface {
 	CheckHu(h *hand.Hand, target tile.Tile, hc HuContext) (HuResult, bool)
 	ScoreFans(result HuResult, sc ScoreContext) fan.Breakdown
 	GameOver(state GameState) bool
+}
+
+// CapabilitiesOf 返回规则能力集合；未显式声明的旧规则使用保守默认能力。
+func CapabilitiesOf(r Rule) CapabilitySet {
+	if provider, ok := r.(RuleCapabilitiesProvider); ok {
+		caps := provider.Capabilities()
+		if caps.Claims == nil {
+			caps.Claims = NoEatingClaimPolicy{}
+		}
+		return caps
+	}
+	return CapabilitySet{
+		Metadata: RuleMetadata{
+			DisplayName: "未命名麻将规则",
+			ShortDesc:   "默认无吃牌抢答能力",
+		},
+		Claims: NoEatingClaimPolicy{},
+	}
+}
+
+// StaticOpeningFlow 是固定开局步骤的简单实现。
+type StaticOpeningFlow []string
+
+// Steps 返回开局步骤副本。
+func (f StaticOpeningFlow) Steps() []string {
+	return append([]string(nil), f...)
+}
+
+// FeatureSet 是仅声明特性开关的简单能力实现。
+type FeatureSet []string
+
+// FeatureFlags 返回特性开关副本。
+func (f FeatureSet) FeatureFlags() []string {
+	return append([]string(nil), f...)
+}
+
+// NoEatingClaimPolicy 实现四川血战默认抢答：胡优先于杠，杠优先于碰，不开放吃。
+type NoEatingClaimPolicy struct{}
+
+// Candidates 返回当前座位可用抢答动作。
+func (NoEatingClaimPolicy) Candidates(ctx ClaimContext) []ClaimAction {
+	if ctx.Hued || ctx.Hand == nil || ctx.Tile == 0 || ctx.Seat == ctx.SourceSeat {
+		return nil
+	}
+	out := make([]ClaimAction, 0, 3)
+	if ctx.CheckHu != nil {
+		if _, ok := ctx.CheckHu(ctx.Hand, ctx.Tile, ctx.HuContext); ok {
+			action := ClaimAction{Name: ActionHu, ChoiceAction: "hu_choice", Priority: 3}
+			if ctx.QiangGangWindow {
+				action.ChoiceAction = "qiang_gang_choice"
+			}
+			out = append(out, action)
+		}
+	}
+	if ctx.QiangGangWindow {
+		return out
+	}
+	count := 0
+	for _, current := range ctx.Hand.Tiles() {
+		if current == ctx.Tile {
+			count++
+		}
+	}
+	if count >= 3 {
+		out = append(out, ClaimAction{Name: ActionGang, ChoiceAction: "gang_choice", Priority: 2})
+	}
+	if count >= 2 {
+		out = append(out, ClaimAction{Name: ActionPong, ChoiceAction: "pong_choice", Priority: 1})
+	}
+	return out
 }
 
 var (

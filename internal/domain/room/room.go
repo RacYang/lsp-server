@@ -9,11 +9,14 @@ type Room struct {
 	PlayerIDs   [4]string
 	Ready       [4]bool
 	Surrendered [4]bool
+	HandIndex   int32
+	MaxHands    int32
+	TotalScores [4]int32
 }
 
 // NewRoom 创建空房间并进入 waiting（等待玩家加入）。
 func NewRoom(id string) *Room {
-	r := &Room{ID: id, FSM: NewFSM()}
+	r := &Room{ID: id, FSM: NewFSM(), HandIndex: 1, MaxHands: 1}
 	_ = r.FSM.Transition(StateWaiting)
 	return r
 }
@@ -142,4 +145,45 @@ func (r *Room) CloseRoom() error {
 		return nil
 	}
 	return r.FSM.Transition(StateClosed)
+}
+
+// CanStartNextHand 判断结算后是否还能在同一房间继续下一局。
+func (r *Room) CanStartNextHand() bool {
+	if r == nil {
+		return false
+	}
+	maxHands := r.MaxHands
+	if maxHands <= 0 {
+		maxHands = 1
+	}
+	return r.HandIndex > 0 && r.HandIndex < maxHands
+}
+
+// PrepareNextHand 从结算态回到等待态，并保留座位与累计积分。
+func (r *Room) PrepareNextHand() error {
+	if r == nil || r.FSM == nil {
+		return nil
+	}
+	if r.FSM.State() != StateSettling {
+		return nil
+	}
+	if !r.CanStartNextHand() {
+		return r.CloseRoom()
+	}
+	r.HandIndex++
+	for i := 0; i < 4; i++ {
+		r.Ready[i] = false
+		r.Surrendered[i] = false
+	}
+	return r.FSM.Transition(StateWaiting)
+}
+
+// AddRoundScores 将一局得失累加到房间级总分。
+func (r *Room) AddRoundScores(scores [4]int32) {
+	if r == nil {
+		return
+	}
+	for seat := 0; seat < 4; seat++ {
+		r.TotalScores[seat] += scores[seat]
+	}
 }

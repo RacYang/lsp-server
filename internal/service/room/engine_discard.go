@@ -53,15 +53,19 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	rs.lastDiscardAfterGang = rs.lastGangFollowUp
 	rs.lastGangFollowUp = false
 	seatIndex := seat.Proto()
+	detail := rs.actionDetail(seat, "discard", discard, SeatInvalid, seat)
+	rs.rememberLastAction(detail)
 	actionPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("discard-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
 			Action: &clientv1.ActionNotify{
-				SeatIndex: seatIndex,
-				Action:    "discard",
-				Tile:      discard.String(),
-				Phase:     clientv1.Phase_PHASE_CLAIM,
-				Step:      int64(rs.step),
+				SeatIndex:     seatIndex,
+				Action:        "discard",
+				Tile:          discard.String(),
+				Phase:         clientv1.Phase_PHASE_CLAIM,
+				Step:          int64(rs.step),
+				Detail:        detail,
+				WallRemaining: rs.wallRemaining(),
 			},
 		},
 	})
@@ -164,7 +168,10 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	result, ok := rs.rule.CheckHu(rs.hands[seat], winTile, rules.HuContext{
 		Source:          source,
 		PendingTile:     winTile,
+		Que:             queSuits(rs.queBySeat),
 		Discarder:       rs.lastDiscardSeat,
+		IsHaiDi:         rs.isHaiDi(),
+		IsGangShangHua:  source == rules.HuSourceTsumo && rs.lastGangFollowUp,
 		ResponsibleSeat: payer,
 		GangHistory:     append([]rules.GangRecord(nil), rs.gangRecords...),
 		WallRemaining:   rs.wall.Remaining(),
@@ -179,8 +186,10 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		IsTsumo:              source == rules.HuSourceTsumo,
 		IsOpeningDraw:        rs.isOpeningDrawHu(seat, source),
 		IsDealerFirstDiscard: rs.isDealerFirstDiscardHu(source),
+		IsHaiDi:              rs.isHaiDi(),
 		IsGangShangHua:       source == rules.HuSourceTsumo && rs.lastGangFollowUp,
 		IsGangShangPao:       source != rules.HuSourceTsumo && rs.lastDiscardAfterGang,
+		Que:                  append([]tile.Suit(nil), queSuits(rs.queBySeat)...),
 		ResponsibleSeat:      payer,
 		WallRemaining:        rs.wall.Remaining(),
 	})
@@ -198,15 +207,19 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		metrics.ClaimWindowTotal.WithLabelValues("hu").Inc()
 	}
 	seatIndex := seat.Proto()
+	detail := rs.actionDetail(seat, "hu", winTile, seat, payer)
+	rs.rememberLastAction(detail)
 	huPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("hu-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
 			Action: &clientv1.ActionNotify{
-				SeatIndex: seatIndex,
-				Action:    "hu",
-				Tile:      winTile.String(),
-				Phase:     rs.phase(),
-				Step:      int64(rs.step),
+				SeatIndex:     seatIndex,
+				Action:        "hu",
+				Tile:          winTile.String(),
+				Phase:         rs.phase(),
+				Step:          int64(rs.step),
+				Detail:        detail,
+				WallRemaining: rs.wallRemaining(),
 			},
 		},
 	})
@@ -276,11 +289,12 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		ReqId: fmt.Sprintf("draw-%d", rs.step),
 		Body: &clientv1.Envelope_DrawTile{
 			DrawTile: &clientv1.DrawTileNotify{
-				SeatIndex:   seatIndex,
-				Tile:        drawn.String(),
-				Phase:       clientv1.Phase_PHASE_DISCARD,
-				Step:        int64(rs.step),
-				ActingSeats: []int32{seatIndex},
+				SeatIndex:     seatIndex,
+				Tile:          drawn.String(),
+				Phase:         clientv1.Phase_PHASE_DISCARD,
+				Step:          int64(rs.step),
+				ActingSeats:   []int32{seatIndex},
+				WallRemaining: rs.wallRemaining(),
 			},
 		},
 	})
@@ -295,7 +309,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		Privacy:    PrivacyPerSeat,
 		Project: func(target Seat) []byte {
 			visible := target == rs.turn
-			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_DISCARD, int64(rs.step), []int32{seatIndex}, visible)
+			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_DISCARD, int64(rs.step), []int32{seatIndex}, visible, rs.wallRemaining())
 			if err != nil {
 				return drawPayload
 			}
@@ -308,7 +322,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		rs.waitingDiscard = false
 		out[0].Project = func(target Seat) []byte {
 			visible := target == rs.turn
-			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_TSUMO, int64(rs.step), []int32{seatIndex}, visible)
+			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_TSUMO, int64(rs.step), []int32{seatIndex}, visible, rs.wallRemaining())
 			if err != nil {
 				return drawPayload
 			}
@@ -318,12 +332,13 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 			ReqId: fmt.Sprintf("tsumo-choice-%d", rs.step),
 			Body: &clientv1.Envelope_Action{
 				Action: &clientv1.ActionNotify{
-					SeatIndex:   seatIndex,
-					Action:      "tsumo_choice",
-					Tile:        drawn.String(),
-					Phase:       clientv1.Phase_PHASE_TSUMO,
-					Step:        int64(rs.step),
-					ActingSeats: []int32{seatIndex},
+					SeatIndex:     seatIndex,
+					Action:        "tsumo_choice",
+					Tile:          drawn.String(),
+					Phase:         clientv1.Phase_PHASE_TSUMO,
+					Step:          int64(rs.step),
+					ActingSeats:   []int32{seatIndex},
+					WallRemaining: rs.wallRemaining(),
 				},
 			},
 		})
@@ -337,7 +352,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	return out, nil
 }
 
-func drawTilePayload(reqID string, seatIndex int32, tileText string, phase clientv1.Phase, step int64, actingSeats []int32, visible bool) ([]byte, error) {
+func drawTilePayload(reqID string, seatIndex int32, tileText string, phase clientv1.Phase, step int64, actingSeats []int32, visible bool, wallRemaining int32) ([]byte, error) {
 	if !visible {
 		tileText = ""
 	}
@@ -345,14 +360,29 @@ func drawTilePayload(reqID string, seatIndex int32, tileText string, phase clien
 		ReqId: reqID,
 		Body: &clientv1.Envelope_DrawTile{
 			DrawTile: &clientv1.DrawTileNotify{
-				SeatIndex:   seatIndex,
-				Tile:        tileText,
-				Phase:       phase,
-				Step:        step,
-				ActingSeats: append([]int32(nil), actingSeats...),
+				SeatIndex:     seatIndex,
+				Tile:          tileText,
+				Phase:         phase,
+				Step:          step,
+				ActingSeats:   append([]int32(nil), actingSeats...),
+				WallRemaining: wallRemaining,
 			},
 		},
 	})
+}
+
+func (rs *RoundState) isHaiDi() bool {
+	return rs != nil && rs.wall != nil && rs.wall.Remaining() == 0
+}
+
+func queSuits(raw []int32) []tile.Suit {
+	out := make([]tile.Suit, 0, len(raw))
+	for _, suit := range raw {
+		if suit >= 0 && suit <= 2 {
+			out = append(out, tile.Suit(suit))
+		}
+	}
+	return out
 }
 
 func (rs *RoundState) isHued(seat Seat) bool {

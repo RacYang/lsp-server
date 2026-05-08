@@ -30,7 +30,7 @@ run_golangci_negative() {
   cat >"${tmp_dir}/go.mod" <<EOF
 module negative.test/sample
 
-go 1.26.2
+go 1.26.3
 EOF
   mkdir -p "${tmp_dir}/sample"
   cp "${negative_file}" "${tmp_dir}/sample/main.go"
@@ -55,7 +55,7 @@ run_arch_negative() {
   cat >"${tmp_dir}/go.mod" <<EOF
 module racoo.cn/lsp
 
-go 1.26.2
+go 1.26.3
 EOF
   mkdir -p "${tmp_dir}/internal/${target_dir}" "${tmp_dir}/internal/${imported_dir}"
   cat >"${tmp_dir}/internal/${imported_dir}/stub.go" <<EOF
@@ -131,7 +131,7 @@ run_deps_negative() {
   cat >"${tmp_dir}/go.mod" <<EOF
 module negative.test/sample
 
-go 1.26.2
+go 1.26.3
 
 require github.com/topfreegames/pitaya v0.0.0
 EOF

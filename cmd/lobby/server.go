@@ -281,7 +281,21 @@ func lobbyRoomMetasToCluster(rooms []lobbysvc.RoomMeta) []*clusterv1.RoomMeta {
 			MaxSeats:    room.MaxSeats,
 			CreatedAtMs: room.CreatedAtMs,
 			Stage:       room.Stage,
+			RuleMeta:    lobbyRuleMetaToCluster(room.RuleMeta),
 		})
 	}
 	return out
+}
+
+func lobbyRuleMetaToCluster(meta lobbysvc.RuleMeta) *clusterv1.RuleMeta {
+	if meta.RuleID == "" && meta.DisplayName == "" {
+		return nil
+	}
+	return &clusterv1.RuleMeta{
+		RuleId:          meta.RuleID,
+		DisplayName:     meta.DisplayName,
+		ShortDesc:       meta.ShortDesc,
+		EnabledFeatures: append([]string(nil), meta.EnabledFeatures...),
+		MaxHands:        meta.MaxHands,
+	}
 }

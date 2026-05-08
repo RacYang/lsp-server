@@ -59,11 +59,15 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat Seat, sui
 		ReqId: "start",
 		Body: &clientv1.Envelope_StartGame{
 			StartGame: &clientv1.StartGameNotify{
-				RoomId:      rs.roomID,
-				DealerSeat:  rs.dealerSeat.Proto(),
-				Phase:       clientv1.Phase_PHASE_DRAW,
-				Step:        int64(rs.step),
-				ActingSeats: []int32{rs.turn.Proto()},
+				RoomId:        rs.roomID,
+				DealerSeat:    rs.dealerSeat.Proto(),
+				Phase:         clientv1.Phase_PHASE_DRAW,
+				Step:          int64(rs.step),
+				ActingSeats:   []int32{rs.turn.Proto()},
+				WallRemaining: rs.wallRemaining(),
+				RoundIndex:    1,
+				HandIndex:     1,
+				RuleMeta:      rs.ruleMeta(),
 			},
 		},
 	})

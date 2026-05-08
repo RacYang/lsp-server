@@ -154,3 +154,66 @@ func TestWaitingToClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPrepareNextHandKeepsSeatsAndResetsRoundFlags(t *testing.T) {
+	r := NewRoom("multi")
+	r.MaxHands = 2
+	for i := 0; i < 4; i++ {
+		_, _ = r.JoinAutoSeat("p" + string(rune('0'+i)))
+		_ = r.SetReady(Seat(i), true)
+		r.Surrendered[i] = true
+	}
+	if err := r.StartPlaying(); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CloseToSettling(); err != nil {
+		t.Fatal(err)
+	}
+	if !r.CanStartNextHand() {
+		t.Fatal("expected next hand")
+	}
+	if err := r.PrepareNextHand(); err != nil {
+		t.Fatal(err)
+	}
+	if r.FSM.State() != StateWaiting {
+		t.Fatalf("want waiting got %s", r.FSM.State())
+	}
+	if r.HandIndex != 2 {
+		t.Fatalf("hand index=%d", r.HandIndex)
+	}
+	for i := 0; i < 4; i++ {
+		if r.PlayerIDs[i] == "" || r.Ready[i] || r.Surrendered[i] {
+			t.Fatalf("seat %d not reset: players=%v ready=%v surrendered=%v", i, r.PlayerIDs, r.Ready, r.Surrendered)
+		}
+	}
+}
+
+func TestPrepareNextHandClosesAtLimitAndScoresAccumulate(t *testing.T) {
+	r := NewRoom("limit")
+	r.AddRoundScores([4]int32{1, -1, 2, -2})
+	if r.TotalScores != [4]int32{1, -1, 2, -2} {
+		t.Fatalf("scores=%v", r.TotalScores)
+	}
+	_ = r.FSM.Transition(StateReady)
+	_ = r.StartPlaying()
+	_ = r.CloseToSettling()
+	if r.CanStartNextHand() {
+		t.Fatal("default max hands should not continue")
+	}
+	if err := r.PrepareNextHand(); err != nil {
+		t.Fatal(err)
+	}
+	if r.FSM.State() != StateClosed {
+		t.Fatalf("want closed got %s", r.FSM.State())
+	}
+}
+
+func TestPrepareNextHandWrongStateIsNoop(t *testing.T) {
+	r := NewRoom("wrong")
+	if err := r.PrepareNextHand(); err != nil {
+		t.Fatal(err)
+	}
+	if r.FSM.State() != StateWaiting {
+		t.Fatalf("state changed: %s", r.FSM.State())
+	}
+}

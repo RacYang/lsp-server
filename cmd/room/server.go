@@ -252,6 +252,14 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
 					DiscardsBySeat:   stringMatrixToClusterSeatTiles(view.DiscardsBySeat),
 					MeldsBySeat:      stringMatrixToClusterSeatTiles(view.MeldsBySeat),
+					MeldInfosBySeat:  clientSeatMeldsToCluster(view.MeldInfosBySeat),
+					LastAction:       clientLastActionToCluster(view.LastAction),
+					WallRemaining:    view.WallRemaining,
+					DeadlineUnixMs:   view.DeadlineUnixMs,
+					RoundIndex:       view.RoundIndex,
+					HandIndex:        view.HandIndex,
+					TotalScores:      clientSeatScoresToCluster(view.TotalScores),
+					RuleMeta:         clientRuleMetaToCluster(view.RuleMeta),
 				}, nil
 			}
 		}
@@ -284,6 +292,14 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
 		DiscardsBySeat:   stringMatrixToClusterSeatTiles(view.DiscardsBySeat),
 		MeldsBySeat:      stringMatrixToClusterSeatTiles(view.MeldsBySeat),
+		MeldInfosBySeat:  clientSeatMeldsToCluster(view.MeldInfosBySeat),
+		LastAction:       clientLastActionToCluster(view.LastAction),
+		WallRemaining:    view.WallRemaining,
+		DeadlineUnixMs:   view.DeadlineUnixMs,
+		RoundIndex:       view.RoundIndex,
+		HandIndex:        view.HandIndex,
+		TotalScores:      clientSeatScoresToCluster(view.TotalScores),
+		RuleMeta:         clientRuleMetaToCluster(view.RuleMeta),
 	}, nil
 }
 
@@ -306,9 +322,13 @@ func handForSeat(hands [][]string, seat int) []string {
 func clusterSeatsFromPlayerIDs(players []string) []*clusterv1.SeatInfo {
 	seats := make([]*clusterv1.SeatInfo, 0, 4)
 	for i := 0; i < 4; i++ {
-		info := &clusterv1.SeatInfo{SeatIndex: int32(i)} //nolint:gosec // 固定座位范围 0..3
+		info := &clusterv1.SeatInfo{SeatIndex: int32(i), Status: "empty"} //nolint:gosec // 固定座位范围 0..3
 		if i < len(players) {
 			info.UserId = players[i]
+			if players[i] != "" {
+				info.Online = true
+				info.Status = "online"
+			}
 		}
 		seats = append(seats, info)
 	}
@@ -522,16 +542,21 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 	case roomsvc.KindDrawTile:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
 			DrawTile: &clusterv1.DrawTileEvent{
-				SeatIndex: env.GetDrawTile().GetSeatIndex(),
-				Tile:      env.GetDrawTile().GetTile(),
+				SeatIndex:      env.GetDrawTile().GetSeatIndex(),
+				Tile:           env.GetDrawTile().GetTile(),
+				WallRemaining:  env.GetDrawTile().GetWallRemaining(),
+				DeadlineUnixMs: env.GetDrawTile().GetDeadlineUnixMs(),
 			},
 		}
 	case roomsvc.KindAction:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_Action{
 			Action: &clusterv1.ActionEvent{
-				SeatIndex: env.GetAction().GetSeatIndex(),
-				Action:    env.GetAction().GetAction(),
-				Tile:      env.GetAction().GetTile(),
+				SeatIndex:      env.GetAction().GetSeatIndex(),
+				Action:         env.GetAction().GetAction(),
+				Tile:           env.GetAction().GetTile(),
+				Detail:         clientActionDetailToCluster(env.GetAction().GetDetail()),
+				WallRemaining:  env.GetAction().GetWallRemaining(),
+				DeadlineUnixMs: env.GetAction().GetDeadlineUnixMs(),
 			},
 		}
 	case roomsvc.KindSettlement:
@@ -544,6 +569,9 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				SeatScores:         clientSeatScoresToCluster(settlement.GetSeatScores()),
 				Penalties:          clientPenaltiesToCluster(settlement.GetPenalties()),
 				PerWinnerBreakdown: clientWinnerBreakdownsToCluster(settlement.GetPerWinnerBreakdown()),
+				RoundIndex:         settlement.GetRoundIndex(),
+				HandIndex:          settlement.GetHandIndex(),
+				TotalScores:        clientSeatScoresToCluster(settlement.GetTotalScores()),
 			},
 		}
 	default:
@@ -572,6 +600,68 @@ func clientSeatScoresToCluster(scores []*clientv1.SeatScore) []*clusterv1.SeatSc
 			TotalFan:  score.GetTotalFan(),
 			Skipped:   score.GetSkipped(),
 		})
+	}
+	return out
+}
+
+func clientRuleMetaToCluster(meta *clientv1.RuleMeta) *clusterv1.RuleMeta {
+	if meta == nil {
+		return nil
+	}
+	return &clusterv1.RuleMeta{
+		RuleId:          meta.GetRuleId(),
+		DisplayName:     meta.GetDisplayName(),
+		ShortDesc:       meta.GetShortDesc(),
+		EnabledFeatures: append([]string(nil), meta.GetEnabledFeatures()...),
+		MaxHands:        meta.GetMaxHands(),
+	}
+}
+
+func clientActionDetailToCluster(detail *clientv1.ActionDetail) *clusterv1.ActionDetail {
+	if detail == nil {
+		return nil
+	}
+	return &clusterv1.ActionDetail{
+		Step:        detail.GetStep(),
+		ActorSeat:   detail.GetActorSeat(),
+		Action:      detail.GetAction(),
+		Tile:        detail.GetTile(),
+		TargetSeat:  detail.GetTargetSeat(),
+		SourceSeat:  detail.GetSourceSeat(),
+		CreatedAtMs: detail.GetCreatedAtMs(),
+	}
+}
+
+func clientLastActionToCluster(action *clientv1.LastActionInfo) *clusterv1.LastActionInfo {
+	if action == nil {
+		return nil
+	}
+	return &clusterv1.LastActionInfo{
+		Step:        action.GetStep(),
+		ActorSeat:   action.GetActorSeat(),
+		Action:      action.GetAction(),
+		Tile:        action.GetTile(),
+		TargetSeat:  action.GetTargetSeat(),
+		SourceSeat:  action.GetSourceSeat(),
+		CreatedAtMs: action.GetCreatedAtMs(),
+	}
+}
+
+func clientSeatMeldsToCluster(items []*clientv1.SeatMelds) []*clusterv1.SeatMelds {
+	out := make([]*clusterv1.SeatMelds, 0, len(items))
+	for _, item := range items {
+		melds := make([]*clusterv1.MeldInfo, 0, len(item.GetMelds()))
+		for _, meld := range item.GetMelds() {
+			melds = append(melds, &clusterv1.MeldInfo{
+				SeatIndex:       meld.GetSeatIndex(),
+				Kind:            meld.GetKind(),
+				Tiles:           append([]string(nil), meld.GetTiles()...),
+				ClaimedFromSeat: meld.GetClaimedFromSeat(),
+				Concealed:       meld.GetConcealed(),
+				Step:            meld.GetStep(),
+			})
+		}
+		out = append(out, &clusterv1.SeatMelds{SeatIndex: item.GetSeatIndex(), Melds: melds})
 	}
 	return out
 }

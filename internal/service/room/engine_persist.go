@@ -32,12 +32,20 @@ func (rs *RoundState) SnapshotView() RoundView {
 		HandsBySeat:       rs.handStringsBySeat(),
 		DiscardsBySeat:    rs.discardStringsBySeat(),
 		MeldsBySeat:       cloneStringMatrix(rs.melds),
+		MeldInfosBySeat:   rs.meldInfosBySeat(),
 		PlayerIDs:         rs.playerIDs,
 		QueBySeat:         append([]int32(nil), rs.queBySeat...),
 		HuedSeats:         append([]bool(nil), rs.huedSeats...),
 		ExchangeSubmitted: append([]bool(nil), rs.exchangeSubmitted...),
 		QueSubmitted:      append([]bool(nil), rs.queSubmitted...),
 		Closed:            rs.closed,
+		LastAction:        rs.lastAction,
+		WallRemaining:     rs.wallRemaining(),
+		DeadlineUnixMs:    rs.deadlineUnixMs,
+		RoundIndex:        1,
+		HandIndex:         1,
+		TotalScores:       rs.totalScores(),
+		RuleMeta:          rs.ruleMeta(),
 	}
 }
 
@@ -298,6 +306,7 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		ruleID = "sichuan_xzdd"
 	}
 	rule := rules.MustGet(ruleID)
+	caps := rules.CapabilitiesOf(rule)
 
 	wallTiles := make([]tile.Tile, 0, len(rp.WallRemaining))
 	for _, raw := range rp.WallRemaining {
@@ -328,6 +337,7 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		ruleID:                 ruleID,
 		playerIDs:              rp.PlayerIDs,
 		rule:                   rule,
+		caps:                   caps,
 		wall:                   wall.NewFromOrderedTiles(wallTiles),
 		hands:                  hands,
 		discards:               make([][]tile.Tile, 4),
@@ -422,7 +432,12 @@ func decodeClaimCandidatesIntoRound(rs *RoundState, rp *roundPersist) error {
 			}
 		}
 		if len(actions) > 0 {
-			rs.claimCandidates = append(rs.claimCandidates, claimCandidate{seat: Seat(candidate.Seat), actions: actions})
+			rs.claimCandidates = append(rs.claimCandidates, claimCandidate{
+				seat:         Seat(candidate.Seat),
+				actions:      actions,
+				priority:     legacyClaimPriority(actions),
+				choiceAction: claimCandidate{actions: actions}.claimChoiceAction(),
+			})
 		}
 	}
 	if rs.claimWindowOpen && len(rs.claimCandidates) == 0 {

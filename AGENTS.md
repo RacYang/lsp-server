@@ -9,4 +9,5 @@
 5. 文档、注释与日志 message 以中文为主（见 ADR-0004～0006 与 `make verify-lang`）。
 6. Git 工作流见 [ADR-0007](docs/adr/0007-git-workflow-policy.md)：在 `main` 外使用 `feat/`、`fix/` 等 topic 分支命名；不要依赖 `--no-verify` 跳过 hook，除非人类维护者明确授权。
 7. 完整 ADR 索引见 [docs/adr/README.md](docs/adr/README.md)；AGENTS.md 只保留执行纪律。
-8. 新增工程硬约束须同时落 `.cursor/rules/*.mdc`、enforcer 与 `.build/negatives/*.neg`；具体流程见 `.cursor/skills/add-constraint/`。
+8. 麻将规则组合与完整对局契约见 [ADR-0040](docs/adr/0040-composable-mahjong-rule-capabilities.md)、[docs/RULE-ENGINE.md](docs/RULE-ENGINE.md)、[docs/ROOM-FSM.md](docs/ROOM-FSM.md) 与 [docs/cli-tui-backend-gaps.md](docs/cli-tui-backend-gaps.md)。
+9. 新增工程硬约束须同时落 `.cursor/rules/*.mdc`、enforcer 与 `.build/negatives/*.neg`；具体流程见 `.cursor/skills/add-constraint/`。

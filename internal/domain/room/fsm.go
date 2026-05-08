@@ -36,7 +36,7 @@ func (f *FSM) Transition(next State) error {
 	case StatePlaying:
 		ok = next == StateSettling || next == StateClosed
 	case StateSettling:
-		ok = next == StateClosed
+		ok = next == StateClosed || next == StateWaiting || next == StateReady
 	case StateClosed:
 		ok = false
 	}

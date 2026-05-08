@@ -31,6 +31,20 @@ func TestGameOverConditions(t *testing.T) {
 	}
 }
 
+func TestCapabilitiesExposeComposableFeatures(t *testing.T) {
+	var x xzdd
+	caps := x.Capabilities()
+	if caps.Claims == nil {
+		t.Fatal("expected claim policy")
+	}
+	if got := caps.Opening.Steps(); len(got) != 2 || got[0] != "exchange_three" || got[1] != "que_men" {
+		t.Fatalf("unexpected opening flow: %v", got)
+	}
+	if caps.Metadata.DisplayName != "四川血战到底" {
+		t.Fatalf("unexpected display name: %s", caps.Metadata.DisplayName)
+	}
+}
+
 func TestCheckHuSevenPairsScoring(t *testing.T) {
 	var x xzdd
 	h := hand.New()

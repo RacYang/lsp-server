@@ -63,6 +63,14 @@ message SnapshotRoomResponse {
   repeated SeatTiles discards_by_seat = 12;
   repeated SeatTiles melds_by_seat = 13;
   repeated SeatInfo seats = 14;
+  LastActionInfo last_action = 15;
+  int32 wall_remaining = 16;
+  int64 deadline_unix_ms = 17;
+  repeated SeatMelds meld_infos_by_seat = 18;
+  int32 round_index = 19;
+  int32 hand_index = 20;
+  repeated SeatScore total_scores = 21;
+  RuleMeta rule_meta = 22;
 }
 
 message SeatInfo {
@@ -71,6 +79,11 @@ message SeatInfo {
   string nickname = 3;
   bool is_bot = 4;
   bool surrendered = 5;
+  bool online = 6;
+  bool auto_play = 7;
+  int64 disconnected_at_ms = 8;
+  string status = 9;
+  int32 total_score = 10;
 }
 
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
@@ -129,12 +142,17 @@ message InitialDealEvent {
 message DrawTileEvent {
   int32 seat_index = 1;
   string tile = 2;
+  int32 wall_remaining = 3;
+  int64 deadline_unix_ms = 4;
 }
 
 message ActionEvent {
   int32 seat_index = 1;
   string action = 2;
   string tile = 3;
+  ActionDetail detail = 4;
+  int32 wall_remaining = 5;
+  int64 deadline_unix_ms = 6;
 }
 
 message SettlementEvent {
@@ -144,6 +162,9 @@ message SettlementEvent {
   repeated SeatScore seat_scores = 4;
   repeated PenaltyItem penalties = 5;
   repeated WinnerBreakdown per_winner_breakdown = 6;
+  int32 round_index = 7;
+  int32 hand_index = 8;
+  repeated SeatScore total_scores = 9;
 }
 
 message ExchangeThreeDoneEvent {
@@ -163,6 +184,48 @@ message RouteRedirectEvent {
 message SeatTiles {
   int32 seat_index = 1;
   repeated string tiles = 2;
+}
+
+message RuleMeta {
+  string rule_id = 1;
+  string display_name = 2;
+  string short_desc = 3;
+  repeated string enabled_features = 4;
+  int32 max_hands = 5;
+}
+
+message ActionDetail {
+  int64 step = 1;
+  int32 actor_seat = 2;
+  string action = 3;
+  string tile = 4;
+  int32 target_seat = 5;
+  int32 source_seat = 6;
+  int64 created_at_ms = 7;
+}
+
+message LastActionInfo {
+  int64 step = 1;
+  int32 actor_seat = 2;
+  string action = 3;
+  string tile = 4;
+  int32 target_seat = 5;
+  int32 source_seat = 6;
+  int64 created_at_ms = 7;
+}
+
+message MeldInfo {
+  int32 seat_index = 1;
+  string kind = 2;
+  repeated string tiles = 3;
+  int32 claimed_from_seat = 4;
+  bool concealed = 5;
+  int64 step = 6;
+}
+
+message SeatMelds {
+  int32 seat_index = 1;
+  repeated MeldInfo melds = 2;
 }
 
 message ClaimCandidate {

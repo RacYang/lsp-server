@@ -21,6 +21,7 @@ type Service struct {
 	engine               *Engine
 	clock                clock.Clock
 	tmo                  TimeoutConfig
+	maxHands             int32
 	mailboxCapacity      int
 	onAuto               func(context.Context, string, []Notification)
 	allowLeaveDuringPlay bool
@@ -87,6 +88,7 @@ func NewServiceWithRule(l *RoomRegistry, ruleID string) *Service {
 		engine:               NewEngine(ruleID),
 		clock:                clock.NewReal(),
 		tmo:                  DefaultTimeoutConfig(),
+		maxHands:             1,
 		mailboxCapacity:      defaultMailboxCapacity,
 		allowLeaveDuringPlay: true,
 	}
@@ -117,6 +119,17 @@ func (s *Service) SetMailboxCapacity(capacity int) {
 		capacity = defaultMailboxCapacity
 	}
 	s.mailboxCapacity = capacity
+}
+
+// SetMaxHands 设置同房最多连开局数；默认 1 局保持既有关闭行为。
+func (s *Service) SetMaxHands(maxHands int32) {
+	if s == nil {
+		return
+	}
+	if maxHands <= 0 {
+		maxHands = 1
+	}
+	s.maxHands = maxHands
 }
 
 // SetAllowLeaveDuringPlay 控制 playing 中 Leave 是否转换为 surrender；关闭时回退为拒绝离房。
@@ -172,6 +185,7 @@ func (s *Service) EnsureRoom(roomID string) error {
 		return nil
 	}
 	r := domainroom.NewRoom(roomID)
+	r.MaxHands = s.maxHands
 	if err := s.lobby.CreateRoom(roomID, r); err != nil {
 		// 并发首进房时，另一协程可能已经抢先建好了房；此时回读并补 actor 即可。
 		if _, ok := s.lobby.GetRoom(roomID); ok {
@@ -380,6 +394,7 @@ func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string
 		return nil
 	}
 	r := domainroom.NewRoom(roomID)
+	r.MaxHands = s.maxHands
 	for _, userID := range playerIDs {
 		if userID == "" {
 			continue

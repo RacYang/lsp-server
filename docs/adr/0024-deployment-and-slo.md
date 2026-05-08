@@ -30,7 +30,7 @@ ADR-0023 已经把上述议题划入 Phase 6 范围，本 ADR 给出具体决策
 每个二进制（`gate`、`room`、`lobby`、`all` 仅本地用）单独出镜像：
 
 - 基础镜像：`gcr.io/distroless/base-debian12` 或等价 minimal base，避免引入 shell。
-- 构建：多阶段 Dockerfile，第一阶段 `golang:1.26.2-alpine`（与 `.build/config.yaml` `tools.go` 对齐）跑 `go build -trimpath -ldflags='-s -w'`，第二阶段只拷贝可执行文件。
+- 构建：多阶段 Dockerfile，第一阶段 `golang:1.26.3-alpine`（与 `.build/config.yaml` `tools.go` 对齐）跑 `go build -trimpath -ldflags='-s -w'`，第二阶段只拷贝可执行文件。
 - 镜像 tag：`<service>-<git_short_sha>` + 语义化版本 tag（与 `git.tags.release_pattern` 一致）。
 - 构建必须可重现：`-trimpath`、固定 `CGO_ENABLED=0`、`GOFLAGS='-mod=readonly'`。
 

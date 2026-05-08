@@ -37,6 +37,16 @@ type RoomMeta struct {
 	MaxSeats    int32
 	CreatedAtMs int64
 	Stage       string
+	RuleMeta    RuleMeta
+}
+
+// RuleMeta 是大厅可读的规则摘要；保持轻量，避免 lobby 依赖麻将实现包。
+type RuleMeta struct {
+	RuleID          string
+	DisplayName     string
+	ShortDesc       string
+	EnabledFeatures []string
+	MaxHands        int32
 }
 
 type BotSeat struct {
@@ -137,6 +147,7 @@ func (s *Service) ListRooms(_ context.Context, pageSize int32, pageToken string)
 			MaxSeats:    meta.maxSeats,
 			CreatedAtMs: meta.createdAtMs,
 			Stage:       meta.stage(),
+			RuleMeta:    defaultRuleMeta(normalizeRuleID(meta.ruleID)),
 		})
 	}
 	sort.Slice(rooms, func(i, j int) bool {
@@ -160,6 +171,29 @@ func (s *Service) ListRooms(_ context.Context, pageSize int32, pageToken string)
 	}
 	last := out[len(out)-1]
 	return out, formatPageToken(last.CreatedAtMs, last.RoomID), nil
+}
+
+func defaultRuleMeta(ruleID string) RuleMeta {
+	if normalizeRuleID(ruleID) != defaultRuleID {
+		return RuleMeta{RuleID: normalizeRuleID(ruleID)}
+	}
+	return RuleMeta{
+		RuleID:      defaultRuleID,
+		DisplayName: "四川血战到底",
+		ShortDesc:   "换三张、定缺、无吃、胡牌后血战续行",
+		EnabledFeatures: []string{
+			"exchange_three",
+			"que_men",
+			"no_chi",
+			"pong",
+			"ming_gang",
+			"an_gang",
+			"bu_gang",
+			"qiang_gang_hu",
+			"xuezhan_continue",
+		},
+		MaxHands: 4,
+	}
 }
 
 // AutoMatch 优先加入最早创建的公开未满房；没有候选时创建一个公开房。

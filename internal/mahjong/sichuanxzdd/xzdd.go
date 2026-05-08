@@ -25,6 +25,38 @@ func (x *xzdd) ID() string { return ruleID }
 
 func (x *xzdd) Name() string { return "四川麻将血战到底（MVP）" }
 
+func (x *xzdd) Capabilities() rules.CapabilitySet {
+	features := []string{
+		"exchange_three",
+		"que_men",
+		"no_chi",
+		"pong",
+		"ming_gang",
+		"an_gang",
+		"bu_gang",
+		"qiang_gang_hu",
+		"xuezhan_continue",
+		"hai_di",
+		"gang_shang",
+		"settlement_penalty",
+	}
+	return rules.CapabilitySet{
+		Metadata: rules.RuleMetadata{
+			DisplayName:     "四川血战到底",
+			ShortDesc:       "换三张、定缺、无吃、胡牌后血战续行",
+			EnabledFeatures: append([]string(nil), features...),
+			MaxHands:        4,
+		},
+		Opening:     rules.StaticOpeningFlow{"exchange_three", "que_men"},
+		Claims:      rules.NoEatingClaimPolicy{},
+		Turn:        rules.FeatureSet{"draw", "tsumo_window", "gang_follow_up", "hai_di"},
+		Scoring:     rules.FeatureSet{"fan_breakdown", "dealer", "advanced_fans", "gang_context"},
+		Settlement:  rules.FeatureSet{"ledger", "cha_hua_zhu", "cha_da_jiao", "tax_refund"},
+		Termination: rules.FeatureSet{"three_hued_or_wall_empty"},
+		Projection:  rules.FeatureSet{"per_seat_hand", "round_snapshot", "tui_authority"},
+	}
+}
+
 func (x *xzdd) BuildWall(ctx context.Context, seed int64) *wall.Wall {
 	_ = ctx
 	w := wall.NewFull108()

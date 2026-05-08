@@ -130,6 +130,11 @@ message SeatInfo {
   bool is_bot = 4;
   bool surrendered = 5;
   int32 hand_count = 6;
+  bool online = 7;
+  bool auto_play = 8;
+  int64 disconnected_at_ms = 9;
+  string status = 10;
+  int32 total_score = 11;
 }
 
 // RoomMeta 是大厅页展示的公开房间摘要；私密房不会出现在列表中。
@@ -141,6 +146,16 @@ message RoomMeta {
   int32 max_seats = 5;
   int64 created_at_ms = 6;
   string stage = 7;
+  RuleMeta rule_meta = 8;
+}
+
+// RuleMeta 是客户端可读的规则摘要，避免大厅与 TUI 硬编码玩法说明。
+message RuleMeta {
+  string rule_id = 1;
+  string display_name = 2;
+  string short_desc = 3;
+  repeated string enabled_features = 4;
+  int32 max_hands = 5;
 }
 
 // ListRoomsRequest 查询当前可加入的公开等待房间。
@@ -265,6 +280,10 @@ message StartGameNotify {
   Phase phase = 3;
   int64 step = 4;
   repeated int32 acting_seats = 5;
+  int32 wall_remaining = 6;
+  int32 round_index = 7;
+  int32 hand_index = 8;
+  RuleMeta rule_meta = 9;
 }
 
 // InitialDealNotify 表示开局发给当前座位的 13 张初始手牌。
@@ -281,6 +300,8 @@ message DrawTileNotify {
   Phase phase = 3;
   int64 step = 4;
   repeated int32 acting_seats = 5;
+  int32 wall_remaining = 6;
+  int64 deadline_unix_ms = 7;
 }
 
 // ActionNotify 表示他人可见动作（吃碰杠胡等，Phase 1 简化为文本描述）。
@@ -295,6 +316,46 @@ message ActionNotify {
   Phase phase = 4;
   int64 step = 5;
   repeated int32 acting_seats = 6;
+  ActionDetail detail = 7;
+  int32 wall_remaining = 8;
+  int64 deadline_unix_ms = 9;
+}
+
+// ActionDetail 是可重连恢复的结构化最近动作。
+message ActionDetail {
+  int64 step = 1;
+  int32 actor_seat = 2;
+  string action = 3;
+  string tile = 4;
+  int32 target_seat = 5;
+  int32 source_seat = 6;
+  int64 created_at_ms = 7;
+}
+
+// LastActionInfo 是快照中的最近动作权威副本。
+message LastActionInfo {
+  int64 step = 1;
+  int32 actor_seat = 2;
+  string action = 3;
+  string tile = 4;
+  int32 target_seat = 5;
+  int32 source_seat = 6;
+  int64 created_at_ms = 7;
+}
+
+// MeldInfo 表示结构化副露；旧文本 melds_by_seat 保留兼容。
+message MeldInfo {
+  int32 seat_index = 1;
+  string kind = 2;
+  repeated string tiles = 3;
+  int32 claimed_from_seat = 4;
+  bool concealed = 5;
+  int64 step = 6;
+}
+
+message SeatMelds {
+  int32 seat_index = 1;
+  repeated MeldInfo melds = 2;
 }
 
 // SettlementNotify 表示一局结算摘要。
@@ -310,6 +371,9 @@ message SettlementNotify {
   string detail_text = 6;
   // 每个胡牌玩家的番种分解，字段与 cluster.v1.WinnerBreakdown 对齐。
   repeated WinnerBreakdown per_winner_breakdown = 7;
+  int32 round_index = 8;
+  int32 hand_index = 9;
+  repeated SeatScore total_scores = 10;
 }
 
 // SeatScore 表示某玩家在本局结算中的番数/胜负摘要。
@@ -433,6 +497,14 @@ message SnapshotNotify {
   Phase phase = 15;
   repeated int32 acting_seats = 16;
   int64 last_step = 17;
+  LastActionInfo last_action = 18;
+  int32 wall_remaining = 19;
+  int64 deadline_unix_ms = 20;
+  repeated SeatMelds meld_infos_by_seat = 21;
+  int32 round_index = 22;
+  int32 hand_index = 23;
+  repeated SeatScore total_scores = 24;
+  RuleMeta rule_meta = 25;
 }
 
 // ClaimCandidate 表示快照中仍然有效的抢答候选。

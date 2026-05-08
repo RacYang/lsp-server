@@ -41,7 +41,10 @@ func (s *roomScheduler) reset(rs *RoundState) {
 		s.timer = nil
 	}
 	if d > 0 {
+		rs.deadlineUnixMs = s.clk.Now().Add(d).UnixMilli()
 		s.timer = s.clk.AfterFunc(d, s.fire)
+	} else if rs != nil {
+		rs.deadlineUnixMs = 0
 	}
 	s.mu.Unlock()
 }

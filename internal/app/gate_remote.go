@@ -591,6 +591,14 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		YourHandTiles:    append([]string(nil), snapResp.GetYourHandTiles()...),
 		DiscardsBySeat:   clusterSeatTilesToClient(snapResp.GetDiscardsBySeat()),
 		MeldsBySeat:      clusterSeatTilesToClient(snapResp.GetMeldsBySeat()),
+		MeldInfosBySeat:  clusterSeatMeldsToClient(snapResp.GetMeldInfosBySeat()),
+		LastAction:       clusterLastActionToClient(snapResp.GetLastAction()),
+		WallRemaining:    snapResp.GetWallRemaining(),
+		DeadlineUnixMs:   snapResp.GetDeadlineUnixMs(),
+		RoundIndex:       snapResp.GetRoundIndex(),
+		HandIndex:        snapResp.GetHandIndex(),
+		TotalScores:      clusterSeatScoresToClient(snapResp.GetTotalScores()),
+		RuleMeta:         clusterRuleMetaToClient(snapResp.GetRuleMeta()),
 	}
 	g.rememberRoomPlayers(srec.RoomID, snapResp.GetPlayerIds())
 	if snap.GetState() == "closed" {
@@ -664,11 +672,16 @@ func clusterSeatsToClient(items []*clusterv1.SeatInfo) []*clientv1.SeatInfo {
 	out := make([]*clientv1.SeatInfo, 0, len(items))
 	for _, item := range items {
 		out = append(out, &clientv1.SeatInfo{
-			SeatIndex:   item.GetSeatIndex(),
-			UserId:      item.GetUserId(),
-			Nickname:    item.GetNickname(),
-			IsBot:       item.GetIsBot(),
-			Surrendered: item.GetSurrendered(),
+			SeatIndex:        item.GetSeatIndex(),
+			UserId:           item.GetUserId(),
+			Nickname:         item.GetNickname(),
+			IsBot:            item.GetIsBot(),
+			Surrendered:      item.GetSurrendered(),
+			Online:           item.GetOnline(),
+			AutoPlay:         item.GetAutoPlay(),
+			DisconnectedAtMs: item.GetDisconnectedAtMs(),
+			Status:           item.GetStatus(),
+			TotalScore:       item.GetTotalScore(),
 		})
 	}
 	return out
@@ -685,6 +698,7 @@ func clusterRoomMetasToClient(rooms []*clusterv1.RoomMeta) []*clientv1.RoomMeta 
 			MaxSeats:    room.GetMaxSeats(),
 			CreatedAtMs: room.GetCreatedAtMs(),
 			Stage:       room.GetStage(),
+			RuleMeta:    clusterRuleMetaToClient(room.GetRuleMeta()),
 		})
 	}
 	return out
@@ -699,6 +713,68 @@ func clusterSeatScoresToClient(scores []*clusterv1.SeatScore) []*clientv1.SeatSc
 			TotalFan:  score.GetTotalFan(),
 			Skipped:   score.GetSkipped(),
 		})
+	}
+	return out
+}
+
+func clusterRuleMetaToClient(meta *clusterv1.RuleMeta) *clientv1.RuleMeta {
+	if meta == nil {
+		return nil
+	}
+	return &clientv1.RuleMeta{
+		RuleId:          meta.GetRuleId(),
+		DisplayName:     meta.GetDisplayName(),
+		ShortDesc:       meta.GetShortDesc(),
+		EnabledFeatures: append([]string(nil), meta.GetEnabledFeatures()...),
+		MaxHands:        meta.GetMaxHands(),
+	}
+}
+
+func clusterActionDetailToClient(detail *clusterv1.ActionDetail) *clientv1.ActionDetail {
+	if detail == nil {
+		return nil
+	}
+	return &clientv1.ActionDetail{
+		Step:        detail.GetStep(),
+		ActorSeat:   detail.GetActorSeat(),
+		Action:      detail.GetAction(),
+		Tile:        detail.GetTile(),
+		TargetSeat:  detail.GetTargetSeat(),
+		SourceSeat:  detail.GetSourceSeat(),
+		CreatedAtMs: detail.GetCreatedAtMs(),
+	}
+}
+
+func clusterLastActionToClient(action *clusterv1.LastActionInfo) *clientv1.LastActionInfo {
+	if action == nil {
+		return nil
+	}
+	return &clientv1.LastActionInfo{
+		Step:        action.GetStep(),
+		ActorSeat:   action.GetActorSeat(),
+		Action:      action.GetAction(),
+		Tile:        action.GetTile(),
+		TargetSeat:  action.GetTargetSeat(),
+		SourceSeat:  action.GetSourceSeat(),
+		CreatedAtMs: action.GetCreatedAtMs(),
+	}
+}
+
+func clusterSeatMeldsToClient(items []*clusterv1.SeatMelds) []*clientv1.SeatMelds {
+	out := make([]*clientv1.SeatMelds, 0, len(items))
+	for _, item := range items {
+		melds := make([]*clientv1.MeldInfo, 0, len(item.GetMelds()))
+		for _, meld := range item.GetMelds() {
+			melds = append(melds, &clientv1.MeldInfo{
+				SeatIndex:       meld.GetSeatIndex(),
+				Kind:            meld.GetKind(),
+				Tiles:           append([]string(nil), meld.GetTiles()...),
+				ClaimedFromSeat: meld.GetClaimedFromSeat(),
+				Concealed:       meld.GetConcealed(),
+				Step:            meld.GetStep(),
+			})
+		}
+		out = append(out, &clientv1.SeatMelds{SeatIndex: item.GetSeatIndex(), Melds: melds})
 	}
 	return out
 }
@@ -927,17 +1003,22 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 		return marshalClientEnvelope(msgid.DrawTile, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
-				SeatIndex: body.DrawTile.GetSeatIndex(),
-				Tile:      body.DrawTile.GetTile(),
+				SeatIndex:      body.DrawTile.GetSeatIndex(),
+				Tile:           body.DrawTile.GetTile(),
+				WallRemaining:  body.DrawTile.GetWallRemaining(),
+				DeadlineUnixMs: body.DrawTile.GetDeadlineUnixMs(),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_Action:
 		return marshalClientEnvelope(msgid.ActionNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
-				SeatIndex: body.Action.GetSeatIndex(),
-				Action:    body.Action.GetAction(),
-				Tile:      body.Action.GetTile(),
+				SeatIndex:      body.Action.GetSeatIndex(),
+				Action:         body.Action.GetAction(),
+				Tile:           body.Action.GetTile(),
+				Detail:         clusterActionDetailToClient(body.Action.GetDetail()),
+				WallRemaining:  body.Action.GetWallRemaining(),
+				DeadlineUnixMs: body.Action.GetDeadlineUnixMs(),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_Settlement:
@@ -951,6 +1032,9 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				Penalties:          clusterPenaltiesToClient(body.Settlement.GetPenalties()),
 				DetailText:         body.Settlement.GetDetailText(),
 				PerWinnerBreakdown: clusterWinnerBreakdownsToClient(body.Settlement.GetPerWinnerBreakdown()),
+				RoundIndex:         body.Settlement.GetRoundIndex(),
+				HandIndex:          body.Settlement.GetHandIndex(),
+				TotalScores:        clusterSeatScoresToClient(body.Settlement.GetTotalScores()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone:

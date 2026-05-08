@@ -223,6 +223,19 @@ func (a *roomActor) closeRoomAfterRound() {
 	if a == nil || a.room == nil {
 		return
 	}
+	if a.round != nil {
+		var scores [4]int32
+		for seat, score := range seatBalancesFromLedger(a.round.ledger) {
+			if seat < len(scores) {
+				scores[seat] = score
+			}
+		}
+		a.room.AddRoundScores(scores)
+	}
 	_ = a.room.CloseToSettling()
+	if a.room.CanStartNextHand() {
+		_ = a.room.PrepareNextHand()
+		return
+	}
 	_ = a.room.CloseRoom()
 }

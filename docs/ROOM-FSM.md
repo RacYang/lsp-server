@@ -18,6 +18,11 @@
 
 详见 `internal/domain/room/fsm.go` 中的显式迁移表；非法迁移会返回错误，避免静默破坏房间一致性。
 
+结算后支持两种收尾：
+
+- 默认 `max_hands=1`：`playing -> settling -> closed`，保持旧行为。
+- 多局房间：`playing -> settling -> waiting`，保留座位与房间级累计积分，清理本局 ready / surrendered 状态，玩家重新准备后进入下一局。达到局数上限或解散时进入 `closed`。
+
 ## 超时策略
 
 - `waiting`：超时策略仍为工程占位，当前不自动踢人；运维侧可直接回收长时间空房。
@@ -30,6 +35,7 @@
 ## 重连与恢复
 
 - `SnapshotRoom` 返回房间玩家、定缺、阶段、快照游标以及等待态摘要（谁可操作、等待什么动作、候选动作）。
+- `SnapshotRoom` / `SnapshotNotify` 同步返回结构化副露、最近动作、权威剩牌数、当前 deadline、局号、累计积分与规则元数据；客户端不应从旧字符串日志反推这些事实。
 - `room` 冷启动可基于 `snapmeta.round_json` 恢复进行中的局面；`round_json.schema_version` 高于当前版本时降级到重新准备。
 - 过牌后的 `claim_window_open=false` 不会再凭 `LastDiscard` 重新打开抢答窗口。
 - 幂等仍以 `ApplyEvent.idempotency_key` 为入口，Redis 只记录请求是否已成功落地，不重放业务副作用。

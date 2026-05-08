@@ -65,11 +65,13 @@ type RoundState struct {
 	playerIDs   [4]string
 	surrendered []bool
 	rule        rules.Rule
+	caps        rules.CapabilitySet
 	wall        *wall.Wall
 	hands       []*hand.Hand
 	queBySeat   []int32
 	discards    [][]tile.Tile
 	melds       [][]string
+	lastAction  *clientv1.LastActionInfo
 
 	waitingExchange        bool
 	exchangeDirection      int32
@@ -98,11 +100,14 @@ type RoundState struct {
 	lastGangFollowUp       bool
 	lastDiscardAfterGang   bool
 	closed                 bool
+	deadlineUnixMs         int64
 }
 
 type claimCandidate struct {
-	seat    Seat
-	actions []string
+	seat         Seat
+	actions      []string
+	priority     int
+	choiceAction string
 }
 
 type claimCandidatePersist struct {
@@ -162,6 +167,7 @@ type RoundView struct {
 	HandsBySeat      [][]string
 	DiscardsBySeat   [][]string
 	MeldsBySeat      [][]string
+	MeldInfosBySeat  []*clientv1.SeatMelds
 	// 以下字段供 BotSupervisor 与重连快照重建 bot 视图使用，对老调用方可零值兼容。
 	QueBySeat         []int32
 	PlayerIDs         [4]string
@@ -169,6 +175,13 @@ type RoundView struct {
 	Closed            bool
 	ExchangeSubmitted []bool
 	QueSubmitted      []bool
+	LastAction        *clientv1.LastActionInfo
+	WallRemaining     int32
+	DeadlineUnixMs    int64
+	RoundIndex        int32
+	HandIndex         int32
+	TotalScores       []*clientv1.SeatScore
+	RuleMeta          *clientv1.RuleMeta
 }
 
 // RoundClaimCandidate 描述恢复快照中仍有效的抢答候选。
@@ -191,12 +204,14 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 		return nil, nil, fmt.Errorf("nil engine")
 	}
 	rule := rules.MustGet(e.ruleID)
+	caps := rules.CapabilitiesOf(rule)
 	rs := &RoundState{
 		roomID:            roomID,
 		ruleID:            e.ruleID,
 		playerIDs:         playerIDs,
 		surrendered:       make([]bool, 4),
 		rule:              rule,
+		caps:              caps,
 		wall:              rule.BuildWall(ctx, int64(seedFromRoomID(roomID)&0x7fff_ffff_ffff_ffff)), //nolint:gosec // 已清零最高位
 		hands:             make([]*hand.Hand, 4),
 		discards:          make([][]tile.Tile, 4),

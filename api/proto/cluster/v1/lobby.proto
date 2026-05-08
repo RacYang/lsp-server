@@ -72,6 +72,7 @@ message RoomMeta {
   int32 max_seats = 5;
   int64 created_at_ms = 6;
   string stage = 7;
+  RuleMeta rule_meta = 8;
 }
 
 message ListRoomsRequest {

@@ -335,6 +335,14 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
 		DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
 		MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
+		MeldInfosBySeat:  view.MeldInfosBySeat,
+		LastAction:       view.LastAction,
+		WallRemaining:    view.WallRemaining,
+		DeadlineUnixMs:   view.DeadlineUnixMs,
+		RoundIndex:       view.RoundIndex,
+		HandIndex:        view.HandIndex,
+		TotalScores:      view.TotalScores,
+		RuleMeta:         view.RuleMeta,
 	}
 	for seat := 0; seat < len(snap.Seats) && seat < len(view.HandsBySeat); seat++ {
 		snap.Seats[seat].HandCount = int32(len(view.HandsBySeat[seat])) //nolint:gosec // 座位手牌数量小于 20。
@@ -351,9 +359,13 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 func clientSeatsFromPlayerIDs(players []string) []*clientv1.SeatInfo {
 	seats := make([]*clientv1.SeatInfo, 0, 4)
 	for i := 0; i < 4; i++ {
-		info := &clientv1.SeatInfo{SeatIndex: int32(i)} //nolint:gosec // 固定座位范围 0..3
+		info := &clientv1.SeatInfo{SeatIndex: int32(i), Status: "empty"} //nolint:gosec // 固定座位范围 0..3
 		if i < len(players) {
 			info.UserId = players[i]
+			if players[i] != "" {
+				info.Online = true
+				info.Status = "online"
+			}
 		}
 		seats = append(seats, info)
 	}
@@ -413,7 +425,21 @@ func lobbyRoomMetasToClient(rooms []lobbysvc.RoomMeta) []*clientv1.RoomMeta {
 			MaxSeats:    room.MaxSeats,
 			CreatedAtMs: room.CreatedAtMs,
 			Stage:       room.Stage,
+			RuleMeta:    lobbyRuleMetaToClient(room.RuleMeta),
 		})
 	}
 	return out
+}
+
+func lobbyRuleMetaToClient(meta lobbysvc.RuleMeta) *clientv1.RuleMeta {
+	if meta.RuleID == "" && meta.DisplayName == "" {
+		return nil
+	}
+	return &clientv1.RuleMeta{
+		RuleId:          meta.RuleID,
+		DisplayName:     meta.DisplayName,
+		ShortDesc:       meta.ShortDesc,
+		EnabledFeatures: append([]string(nil), meta.EnabledFeatures...),
+		MaxHands:        meta.MaxHands,
+	}
 }

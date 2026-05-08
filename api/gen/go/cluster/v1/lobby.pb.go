@@ -495,6 +495,7 @@ type RoomMeta struct {
 	MaxSeats      int32                  `protobuf:"varint,5,opt,name=max_seats,json=maxSeats,proto3" json:"max_seats,omitempty"`
 	CreatedAtMs   int64                  `protobuf:"varint,6,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	Stage         string                 `protobuf:"bytes,7,opt,name=stage,proto3" json:"stage,omitempty"`
+	RuleMeta      *RuleMeta              `protobuf:"bytes,8,opt,name=rule_meta,json=ruleMeta,proto3" json:"rule_meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -576,6 +577,13 @@ func (x *RoomMeta) GetStage() string {
 		return x.Stage
 	}
 	return ""
+}
+
+func (x *RoomMeta) GetRuleMeta() *RuleMeta {
+	if x != nil {
+		return x.RuleMeta
+	}
+	return nil
 }
 
 type ListRoomsRequest struct {
@@ -985,7 +993,7 @@ const file_cluster_v1_lobby_proto_rawDesc = "" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12 \n" +
 	"\froom_node_id\x18\x02 \x01(\tR\n" +
 	"roomNodeId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xd5\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\x88\x02\n" +
 	"\bRoomMeta\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x17\n" +
 	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12!\n" +
@@ -994,7 +1002,8 @@ const file_cluster_v1_lobby_proto_rawDesc = "" +
 	"seat_count\x18\x04 \x01(\x05R\tseatCount\x12\x1b\n" +
 	"\tmax_seats\x18\x05 \x01(\x05R\bmaxSeats\x12\"\n" +
 	"\rcreated_at_ms\x18\x06 \x01(\x03R\vcreatedAtMs\x12\x14\n" +
-	"\x05stage\x18\a \x01(\tR\x05stage\"N\n" +
+	"\x05stage\x18\a \x01(\tR\x05stage\x121\n" +
+	"\trule_meta\x18\b \x01(\v2\x14.cluster.v1.RuleMetaR\bruleMeta\"N\n" +
 	"\x10ListRoomsRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
@@ -1064,30 +1073,32 @@ var file_cluster_v1_lobby_proto_goTypes = []any{
 	(*AutoMatchResponse)(nil),  // 12: cluster.v1.AutoMatchResponse
 	(*AddBotRequest)(nil),      // 13: cluster.v1.AddBotRequest
 	(*AddBotResponse)(nil),     // 14: cluster.v1.AddBotResponse
-	(*SeatInfo)(nil),           // 15: cluster.v1.SeatInfo
+	(*RuleMeta)(nil),           // 15: cluster.v1.RuleMeta
+	(*SeatInfo)(nil),           // 16: cluster.v1.SeatInfo
 }
 var file_cluster_v1_lobby_proto_depIdxs = []int32{
-	8,  // 0: cluster.v1.ListRoomsResponse.rooms:type_name -> cluster.v1.RoomMeta
-	15, // 1: cluster.v1.AddBotResponse.added:type_name -> cluster.v1.SeatInfo
-	0,  // 2: cluster.v1.LobbyService.CreateRoom:input_type -> cluster.v1.CreateRoomRequest
-	2,  // 3: cluster.v1.LobbyService.JoinRoom:input_type -> cluster.v1.JoinRoomRequest
-	6,  // 4: cluster.v1.LobbyService.GetRoom:input_type -> cluster.v1.GetRoomRequest
-	9,  // 5: cluster.v1.LobbyService.ListRooms:input_type -> cluster.v1.ListRoomsRequest
-	11, // 6: cluster.v1.LobbyService.AutoMatch:input_type -> cluster.v1.AutoMatchRequest
-	4,  // 7: cluster.v1.LobbyService.LeaveRoom:input_type -> cluster.v1.LeaveRoomRequest
-	13, // 8: cluster.v1.LobbyService.AddBot:input_type -> cluster.v1.AddBotRequest
-	1,  // 9: cluster.v1.LobbyService.CreateRoom:output_type -> cluster.v1.CreateRoomResponse
-	3,  // 10: cluster.v1.LobbyService.JoinRoom:output_type -> cluster.v1.JoinRoomResponse
-	7,  // 11: cluster.v1.LobbyService.GetRoom:output_type -> cluster.v1.GetRoomResponse
-	10, // 12: cluster.v1.LobbyService.ListRooms:output_type -> cluster.v1.ListRoomsResponse
-	12, // 13: cluster.v1.LobbyService.AutoMatch:output_type -> cluster.v1.AutoMatchResponse
-	5,  // 14: cluster.v1.LobbyService.LeaveRoom:output_type -> cluster.v1.LeaveRoomResponse
-	14, // 15: cluster.v1.LobbyService.AddBot:output_type -> cluster.v1.AddBotResponse
-	9,  // [9:16] is the sub-list for method output_type
-	2,  // [2:9] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	15, // 0: cluster.v1.RoomMeta.rule_meta:type_name -> cluster.v1.RuleMeta
+	8,  // 1: cluster.v1.ListRoomsResponse.rooms:type_name -> cluster.v1.RoomMeta
+	16, // 2: cluster.v1.AddBotResponse.added:type_name -> cluster.v1.SeatInfo
+	0,  // 3: cluster.v1.LobbyService.CreateRoom:input_type -> cluster.v1.CreateRoomRequest
+	2,  // 4: cluster.v1.LobbyService.JoinRoom:input_type -> cluster.v1.JoinRoomRequest
+	6,  // 5: cluster.v1.LobbyService.GetRoom:input_type -> cluster.v1.GetRoomRequest
+	9,  // 6: cluster.v1.LobbyService.ListRooms:input_type -> cluster.v1.ListRoomsRequest
+	11, // 7: cluster.v1.LobbyService.AutoMatch:input_type -> cluster.v1.AutoMatchRequest
+	4,  // 8: cluster.v1.LobbyService.LeaveRoom:input_type -> cluster.v1.LeaveRoomRequest
+	13, // 9: cluster.v1.LobbyService.AddBot:input_type -> cluster.v1.AddBotRequest
+	1,  // 10: cluster.v1.LobbyService.CreateRoom:output_type -> cluster.v1.CreateRoomResponse
+	3,  // 11: cluster.v1.LobbyService.JoinRoom:output_type -> cluster.v1.JoinRoomResponse
+	7,  // 12: cluster.v1.LobbyService.GetRoom:output_type -> cluster.v1.GetRoomResponse
+	10, // 13: cluster.v1.LobbyService.ListRooms:output_type -> cluster.v1.ListRoomsResponse
+	12, // 14: cluster.v1.LobbyService.AutoMatch:output_type -> cluster.v1.AutoMatchResponse
+	5,  // 15: cluster.v1.LobbyService.LeaveRoom:output_type -> cluster.v1.LeaveRoomResponse
+	14, // 16: cluster.v1.LobbyService.AddBot:output_type -> cluster.v1.AddBotResponse
+	10, // [10:17] is the sub-list for method output_type
+	3,  // [3:10] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_cluster_v1_lobby_proto_init() }

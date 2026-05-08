@@ -16,6 +16,7 @@ import (
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
+	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 	"racoo.cn/lsp/internal/net/msgid"
@@ -158,6 +159,30 @@ func TestActorRemovedAfterRoomClosed(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestServiceSupportsConfiguredNextHand(t *testing.T) {
+	t.Parallel()
+
+	r := domainroom.NewRoom("room-next-hand")
+	r.MaxHands = 2
+	for i := 0; i < 4; i++ {
+		_, ok := r.JoinAutoSeat("p" + string(rune('0'+i)))
+		require.True(t, ok)
+		require.NoError(t, r.SetReady(domainroom.Seat(i), true))
+	}
+	require.NoError(t, r.StartPlaying())
+	a := &roomActor{
+		room: r,
+		round: &RoundState{
+			ledger: make([]sichuanxzdd.ScoreEntry, 0),
+		},
+	}
+	a.closeRoomAfterRound()
+	a.round = nil
+	require.Nil(t, a.round)
+	require.Equal(t, domainroom.StateWaiting, a.room.FSM.State())
+	require.EqualValues(t, 2, a.room.HandIndex)
+}
+
 func TestRecoverRoomAndRuleID(t *testing.T) {
 	t.Parallel()
 
@@ -274,6 +299,36 @@ func TestRoundViewShowsClaimWindow(t *testing.T) {
 	require.Equal(t, "claim_window", view.WaitingAction)
 	require.Equal(t, "m3", view.PendingTile)
 	require.Equal(t, []string{"pong"}, view.AvailableActions)
+}
+
+func TestRoundViewIncludesAuthoritativeTUIFields(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-contract",
+		ruleID:          "sichuan_xzdd",
+		rule:            rules.MustGet("sichuan_xzdd"),
+		caps:            rules.CapabilitiesOf(rules.MustGet("sichuan_xzdd")),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7), tile.Must(tile.SuitDots, 8)}),
+		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
+		melds:           [][]string{{"pong:m3"}, nil, {"gang:p5"}, nil},
+		ledger:          make([]sichuanxzdd.ScoreEntry, 0),
+		queBySeat:       make([]int32, 4),
+		lastDiscardSeat: -1,
+		deadlineUnixMs:  12345,
+	}
+	rs.rememberLastAction(rs.actionDetail(0, "discard", tile.Must(tile.SuitCharacters, 3), SeatInvalid, 0))
+
+	view := rs.SnapshotView()
+	require.EqualValues(t, 2, view.WallRemaining)
+	require.EqualValues(t, 12345, view.DeadlineUnixMs)
+	require.NotNil(t, view.LastAction)
+	require.Equal(t, "discard", view.LastAction.GetAction())
+	require.NotNil(t, view.RuleMeta)
+	require.Contains(t, view.RuleMeta.GetEnabledFeatures(), "exchange_three")
+	require.Len(t, view.MeldInfosBySeat, 4)
+	require.Equal(t, "pong", view.MeldInfosBySeat[0].GetMelds()[0].GetKind())
 }
 
 func TestExchangeThreeUsesClientDirection(t *testing.T) {

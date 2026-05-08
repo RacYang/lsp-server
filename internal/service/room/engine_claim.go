@@ -52,16 +52,20 @@ func (e *Engine) ApplyPongByPlayer(_ context.Context, rs *RoundState, seat Seat)
 	rs.lastDiscard = 0
 	rs.lastDiscardSeat = SeatInvalid
 	seatIndex := seat.Proto()
+	detail := rs.actionDetail(seat, "pong", claimedTile, seat, claimedFromSeat)
+	rs.rememberLastAction(detail)
 	payload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("pong-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
 			Action: &clientv1.ActionNotify{
-				SeatIndex:   seatIndex,
-				Action:      "pong",
-				Tile:        claimedTile.String(),
-				Phase:       clientv1.Phase_PHASE_DISCARD,
-				Step:        int64(rs.step),
-				ActingSeats: []int32{seatIndex},
+				SeatIndex:     seatIndex,
+				Action:        "pong",
+				Tile:          claimedTile.String(),
+				Phase:         clientv1.Phase_PHASE_DISCARD,
+				Step:          int64(rs.step),
+				ActingSeats:   []int32{seatIndex},
+				Detail:        detail,
+				WallRemaining: rs.wallRemaining(),
 			},
 		},
 	})
@@ -108,9 +112,11 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 	var gangTile tile.Tile
 	var err error
 	var out []Notification
+	gangFromSeat := SeatInvalid
 	if claimGang {
 		gangTile = rs.lastDiscard
 		fromSeat := rs.lastDiscardSeat
+		gangFromSeat = fromSeat
 		rs.clearClaimWindow()
 		rs.closeOpeningClaimWindow()
 		if err := rs.rewindInterruptedTurn(); err != nil {
@@ -154,16 +160,23 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
 	seatIndex := seat.Proto()
+	detail := rs.actionDetail(seat, "gang", gangTile, seat, SeatInvalid)
+	if claimGang {
+		detail.SourceSeat = gangFromSeat.Proto()
+	}
+	rs.rememberLastAction(detail)
 	payload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("gang-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
 			Action: &clientv1.ActionNotify{
-				SeatIndex:   seatIndex,
-				Action:      "gang",
-				Tile:        gangTile.String(),
-				Phase:       clientv1.Phase_PHASE_DRAW,
-				Step:        int64(rs.step),
-				ActingSeats: []int32{seatIndex},
+				SeatIndex:     seatIndex,
+				Action:        "gang",
+				Tile:          gangTile.String(),
+				Phase:         clientv1.Phase_PHASE_DRAW,
+				Step:          int64(rs.step),
+				ActingSeats:   []int32{seatIndex},
+				Detail:        detail,
+				WallRemaining: rs.wallRemaining(),
 			},
 		},
 	})
@@ -293,23 +306,25 @@ func (rs *RoundState) buildClaimCandidates() []claimCandidate {
 		return nil
 	}
 	out := make([]claimCandidate, 0, 3)
+	claimPolicy := rs.caps.Claims
+	if claimPolicy == nil {
+		claimPolicy = rules.CapabilitiesOf(rs.rule).Claims
+	}
 	for offset := 1; offset < 4; offset++ {
 		seat := Seat((int(rs.lastDiscardSeat) + offset) % 4)
-		if rs.isHued(seat) {
-			continue
-		}
-		actions := make([]string, 0, 3)
-		if rs.rawCanClaimHu(seat) {
-			actions = append(actions, "hu")
-		}
-		if !rs.qiangGangWindow && rs.rawCanClaimGang(seat) {
-			actions = append(actions, "gang")
-		}
-		if !rs.qiangGangWindow && rs.rawCanClaimPong(seat) {
-			actions = append(actions, "pong")
-		}
+		claimActions := claimPolicy.Candidates(rules.ClaimContext{
+			Seat:            seat,
+			SourceSeat:      rs.lastDiscardSeat,
+			Tile:            rs.lastDiscard,
+			Hand:            rs.hands[seat],
+			QiangGangWindow: rs.qiangGangWindow,
+			Hued:            rs.isHued(seat),
+			HuContext:       rs.claimHuContext(seat),
+			CheckHu:         rs.rule.CheckHu,
+		})
+		actions, priority, choiceAction := normalizeClaimActions(claimActions)
 		if len(actions) > 0 {
-			out = append(out, claimCandidate{seat: seat, actions: actions})
+			out = append(out, claimCandidate{seat: seat, actions: actions, priority: priority, choiceAction: choiceAction})
 		}
 	}
 	return out
@@ -320,9 +335,9 @@ func (rs *RoundState) bestClaimCandidate() (claimCandidate, bool) {
 		return claimCandidate{}, false
 	}
 	best := rs.claimCandidates[0]
-	bestPriority := claimPriority(best.actions)
+	bestPriority := best.claimPriority()
 	for _, candidate := range rs.claimCandidates[1:] {
-		priority := claimPriority(candidate.actions)
+		priority := candidate.claimPriority()
 		if priority > bestPriority {
 			best = candidate
 			bestPriority = priority
@@ -361,14 +376,21 @@ func (rs *RoundState) hasClaimAction(seat Seat, action string) bool {
 	return false
 }
 
-func claimPriority(actions []string) int {
-	if hasAction(actions, "hu") {
+func (candidate claimCandidate) claimPriority() int {
+	if candidate.priority > 0 {
+		return candidate.priority
+	}
+	return legacyClaimPriority(candidate.actions)
+}
+
+func legacyClaimPriority(actions []string) int {
+	if hasAction(actions, string(rules.ActionHu)) {
 		return 3
 	}
-	if hasAction(actions, "gang") {
+	if hasAction(actions, string(rules.ActionGang)) {
 		return 2
 	}
-	if hasAction(actions, "pong") {
+	if hasAction(actions, string(rules.ActionPong)) {
 		return 1
 	}
 	return 0
@@ -388,27 +410,19 @@ func (rs *RoundState) claimPromptNotifications(discard tile.Tile) ([]Notificatio
 	if !ok {
 		return nil, nil
 	}
-	claimAction := "pong_choice"
-	if hasAction(candidate.actions, "hu") {
-		if rs.qiangGangWindow {
-			claimAction = "qiang_gang_choice"
-		} else {
-			claimAction = "hu_choice"
-		}
-	} else if hasAction(candidate.actions, "gang") {
-		claimAction = "gang_choice"
-	}
+	claimAction := candidate.claimChoiceAction()
 	claimSeatIndex := candidate.seat.Proto()
 	claimPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("claim-%d-%d", rs.step, candidate.seat),
 		Body: &clientv1.Envelope_Action{
 			Action: &clientv1.ActionNotify{
-				SeatIndex:   claimSeatIndex,
-				Action:      claimAction,
-				Tile:        discard.String(),
-				Phase:       clientv1.Phase_PHASE_CLAIM,
-				Step:        int64(rs.step),
-				ActingSeats: []int32{claimSeatIndex},
+				SeatIndex:     claimSeatIndex,
+				Action:        claimAction,
+				Tile:          discard.String(),
+				Phase:         clientv1.Phase_PHASE_CLAIM,
+				Step:          int64(rs.step),
+				ActingSeats:   []int32{claimSeatIndex},
+				WallRemaining: rs.wallRemaining(),
 			},
 		},
 	})
@@ -418,17 +432,43 @@ func (rs *RoundState) claimPromptNotifications(discard tile.Tile) ([]Notificatio
 	return []Notification{{Kind: KindAction, Payload: claimPayload, TargetSeat: BroadcastSeat}}, nil
 }
 
-func (rs *RoundState) rawCanClaimPong(seat Seat) bool {
-	if rs == nil || rs.lastDiscard == 0 || rs.lastDiscardSeat < 0 || seat == rs.lastDiscardSeat || rs.isHued(seat) {
-		return false
+func normalizeClaimActions(in []rules.ClaimAction) ([]string, int, string) {
+	if len(in) == 0 {
+		return nil, 0, ""
 	}
-	count := 0
-	for _, t := range rs.hands[seat].Tiles() {
-		if t == rs.lastDiscard {
-			count++
+	actions := make([]string, 0, len(in))
+	priority := 0
+	choiceAction := ""
+	for _, action := range in {
+		name := string(action.Name)
+		if name == "" {
+			continue
+		}
+		actions = append(actions, name)
+		if action.Priority > priority {
+			priority = action.Priority
+			choiceAction = action.ChoiceAction
 		}
 	}
-	return count >= 2
+	return actions, priority, choiceAction
+}
+
+func (candidate claimCandidate) claimChoiceAction() string {
+	if candidate.choiceAction != "" {
+		return candidate.choiceAction
+	}
+	switch {
+	case hasAction(candidate.actions, string(rules.ActionHu)):
+		return "hu_choice"
+	case hasAction(candidate.actions, string(rules.ActionGang)):
+		return "gang_choice"
+	case hasAction(candidate.actions, string(rules.ActionPong)):
+		return "pong_choice"
+	case hasAction(candidate.actions, string(rules.ActionChi)):
+		return "chi_choice"
+	default:
+		return "claim_choice"
+	}
 }
 
 func (rs *RoundState) rawCanClaimGang(seat Seat) bool {
@@ -444,9 +484,13 @@ func (rs *RoundState) rawCanClaimGang(seat Seat) bool {
 	return count >= 3
 }
 
-func (rs *RoundState) rawCanClaimHu(seat Seat) bool {
-	if rs == nil || rs.lastDiscard == 0 || rs.lastDiscardSeat < 0 || seat == rs.lastDiscardSeat || rs.isHued(seat) {
-		return false
+func (rs *RoundState) claimHuContext(seat Seat) rules.HuContext {
+	if rs == nil {
+		return rules.HuContext{}
+	}
+	wallRemaining := 0
+	if rs.wall != nil {
+		wallRemaining = rs.wall.Remaining()
 	}
 	ctx := rules.HuContext{
 		Source:          rules.HuSourceDiscard,
@@ -454,11 +498,11 @@ func (rs *RoundState) rawCanClaimHu(seat Seat) bool {
 		Discarder:       rs.lastDiscardSeat,
 		ResponsibleSeat: rs.lastDiscardSeat,
 		GangHistory:     append([]rules.GangRecord(nil), rs.gangRecords...),
-		WallRemaining:   rs.wall.Remaining(),
+		WallRemaining:   wallRemaining,
 	}
 	if rs.qiangGangWindow {
 		ctx.Source = rules.HuSourceQiangGang
 	}
-	_, ok := rs.rule.CheckHu(rs.hands[seat], rs.lastDiscard, ctx)
-	return ok
+	_ = seat
+	return ctx
 }

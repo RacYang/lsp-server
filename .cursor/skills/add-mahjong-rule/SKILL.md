@@ -17,11 +17,11 @@ description: 通过共享规则接口新增麻将变体实现。用于引入新�
 
 ## Steps
 
-1. 在 `internal/mahjong/rules` 维持共享接口，不让房间代码依赖具体规则实现。
-2. 在规则专属包中实现变体逻辑，保持麻将算法层与传输、会话、存储隔离。
-3. 如需注册表或配置选择，新增清晰的规则 ID，并补配置解析测试。
-4. 为新行为补充 YAML 夹具与 Go 单测，确保夹具确定性与可回放。
-5. 更新 `docs/RULE-ENGINE.md`、`docs/RULE-LIFECYCLE.md` 与 CHANGELOG。
+1. 在 `internal/mahjong/rules` 维持共享接口，并通过 `CapabilitySet` 组合开局、吃碰杠胡、轮转、计分、结算、终局与投影能力。
+2. 在规则专属包中实现变体逻辑，保持麻将算法层与传输、会话、存储隔离；room engine 不得依赖具体规则包。
+3. 如需注册表或配置选择，新增清晰的规则 ID，并补配置解析与能力元数据测试。
+4. 为新行为补充 YAML 夹具与 Go 单测，至少覆盖发牌、动作、和牌、结算、重连快照与多局边界。
+5. 更新 `docs/RULE-ENGINE.md`、相关 ADR、`docs/PROTOCOL.md`、`docs/cli-tui-backend-gaps.md` 与 CHANGELOG；只有治理硬约束变更才更新 `docs/RULE-LIFECYCLE.md`。
 
 ## Verify
 
