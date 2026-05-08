@@ -27,10 +27,15 @@ func drawCenterDial(scr tcell.Screen, in FrameInputs) {
 		return
 	}
 	label := "--"
-	if n, ok := remainingTilesEstimate(in.View); ok {
+	if in.View.WallRemaining > 0 {
+		label = fmt.Sprintf("%02d", in.View.WallRemaining)
+	} else if n, ok := remainingTilesEstimate(in.View); ok {
 		label = fmt.Sprintf("%02d", n)
 	}
 	text := label
+	if in.View.LastAction != nil && in.View.LastAction.GetTile() != "" {
+		text += " " + TileName(in.View.LastAction.GetTile())
+	}
 	if in.View.DealerSeat == in.View.SeatIndex && in.View.SeatIndex >= 0 {
 		text += " ★"
 	}

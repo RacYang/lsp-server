@@ -128,41 +128,11 @@ func run() int {
 	lobbyGW := NewWSLobbyGateway(client, bus, state)
 	tableGW := NewWSTableGateway(client, bus)
 
-	for ctx.Err() == nil {
-		if view := state.Snapshot(); view.Phase == phaseTable && view.RoomID != "" {
-			exit := RunTableScreen(ctx, switcher, state, tableGW, &cfg)
-			if exit.Err != nil && !errors.Is(exit.Err, context.Canceled) {
-				fmt.Fprintln(os.Stderr, "牌桌退出:", exit.Err)
-			}
-			if sum := snapshotSettlementSummary(state.Snapshot()); sum != nil {
-				WriteStdoutSummary(os.Stdout, *sum)
-			}
-			if exit.Reason == TableExitRestart {
-				if err := restartAfterSettlement(ctx, state, lobbyGW); err != nil {
-					fmt.Fprintln(os.Stderr, "再来一局失败:", err)
-				}
-				continue
-			}
-			if exit.Reason == TableExitContextDone {
-				break
-			}
-			continue
+	_ = prompter // 旧行式 lobby 已被全屏 SceneRouter 替代，保留构造避免配置读写路径漂移。
+	if err := RunSceneApp(ctx, switcher, state, lobbyGW, tableGW, &cfg); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "TUI 错误:", err)
 		}
-		outcome, err := RunLobby(ctx, prompter, lobbyGW, &cfg)
-		_ = SaveConfig(*configPath, cfg)
-		if err != nil {
-			if !errors.Is(err, context.Canceled) {
-				fmt.Fprintln(os.Stderr, "lobby 错误:", err)
-			}
-			break
-		}
-		if outcome.Reason == LobbyExitQuit {
-			break
-		}
-		// 不在这里直接调 RunTableScreen：lobby 处理器只负责发请求，phaseTable 由
-		// JoinRoomResp / CreateRoomResp 的 state apply 切换。统一交给下次循环开头
-		// 那一行 `view.Phase == phaseTable && RoomID != ""` 来判断是否进入牌桌，
-		// 避免出现"加入失败但仍弹出空牌桌"的旧 bug。
 	}
 	_ = SaveConfig(*configPath, cfg)
 	return 0

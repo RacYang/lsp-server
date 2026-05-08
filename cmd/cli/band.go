@@ -47,9 +47,12 @@ func compactPlayerLine(view RoomView, seat int32) string {
 	p := view.Players[seat]
 	name := playerDisplayName(view, seat)
 	parts := []string{
-		name,
+		seatStatusMark(p) + name,
 		"缺" + queLabel(view.QueBySeat[seat]),
 		fmt.Sprintf("%d张", handCountForSeat(view, seat)),
+	}
+	if p.TotalScore != 0 {
+		parts = append(parts, fmt.Sprintf("%+d", p.TotalScore))
 	}
 	if melds := formatMeldGlyphs(p.Melds); melds != "" {
 		parts = append(parts, melds)
@@ -89,7 +92,17 @@ func bottomActionHint(view RoomView, cursor *HandCursor, now time.Time) string {
 }
 
 func actionCountdown(view RoomView, now time.Time) (int, bool) {
-	if now.IsZero() || view.ActionStartedAt.IsZero() {
+	if now.IsZero() {
+		return 0, false
+	}
+	if view.DeadlineUnixMS > 0 {
+		left := time.Until(time.UnixMilli(view.DeadlineUnixMS))
+		if left < 0 {
+			left = 0
+		}
+		return int(math.Ceil(left.Seconds())), true
+	}
+	if view.ActionStartedAt.IsZero() {
 		return 0, false
 	}
 	var total time.Duration
@@ -128,6 +141,9 @@ func sideLabel(view RoomView, seat int32) string {
 }
 
 func remainingLabel(view RoomView) string {
+	if view.WallRemaining > 0 {
+		return fmt.Sprintf("%d", view.WallRemaining)
+	}
 	if n, ok := remainingTilesEstimate(view); ok {
 		return fmt.Sprintf("%d", n)
 	}
@@ -135,9 +151,28 @@ func remainingLabel(view RoomView) string {
 }
 
 func scoreSummary(view RoomView) string {
-	// 协议尚未提供实时筹码；保留天凤式位置，避免用假分数误导。
 	if !gameStarted(view) {
 		return ""
 	}
-	return "你 --  西 --  北 --  东 --"
+	if len(view.TotalScores) > 0 {
+		parts := make([]string, 0, len(view.TotalScores))
+		for _, score := range view.TotalScores {
+			parts = append(parts, fmt.Sprintf("%s %+d", sideLabel(view, score.GetSeatIndex()), score.GetTotalFan()))
+		}
+		return strings.Join(parts, "  ")
+	}
+	return fmt.Sprintf("第%d局 第%d手", view.RoundIndex+1, view.HandIndex+1)
+}
+
+func seatStatusMark(p PlayerView) string {
+	switch {
+	case p.IsBot:
+		return "▣"
+	case p.AutoPlay:
+		return "◐"
+	case !p.Online && p.UserID != "":
+		return "○"
+	default:
+		return "●"
+	}
 }

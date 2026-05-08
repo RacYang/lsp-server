@@ -64,6 +64,13 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 	case *clientv1.Envelope_StartGame:
 		v.RoomID = body.StartGame.GetRoomId()
 		v.DealerSeat = body.StartGame.GetDealerSeat()
+		v.WallRemaining = body.StartGame.GetWallRemaining()
+		v.RoundIndex = body.StartGame.GetRoundIndex()
+		v.HandIndex = body.StartGame.GetHandIndex()
+		if meta := body.StartGame.GetRuleMeta(); meta != nil {
+			v.RuleID = meta.GetRuleId()
+			v.DisplayName = meta.GetDisplayName()
+		}
 		v.RoomState = "playing"
 		applyPhase(v, body.StartGame.GetPhase(), body.StartGame.GetActingSeats(), body.StartGame.GetStep())
 		v.LastSettlement = nil
@@ -76,6 +83,9 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		applyAction(v, body.Action)
 	case *clientv1.Envelope_Settlement:
 		v.LastSettlement = body.Settlement
+		v.RoundIndex = body.Settlement.GetRoundIndex()
+		v.HandIndex = body.Settlement.GetHandIndex()
+		v.TotalScores = cloneSeatScores(body.Settlement.GetTotalScores())
 		v.RoomState = "settling"
 		setWaitingAction(v, "none", nil)
 		v.ClaimCandidates = map[int32][]string{}
@@ -229,6 +239,8 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	t := draw.GetTile()
 	v.ActingSeat = seat
 	v.PendingTile = t
+	v.WallRemaining = draw.GetWallRemaining()
+	v.DeadlineUnixMS = draw.GetDeadlineUnixMs()
 	applyPhase(v, draw.GetPhase(), draw.GetActingSeats(), draw.GetStep())
 	if draw.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
 		setWaitingAction(v, "discard", []string{"discard"})
@@ -252,6 +264,19 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 
 func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 	seat := action.GetSeatIndex()
+	v.WallRemaining = action.GetWallRemaining()
+	v.DeadlineUnixMS = action.GetDeadlineUnixMs()
+	if detail := action.GetDetail(); detail != nil {
+		v.LastAction = &clientv1.LastActionInfo{
+			Step:        detail.GetStep(),
+			ActorSeat:   detail.GetActorSeat(),
+			Action:      detail.GetAction(),
+			Tile:        detail.GetTile(),
+			TargetSeat:  detail.GetTargetSeat(),
+			SourceSeat:  detail.GetSourceSeat(),
+			CreatedAtMs: detail.GetCreatedAtMs(),
+		}
+	}
 	applyPhase(v, action.GetPhase(), action.GetActingSeats(), action.GetStep())
 	switch action.GetAction() {
 	case "exchange_three":
@@ -505,6 +530,16 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 		v.SnapshotStep = snap.GetLastStep()
 	}
 	v.PendingTile = snap.GetPendingTile()
+	v.LastAction = snap.GetLastAction()
+	v.WallRemaining = snap.GetWallRemaining()
+	v.DeadlineUnixMS = snap.GetDeadlineUnixMs()
+	v.RoundIndex = snap.GetRoundIndex()
+	v.HandIndex = snap.GetHandIndex()
+	v.TotalScores = cloneSeatScores(snap.GetTotalScores())
+	if meta := snap.GetRuleMeta(); meta != nil {
+		v.RuleID = meta.GetRuleId()
+		v.DisplayName = meta.GetDisplayName()
+	}
 	v.ClaimCandidates = make(map[int32][]string, len(snap.GetClaimCandidates()))
 	for _, candidate := range snap.GetClaimCandidates() {
 		v.ClaimCandidates[candidate.GetSeatIndex()] = append([]string(nil), candidate.GetActions()...)
@@ -527,6 +562,7 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 	}
 	applySeatTiles(v, snap.GetDiscardsBySeat(), func(p *PlayerView, tiles []string) { p.Discards = tiles })
 	applySeatTiles(v, snap.GetMeldsBySeat(), func(p *PlayerView, tiles []string) { p.Melds = tiles })
+	applyMeldInfos(v, snap.GetMeldInfosBySeat())
 	appendLog(v, "快照已恢复")
 }
 
@@ -544,6 +580,10 @@ func applySeatInfos(v *RoomView, seats []*clientv1.SeatInfo) {
 		p.Nickname = seat.GetNickname()
 		p.IsBot = seat.GetIsBot()
 		p.Surrendered = seat.GetSurrendered()
+		p.Online = seat.GetOnline()
+		p.AutoPlay = seat.GetAutoPlay()
+		p.Status = seat.GetStatus()
+		p.TotalScore = seat.GetTotalScore()
 		if count := seat.GetHandCount(); count > 0 {
 			p.HandCnt = int(count)
 		}
@@ -570,6 +610,12 @@ func resetRoomToLobby(v *RoomView, keepSettlement bool) {
 	v.RoomState = ""
 	v.LastStep = 0
 	v.SnapshotStep = 0
+	v.DeadlineUnixMS = 0
+	v.WallRemaining = 0
+	v.RoundIndex = 0
+	v.HandIndex = 0
+	v.TotalScores = nil
+	v.LastAction = nil
 	v.ExchangeDirection = -1
 	clearRoundFacts(v)
 	for i := range v.Players {
@@ -633,6 +679,26 @@ func applySeatTiles(v *RoomView, items []*clientv1.SeatTiles, fn func(*PlayerVie
 			continue
 		}
 		fn(&v.Players[seat], append([]string(nil), item.GetTiles()...))
+	}
+}
+
+func applyMeldInfos(v *RoomView, items []*clientv1.SeatMelds) {
+	for _, item := range items {
+		seat := item.GetSeatIndex()
+		if seat < 0 || seat > 3 {
+			continue
+		}
+		melds := make([]string, 0, len(item.GetMelds()))
+		for _, meld := range item.GetMelds() {
+			tiles := meld.GetTiles()
+			if len(tiles) == 0 {
+				continue
+			}
+			melds = append(melds, meld.GetKind()+":"+strings.Join(tiles, ","))
+		}
+		if len(melds) > 0 {
+			v.Players[seat].Melds = melds
+		}
 	}
 }
 

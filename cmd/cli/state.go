@@ -38,6 +38,12 @@ type RoomView struct {
 	LastStep        int64
 	SnapshotStep    int64
 	ActionStartedAt time.Time
+	DeadlineUnixMS  int64
+	WallRemaining   int32
+	RoundIndex      int32
+	HandIndex       int32
+	TotalScores     []*clientv1.SeatScore
+	LastAction      *clientv1.LastActionInfo
 
 	DealerSeat        int32
 	ActingSeat        int32
@@ -70,6 +76,10 @@ type PlayerView struct {
 	Ready       bool
 	IsBot       bool
 	Surrendered bool
+	Online      bool
+	AutoPlay    bool
+	Status      string
+	TotalScore  int32
 	Hand        []string
 	HandCnt     int
 	Melds       []string
@@ -146,6 +156,10 @@ func cloneRoomView(in RoomView) RoomView {
 	out := in
 	out.AvailableActions = append([]string(nil), in.AvailableActions...)
 	out.ActingSeats = append([]int32(nil), in.ActingSeats...)
+	out.TotalScores = cloneSeatScores(in.TotalScores)
+	if in.LastAction != nil {
+		out.LastAction = proto.Clone(in.LastAction).(*clientv1.LastActionInfo)
+	}
 	out.ClaimCandidates = make(map[int32][]string, len(in.ClaimCandidates))
 	for seat, actions := range in.ClaimCandidates {
 		out.ClaimCandidates[seat] = append([]string(nil), actions...)
@@ -173,6 +187,17 @@ func cloneRoomMetas(in []*clientv1.RoomMeta) []*clientv1.RoomMeta {
 			continue
 		}
 		out = append(out, proto.Clone(room).(*clientv1.RoomMeta))
+	}
+	return out
+}
+
+func cloneSeatScores(in []*clientv1.SeatScore) []*clientv1.SeatScore {
+	out := make([]*clientv1.SeatScore, 0, len(in))
+	for _, score := range in {
+		if score == nil {
+			continue
+		}
+		out = append(out, proto.Clone(score).(*clientv1.SeatScore))
 	}
 	return out
 }

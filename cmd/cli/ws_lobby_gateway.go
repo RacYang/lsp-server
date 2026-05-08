@@ -65,6 +65,32 @@ func (g *wsLobbyGateway) LeaveRoom(ctx context.Context) error {
 	return nil
 }
 
+func (g *wsLobbyGateway) ListRules(ctx context.Context) ([]LobbyRuleMeta, error) {
+	reqID := newReqID("listrules")
+	env, err := g.rpc.Call(ctx, msgid.ListRulesReq, &clientv1.Envelope{
+		ReqId: reqID,
+		Body:  &clientv1.Envelope_ListRulesReq{ListRulesReq: &clientv1.ListRulesRequest{}},
+	}, func(e *clientv1.Envelope) bool { return e.GetListRulesResp() != nil })
+	if err != nil {
+		return nil, err
+	}
+	resp := env.GetListRulesResp()
+	if errStr := envelopeError(resp.GetErrorCode(), resp.GetErrorMessage()); errStr != "" {
+		return nil, errors.New(errStr)
+	}
+	out := make([]LobbyRuleMeta, 0, len(resp.GetRules()))
+	for _, rule := range resp.GetRules() {
+		out = append(out, LobbyRuleMeta{
+			RuleID:          rule.GetRuleId(),
+			DisplayName:     rule.GetDisplayName(),
+			ShortDesc:       rule.GetShortDesc(),
+			EnabledFeatures: append([]string(nil), rule.GetEnabledFeatures()...),
+			MaxHands:        rule.GetMaxHands(),
+		})
+	}
+	return out, nil
+}
+
 func (g *wsLobbyGateway) ListRooms(ctx context.Context, pageToken string) (LobbyRoomList, error) {
 	reqID := newReqID("listrooms")
 	env, err := g.rpc.Call(ctx, msgid.ListRoomsReq, &clientv1.Envelope{
