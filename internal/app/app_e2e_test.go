@@ -20,6 +20,18 @@ import (
 	"racoo.cn/lsp/internal/net/msgid"
 )
 
+type wsTestMessage struct {
+	msgID uint16
+	env   *clientv1.Envelope
+}
+
+type wsTestBacklog struct {
+	mu    sync.Mutex
+	items []wsTestMessage
+}
+
+var wsTestBacklogs sync.Map
+
 func dialWS(t *testing.T, base string) *websocket.Conn {
 	t.Helper()
 	u := "ws://" + base + "/ws"
@@ -32,7 +44,53 @@ func dialWS(t *testing.T, base string) *websocket.Conn {
 			t.Fatalf("关闭握手响应体失败: %v", err)
 		}
 	}
+	t.Cleanup(func() { wsTestBacklogs.Delete(c) })
 	return c
+}
+
+func stashWSMessage(conn *websocket.Conn, msg wsTestMessage) {
+	backlog := backlogForWS(conn)
+	backlog.mu.Lock()
+	defer backlog.mu.Unlock()
+	backlog.items = append(backlog.items, msg)
+}
+
+func popWSMessage(conn *websocket.Conn) (wsTestMessage, bool) {
+	backlog := backlogForWS(conn)
+	backlog.mu.Lock()
+	defer backlog.mu.Unlock()
+	if len(backlog.items) == 0 {
+		return wsTestMessage{}, false
+	}
+	msg := backlog.items[0]
+	copy(backlog.items, backlog.items[1:])
+	backlog.items = backlog.items[:len(backlog.items)-1]
+	return msg, true
+}
+
+func backlogForWS(conn *websocket.Conn) *wsTestBacklog {
+	actual, _ := wsTestBacklogs.LoadOrStore(conn, &wsTestBacklog{})
+	return actual.(*wsTestBacklog)
+}
+
+func readWSClientMessage(conn *websocket.Conn, timeout time.Duration) (wsTestMessage, error) {
+	if msg, ok := popWSMessage(conn); ok {
+		return msg, nil
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		return wsTestMessage{}, fmt.Errorf("读消息失败: %w", err)
+	}
+	h, err := frame.ReadFrame(bytes.NewReader(data))
+	if err != nil {
+		return wsTestMessage{}, err
+	}
+	var env clientv1.Envelope
+	if err := proto.Unmarshal(h.Payload, &env); err != nil {
+		return wsTestMessage{}, err
+	}
+	return wsTestMessage{msgID: h.MsgID, env: &env}, nil
 }
 
 // loginJoinReturnSessionToken 与 loginJoin 相同，但返回登录响应中的 session_token（需 gate 启用 Redis）。
@@ -146,24 +204,16 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 16; i++ {
-		_ = conn.SetReadDeadline(time.Now().Add(4 * time.Second))
-		_, data, err := conn.ReadMessage()
+		msg, err := readWSClientMessage(conn, 4*time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if h.MsgID != msgid.ReadyResp {
+		if msg.msgID != msgid.ReadyResp {
+			stashWSMessage(conn, msg)
 			continue
 		}
-		var env clientv1.Envelope
-		if err := proto.Unmarshal(h.Payload, &env); err != nil {
-			t.Fatal(err)
-		}
-		if env.GetReadyResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-			t.Fatalf("准备失败: %v %s", env.GetReadyResp().GetErrorCode(), env.GetReadyResp().GetErrorMessage())
+		if msg.env.GetReadyResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
+			t.Fatalf("准备失败: %v %s", msg.env.GetReadyResp().GetErrorCode(), msg.env.GetReadyResp().GetErrorMessage())
 		}
 		return
 	}
@@ -173,26 +223,17 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clientv1.SettlementNotify, error) {
 	hand := make([]string, 0, 14)
 	for n := 0; n < max; n++ {
-		_ = conn.SetReadDeadline(time.Now().Add(8 * time.Second))
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			return nil, fmt.Errorf("读消息失败: %w", err)
-		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		msg, err := readWSClientMessage(conn, 8*time.Second)
 		if err != nil {
 			return nil, err
 		}
-		var env clientv1.Envelope
-		if err := proto.Unmarshal(h.Payload, &env); err != nil {
-			return nil, err
-		}
-		switch h.MsgID {
+		switch msg.msgID {
 		case msgid.InitialDealNotify:
-			if deal := env.GetInitialDeal(); deal != nil && deal.GetSeatIndex() == seat {
+			if deal := msg.env.GetInitialDeal(); deal != nil && deal.GetSeatIndex() == seat {
 				hand = append(hand[:0], deal.GetTiles()...)
 			}
 		case msgid.DrawTile:
-			draw := env.GetDrawTile()
+			draw := msg.env.GetDrawTile()
 			if draw != nil && draw.GetSeatIndex() == seat && draw.GetTile() != "" {
 				hand = append(hand, draw.GetTile())
 				req := &clientv1.Envelope{
@@ -210,7 +251,7 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				}
 			}
 		case msgid.ActionNotify:
-			action := env.GetAction()
+			action := msg.env.GetAction()
 			if action == nil || action.GetSeatIndex() != seat {
 				break
 			}
@@ -292,7 +333,7 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				}
 			}
 		case msgid.Settlement:
-			if sn := env.GetSettlement(); sn != nil {
+			if sn := msg.env.GetSettlement(); sn != nil {
 				return sn, nil
 			}
 		}
