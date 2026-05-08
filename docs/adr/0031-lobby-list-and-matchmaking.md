@@ -37,7 +37,7 @@ date: 2026-04-29
 
 大厅维护最小房间元数据：
 
-- `rule_id` 为空时归一为默认 `sichuan_xzdd`。
+- `rule_id` 为空时归一为默认 `sichuan_xuezhandaodi_huansanzhang`。
 - `display_name` 为空时使用 `room_id`。
 - `max_seats` 固定为 4。
 - `stage` 暂为 `waiting`，本 ADR 不引入局中房间看板。

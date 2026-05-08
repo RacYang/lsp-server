@@ -7,7 +7,7 @@ import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -74,7 +74,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	}
 	out = append(out, Notification{Kind: KindStartGame, Payload: startPayload, TargetSeat: BroadcastSeat})
 
-	ledger := make([]sichuanxzdd.ScoreEntry, 0, 8)
+	ledger := make([]xuezhandaodi.ScoreEntry, 0, 8)
 	winnerSeat := SeatInvalid
 	turn := Seat(0)
 	for step := 0; step < autoRoundStepLimit && w.Remaining() > 0; step++ {
@@ -105,7 +105,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 				if other == turn {
 					continue
 				}
-				ledger = append(ledger, huScoreEntry(sichuanxzdd.ReasonHuTsumo, other, turn, int32(breakdown.Total), step, turn, fanLabels(breakdown))) //nolint:gosec // 番数极小
+				ledger = append(ledger, huScoreEntry(xuezhandaodi.ReasonHuTsumo, other, turn, int32(breakdown.Total), step, turn, fanLabels(breakdown))) //nolint:gosec // 番数极小
 			}
 			winnerSeat = turn
 			huPayload, err := marshalEnvelope(&clientv1.Envelope{
@@ -144,7 +144,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	if winnerSeat >= 0 {
 		winnerSeats = append(winnerSeats, winnerSeat)
 	}
-	seatScores, penalties, breakdowns, detail := sichuanxzdd.BuildSettlement(playerIDs, hands, queBySeat, ledger, winnerSeats)
+	seatScores, penalties, breakdowns, detail := xuezhandaodi.BuildSettlement(playerIDs, hands, queBySeat, ledger, winnerSeats)
 	settlementPayload, err := buildSettlementNotification(roomID, playerIDs, winnerSeats, seatScores, penalties, breakdowns, detail)
 	if err != nil {
 		return nil, err

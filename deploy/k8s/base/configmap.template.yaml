@@ -7,7 +7,7 @@ data:
     server:
       addr: ":18080"
     rule:
-      default_id: "sichuan_xzdd"
+      default_id: "sichuan_xuezhandaodi_huansanzhang"
     cluster:
       lobby_addr: "lsp-lobby:19081"
       room_addr: "lsp-room:19082"
@@ -32,7 +32,7 @@ data:
     server:
       addr: ":19082"
     rule:
-      default_id: "sichuan_xzdd"
+      default_id: "sichuan_xuezhandaodi_huansanzhang"
     cluster:
       lobby_addr: "lsp-lobby:19081"
       room_addr: "lsp-room:19082"
@@ -57,7 +57,7 @@ data:
     server:
       addr: ":19081"
     rule:
-      default_id: "sichuan_xzdd"
+      default_id: "sichuan_xuezhandaodi_huansanzhang"
     cluster:
       lobby_addr: "lsp-lobby:19081"
       room_addr: "lsp-room:19082"

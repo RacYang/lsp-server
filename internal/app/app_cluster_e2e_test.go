@@ -28,9 +28,9 @@ func TestClusterProcessesFourPlayersReceiveSettlement(t *testing.T) {
 	roomAddr := reserveTCPAddr(t)
 
 	tempDir := t.TempDir()
-	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", lobbyAddr, "sichuan_xzdd"))
-	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", roomAddr, "sichuan_xzdd"))
-	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\n", gateAddr, "sichuan_xzdd", lobbyAddr, roomAddr))
+	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", lobbyAddr, "sichuan_xuezhandaodi_huansanzhang"))
+	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", roomAddr, "sichuan_xuezhandaodi_huansanzhang"))
+	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\n", gateAddr, "sichuan_xuezhandaodi_huansanzhang", lobbyAddr, roomAddr))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -75,11 +75,11 @@ func TestClusterReconnectLoginWithSessionToken(t *testing.T) {
 	roomAddr := reserveTCPAddr(t)
 
 	tempDir := t.TempDir()
-	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", lobbyAddr, "sichuan_xzdd"))
-	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", roomAddr, "sichuan_xzdd"))
+	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", lobbyAddr, "sichuan_xuezhandaodi_huansanzhang"))
+	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", roomAddr, "sichuan_xuezhandaodi_huansanzhang"))
 	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: \"\"\n",
-		gateAddr, "sichuan_xzdd", lobbyAddr, roomAddr, redisAddr))
+		gateAddr, "sichuan_xuezhandaodi_huansanzhang", lobbyAddr, roomAddr, redisAddr))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()

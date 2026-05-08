@@ -11,7 +11,7 @@ description: 扩展现有麻将规则的计分逻辑。用于新增番种、结�
 
 ## Inputs
 
-- 规则归属：优先确认是否属于 `internal/mahjong/sichuanxzdd` 当前规则。
+- 规则归属：优先确认是否属于 `internal/mahjong/sichuan/xuezhandaodi` 当前规则。
 - 计分语义：番种名称、倍数、触发条件、互斥或叠加关系。
 - 测试样例：正例、反例，以及需要覆盖的边界局面。
 
@@ -19,7 +19,7 @@ description: 扩展现有麻将规则的计分逻辑。用于新增番种、结�
 
 1. 只修改规则作用域内的计分包，不把番种判断放到传输层、存储层或 handler。
 2. 如需新增上下文字段，先扩展 `internal/mahjong/rules` 的共享结构，再由房间引擎填充。
-3. 在 `internal/mahjong/sichuanxzdd` 中实现番种判断，保持名称显式、可确定性推导。
+3. 在 `internal/mahjong/sichuan/xuezhandaodi` 中实现番种判断，保持名称显式、可确定性推导。
 4. 在 YAML 驱动测试或 Go 单测中同时补正例与反例。
 5. 更新 `docs/MAHJONG-ALGORITHMS.md` 或相关 ADR/CHANGELOG 条目，说明新增语义。
 

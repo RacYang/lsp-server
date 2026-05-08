@@ -2,12 +2,12 @@ package room
 
 import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/metrics"
 )
 
 func (rs *RoundState) finishRound() (Notification, error) {
-	seatScores, penalties, breakdowns, detail := sichuanxzdd.BuildSettlement(rs.playerIDs, rs.hands, rs.queBySeat, rs.ledger, rs.winnerSeats)
+	seatScores, penalties, breakdowns, detail := xuezhandaodi.BuildSettlement(rs.playerIDs, rs.hands, rs.queBySeat, rs.ledger, rs.winnerSeats)
 	for _, penalty := range penalties {
 		metrics.SettlementPenaltyTotal.WithLabelValues(penalty.GetReason()).Inc()
 	}

@@ -9,6 +9,7 @@
     "coverage",
     "lint",
     "deps",
+    "mahjong",
     "proto",
     "commit",
     "git",
@@ -168,6 +169,32 @@
         "denylist": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "mahjong": {
+      "type": "object",
+      "required": ["rules"],
+      "properties": {
+        "rules": {
+          "type": "object",
+          "required": ["id_pattern", "forbidden_abbreviations", "allowed_ids"],
+          "properties": {
+            "id_pattern": { "type": "string", "minLength": 1 },
+            "forbidden_abbreviations": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            "allowed_ids": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

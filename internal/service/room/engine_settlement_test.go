@@ -7,14 +7,14 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 )
 
 func TestFinishRoundBuildsSettlementEnvelope(t *testing.T) {
 	rs := scoreRoundState()
 	rs.winnerSeats = []Seat{1}
-	rs.ledger = []sichuanxzdd.ScoreEntry{{
-		Reason:     sichuanxzdd.ReasonHuDiscard,
+	rs.ledger = []xuezhandaodi.ScoreEntry{{
+		Reason:     xuezhandaodi.ReasonHuDiscard,
 		FromSeat:   0,
 		ToSeat:     1,
 		Amount:     2,

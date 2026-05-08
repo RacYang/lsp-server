@@ -63,6 +63,12 @@
 | 37 | 创建房间响应 | `create_room_resp` | S→C |
 | 38 | 过请求 | `pass_req` | C→S |
 | 39 | 过响应 | `pass_resp` | S→C |
+| 40 | 改名请求 | `rename_req` | C→S |
+| 41 | 改名响应 | `rename_resp` | S→C |
+| 42 | 添加机器人请求 | `add_bot_req` | C→S |
+| 43 | 添加机器人响应 | `add_bot_resp` | S→C |
+| 44 | 规则列表请求 | `list_rules_req` | C→S |
+| 45 | 规则列表响应 | `list_rules_resp` | S→C |
 
 ## Phase 3 登录与重连（节选）
 
@@ -101,6 +107,7 @@
 
 ## Phase 7 大厅列表与匹配
 
+- `ListRulesRequest` 返回后端当前可创建的 `RuleMeta` 清单，客户端应以该清单渲染创建房间入口。
 - `ListRoomsRequest` 返回 `RoomMeta` 列表，仅包含公开、未满且可加入的等待房间；私密房不出现在列表中。
 - `JoinRoomResponse`、`AutoMatchResponse`、`CreateRoomResponse` 会返回 `rule_id` 与 `display_name`，客户端入桌后不再猜规则与房间名。
 - `AutoMatchRequest.rule_id` 为空时使用默认规则。服务端会选择最早创建的可加入公开房；没有候选时创建一个公开房并直接返回 `room_id`、`seat_index` 与房间元数据。

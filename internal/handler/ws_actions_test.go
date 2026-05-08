@@ -74,6 +74,9 @@ func (g *actionStubGateway) Pass(_ context.Context, _, _ string) (func(), error)
 func (g *actionStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
 }
+func (g *actionStubGateway) ListRules(_ context.Context) ([]*clientv1.RuleMeta, error) {
+	return nil, nil
+}
 func (g *actionStubGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (string, int, error) {
 	return "", 0, nil
 }

@@ -1,4 +1,4 @@
-package sichuanxzdd
+package xuezhandaodi
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestScoreFansQingYiSeWithSevenPairs(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	// 清一色万子七对：m1m1 m3m3 m5m5 m7m7 m9m9 m2m2 m4m4（13 张）+ m4 进张成对
 	seq := []string{
@@ -33,7 +33,7 @@ func TestScoreFansQingYiSeWithSevenPairs(t *testing.T) {
 }
 
 func TestScoreFansDuiDuiHu(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	// 13 张：111 222 333 444 5，胡 5 成对对胡。
 	for _, s := range []string{
@@ -58,7 +58,7 @@ func TestScoreFansDuiDuiHu(t *testing.T) {
 }
 
 func TestScoreFansQiDuiWithGen(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	for _, s := range []string{
 		"m1", "m1", "m1", "m1",
@@ -83,7 +83,7 @@ func TestScoreFansQiDuiWithGen(t *testing.T) {
 }
 
 func TestScoreFansHeavenlyAndEarthlyHand(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	res := rules.HuResult{Win: countsFromTileTexts(t, []string{
 		"m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "p1", "p1", "p1", "p2", "p2",
 	})}
@@ -102,7 +102,7 @@ func TestScoreFansHeavenlyAndEarthlyHand(t *testing.T) {
 }
 
 func TestScoreFansShiBaLuoHanFiltersWinnerSeat(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	res := rules.HuResult{Win: countsFromTileTexts(t, []string{
 		"m1", "m1", "m1", "m2", "m2", "m2", "m3", "m3", "m3", "p4", "p4", "p4", "s5", "s5",
 	})}

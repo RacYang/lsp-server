@@ -4,6 +4,7 @@ package rules
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	domainroom "racoo.cn/lsp/internal/domain/room"
@@ -288,4 +289,18 @@ func MustGet(id string) Rule {
 		panic(fmt.Sprintf("unknown rule id: %s", id))
 	}
 	return r
+}
+
+// List 返回当前已注册规则的稳定快照，按规则 ID 升序排列。
+func List() []Rule {
+	regMu.RLock()
+	defer regMu.RUnlock()
+	out := make([]Rule, 0, len(reg))
+	for _, r := range reg {
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID() < out[j].ID()
+	})
+	return out
 }

@@ -249,7 +249,7 @@ func TestGameSummaryStoreCRUD(t *testing.T) {
 	endedAt := time.Now().UTC().Round(time.Second)
 	createdAt := endedAt.Add(-time.Minute)
 	mock.ExpectExec("INSERT INTO game_summaries").
-		WithArgs("room-g", "sichuan_xzdd", []string{"u1", "u2"}).
+		WithArgs("room-g", "sichuan_xuezhandaodi_huansanzhang", []string{"u1", "u2"}).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec("UPDATE game_summaries").
 		WithArgs("room-g", endedAt).
@@ -257,10 +257,10 @@ func TestGameSummaryStoreCRUD(t *testing.T) {
 	mock.ExpectQuery("SELECT room_id, rule_id, player_ids, created_at, ended_at").
 		WithArgs("room-g").
 		WillReturnRows(pgxmock.NewRows([]string{"room_id", "rule_id", "player_ids", "created_at", "ended_at"}).
-			AddRow("room-g", "sichuan_xzdd", []string{"u1", "u2"}, createdAt, &endedAt))
+			AddRow("room-g", "sichuan_xuezhandaodi_huansanzhang", []string{"u1", "u2"}, createdAt, &endedAt))
 
 	s := postgres.NewGameSummaryStore(mock)
-	require.NoError(t, s.CreateGameSummary(context.Background(), "room-g", "sichuan_xzdd", []string{"u1", "u2"}))
+	require.NoError(t, s.CreateGameSummary(context.Background(), "room-g", "sichuan_xuezhandaodi_huansanzhang", []string{"u1", "u2"}))
 	require.NoError(t, s.EndGameSummary(context.Background(), "room-g", endedAt))
 	got, err := s.GetGameSummary(context.Background(), "room-g")
 	require.NoError(t, err)

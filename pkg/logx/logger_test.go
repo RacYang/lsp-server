@@ -65,7 +65,7 @@ func TestLoggerWithObserver(t *testing.T) {
 	ctx := WithTraceID(context.Background(), "tid")
 	ctx = WithUserID(ctx, "uid")
 	ctx = WithRoomID(ctx, "rid")
-	log.With("op", "join_room").Info(ctx, "玩家进入房间", "rule_id", "sichuan_xzdd")
+	log.With("op", "join_room").Info(ctx, "玩家进入房间", "rule_id", "sichuan_xuezhandaodi_huansanzhang")
 	entries := obs.Drain()
 	if len(entries) != 1 {
 		t.Fatalf("entries = %d", len(entries))

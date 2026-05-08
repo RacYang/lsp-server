@@ -1,4 +1,4 @@
-package sichuanxzdd
+package xuezhandaodi
 
 import (
 	"os"
@@ -44,7 +44,7 @@ type fixtureGangRecord struct {
 func TestFanDeepeningYAMLFixtures(t *testing.T) {
 	var file fanFixtureFile
 	readYAMLFixture(t, "fan_deepening_cases.yaml", &file)
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	for _, tc := range file.Cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			ctx := rules.ScoreContext{

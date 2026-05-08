@@ -30,7 +30,7 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 	defer func() { _ = ln.Close() }()
 
 	grpcSrv := grpc.NewServer()
-	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xzdd"), nil, nil, nil, nil)
+	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
 	registerRoomService(grpcSrv, srv)
 	go func() { _ = grpcSrv.Serve(ln) }()
 	defer grpcSrv.Stop()
@@ -139,7 +139,7 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 	t.Cleanup(func() { _ = rcli.Close() })
 	rdb := redis.NewClientFromUniversal(rcli)
 
-	s := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xzdd"), nil, nil, nil, rdb)
+	s := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
 	ctx := context.Background()
 
 	s.setReady(false)
@@ -175,7 +175,7 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 func TestSnapshotRoomIncludesRoundView(t *testing.T) {
 	t.Parallel()
 
-	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xzdd"), nil, nil, nil, nil)
+	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
 	ctx := context.Background()
 	for _, userID := range []string{"u1", "u2", "u3", "u4"} {
 		_, err := srv.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
@@ -231,7 +231,7 @@ func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 	t.Cleanup(func() { _ = rcli.Close() })
 	rdb := redis.NewClientFromUniversal(rcli)
 
-	rooms := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xzdd")
+	rooms := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
 	for _, uid := range []string{"u1", "u2", "u3", "u4"} {
 		_, err := rooms.Join(context.Background(), "r-meta", uid)
 		require.NoError(t, err)
@@ -283,7 +283,7 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 	mock.ExpectRollback()
 
 	ev := postgres.NewRoomEventStore(mock)
-	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xzdd"), ev, nil, nil, nil)
+	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, nil)
 	ch := make(chan *clusterv1.RoomServiceStreamEventsResponse, 1)
 	srv.streams["r-batch"] = []chan *clusterv1.RoomServiceStreamEventsResponse{ch}
 

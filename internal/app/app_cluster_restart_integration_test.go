@@ -72,15 +72,15 @@ func TestRoomProcessRestartReplay(t *testing.T) {
 
 	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
-		lobbyAddr, "sichuan_xzdd", etcdURL,
+		lobbyAddr, "sichuan_xuezhandaodi_huansanzhang", etcdURL,
 	))
 	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nredis:\n  addr: %q\npostgres:\n  dsn: %q\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
-		roomAddr, "sichuan_xzdd", mr.Addr(), dsn, etcdURL,
+		roomAddr, "sichuan_xuezhandaodi_huansanzhang", mr.Addr(), dsn, etcdURL,
 	))
 	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
-		gateAddr, "sichuan_xzdd", lobbyAddr, roomAddr, mr.Addr(), etcdURL,
+		gateAddr, "sichuan_xuezhandaodi_huansanzhang", lobbyAddr, roomAddr, mr.Addr(), etcdURL,
 	))
 
 	lobbyProc := startManagedProc(t, ctx, repoRoot, "./cmd/lobby", lobbyCfg)
@@ -144,15 +144,15 @@ func TestRoomProcessRestartReconnectNoDocker(t *testing.T) {
 
 	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
-		lobbyAddr, "sichuan_xzdd", etcdURL,
+		lobbyAddr, "sichuan_xuezhandaodi_huansanzhang", etcdURL,
 	))
 	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
-		roomAddr, "sichuan_xzdd", mr.Addr(), etcdURL,
+		roomAddr, "sichuan_xuezhandaodi_huansanzhang", mr.Addr(), etcdURL,
 	))
 	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: %q\n",
-		gateAddr, "sichuan_xzdd", lobbyAddr, roomAddr, mr.Addr(), etcdURL,
+		gateAddr, "sichuan_xuezhandaodi_huansanzhang", lobbyAddr, roomAddr, mr.Addr(), etcdURL,
 	))
 
 	lobbyProc := startManagedProc(t, ctx, repoRoot, "./cmd/lobby", lobbyCfg)

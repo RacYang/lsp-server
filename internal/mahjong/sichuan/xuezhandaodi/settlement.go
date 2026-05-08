@@ -1,4 +1,4 @@
-package sichuanxzdd
+package xuezhandaodi
 
 import (
 	"fmt"

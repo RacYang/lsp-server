@@ -9,4 +9,4 @@
 - `hand`：手牌计数与变更。
 - `hu`：和牌判定（标准形与七对）。
 - `fan`：番种与分数分解（Phase 1 为川麻血战到底 MVP 子集）。
-- `rules`：可插拔规则接口与注册表；`sichuanxzdd` 包为四川血战到底 MVP 实现。
+- `rules`：可插拔规则接口与注册表；`xuezhandaodi` 包为四川血战到底 MVP 实现。

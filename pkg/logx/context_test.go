@@ -28,9 +28,9 @@ func TestWithRoomID(t *testing.T) {
 }
 
 func TestWithFields(t *testing.T) {
-	ctx := WithFields(context.Background(), "rule_id", "sichuan_xzdd")
+	ctx := WithFields(context.Background(), "rule_id", "sichuan_xuezhandaodi_huansanzhang")
 	fields := FieldsFromContext(ctx)
-	if len(fields) != 1 || fields[0].Key != "rule_id" || fields[0].Value.String() != "sichuan_xzdd" {
+	if len(fields) != 1 || fields[0].Key != "rule_id" || fields[0].Value.String() != "sichuan_xuezhandaodi_huansanzhang" {
 		t.Fatalf("fields = %#v", fields)
 	}
 }

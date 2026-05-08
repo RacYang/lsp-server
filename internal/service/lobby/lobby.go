@@ -10,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"racoo.cn/lsp/internal/mahjong/rules"
+	_ "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi" // 注册当前内置四川血战规则。
 )
 
 var (
@@ -23,7 +26,7 @@ var (
 
 const (
 	defaultNodeID   = "room-local"
-	defaultRuleID   = "sichuan_xzdd"
+	defaultRuleID   = "sichuan_xuezhandaodi_huansanzhang"
 	defaultMaxSeats = int32(4)
 	waitingStage    = "waiting"
 )
@@ -40,7 +43,7 @@ type RoomMeta struct {
 	RuleMeta    RuleMeta
 }
 
-// RuleMeta 是大厅可读的规则摘要；保持轻量，避免 lobby 依赖麻将实现包。
+// RuleMeta 是大厅可读的规则摘要；由麻将规则注册表统一投影。
 type RuleMeta struct {
 	RuleID          string
 	DisplayName     string
@@ -147,7 +150,7 @@ func (s *Service) ListRooms(_ context.Context, pageSize int32, pageToken string)
 			MaxSeats:    meta.maxSeats,
 			CreatedAtMs: meta.createdAtMs,
 			Stage:       meta.stage(),
-			RuleMeta:    defaultRuleMeta(normalizeRuleID(meta.ruleID)),
+			RuleMeta:    ruleMeta(normalizeRuleID(meta.ruleID)),
 		})
 	}
 	sort.Slice(rooms, func(i, j int) bool {
@@ -173,26 +176,40 @@ func (s *Service) ListRooms(_ context.Context, pageSize int32, pageToken string)
 	return out, formatPageToken(last.CreatedAtMs, last.RoomID), nil
 }
 
-func defaultRuleMeta(ruleID string) RuleMeta {
-	if normalizeRuleID(ruleID) != defaultRuleID {
-		return RuleMeta{RuleID: normalizeRuleID(ruleID)}
+// ListRules 返回当前进程已注册且可用于创建房间的规则清单。
+func (s *Service) ListRules(_ context.Context) ([]RuleMeta, error) {
+	if s == nil {
+		return nil, fmt.Errorf("nil lobby service")
 	}
+	registered := rules.List()
+	out := make([]RuleMeta, 0, len(registered))
+	for _, r := range registered {
+		out = append(out, ruleMetaFromRule(r))
+	}
+	return out, nil
+}
+
+func ruleMeta(ruleID string) RuleMeta {
+	ruleID = normalizeRuleID(ruleID)
+	for _, r := range rules.List() {
+		if r.ID() == ruleID {
+			return ruleMetaFromRule(r)
+		}
+	}
+	return RuleMeta{RuleID: ruleID}
+}
+
+func ruleMetaFromRule(r rules.Rule) RuleMeta {
+	if r == nil {
+		return RuleMeta{}
+	}
+	meta := rules.CapabilitiesOf(r).Metadata
 	return RuleMeta{
-		RuleID:      defaultRuleID,
-		DisplayName: "四川血战到底",
-		ShortDesc:   "换三张、定缺、无吃、胡牌后血战续行",
-		EnabledFeatures: []string{
-			"exchange_three",
-			"que_men",
-			"no_chi",
-			"pong",
-			"ming_gang",
-			"an_gang",
-			"bu_gang",
-			"qiang_gang_hu",
-			"xuezhan_continue",
-		},
-		MaxHands: 4,
+		RuleID:          r.ID(),
+		DisplayName:     meta.DisplayName,
+		ShortDesc:       meta.ShortDesc,
+		EnabledFeatures: append([]string(nil), meta.EnabledFeatures...),
+		MaxHands:        meta.MaxHands,
 	}
 }
 

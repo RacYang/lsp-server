@@ -3,7 +3,7 @@ package room
 import (
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -12,17 +12,17 @@ func appendHuEntries(rs *RoundState, winner Seat, fanTotal int, source rules.HuS
 	if rs == nil || winner < 0 || winner > 3 || fanTotal <= 0 {
 		return
 	}
-	reason := sichuanxzdd.ReasonHuTsumo
+	reason := xuezhandaodi.ReasonHuTsumo
 	switch source {
 	case rules.HuSourceDiscard:
-		reason = sichuanxzdd.ReasonHuDiscard
+		reason = xuezhandaodi.ReasonHuDiscard
 	case rules.HuSourceQiangGang:
-		reason = sichuanxzdd.ReasonHuQiangGang
+		reason = xuezhandaodi.ReasonHuQiangGang
 	}
 	amount := int32(fanTotal) //nolint:gosec // 番数很小
 	names := fanLabels(breakdown)
 	if source == rules.HuSourceQiangGang && payer >= 0 {
-		names = append(names, sichuanxzdd.ReasonBaoPai)
+		names = append(names, xuezhandaodi.ReasonBaoPai)
 	}
 	if source == rules.HuSourceTsumo {
 		for other := Seat(0); other < SeatCount; other++ {
@@ -44,19 +44,19 @@ func appendGangEntries(rs *RoundState, seat Seat, gangTile tile.Tile, kind rules
 		return
 	}
 	amount := int32(1)
-	reason := sichuanxzdd.ReasonGangMing
+	reason := xuezhandaodi.ReasonGangMing
 	switch kind {
 	case rules.GangKindAn:
 		amount = 2
-		reason = sichuanxzdd.ReasonGangAn
+		reason = xuezhandaodi.ReasonGangAn
 	case rules.GangKindBu:
-		reason = sichuanxzdd.ReasonGangBu
+		reason = xuezhandaodi.ReasonGangBu
 	}
 	for other := Seat(0); other < SeatCount; other++ {
 		if other == seat || rs.isHued(other) {
 			continue
 		}
-		rs.ledger = append(rs.ledger, sichuanxzdd.ScoreEntry{
+		rs.ledger = append(rs.ledger, xuezhandaodi.ScoreEntry{
 			Reason:     reason,
 			FromSeat:   other,
 			ToSeat:     seat,
@@ -77,8 +77,8 @@ func appendGangEntries(rs *RoundState, seat Seat, gangTile tile.Tile, kind rules
 }
 
 // huScoreEntry 统一胡牌流水字段，避免各个动作分支分别拼装结算结构。
-func huScoreEntry(reason string, from, to Seat, amount int32, step int, winner Seat, names []string) sichuanxzdd.ScoreEntry {
-	return sichuanxzdd.ScoreEntry{
+func huScoreEntry(reason string, from, to Seat, amount int32, step int, winner Seat, names []string) xuezhandaodi.ScoreEntry {
+	return xuezhandaodi.ScoreEntry{
 		Reason:     reason,
 		FromSeat:   from,
 		ToSeat:     to,
@@ -104,7 +104,7 @@ func fanLabels(b fan.Breakdown) []string {
 }
 
 // seatBalancesFromLedger 将流水折叠成四个座位的当前分数，用于推送与测试断言。
-func seatBalancesFromLedger(ledger []sichuanxzdd.ScoreEntry) []int32 {
+func seatBalancesFromLedger(ledger []xuezhandaodi.ScoreEntry) []int32 {
 	out := make([]int32, 4)
 	for _, entry := range ledger {
 		if entry.Amount <= 0 {

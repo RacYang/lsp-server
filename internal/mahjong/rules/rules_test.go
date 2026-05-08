@@ -60,6 +60,34 @@ func TestRegisterAndMustGet(t *testing.T) {
 	}
 }
 
+func TestListReturnsSortedSnapshot(t *testing.T) {
+	prefix := fmt.Sprintf("list_rule_%s_", t.Name())
+	Register(&fakeRule{id: prefix + "b"})
+	Register(&fakeRule{id: prefix + "a"})
+
+	got := List()
+	ids := make([]string, 0, len(got))
+	for _, r := range got {
+		ids = append(ids, r.ID())
+	}
+	posA, posB := -1, -1
+	for i, id := range ids {
+		switch id {
+		case prefix + "a":
+			posA = i
+		case prefix + "b":
+			posB = i
+		}
+	}
+	if posA < 0 || posB < 0 || posA > posB {
+		t.Fatalf("List must contain a sorted snapshot, ids=%v", ids)
+	}
+	got[0] = &fakeRule{id: "mutated"}
+	if MustGet(prefix+"a").ID() != prefix+"a" {
+		t.Fatal("mutating List result should not affect registry")
+	}
+}
+
 func TestMustGetPanics(t *testing.T) {
 	defer func() {
 		if recover() == nil {

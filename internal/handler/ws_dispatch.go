@@ -29,6 +29,8 @@ func dispatchFrame(
 		handleJoinRoom(ctx, deps, conn, state, h.Payload)
 	case msgid.ListRoomsReq:
 		handleListRooms(ctx, deps, conn, state, h.Payload)
+	case msgid.ListRulesReq:
+		handleListRules(ctx, deps, conn, state, h.Payload)
 	case msgid.AutoMatchReq:
 		handleAutoMatch(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.CreateRoomReq:

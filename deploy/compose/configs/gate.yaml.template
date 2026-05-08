@@ -1,7 +1,7 @@
 server:
   addr: ":18080"
 rule:
-  default_id: "sichuan_xzdd"
+  default_id: "sichuan_xuezhandaodi_huansanzhang"
 cluster:
   lobby_addr: "lobby:19081"
   room_addr: "room:19082"

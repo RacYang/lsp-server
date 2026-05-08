@@ -22,7 +22,7 @@ Phase 5 已经完成房间引擎收敛、协议 baseline 重置与最小观测�
 
 ### 2. 统一 score ledger
 
-`internal/service/room.RoundState` 使用 `[]sichuanxzdd.ScoreEntry` 保存胡分、杠分、退税和包牌事实。`room` 层只追加流水，不在传输层拼结算口径；`sichuanxzdd.BuildSettlement` 统一 fold 出 `SeatScore`、`PenaltyItem`、`WinnerBreakdown` 与可读摘要。
+`internal/service/room.RoundState` 使用 `[]xuezhandaodi.ScoreEntry` 保存胡分、杠分、退税和包牌事实。`room` 层只追加流水，不在传输层拼结算口径；`xuezhandaodi.BuildSettlement` 统一 fold 出 `SeatScore`、`PenaltyItem`、`WinnerBreakdown` 与可读摘要。
 
 ### 3. 分摊、退税与包牌
 

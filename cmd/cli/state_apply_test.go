@@ -142,7 +142,7 @@ func TestApplyLoginResetsLobbyStateWhenNotResumed(t *testing.T) {
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
 		RoomId:      "r1",
 		SeatIndex:   1,
-		RuleId:      "sichuan_xzdd",
+		RuleId:      "sichuan_xuezhandaodi_huansanzhang",
 		DisplayName: "旧房间",
 	}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Settlement{Settlement: &clientv1.SettlementNotify{RoomId: "r1"}}})

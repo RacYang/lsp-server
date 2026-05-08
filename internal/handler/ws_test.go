@@ -28,6 +28,7 @@ import (
 type fakeResumeGateway struct {
 	resumeResult *ResumeResult
 	resumeErr    error
+	rules        []*clientv1.RuleMeta
 }
 
 func (f *fakeResumeGateway) Join(_ context.Context, _, _ string) (int, error) { return 0, nil }
@@ -61,6 +62,9 @@ func (f *fakeResumeGateway) Pass(_ context.Context, _, _ string) (func(), error)
 }
 func (f *fakeResumeGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
+}
+func (f *fakeResumeGateway) ListRules(_ context.Context) ([]*clientv1.RuleMeta, error) {
+	return f.rules, nil
 }
 func (f *fakeResumeGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (string, int, error) {
 	return "", 0, nil
@@ -123,6 +127,9 @@ func (g *joinStubGateway) Pass(_ context.Context, _, _ string) (func(), error) {
 }
 func (g *joinStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
 	return nil, "", nil
+}
+func (g *joinStubGateway) ListRules(_ context.Context) ([]*clientv1.RuleMeta, error) {
+	return nil, nil
 }
 func (g *joinStubGateway) AutoMatch(_ context.Context, _, _ string, _ bool) (string, int, error) {
 	return "", 0, nil
@@ -653,6 +660,15 @@ func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
 			code: func(env *clientv1.Envelope) clientv1.ErrorCode { return env.GetListRoomsResp().GetErrorCode() },
 		},
 		{
+			name:      "list_rules",
+			reqMsgID:  msgid.ListRulesReq,
+			respMsgID: msgid.ListRulesResp,
+			env: &clientv1.Envelope{ReqId: "rules", Body: &clientv1.Envelope_ListRulesReq{
+				ListRulesReq: &clientv1.ListRulesRequest{},
+			}},
+			code: func(env *clientv1.Envelope) clientv1.ErrorCode { return env.GetListRulesResp().GetErrorCode() },
+		},
+		{
 			name:      "auto_match",
 			reqMsgID:  msgid.AutoMatchReq,
 			respMsgID: msgid.AutoMatchResp,
@@ -684,6 +700,30 @@ func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
 			require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED, tc.code(resp))
 		})
 	}
+}
+
+func TestHandleWebSocketListRulesAfterLogin(t *testing.T) {
+	t.Parallel()
+	srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{
+		rules: []*clientv1.RuleMeta{{
+			RuleId:      "sichuan_xuezhandaodi_huansanzhang",
+			DisplayName: "四川血战到底（换三张）",
+		}},
+	}})
+	defer srv.Close()
+	conn := dialWS(t, srv)
+
+	login := &clientv1.Envelope{ReqId: "login", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
+	pb, _ := proto.Marshal(login)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	readEnv(t, conn, msgid.LoginResp)
+
+	req := &clientv1.Envelope{ReqId: "rules", Body: &clientv1.Envelope_ListRulesReq{ListRulesReq: &clientv1.ListRulesRequest{}}}
+	pb, _ = proto.Marshal(req)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ListRulesReq, pb)))
+	resp := readEnv(t, conn, msgid.ListRulesResp)
+	require.Len(t, resp.GetListRulesResp().GetRules(), 1)
+	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", resp.GetListRulesResp().GetRules()[0].GetRuleId())
 }
 
 func TestHandleWebSocketResumeSettlementFallback(t *testing.T) {

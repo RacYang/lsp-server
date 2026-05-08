@@ -7,8 +7,8 @@ allow:
 excludeFiles:
   - "^.*_test\\.go$"
 components:
-  mahjong_xzdd:
-    in: internal/mahjong/sichuanxzdd/**
+  mahjong_xuezhandaodi:
+    in: internal/mahjong/sichuan/xuezhandaodi/**
   mahjong_rules:
     in: internal/mahjong/rules/**
   mahjong_tile:
@@ -56,7 +56,7 @@ components:
   apigen:
     in: api/gen/**
 deps:
-  mahjong_xzdd:
+  mahjong_xuezhandaodi:
     mayDependOn:
       - mahjong_rules
       - mahjong_tile
@@ -72,7 +72,7 @@ deps:
       - apigen
   mahjong_rules:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_tile
       - mahjong_wall
       - mahjong_hand
@@ -86,7 +86,7 @@ deps:
       - apigen
   mahjong_tile:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_wall
       - mahjong_hand
@@ -100,7 +100,7 @@ deps:
       - apigen
   mahjong_wall:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_hand
@@ -114,7 +114,7 @@ deps:
       - apigen
   mahjong_hand:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
@@ -128,7 +128,7 @@ deps:
       - apigen
   mahjong_hu:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
@@ -142,7 +142,7 @@ deps:
       - apigen
   mahjong_fan:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
@@ -156,7 +156,7 @@ deps:
       - apigen
   mahjong_analysis:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
@@ -172,7 +172,7 @@ deps:
     anyProjectDeps: true
   domain:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
@@ -193,7 +193,7 @@ deps:
     anyProjectDeps: true
   handler:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
@@ -219,7 +219,7 @@ deps:
     anyProjectDeps: true
   service:
     mayDependOn:
-      - mahjong_xzdd
+      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall

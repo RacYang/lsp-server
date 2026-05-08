@@ -10,7 +10,7 @@ import (
 func TestLoadTempFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "c.yaml")
-	content := "server:\n  addr: \":19999\"\n  ws_allowed_origins:\n    - \"https://trusted.example\"\nrule:\n  default_id: \"sichuan_xzdd\"\ncluster:\n  advertise_addr: \"room:19082\"\nruntime:\n  gate:\n    ws_rate_limit_per_second: 7\n    ws_rate_limit_burst: 9\n    ws_idempotency_cache: 11\n  room:\n    mailbox_capacity: 13\n    surrender_action_timeout: 1500ms\n    allow_leave_during_play: true\n  lobby:\n    bot_supervisor_enabled: true\n    max_bots_per_room: 2\n  redis:\n    idempotency_ttl: 2m\n  logging:\n    level: debug\n    format: console\n    otel_enabled: true\n    otel_endpoint: \"localhost:4317\"\n    dynamic_level: true\n    sample:\n      initial: 3\n      thereafter: 5\n      tick: 2s\n      error_never: true\n"
+	content := "server:\n  addr: \":19999\"\n  ws_allowed_origins:\n    - \"https://trusted.example\"\nrule:\n  default_id: \"sichuan_xuezhandaodi_huansanzhang\"\ncluster:\n  advertise_addr: \"room:19082\"\nruntime:\n  gate:\n    ws_rate_limit_per_second: 7\n    ws_rate_limit_burst: 9\n    ws_idempotency_cache: 11\n  room:\n    mailbox_capacity: 13\n    surrender_action_timeout: 1500ms\n    allow_leave_during_play: true\n  lobby:\n    bot_supervisor_enabled: true\n    max_bots_per_room: 2\n  redis:\n    idempotency_ttl: 2m\n  logging:\n    level: debug\n    format: console\n    otel_enabled: true\n    otel_endpoint: \"localhost:4317\"\n    dynamic_level: true\n    sample:\n      initial: 3\n      thereafter: 5\n      tick: 2s\n      error_never: true\n"
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -18,7 +18,7 @@ func TestLoadTempFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ServerAddr != ":19999" || cfg.RuleID != "sichuan_xzdd" {
+	if cfg.ServerAddr != ":19999" || cfg.RuleID != "sichuan_xuezhandaodi_huansanzhang" {
 		t.Fatalf("%+v", cfg)
 	}
 	if cfg.ClusterAdvertiseAddr != "room:19082" {

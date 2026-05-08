@@ -39,6 +39,7 @@ type RoomGateway interface {
 	Hu(ctx context.Context, roomID, userID string) (func(), error)
 	Pass(ctx context.Context, roomID, userID string) (func(), error)
 	ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error)
+	ListRules(ctx context.Context) ([]*clientv1.RuleMeta, error)
 	AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error)
 	CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error)
 	AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, func(), error)

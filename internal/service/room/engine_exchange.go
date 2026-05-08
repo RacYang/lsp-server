@@ -94,8 +94,27 @@ func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, d
 }
 
 func (rs *RoundState) initRoundNotifications() ([]Notification, error) {
-	rs.waitingExchange = true
-	return rs.promptSeatActions("exchange_three"), nil
+	if rs.hasOpeningStep("exchange_three") {
+		rs.waitingExchange = true
+		return rs.promptSeatActions("exchange_three"), nil
+	}
+	if rs.hasOpeningStep("que_men") {
+		rs.waitingQueMen = true
+		return rs.promptSeatActions("que_men"), nil
+	}
+	return nil, fmt.Errorf("unsupported opening flow")
+}
+
+func (rs *RoundState) hasOpeningStep(step string) bool {
+	if rs == nil || rs.caps.Opening == nil {
+		return false
+	}
+	for _, current := range rs.caps.Opening.Steps() {
+		if current == step {
+			return true
+		}
+	}
+	return false
 }
 
 func (rs *RoundState) promptSeatActions(action string) []Notification {

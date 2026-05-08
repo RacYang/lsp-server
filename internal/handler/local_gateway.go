@@ -63,6 +63,17 @@ func (g *LocalRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageTo
 	return lobbyRoomMetasToClient(rooms), next, nil
 }
 
+func (g *LocalRoomGateway) ListRules(ctx context.Context) ([]*clientv1.RuleMeta, error) {
+	if g == nil || g.lobby == nil {
+		return nil, fmt.Errorf("nil local lobby gateway")
+	}
+	rules, err := g.lobby.ListRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return lobbyRuleMetasToClient(rules), nil
+}
+
 func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error) {
 	if g == nil || g.lobby == nil || g.rooms == nil {
 		return "", -1, fmt.Errorf("nil local lobby gateway")
@@ -427,6 +438,14 @@ func lobbyRoomMetasToClient(rooms []lobbysvc.RoomMeta) []*clientv1.RoomMeta {
 			Stage:       room.Stage,
 			RuleMeta:    lobbyRuleMetaToClient(room.RuleMeta),
 		})
+	}
+	return out
+}
+
+func lobbyRuleMetasToClient(rules []lobbysvc.RuleMeta) []*clientv1.RuleMeta {
+	out := make([]*clientv1.RuleMeta, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, lobbyRuleMetaToClient(rule))
 	}
 	return out
 }

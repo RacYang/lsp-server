@@ -11,7 +11,7 @@ import (
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
@@ -37,7 +37,7 @@ func TestAppendHuEntriesQiangGangAddsBaoPaiName(t *testing.T) {
 
 	appendHuEntries(rs, 3, 4, rules.HuSourceQiangGang, 0, breakdown)
 	require.Len(t, rs.ledger, 1)
-	require.Contains(t, rs.ledger[0].FanNames, sichuanxzdd.ReasonBaoPai)
+	require.Contains(t, rs.ledger[0].FanNames, xuezhandaodi.ReasonBaoPai)
 }
 
 func TestAppendGangEntriesRecordsLedgerAndHistory(t *testing.T) {
@@ -57,7 +57,7 @@ func TestLegacyLedgerFromTotals(t *testing.T) {
 }
 
 func TestPlayAutoRoundEmitsStructuredSettlement(t *testing.T) {
-	notifications, err := NewEngine("sichuan_xzdd").PlayAutoRound(context.Background(), "auto-score-room", [4]string{"u0", "u1", "u2", "u3"})
+	notifications, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").PlayAutoRound(context.Background(), "auto-score-room", [4]string{"u0", "u1", "u2", "u3"})
 	require.NoError(t, err)
 	require.NotEmpty(t, notifications)
 
@@ -72,8 +72,8 @@ func TestPlayAutoRoundEmitsStructuredSettlement(t *testing.T) {
 func scoreRoundState() *RoundState {
 	return &RoundState{
 		roomID:          "score-room",
-		ruleID:          "sichuan_xzdd",
-		rule:            rules.MustGet("sichuan_xzdd"),
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles(nil),
 		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
@@ -81,6 +81,6 @@ func scoreRoundState() *RoundState {
 		lastDiscardSeat: -1,
 		huedSeats:       make([]bool, 4),
 		winnerSeats:     make([]Seat, 0, 3),
-		ledger:          make([]sichuanxzdd.ScoreEntry, 0, 4),
+		ledger:          make([]xuezhandaodi.ScoreEntry, 0, 4),
 	}
 }

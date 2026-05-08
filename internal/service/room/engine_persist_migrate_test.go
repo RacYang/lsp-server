@@ -3,7 +3,7 @@ package room
 import (
 	"testing"
 
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 )
 
 func TestMigratePersist_NilSafe(t *testing.T) {
@@ -40,7 +40,7 @@ func TestMigratePersist_V1PreservesExistingWinnerSeats(t *testing.T) {
 		SchemaVersion: 1,
 		WinnerSeat:    1,
 		WinnerSeats:   []int{0, 3},
-		Ledger:        []sichuanxzdd.ScoreEntry{{Reason: "kept"}},
+		Ledger:        []xuezhandaodi.ScoreEntry{{Reason: "kept"}},
 	}
 	migratePersistToCurrent(rp)
 

@@ -1,4 +1,4 @@
-package sichuanxzdd
+package xuezhandaodi
 
 import (
 	"context"
@@ -10,14 +10,14 @@ import (
 )
 
 func TestName(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	if x.Name() == "" {
 		t.Fatal("empty name")
 	}
 }
 
 func TestBuildWallSeedZero(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	w1 := x.BuildWall(context.Background(), 0)
 	w2 := x.BuildWall(context.Background(), 0)
 	if len(w1.Tiles()) != len(w2.Tiles()) {
@@ -26,7 +26,7 @@ func TestBuildWallSeedZero(t *testing.T) {
 }
 
 func TestCheckHuNilHand(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	ti := tile.Must(tile.SuitDots, 1)
 	if _, ok := x.CheckHu(nil, ti, rules.HuContext{}); ok {
 		t.Fatal("expected false")
@@ -34,7 +34,7 @@ func TestCheckHuNilHand(t *testing.T) {
 }
 
 func TestCheckHuFalse(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	for _, s := range []string{"m1", "m9", "p1", "p9", "s1", "s9"} {
 		ti, _ := tile.Parse(s)
@@ -47,7 +47,7 @@ func TestCheckHuFalse(t *testing.T) {
 }
 
 func TestScoreFansPingHuOnly(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	for _, s := range []string{"m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "p1", "p1", "p1", "p2"} {
 		ti, _ := tile.Parse(s)

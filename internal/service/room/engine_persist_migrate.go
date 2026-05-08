@@ -1,6 +1,6 @@
 package room
 
-import "racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+import "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 
 // migratePersistToCurrent 把任意旧 schema 的 roundPersist 升级到当前版本，让上层
 // 反序列化与构造逻辑只与最新版本对话；每个分支只前进一个版本，避免分叉。
@@ -41,8 +41,8 @@ func migrateV2ToV3(rp *roundPersist) {
 }
 
 // legacyLedgerFromTotals 将 v0/v1 的座位总分翻译为单条 legacy_total 流水，保留可审计性。
-func legacyLedgerFromTotals(totals []int32) []sichuanxzdd.ScoreEntry {
-	out := make([]sichuanxzdd.ScoreEntry, 0, len(totals))
+func legacyLedgerFromTotals(totals []int32) []xuezhandaodi.ScoreEntry {
+	out := make([]xuezhandaodi.ScoreEntry, 0, len(totals))
 	for seat, total := range totals {
 		if total == 0 {
 			continue
@@ -51,7 +51,7 @@ func legacyLedgerFromTotals(totals []int32) []sichuanxzdd.ScoreEntry {
 		if total < 0 {
 			from, to, amount = seat, -1, -total
 		}
-		out = append(out, sichuanxzdd.ScoreEntry{
+		out = append(out, xuezhandaodi.ScoreEntry{
 			Reason:     "legacy_total",
 			FromSeat:   Seat(from),
 			ToSeat:     Seat(to),

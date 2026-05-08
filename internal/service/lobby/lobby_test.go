@@ -31,11 +31,24 @@ func TestCreateJoinGetRoom(t *testing.T) {
 	require.Equal(t, "room-local", got)
 }
 
+func TestListRulesReturnsRegisteredRuleMeta(t *testing.T) {
+	t.Parallel()
+	s := New()
+	rules, err := s.ListRules(context.Background())
+	require.NoError(t, err)
+	require.Len(t, rules, 2)
+	require.Equal(t, "sichuan_xuezhandaodi_biaozhun", rules[0].RuleID)
+	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", rules[1].RuleID)
+	require.NotEmpty(t, rules[0].DisplayName)
+	require.NotContains(t, rules[0].EnabledFeatures, "exchange_three")
+	require.Contains(t, rules[1].EnabledFeatures, "exchange_three")
+}
+
 func TestLeaveRoomFreesSeatForImmediateAutoMatch(t *testing.T) {
 	t.Parallel()
 	s := New()
 	ctx := context.Background()
-	roomID, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xzdd", "公开桌", false, "u1")
+	roomID, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xuezhandaodi_huansanzhang", "公开桌", false, "u1")
 	require.NoError(t, err)
 	for _, userID := range []string{"u2", "u3", "u4"} {
 		_, err = s.JoinRoom(ctx, roomID, userID)
@@ -45,7 +58,7 @@ func TestLeaveRoomFreesSeatForImmediateAutoMatch(t *testing.T) {
 	require.ErrorIs(t, err, ErrRoomFull)
 
 	require.NoError(t, s.LeaveRoom(ctx, roomID, "u2"))
-	joined, seat, err := s.AutoMatch(ctx, "sichuan_xzdd", "u5")
+	joined, seat, err := s.AutoMatch(ctx, "sichuan_xuezhandaodi_huansanzhang", "u5")
 	require.NoError(t, err)
 	require.Equal(t, roomID, joined)
 	require.EqualValues(t, 1, seat)
@@ -56,9 +69,9 @@ func TestListRoomsFiltersPrivateAndFullRooms(t *testing.T) {
 	s := New()
 	ctx := context.Background()
 
-	publicID, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xzdd", "公开桌", false, "u1")
+	publicID, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xuezhandaodi_huansanzhang", "公开桌", false, "u1")
 	require.NoError(t, err)
-	privateID, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xzdd", "私密桌", true, "u2")
+	privateID, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xuezhandaodi_huansanzhang", "私密桌", true, "u2")
 	require.NoError(t, err)
 	for _, userID := range []string{"u3", "u4", "u5"} {
 		_, err = s.JoinRoom(ctx, publicID, userID)
@@ -85,12 +98,12 @@ func TestAutoMatchUsesOldestOpenRoomOrCreatesFallback(t *testing.T) {
 	ctx := context.Background()
 	s.newRoomID = fixedRoomIDs("AAA111", "BBB222", "CCC333")
 
-	first, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xzdd", "一号桌", false, "u1")
+	first, _, err := s.CreateRoomWithMeta(ctx, "sichuan_xuezhandaodi_huansanzhang", "一号桌", false, "u1")
 	require.NoError(t, err)
 	second, _, err := s.CreateRoomWithMeta(ctx, "other", "其它规则桌", false, "u2")
 	require.NoError(t, err)
 
-	roomID, seat, err := s.AutoMatch(ctx, "sichuan_xzdd", "u3")
+	roomID, seat, err := s.AutoMatch(ctx, "sichuan_xuezhandaodi_huansanzhang", "u3")
 	require.NoError(t, err)
 	require.Equal(t, first, roomID)
 	require.EqualValues(t, 1, seat)

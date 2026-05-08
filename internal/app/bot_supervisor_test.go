@@ -18,7 +18,7 @@ import (
 func TestBotSupervisorAllBotsCompleteARound(t *testing.T) {
 	t.Parallel()
 
-	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xzdd")
+	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
 	svc.SetMailboxCapacity(64)
 	sup := NewBotSupervisor(svc)
 	svc.SetAfterCmdHook(sup.AfterCmd)
@@ -79,7 +79,7 @@ func TestBotSupervisorAllBotsCompleteARound(t *testing.T) {
 func TestBotSupervisorMixedHumanWaitsAfterExchange(t *testing.T) {
 	t.Parallel()
 
-	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xzdd")
+	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
 	svc.SetMailboxCapacity(64)
 	sup := NewBotSupervisor(svc)
 	svc.SetAfterCmdHook(sup.AfterCmd)

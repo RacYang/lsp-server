@@ -10,7 +10,7 @@ ctx = logx.WithTraceID(ctx, tid)
 ctx = logx.WithUserID(ctx, uid)
 ctx = logx.WithRoomID(ctx, rid)
 log := logx.New(os.Stdout, logx.LevelInfo).With("op", "join_room")
-log.Info(ctx, "玩家进入房间", "rule_id", "sichuan_xzdd")
+log.Info(ctx, "玩家进入房间", "rule_id", "sichuan_xuezhandaodi_huansanzhang")
 ```
 
 包级函数 `logx.Info` 等使用默认 Logger（标准输出、Info 级别）。
@@ -19,7 +19,7 @@ log.Info(ctx, "玩家进入房间", "rule_id", "sichuan_xzdd")
 
 ```go
 obs, log := logx.NewObserver()
-log.Info(ctx, "玩家进入房间", "rule_id", "sichuan_xzdd")
+log.Info(ctx, "玩家进入房间", "rule_id", "sichuan_xuezhandaodi_huansanzhang")
 entries := obs.Drain()
 ```
 

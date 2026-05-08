@@ -12,6 +12,7 @@ service LobbyService {
   rpc JoinRoom(JoinRoomRequest) returns (JoinRoomResponse);
   rpc GetRoom(GetRoomRequest) returns (GetRoomResponse);
   rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
   rpc AutoMatch(AutoMatchRequest) returns (AutoMatchResponse);
   rpc LeaveRoom(LeaveRoomRequest) returns (LeaveRoomResponse);
   rpc AddBot(AddBotRequest) returns (AddBotResponse);
@@ -84,6 +85,13 @@ message ListRoomsResponse {
   repeated RoomMeta rooms = 1;
   string next_page_token = 2;
   string error = 3;
+}
+
+message ListRulesRequest {}
+
+message ListRulesResponse {
+  repeated RuleMeta rules = 1;
+  string error = 2;
 }
 
 message AutoMatchRequest {

@@ -17,7 +17,7 @@ func TestApplyLobbyListMatchAndCreate(t *testing.T) {
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ListRoomsResp{ListRoomsResp: &clientv1.ListRoomsResponse{
 		Rooms: []*clientv1.RoomMeta{{
 			RoomId:      "ROOM01",
-			RuleId:      "sichuan_xzdd",
+			RuleId:      "sichuan_xuezhandaodi_huansanzhang",
 			DisplayName: "公开桌",
 			SeatCount:   2,
 			MaxSeats:    4,

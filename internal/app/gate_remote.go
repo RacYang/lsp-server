@@ -183,6 +183,25 @@ func (g *remoteRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageT
 	return clusterRoomMetasToClient(resp.GetRooms()), resp.GetNextPageToken(), nil
 }
 
+func (g *remoteRoomGateway) ListRules(ctx context.Context) ([]*clientv1.RuleMeta, error) {
+	if g == nil {
+		return nil, fmt.Errorf("nil remote room gateway")
+	}
+	var resp *clusterv1.ListRulesResponse
+	err := retryGRPC(ctx, func(callCtx context.Context) error {
+		var callErr error
+		resp, callErr = g.lobby.ListRules(withOutgoingTrace(callCtx), &clusterv1.ListRulesRequest{})
+		return callErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetError() != "" {
+		return nil, errors.New(resp.GetError())
+	}
+	return clusterRuleMetasToClient(resp.GetRules()), nil
+}
+
 func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error) {
 	if g == nil {
 		return "", -1, fmt.Errorf("nil remote room gateway")
@@ -700,6 +719,14 @@ func clusterRoomMetasToClient(rooms []*clusterv1.RoomMeta) []*clientv1.RoomMeta 
 			Stage:       room.GetStage(),
 			RuleMeta:    clusterRuleMetaToClient(room.GetRuleMeta()),
 		})
+	}
+	return out
+}
+
+func clusterRuleMetasToClient(rules []*clusterv1.RuleMeta) []*clientv1.RuleMeta {
+	out := make([]*clientv1.RuleMeta, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, clusterRuleMetaToClient(rule))
 	}
 	return out
 }

@@ -15,6 +15,18 @@ import (
 	"racoo.cn/lsp/internal/store/redis"
 )
 
+func TestLocalRoomGatewayListRules(t *testing.T) {
+	t.Parallel()
+	g := NewLocalRoomGateway(nil, nil, nil)
+	rules, err := g.ListRules(context.Background())
+	require.NoError(t, err)
+	require.Len(t, rules, 2)
+	require.Equal(t, "sichuan_xuezhandaodi_biaozhun", rules[0].GetRuleId())
+	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", rules[1].GetRuleId())
+	require.NotContains(t, rules[0].GetEnabledFeatures(), "exchange_three")
+	require.Contains(t, rules[1].GetEnabledFeatures(), "exchange_three")
+}
+
 func TestLocalRoomGatewayNilErrors(t *testing.T) {
 	t.Parallel()
 	var g *LocalRoomGateway

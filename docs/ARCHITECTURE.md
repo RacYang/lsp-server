@@ -9,7 +9,7 @@
 - Phase 5：血战规则补完、room 引擎拆分与可观测性最小集合（[ADR-0017](adr/0017-room-engine-and-settlement-boundary.md)、[ADR-0019](adr/0019-observability-metrics.md)）。
 - Phase 5.3 / 5.4 / 5.5：规则深化、庄家与高阶番种、运行时参数与存储弹性（[ADR-0020](adr/0020-rules-deepening.md)、[ADR-0021](adr/0021-dealer-and-advanced-fans.md)、[ADR-0022](adr/0022-runtime-knobs-and-storage-resilience.md)）。
 - Phase 6：生产部署、SLO、压测与容量基线（范围见 [ADR-0023](adr/0023-scope-and-roadmap.md)，部署与 SLO 见 [ADR-0024](adr/0024-deployment-and-slo.md)，压测容量见 [ADR-0025](adr/0025-load-and-capacity.md)，备份与凭据见 [ADR-0026](adr/0026-postgres-backup-and-restore.md)、[ADR-0027](adr/0027-secret-and-credential-management.md)）。
-- Phase 7：玩家客户端与四川血战权威局内契约（[ADR-0038](adr/0038-cli-symmetric-tui-layout.md)、[ADR-0039](adr/0039-sichuan-xzdd-authoritative-round-contract.md)）。
+- Phase 7：玩家客户端与四川血战权威局内契约（[ADR-0038](adr/0038-cli-symmetric-tui-layout.md)、[ADR-0039](adr/0039-sichuan-xuezhandaodi-authoritative-round-contract.md)）。
 
 ## 运行时拓扑
 
@@ -37,7 +37,7 @@ Phase 6 生产交付工件集中在 `deploy/`：`docker/` 提供三服务镜像�
 
 ## 局内权威契约
 
-四川血战局内链路遵循 [ADR-0039](adr/0039-sichuan-xzdd-authoritative-round-contract.md)：玩家显式命令与托管命令在 room engine 中分流；换三张方向、定缺结果与阶段由 `RoundState` 统一下发；隐私敏感通知通过 `Notification.PrivacyPerSeat` 由网关按座位投影，避免其他玩家收到摸牌明文。
+四川血战局内链路遵循 [ADR-0039](adr/0039-sichuan-xuezhandaodi-authoritative-round-contract.md)：玩家显式命令与托管命令在 room engine 中分流；换三张方向、定缺结果与阶段由 `RoundState` 统一下发；隐私敏感通知通过 `Notification.PrivacyPerSeat` 由网关按座位投影，避免其他玩家收到摸牌明文。
 
 ## 边界
 

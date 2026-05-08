@@ -1,4 +1,4 @@
-package sichuanxzdd
+package xuezhandaodi
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestBuildWallDeterministic(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	w1 := x.BuildWall(context.Background(), 7)
 	w2 := x.BuildWall(context.Background(), 7)
 	if w1.Tiles()[0] != w2.Tiles()[0] {
@@ -19,7 +19,7 @@ func TestBuildWallDeterministic(t *testing.T) {
 }
 
 func TestGameOverConditions(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	if !x.GameOver(rules.GameState{HuedPlayers: 3, WallRemaining: 10}) {
 		t.Fatal("expected game over on 3 hu")
 	}
@@ -32,7 +32,7 @@ func TestGameOverConditions(t *testing.T) {
 }
 
 func TestCapabilitiesExposeComposableFeatures(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	caps := x.Capabilities()
 	if caps.Claims == nil {
 		t.Fatal("expected claim policy")
@@ -40,13 +40,26 @@ func TestCapabilitiesExposeComposableFeatures(t *testing.T) {
 	if got := caps.Opening.Steps(); len(got) != 2 || got[0] != "exchange_three" || got[1] != "que_men" {
 		t.Fatalf("unexpected opening flow: %v", got)
 	}
-	if caps.Metadata.DisplayName != "四川血战到底" {
+	if caps.Metadata.DisplayName != "四川血战到底（换三张）" {
 		t.Fatalf("unexpected display name: %s", caps.Metadata.DisplayName)
 	}
 }
 
+func TestBiaozhunCapabilitiesSkipExchangeThree(t *testing.T) {
+	x := newRule(IDBiaozhun, false)
+	caps := x.Capabilities()
+	if got := caps.Opening.Steps(); len(got) != 1 || got[0] != "que_men" {
+		t.Fatalf("unexpected opening flow: %v", got)
+	}
+	for _, feature := range caps.Metadata.EnabledFeatures {
+		if feature == "exchange_three" {
+			t.Fatalf("biaozhun should not expose exchange_three: %v", caps.Metadata.EnabledFeatures)
+		}
+	}
+}
+
 func TestCheckHuSevenPairsScoring(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	// 七对：7 个不同对子
 	pairs := []string{"m1", "m1", "m3", "m3", "m5", "m5", "m7", "m7", "p2", "p2", "p4", "p4", "s6"}

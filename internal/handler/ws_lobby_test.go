@@ -24,7 +24,7 @@ func TestWebSocketLobbyCreateListAndAutoMatch(t *testing.T) {
 	creator := dialWS(t, srv)
 	loginOnly(t, creator, "creator")
 	create := &clientv1.Envelope{ReqId: "create", IdempotencyKey: "idem-create", Body: &clientv1.Envelope_CreateRoomReq{
-		CreateRoomReq: &clientv1.CreateRoomRequest{RuleId: "sichuan_xzdd", DisplayName: "公开大厅桌"},
+		CreateRoomReq: &clientv1.CreateRoomRequest{RuleId: "sichuan_xuezhandaodi_huansanzhang", DisplayName: "公开大厅桌"},
 	}}
 	writeEnv(t, creator, msgid.CreateRoomReq, create)
 	createResp := readEnv(t, creator, msgid.CreateRoomResp).GetCreateRoomResp()
@@ -43,7 +43,7 @@ func TestWebSocketLobbyCreateListAndAutoMatch(t *testing.T) {
 	matcher := dialWS(t, srv)
 	loginOnly(t, matcher, "matcher")
 	match := &clientv1.Envelope{ReqId: "match", IdempotencyKey: "idem-match", Body: &clientv1.Envelope_AutoMatchReq{
-		AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: "sichuan_xzdd"},
+		AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: "sichuan_xuezhandaodi_huansanzhang"},
 	}}
 	writeEnv(t, matcher, msgid.AutoMatchReq, match)
 	matchResp := readEnv(t, matcher, msgid.AutoMatchResp).GetAutoMatchResp()

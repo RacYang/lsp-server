@@ -95,6 +95,15 @@ func (s *lobbyGRPCServer) ListRooms(ctx context.Context, req *clusterv1.ListRoom
 	return &clusterv1.ListRoomsResponse{Rooms: lobbyRoomMetasToCluster(rooms), NextPageToken: next}, nil
 }
 
+// ListRules 返回当前后端可创建的规则清单。
+func (s *lobbyGRPCServer) ListRules(ctx context.Context, _ *clusterv1.ListRulesRequest) (*clusterv1.ListRulesResponse, error) {
+	rules, err := s.svc.ListRules(ctx)
+	if err != nil {
+		return &clusterv1.ListRulesResponse{Error: err.Error()}, nil
+	}
+	return &clusterv1.ListRulesResponse{Rules: lobbyRuleMetasToCluster(rules)}, nil
+}
+
 // AutoMatch 选择一个公开未满房，或在无候选时创建新公开房。
 func (s *lobbyGRPCServer) AutoMatch(ctx context.Context, req *clusterv1.AutoMatchRequest) (*clusterv1.AutoMatchResponse, error) {
 	roomID, seat, err := s.svc.AutoMatch(ctx, req.GetRuleId(), req.GetUserId())
@@ -136,6 +145,7 @@ type lobbyService interface {
 	JoinRoom(context.Context, *clusterv1.JoinRoomRequest) (*clusterv1.JoinRoomResponse, error)
 	GetRoom(context.Context, *clusterv1.GetRoomRequest) (*clusterv1.GetRoomResponse, error)
 	ListRooms(context.Context, *clusterv1.ListRoomsRequest) (*clusterv1.ListRoomsResponse, error)
+	ListRules(context.Context, *clusterv1.ListRulesRequest) (*clusterv1.ListRulesResponse, error)
 	AutoMatch(context.Context, *clusterv1.AutoMatchRequest) (*clusterv1.AutoMatchResponse, error)
 	LeaveRoom(context.Context, *clusterv1.LeaveRoomRequest) (*clusterv1.LeaveRoomResponse, error)
 	AddBot(context.Context, *clusterv1.AddBotRequest) (*clusterv1.AddBotResponse, error)
@@ -151,6 +161,7 @@ func registerLobbyService(s grpc.ServiceRegistrar, srv lobbyService) {
 			{MethodName: "JoinRoom", Handler: lobbyJoinRoomHandler},
 			{MethodName: "GetRoom", Handler: lobbyGetRoomHandler},
 			{MethodName: "ListRooms", Handler: lobbyListRoomsHandler},
+			{MethodName: "ListRules", Handler: lobbyListRulesHandler},
 			{MethodName: "AutoMatch", Handler: lobbyAutoMatchHandler},
 			{MethodName: "LeaveRoom", Handler: lobbyLeaveRoomHandler},
 			{MethodName: "AddBot", Handler: lobbyAddBotHandler},
@@ -224,6 +235,22 @@ func lobbyListRoomsHandler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+// lobbyListRulesHandler 为规则列表 RPC 提供统一桥接。
+func lobbyListRulesHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(clusterv1.ListRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(lobbyService).ListRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/ListRules"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(lobbyService).ListRules(ctx, req.(*clusterv1.ListRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // lobbyAutoMatchHandler 为自动匹配 RPC 提供统一桥接。
 func lobbyAutoMatchHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(clusterv1.AutoMatchRequest)
@@ -283,6 +310,14 @@ func lobbyRoomMetasToCluster(rooms []lobbysvc.RoomMeta) []*clusterv1.RoomMeta {
 			Stage:       room.Stage,
 			RuleMeta:    lobbyRuleMetaToCluster(room.RuleMeta),
 		})
+	}
+	return out
+}
+
+func lobbyRuleMetasToCluster(rules []lobbysvc.RuleMeta) []*clusterv1.RuleMeta {
+	out := make([]*clusterv1.RuleMeta, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, lobbyRuleMetaToCluster(rule))
 	}
 	return out
 }

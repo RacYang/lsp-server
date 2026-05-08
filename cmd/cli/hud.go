@@ -7,15 +7,15 @@ import "strings"
 // 与 internal/rules 注册保持一致；新增规则时同步在这里登记，避免 HUD 出现
 // "default" / "blood" 这类英文 ID。
 var ruleDisplayNames = map[string]string{
-	"default":       "默认麻将",
-	"blood":         "川麻血战",
-	"sichuan":       "川麻血战",
-	"sichuan_xz":    "川麻血战",
-	"sichuan_xzdd":  "川麻血战 (血战到底)",
-	"sichuan_dx":    "川麻倒下",
-	"changsha":      "长沙麻将",
-	"japanese":      "日麻立直",
-	"international": "国标麻将",
+	"default":                           "默认麻将",
+	"blood":                             "川麻血战",
+	"sichuan":                           "川麻血战",
+	"sichuan_xz":                        "川麻血战",
+	"sichuan_xuezhandaodi_huansanzhang": "川麻血战 (血战到底)",
+	"sichuan_dx":                        "川麻倒下",
+	"changsha":                          "长沙麻将",
+	"japanese":                          "日麻立直",
+	"international":                     "国标麻将",
 }
 
 // ruleLabel 仅根据 RuleID 得到玩家可读的规则名；不会再误用 DisplayName。

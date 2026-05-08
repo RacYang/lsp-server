@@ -29,7 +29,7 @@ Phase 4 之前，项目存在两套相似的牌局引擎：
 
 ### 2. 结算归属规则包
 
-当前 MVP 结算从 `room` 包迁移到 `internal/mahjong/sichuanxzdd.BuildSettlement`。`room` 引擎只负责在一局结束时收集运行态并调用规则包生成：
+当前 MVP 结算从 `room` 包迁移到 `internal/mahjong/sichuan/xuezhandaodi.BuildSettlement`。`room` 引擎只负责在一局结束时收集运行态并调用规则包生成：
 
 - `SeatScore`
 - `PenaltyItem`
@@ -42,11 +42,11 @@ Phase 5.3 扩展 `HuContext` / `ScoreContext`，把以下字段纳入规则接�
 - 和牌场况：`IsHaiDi`、`IsGangShangHua`、`Discarder`、`ResponsibleSeat`、`WallRemaining`。
 - 计分场况：每家根牌、杠流水、自摸标记、缺门数组与剩余牌数。
 
-当前 `sichuanxzdd.ScoreFans` 接受扩展后的结构但暂不消费，后续每条血战规则 PR 在这些字段上增量实现。
+当前 `xuezhandaodi.ScoreFans` 接受扩展后的结构但暂不消费，后续每条血战规则 PR 在这些字段上增量实现。
 
 ### 2.1 Phase 5.3 score ledger 与分摊口径
 
-Phase 5.3 将 `RoundState.totalFanBySeat` 替换为结算流水 `ScoreEntry`。房间层只负责把胡牌与杠牌事实追加到流水；`sichuanxzdd.BuildSettlement` 在局末 fold 出座位总分、罚分、退税与 `per_winner_breakdown`。
+Phase 5.3 将 `RoundState.totalFanBySeat` 替换为结算流水 `ScoreEntry`。房间层只负责把胡牌与杠牌事实追加到流水；`xuezhandaodi.BuildSettlement` 在局末 fold 出座位总分、罚分、退税与 `per_winner_breakdown`。
 
 胡牌分摊口径如下：
 
@@ -73,6 +73,6 @@ Phase 5.3 将 `RoundState.totalFanBySeat` 替换为结算流水 `ScoreEntry`。�
 
 ## 后果
 
-- 后续血战规则只需修改 `internal/mahjong/sichuanxzdd` 与 `rules` 上下文，不需要同步双引擎。
+- 后续血战规则只需修改 `internal/mahjong/sichuan/xuezhandaodi` 与 `rules` 上下文，不需要同步双引擎。
 - `internal/service/room/engine_auto.go` 成为唯一自动回放入口。
 - `BuildSettlement` 已完成 Phase 5.3 的查叫、花猪、退税、杠分流水与 `per_winner_breakdown` 折叠；后续规则深化应继续通过 `rules.ScoreContext` 与 `ScoreEntry` 扩展，而不是在传输层拼接口径。

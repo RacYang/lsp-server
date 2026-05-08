@@ -89,6 +89,8 @@ message Envelope {
     RenameResponse rename_resp = 43;
     AddBotRequest add_bot_req = 44;
     AddBotResponse add_bot_resp = 45;
+    ListRulesRequest list_rules_req = 46;
+    ListRulesResponse list_rules_resp = 47;
   }
 }
 
@@ -156,6 +158,15 @@ message RuleMeta {
   string short_desc = 3;
   repeated string enabled_features = 4;
   int32 max_hands = 5;
+}
+
+// ListRulesRequest 查询后端当前可创建的规则清单。
+message ListRulesRequest {}
+
+message ListRulesResponse {
+  repeated RuleMeta rules = 1;
+  ErrorCode error_code = 2;
+  string error_message = 3;
 }
 
 // ListRoomsRequest 查询当前可加入的公开等待房间。

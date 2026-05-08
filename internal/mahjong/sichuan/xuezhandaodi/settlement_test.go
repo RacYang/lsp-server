@@ -1,4 +1,4 @@
-package sichuanxzdd
+package xuezhandaodi
 
 import (
 	"testing"
@@ -109,7 +109,7 @@ func TestBuildSettlementWinnerBreakdownBaoPai(t *testing.T) {
 }
 
 func TestScoreFansContextualKinds(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	h := hand.FromTiles([]tile.Tile{
 		tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1),
 		tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2),
@@ -142,7 +142,7 @@ func TestScoreFansContextualKinds(t *testing.T) {
 }
 
 func TestScoreFansDeepeningKinds(t *testing.T) {
-	var x xzdd
+	x := newRule(IDHuansanzhang, true)
 	win := countsFromTiles([]tile.Tile{
 		tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2),
 		tile.Must(tile.SuitCharacters, 5), tile.Must(tile.SuitCharacters, 5), tile.Must(tile.SuitCharacters, 5),

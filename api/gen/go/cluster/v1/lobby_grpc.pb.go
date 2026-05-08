@@ -23,6 +23,7 @@ const (
 	LobbyService_JoinRoom_FullMethodName   = "/cluster.v1.LobbyService/JoinRoom"
 	LobbyService_GetRoom_FullMethodName    = "/cluster.v1.LobbyService/GetRoom"
 	LobbyService_ListRooms_FullMethodName  = "/cluster.v1.LobbyService/ListRooms"
+	LobbyService_ListRules_FullMethodName  = "/cluster.v1.LobbyService/ListRules"
 	LobbyService_AutoMatch_FullMethodName  = "/cluster.v1.LobbyService/AutoMatch"
 	LobbyService_LeaveRoom_FullMethodName  = "/cluster.v1.LobbyService/LeaveRoom"
 	LobbyService_AddBot_FullMethodName     = "/cluster.v1.LobbyService/AddBot"
@@ -38,6 +39,7 @@ type LobbyServiceClient interface {
 	JoinRoom(ctx context.Context, in *JoinRoomRequest, opts ...grpc.CallOption) (*JoinRoomResponse, error)
 	GetRoom(ctx context.Context, in *GetRoomRequest, opts ...grpc.CallOption) (*GetRoomResponse, error)
 	ListRooms(ctx context.Context, in *ListRoomsRequest, opts ...grpc.CallOption) (*ListRoomsResponse, error)
+	ListRules(ctx context.Context, in *ListRulesRequest, opts ...grpc.CallOption) (*ListRulesResponse, error)
 	AutoMatch(ctx context.Context, in *AutoMatchRequest, opts ...grpc.CallOption) (*AutoMatchResponse, error)
 	LeaveRoom(ctx context.Context, in *LeaveRoomRequest, opts ...grpc.CallOption) (*LeaveRoomResponse, error)
 	AddBot(ctx context.Context, in *AddBotRequest, opts ...grpc.CallOption) (*AddBotResponse, error)
@@ -91,6 +93,16 @@ func (c *lobbyServiceClient) ListRooms(ctx context.Context, in *ListRoomsRequest
 	return out, nil
 }
 
+func (c *lobbyServiceClient) ListRules(ctx context.Context, in *ListRulesRequest, opts ...grpc.CallOption) (*ListRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRulesResponse)
+	err := c.cc.Invoke(ctx, LobbyService_ListRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *lobbyServiceClient) AutoMatch(ctx context.Context, in *AutoMatchRequest, opts ...grpc.CallOption) (*AutoMatchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AutoMatchResponse)
@@ -131,6 +143,7 @@ type LobbyServiceServer interface {
 	JoinRoom(context.Context, *JoinRoomRequest) (*JoinRoomResponse, error)
 	GetRoom(context.Context, *GetRoomRequest) (*GetRoomResponse, error)
 	ListRooms(context.Context, *ListRoomsRequest) (*ListRoomsResponse, error)
+	ListRules(context.Context, *ListRulesRequest) (*ListRulesResponse, error)
 	AutoMatch(context.Context, *AutoMatchRequest) (*AutoMatchResponse, error)
 	LeaveRoom(context.Context, *LeaveRoomRequest) (*LeaveRoomResponse, error)
 	AddBot(context.Context, *AddBotRequest) (*AddBotResponse, error)
@@ -155,6 +168,9 @@ func (UnimplementedLobbyServiceServer) GetRoom(context.Context, *GetRoomRequest)
 }
 func (UnimplementedLobbyServiceServer) ListRooms(context.Context, *ListRoomsRequest) (*ListRoomsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRooms not implemented")
+}
+func (UnimplementedLobbyServiceServer) ListRules(context.Context, *ListRulesRequest) (*ListRulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRules not implemented")
 }
 func (UnimplementedLobbyServiceServer) AutoMatch(context.Context, *AutoMatchRequest) (*AutoMatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AutoMatch not implemented")
@@ -258,6 +274,24 @@ func _LobbyService_ListRooms_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LobbyService_ListRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LobbyServiceServer).ListRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LobbyService_ListRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LobbyServiceServer).ListRules(ctx, req.(*ListRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LobbyService_AutoMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AutoMatchRequest)
 	if err := dec(in); err != nil {
@@ -334,6 +368,10 @@ var LobbyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRooms",
 			Handler:    _LobbyService_ListRooms_Handler,
+		},
+		{
+			MethodName: "ListRules",
+			Handler:    _LobbyService_ListRules_Handler,
 		},
 		{
 			MethodName: "AutoMatch",

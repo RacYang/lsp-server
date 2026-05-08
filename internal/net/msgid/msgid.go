@@ -54,4 +54,6 @@ const (
 	RenameResp     uint16 = 41
 	AddBotReq      uint16 = 42
 	AddBotResp     uint16 = 43
+	ListRulesReq   uint16 = 44
+	ListRulesResp  uint16 = 45
 )

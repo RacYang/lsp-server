@@ -9,7 +9,7 @@ import (
 
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -38,7 +38,7 @@ type fixtureLedgerEntry struct {
 
 func TestScoreLedgerYAMLFixtures(t *testing.T) {
 	var file scoreLedgerFixtureFile
-	data, err := os.ReadFile(filepath.Join("..", "..", "mahjong", "sichuanxzdd", "testdata", "score_ledger_cases.yaml"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "mahjong", "sichuan", "xuezhandaodi", "testdata", "score_ledger_cases.yaml"))
 	if err != nil {
 		t.Fatalf("read score ledger fixture: %v", err)
 	}
@@ -102,7 +102,7 @@ func fixtureLedgerGangKind(t *testing.T, raw string) rules.GangKind {
 	}
 }
 
-func ledgerHasEntry(entries []sichuanxzdd.ScoreEntry, want fixtureLedgerEntry) bool {
+func ledgerHasEntry(entries []xuezhandaodi.ScoreEntry, want fixtureLedgerEntry) bool {
 	for _, entry := range entries {
 		if entry.FromSeat == SeatFromInt(want.From) && entry.ToSeat == SeatFromInt(want.To) && entry.Amount == want.Amount {
 			return true

@@ -18,14 +18,14 @@ func TestApplyJoinResultToStateSetsRoomIDAndPhase(t *testing.T) {
 		RoomID:      "ROOMX",
 		SeatIndex:   2,
 		DisplayName: "三缺一",
-		RuleID:      "sichuan_xzdd",
+		RuleID:      "sichuan_xuezhandaodi_huansanzhang",
 	})
 
 	view := st.Snapshot()
 	require.Equal(t, "ROOMX", view.RoomID)
 	require.Equal(t, phaseTable, view.Phase)
 	require.EqualValues(t, 2, view.SeatIndex)
-	require.Equal(t, "sichuan_xzdd", view.RuleID)
+	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", view.RuleID)
 	require.Equal(t, "三缺一", view.DisplayName)
 }
 

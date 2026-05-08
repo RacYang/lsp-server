@@ -75,7 +75,7 @@ func TestClusterToClientConverters(t *testing.T) {
 	gotBreakdowns := clusterWinnerBreakdownsToClient(breakdowns)
 	require.Equal(t, []string{"清一色"}, gotBreakdowns[0].GetFanNames())
 
-	rooms := []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xzdd", DisplayName: "公开桌", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}
+	rooms := []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", DisplayName: "公开桌", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}
 	gotRooms := clusterRoomMetasToClient(rooms)
 	require.Equal(t, "ROOM01", gotRooms[0].GetRoomId())
 	require.Equal(t, int32(1), gotRooms[0].GetSeatCount())
@@ -341,7 +341,7 @@ func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
 	require.Equal(t, "next", next)
 	require.Equal(t, "ROOM01", rooms[0].GetRoomId())
 
-	roomID, seat, err := g.AutoMatch(ctx, "sichuan_xzdd", "u2", false)
+	roomID, seat, err := g.AutoMatch(ctx, "sichuan_xuezhandaodi_huansanzhang", "u2", false)
 	require.NoError(t, err)
 	require.Equal(t, "ROOM01", roomID)
 	require.Equal(t, 1, seat)
@@ -349,7 +349,7 @@ func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "u2", gotUser)
 
-	roomID, seat, err = g.CreateRoom(ctx, "sichuan_xzdd", "新桌", true, "u3")
+	roomID, seat, err = g.CreateRoom(ctx, "sichuan_xuezhandaodi_huansanzhang", "新桌", true, "u3")
 	require.NoError(t, err)
 	require.Equal(t, "ROOM02", roomID)
 	require.Equal(t, 0, seat)
@@ -374,9 +374,13 @@ func (f *fakeLobbyClient) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequest
 
 func (f *fakeLobbyClient) ListRooms(_ context.Context, _ *clusterv1.ListRoomsRequest, _ ...grpc.CallOption) (*clusterv1.ListRoomsResponse, error) {
 	return &clusterv1.ListRoomsResponse{
-		Rooms:         []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xzdd", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}},
+		Rooms:         []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}},
 		NextPageToken: "next",
 	}, nil
+}
+
+func (f *fakeLobbyClient) ListRules(_ context.Context, _ *clusterv1.ListRulesRequest, _ ...grpc.CallOption) (*clusterv1.ListRulesResponse, error) {
+	return &clusterv1.ListRulesResponse{Rules: []*clusterv1.RuleMeta{{RuleId: "sichuan_xuezhandaodi_huansanzhang"}}}, nil
 }
 
 func (f *fakeLobbyClient) AutoMatch(_ context.Context, _ *clusterv1.AutoMatchRequest, _ ...grpc.CallOption) (*clusterv1.AutoMatchResponse, error) {

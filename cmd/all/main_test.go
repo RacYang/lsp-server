@@ -11,7 +11,7 @@ import (
 func TestRunWithTempConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "all.yaml")
-	content := "server:\n  addr: \"127.0.0.1:0\"\nrule:\n  default_id: \"sichuan_xzdd\"\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n"
+	content := "server:\n  addr: \"127.0.0.1:0\"\nrule:\n  default_id: \"sichuan_xuezhandaodi_huansanzhang\"\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n"
 	if err := os.WriteFile(cfgPath, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,7 @@ HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
 	verify-meta verify-config verify-tools verify-determinism verify-commit-msg verify-lang verify-nolint-policy verify-domain verify-redis-keys verify-metrics-naming verify-gate-session-routing \
-	verify-cli-release-targets verify-git-repo verify-git-local verify-git-push
+	verify-cli-release-targets verify-mahjong-rule-ids verify-git-repo verify-git-local verify-git-push
 
 bootstrap:
 	@bash scripts/install-tools.sh
@@ -247,7 +247,7 @@ verify-lang:
 verify-nolint-policy:
 	@python3 scripts/verify-nolint-policy.py
 
-verify-domain: verify-redis-keys verify-metrics-naming verify-gate-session-routing
+verify-domain: verify-redis-keys verify-metrics-naming verify-gate-session-routing verify-mahjong-rule-ids
 
 verify-redis-keys:
 	@python3 scripts/verify-redis-keys.py
@@ -260,3 +260,6 @@ verify-gate-session-routing:
 
 verify-cli-release-targets:
 	@python3 scripts/verify-cli-release-targets.py
+
+verify-mahjong-rule-ids:
+	@python3 scripts/verify-mahjong-rule-ids.py

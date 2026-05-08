@@ -48,7 +48,7 @@
 ### Phase 5
 
 - BREAKING：重置 `proto-baseline`；`client.v1.Envelope` 追加 `idempotency_key`，`SnapshotNotify` / `SnapshotRoomResponse` 追加 `claim_candidates`，`cluster.v1.SettlementEvent` 补齐 `seat_scores` / `penalties` / `per_winner_breakdown`，跨进程结算不再丢失结构化罚分。
-- `room` 交互引擎按职责拆分，统一 `sichuanxzdd` 包名，并为 Redis `snapmeta.round_json` 增加 `schema_version`，未知未来版本恢复时降级为重新准备而非阻断 room 启动。
+- `room` 交互引擎按职责拆分，统一 `xuezhandaodi` 包名，并为 Redis `snapmeta.round_json` 增加 `schema_version`，未知未来版本恢复时降级为重新准备而非阻断 room 启动。
 - 血战主链路支持胡后续行、点炮胡候选、抢杠胡窗口、胡/杠/碰优先级裁决、杠流水与更多番种上下文，删除 Phase 4 工程步数截断。
 - 引入可注入 `clock.Clock`、每房定时器、Hub 心跳超时、WS token bucket、actor 有界 mailbox、WS 幂等重放去重与 `ERROR_CODE_RATE_LIMITED` 指标。
 - 新增最小可观测指标集合（抢答窗口、自动托管、重连、actor 队列深度、存储耗时、限流/幂等/未知消息）与 ADR-0019；integration 目标覆盖重连、幂等、限流与 fakeClock 托管。

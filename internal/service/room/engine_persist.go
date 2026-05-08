@@ -7,7 +7,7 @@ import (
 
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuanxzdd"
+	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
@@ -207,7 +207,7 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		QiangGangWindow:        rs.qiangGangWindow,
 		WinnerSeats:            seatsToPersist(rs.winnerSeats),
 		HuedSeats:              append([]bool(nil), rs.huedSeats...),
-		Ledger:                 append([]sichuanxzdd.ScoreEntry(nil), rs.ledger...),
+		Ledger:                 append([]xuezhandaodi.ScoreEntry(nil), rs.ledger...),
 		GangRecords:            append([]rules.GangRecord(nil), rs.gangRecords...),
 		LastGangFollowUp:       rs.lastGangFollowUp,
 		LastDiscardAfterGang:   rs.lastDiscardAfterGang,
@@ -303,7 +303,7 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, error) {
 	ruleID := rp.RuleID
 	if ruleID == "" {
-		ruleID = "sichuan_xzdd"
+		ruleID = "sichuan_xuezhandaodi_huansanzhang"
 	}
 	rule := rules.MustGet(ruleID)
 	caps := rules.CapabilitiesOf(rule)
@@ -360,7 +360,7 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		dealerFirstDiscardOpen: rp.DealerFirstDiscardOpen,
 		winnerSeats:            seatsFromPersist(rp.WinnerSeats),
 		huedSeats:              append([]bool(nil), rp.HuedSeats...),
-		ledger:                 append([]sichuanxzdd.ScoreEntry(nil), rp.Ledger...),
+		ledger:                 append([]xuezhandaodi.ScoreEntry(nil), rp.Ledger...),
 		gangRecords:            append([]rules.GangRecord(nil), rp.GangRecords...),
 		lastGangFollowUp:       rp.LastGangFollowUp,
 		lastDiscardAfterGang:   rp.LastDiscardAfterGang,

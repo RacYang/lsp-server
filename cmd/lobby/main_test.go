@@ -10,7 +10,7 @@ import (
 func TestRunWithCanceledEtcdContext(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "lobby-etcd.yaml")
-	content := "server:\n  addr: \"127.0.0.1:0\"\nrule:\n  default_id: \"sichuan_xzdd\"\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\netcd:\n  endpoints: \"127.0.0.1:1\"\n"
+	content := "server:\n  addr: \"127.0.0.1:0\"\nrule:\n  default_id: \"sichuan_xuezhandaodi_huansanzhang\"\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\netcd:\n  endpoints: \"127.0.0.1:1\"\n"
 	if err := os.WriteFile(cfgPath, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}

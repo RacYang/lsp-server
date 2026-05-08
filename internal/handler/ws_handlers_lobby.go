@@ -14,7 +14,7 @@ import (
 	"racoo.cn/lsp/pkg/logx"
 )
 
-const defaultClientRuleID = "sichuan_xzdd"
+const defaultClientRuleID = "sichuan_xuezhandaodi_huansanzhang"
 
 // handleListRooms 返回大厅可加入的公开房间列表；查询不改变服务端状态，因此不走幂等缓存。
 func handleListRooms(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, payload []byte) {
@@ -45,6 +45,38 @@ func handleListRooms(ctx context.Context, deps Deps, conn *websocket.Conn, state
 	writeLobbyResponse(conn, msgid.ListRoomsResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body:  &clientv1.Envelope_ListRoomsResp{ListRoomsResp: resp},
+	})
+}
+
+// handleListRules 返回后端可创建规则清单；查询不改变服务端状态。
+func handleListRules(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, payload []byte) {
+	var env clientv1.Envelope
+	if err := proto.Unmarshal(payload, &env); err != nil {
+		return
+	}
+	req := env.GetListRulesReq()
+	if req == nil {
+		return
+	}
+	if state.userID == "" {
+		writeLobbyResponse(conn, msgid.ListRulesResp, &clientv1.Envelope{
+			ReqId: env.ReqId,
+			Body: &clientv1.Envelope_ListRulesResp{ListRulesResp: &clientv1.ListRulesResponse{
+				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
+				ErrorMessage: "尚未登录",
+			}},
+		})
+		return
+	}
+	rules, err := deps.Rooms.ListRules(ctx)
+	resp := &clientv1.ListRulesResponse{Rules: rules}
+	if err != nil {
+		resp.ErrorCode = clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
+		resp.ErrorMessage = err.Error()
+	}
+	writeLobbyResponse(conn, msgid.ListRulesResp, &clientv1.Envelope{
+		ReqId: env.ReqId,
+		Body:  &clientv1.Envelope_ListRulesResp{ListRulesResp: resp},
 	})
 }
 

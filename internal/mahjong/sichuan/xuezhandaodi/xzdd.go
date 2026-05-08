@@ -1,5 +1,5 @@
-// Package sichuanxzdd 实现四川麻将「血战到底」规则子集，覆盖交互房间主链路所需的和牌、番种与结算。
-package sichuanxzdd
+// Package xuezhandaodi 实现四川麻将「血战到底」规则子集，覆盖交互房间主链路所需的和牌、番种与结算。
+package xuezhandaodi
 
 import (
 	"context"
@@ -13,21 +13,36 @@ import (
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
 
-const ruleID = "sichuan_xzdd"
+const (
+	IDHuansanzhang = "sichuan_xuezhandaodi_huansanzhang"
+	IDBiaozhun     = "sichuan_xuezhandaodi_biaozhun"
+)
 
 func init() {
-	rules.Register(&xzdd{})
+	rules.Register(newRule(IDHuansanzhang, true))
+	rules.Register(newRule(IDBiaozhun, false))
 }
 
-type xzdd struct{}
+type rule struct {
+	id           string
+	withExchange bool
+}
 
-func (x *xzdd) ID() string { return ruleID }
+func newRule(id string, withExchange bool) *rule {
+	return &rule{id: id, withExchange: withExchange}
+}
 
-func (x *xzdd) Name() string { return "四川麻将血战到底（MVP）" }
+func (x *rule) ID() string { return x.id }
 
-func (x *xzdd) Capabilities() rules.CapabilitySet {
+func (x *rule) Name() string {
+	if x.withExchange {
+		return "四川麻将血战到底（换三张）"
+	}
+	return "四川麻将血战到底（标准）"
+}
+
+func (x *rule) Capabilities() rules.CapabilitySet {
 	features := []string{
-		"exchange_three",
 		"que_men",
 		"no_chi",
 		"pong",
@@ -40,14 +55,23 @@ func (x *xzdd) Capabilities() rules.CapabilitySet {
 		"gang_shang",
 		"settlement_penalty",
 	}
+	opening := rules.StaticOpeningFlow{"que_men"}
+	displayName := "四川血战到底"
+	shortDesc := "定缺、无吃、胡牌后血战续行"
+	if x.withExchange {
+		features = append([]string{"exchange_three"}, features...)
+		opening = rules.StaticOpeningFlow{"exchange_three", "que_men"}
+		displayName = "四川血战到底（换三张）"
+		shortDesc = "换三张、定缺、无吃、胡牌后血战续行"
+	}
 	return rules.CapabilitySet{
 		Metadata: rules.RuleMetadata{
-			DisplayName:     "四川血战到底",
-			ShortDesc:       "换三张、定缺、无吃、胡牌后血战续行",
+			DisplayName:     displayName,
+			ShortDesc:       shortDesc,
 			EnabledFeatures: append([]string(nil), features...),
 			MaxHands:        4,
 		},
-		Opening:     rules.StaticOpeningFlow{"exchange_three", "que_men"},
+		Opening:     opening,
 		Claims:      rules.NoEatingClaimPolicy{},
 		Turn:        rules.FeatureSet{"draw", "tsumo_window", "gang_follow_up", "hai_di"},
 		Scoring:     rules.FeatureSet{"fan_breakdown", "dealer", "advanced_fans", "gang_context"},
@@ -57,7 +81,7 @@ func (x *xzdd) Capabilities() rules.CapabilitySet {
 	}
 }
 
-func (x *xzdd) BuildWall(ctx context.Context, seed int64) *wall.Wall {
+func (x *rule) BuildWall(ctx context.Context, seed int64) *wall.Wall {
 	_ = ctx
 	w := wall.NewFull108()
 	if seed <= 0 {
@@ -69,7 +93,7 @@ func (x *xzdd) BuildWall(ctx context.Context, seed int64) *wall.Wall {
 	return w
 }
 
-func (x *xzdd) CheckHu(h *hand.Hand, target tile.Tile, _ rules.HuContext) (rules.HuResult, bool) {
+func (x *rule) CheckHu(h *hand.Hand, target tile.Tile, _ rules.HuContext) (rules.HuResult, bool) {
 	if h == nil {
 		return rules.HuResult{}, false
 	}
@@ -81,7 +105,7 @@ func (x *xzdd) CheckHu(h *hand.Hand, target tile.Tile, _ rules.HuContext) (rules
 	return rules.HuResult{Win: c}, true
 }
 
-func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Breakdown {
+func (x *rule) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Breakdown {
 	var b fan.Breakdown
 	c := result.Win
 	specialOpening := false
@@ -158,7 +182,7 @@ func (x *xzdd) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Break
 	return b
 }
 
-func (x *xzdd) GameOver(state rules.GameState) bool {
+func (x *rule) GameOver(state rules.GameState) bool {
 	if state.HuedPlayers >= 3 {
 		return true
 	}

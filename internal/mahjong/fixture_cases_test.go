@@ -7,7 +7,7 @@ import (
 
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	_ "racoo.cn/lsp/internal/mahjong/sichuanxzdd" // 触发 init 注册川麻规则
+	_ "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi" // 触发 init 注册川麻规则
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -42,7 +42,7 @@ func TestJSONSimpleHu(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse win: %v", err)
 	}
-	r := rules.MustGet("sichuan_xzdd")
+	r := rules.MustGet("sichuan_xuezhandaodi_huansanzhang")
 	res, ok := r.CheckHu(h, winTile, rules.HuContext{})
 	if ok != fx.WantWin {
 		t.Fatalf("want_win=%v got=%v", fx.WantWin, ok)
