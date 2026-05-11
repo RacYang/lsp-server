@@ -137,9 +137,9 @@ func tileStyle(cursor *HandCursor, idx int) (int, tcell.Style) {
 	cursorOn := cursor.Index == idx
 	marked := cursor.IsMarked(idx)
 	if cursorOn {
-		style = style.Bold(true).Underline(true)
+		style = style.Bold(true).Foreground(tcell.ColorBlack).Background(tcell.ColorYellow)
 	} else if marked {
-		style = style.Bold(true)
+		style = style.Bold(true).Foreground(tcell.ColorYellow)
 	}
 	if cursor.Pending && (cursorOn || marked) {
 		style = style.Foreground(tcell.ColorGray)

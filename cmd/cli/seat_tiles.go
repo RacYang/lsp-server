@@ -32,8 +32,24 @@ func drawSouthHand(scr tcell.Screen, in FrameInputs) {
 	x := region.X
 	for i, tile := range hand {
 		offset, style := tileStyle(in.Cursor, i)
+		if marker := handSelectionMarker(in.Cursor, i); marker != "" && region.Y > 0 {
+			drawText(scr, x+i*3, region.Y-1, style, marker)
+		}
 		drawTileGlyph(scr, x+i*3, region.Y+offset, style, TileGlyph(tile))
 	}
+}
+
+func handSelectionMarker(cursor *HandCursor, idx int) string {
+	if cursor == nil {
+		return ""
+	}
+	if cursor.IsMarked(idx) {
+		return "◆"
+	}
+	if cursor.Index == idx {
+		return "▲"
+	}
+	return ""
 }
 
 func drawHiddenTileLine(scr tcell.Screen, region Region, count int) {

@@ -23,27 +23,33 @@ type AppState struct {
 
 // RoomView 是渲染层唯一读取的数据结构。
 type RoomView struct {
-	UserID          string
-	Nickname        string
-	ServerURL       string
-	Phase           string
-	RoomID          string
-	RuleID          string
-	DisplayName     string
-	SessionToken    string
-	SeatIndex       int32
-	RoomState       string
-	WaitingAction   string
-	RoundPhase      clientv1.Phase
-	LastStep        int64
-	SnapshotStep    int64
-	ActionStartedAt time.Time
-	DeadlineUnixMS  int64
-	WallRemaining   int32
-	RoundIndex      int32
-	HandIndex       int32
-	TotalScores     []*clientv1.SeatScore
-	LastAction      *clientv1.LastActionInfo
+	UserID             string
+	Nickname           string
+	ServerURL          string
+	Phase              string
+	RoomID             string
+	RuleID             string
+	DisplayName        string
+	SessionToken       string
+	SeatIndex          int32
+	RoomState          string
+	WaitingAction      string
+	RoundPhase         clientv1.Phase
+	LastStep           int64
+	SnapshotStep       int64
+	AppliedDrawStep    int64
+	AppliedDrawSeat    int32
+	AppliedDrawTile    string
+	AppliedDiscardStep int64
+	AppliedDiscardSeat int32
+	AppliedDiscardTile string
+	ActionStartedAt    time.Time
+	DeadlineUnixMS     int64
+	WallRemaining      int32
+	RoundIndex         int32
+	HandIndex          int32
+	TotalScores        []*clientv1.SeatScore
+	LastAction         *clientv1.LastActionInfo
 
 	DealerSeat          int32
 	ActingSeat          int32

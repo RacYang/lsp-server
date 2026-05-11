@@ -55,6 +55,52 @@ func TestApplyDiscardDoesNotKeepDiscarderAsActingSeat(t *testing.T) {
 	require.Empty(t, view.Players[0].Discards)
 }
 
+func TestApplyDuplicateDrawDoesNotGrowSelfHand(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
+		SeatIndex: 0,
+		Tiles:     []string{"m1", "m2", "m3"},
+	}}})
+	draw := &clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
+		SeatIndex: 0,
+		Tile:      "p9",
+		Step:      10,
+	}}}
+
+	st.Apply(draw)
+	st.Apply(draw)
+
+	view := st.Snapshot()
+	require.Equal(t, []string{"m1", "m2", "m3", "p9"}, view.Players[0].Hand)
+	require.Equal(t, 4, view.Players[0].HandCnt)
+}
+
+func TestApplyDuplicateDiscardDoesNotRemoveSelfHandTwice(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
+		SeatIndex: 0,
+		Tiles:     []string{"m1", "m1", "m2", "m3"},
+	}}})
+	discard := &clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
+		SeatIndex: 0,
+		Action:    "discard",
+		Tile:      "m1",
+		Step:      11,
+	}}}
+
+	st.Apply(discard)
+	st.Apply(discard)
+
+	view := st.Snapshot()
+	require.Equal(t, []string{"m1", "m2", "m3"}, view.Players[0].Hand)
+	require.Equal(t, []string{"m1"}, view.Players[0].Discards)
+	require.Equal(t, 3, view.Players[0].HandCnt)
+}
+
 func TestApplyPongRemovesClaimedDiscardFromRiver(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})

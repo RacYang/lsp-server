@@ -238,6 +238,11 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 		return
 	}
 	t := draw.GetTile()
+	step := draw.GetStep()
+	duplicate := step > 0 &&
+		v.AppliedDrawStep == step &&
+		v.AppliedDrawSeat == seat &&
+		v.AppliedDrawTile == t
 	v.ActingSeat = seat
 	v.PendingTile = t
 	v.WallRemaining = draw.GetWallRemaining()
@@ -246,6 +251,13 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	if draw.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
 		setWaitingAction(v, "discard", []string{"discard"})
 	}
+	if duplicate {
+		appendLog(v, "已忽略重复摸牌事件")
+		return
+	}
+	v.AppliedDrawStep = step
+	v.AppliedDrawSeat = seat
+	v.AppliedDrawTile = t
 	p := &v.Players[seat]
 	if seat == v.SeatIndex {
 		if t != "" {
@@ -290,7 +302,7 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 			setWaitingAction(v, "que_men", []string{"que_men"})
 		}
 	case "discard":
-		applyDiscardAction(v, seat, action.GetTile())
+		applyDiscardAction(v, seat, action.GetTile(), action.GetStep())
 	case "pong":
 		applyPongAction(v, seat, action.GetTile())
 	case "gang":
@@ -365,10 +377,20 @@ func formatActionLog(view RoomView, seat int32, action, tile string) string {
 	return ""
 }
 
-func applyDiscardAction(v *RoomView, seat int32, tile string) {
+func applyDiscardAction(v *RoomView, seat int32, tile string, step int64) {
 	if seat < 0 || seat > 3 || tile == "" {
 		return
 	}
+	if step > 0 &&
+		v.AppliedDiscardStep == step &&
+		v.AppliedDiscardSeat == seat &&
+		v.AppliedDiscardTile == tile {
+		appendLog(v, "已忽略重复出牌事件")
+		return
+	}
+	v.AppliedDiscardStep = step
+	v.AppliedDiscardSeat = seat
+	v.AppliedDiscardTile = tile
 	p := &v.Players[seat]
 	p.Discards = append(p.Discards, tile)
 	if seat == v.SeatIndex {
@@ -620,6 +642,12 @@ func clearRoundFacts(v *RoomView) {
 	v.RoomState = ""
 	v.WaitingAction = ""
 	v.RoundPhase = clientv1.Phase_PHASE_UNSPECIFIED
+	v.AppliedDrawStep = 0
+	v.AppliedDrawSeat = 0
+	v.AppliedDrawTile = ""
+	v.AppliedDiscardStep = 0
+	v.AppliedDiscardSeat = 0
+	v.AppliedDiscardTile = ""
 	v.ActingSeat = -1
 	v.ActingSeats = nil
 	v.PendingTile = ""

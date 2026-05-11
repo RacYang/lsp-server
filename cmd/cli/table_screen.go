@@ -239,6 +239,24 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			if model.Phase == PhaseSettlement {
 				return leaveRoomFireAndForget(ctx, state, gateway, TableExitGameOver)
 			}
+		case '1':
+			if !containsAction(ux.AllowedActions, ActionQueMen) {
+				noticeInputRejected(state, ux, "当前不能定缺")
+				return tableEventResult{}
+			}
+			return submitQueMen(ctx, gateway, model, 0)
+		case '2':
+			if !containsAction(ux.AllowedActions, ActionQueMen) {
+				noticeInputRejected(state, ux, "当前不能定缺")
+				return tableEventResult{}
+			}
+			return submitQueMen(ctx, gateway, model, 1)
+		case '3':
+			if !containsAction(ux.AllowedActions, ActionQueMen) {
+				noticeInputRejected(state, ux, "当前不能定缺")
+				return tableEventResult{}
+			}
+			return submitQueMen(ctx, gateway, model, 2)
 		case 'm', 'M':
 			if !containsAction(ux.AllowedActions, ActionQueMen) {
 				noticeInputRejected(state, ux, "当前不能定缺")
@@ -295,6 +313,12 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		}
 		if claimDialog != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
 			return submitClaimAction(ctx, gateway, claimDialog, claimDialog.Selected())
+		}
+		if cursor.Mode == CursorModeMulti3 && !cursor.CanSubmit() {
+			if !cursor.ToggleMark() {
+				noticeInputRejected(state, ux, "当前不能标记手牌")
+			}
+			return tableEventResult{}
 		}
 		return submitCursorAction(ctx, state, cursor, hand, gateway, view)
 	}
@@ -541,7 +565,7 @@ func cursorSubmitDisabledReason(cursor *HandCursor) string {
 	case CursorModeSingle:
 		return "请先用 ←→ 选择要出的牌"
 	case CursorModeMulti3:
-		return "请先用 Space 标记 3 张牌"
+		return "请先用回车标记 3 张牌"
 	default:
 		return "当前阶段不能操作手牌"
 	}

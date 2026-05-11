@@ -127,7 +127,7 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 		// 定缺同理：4 家并发选缺一门，不依赖 ActingSeat。
 		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 			model.Allowed = []PlayerAction{ActionQueMen}
-			model.Hint = "请定缺 (m / p / s)"
+			model.Hint = "请定缺：1 缺万，2 缺筒，3 缺条"
 		} else {
 			model.Hint = waitingHint(view)
 		}
@@ -249,21 +249,21 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 	if phase := ux.Phase; phase == PhaseExchange && cursor != nil && cursor.Mode == CursorModeMulti3 && view.SeatIndex >= 0 {
 		need := 3 - len(cursor.Marked)
 		if need > 0 {
-			return fmt.Sprintf("请用 Space 标记换 3 张牌 (还需 %d)", need)
+			return fmt.Sprintf("换三张：移动到手牌后按回车标记，还需 %d 张", need)
 		}
-		return "已选 3 张, 按 Enter 提交"
+		return "已选 3 张，按回车提交换牌"
 	}
 	if ux.Phase == PhaseMyTurnSelected && cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
 		hand := view.Players[view.SeatIndex].Hand
 		if cursor.Index < len(hand) {
-			return fmt.Sprintf("已选 %s, 按 Enter 出牌", TileName(hand[cursor.Index]))
+			return fmt.Sprintf("已选 %s，按回车出牌", TileName(hand[cursor.Index]))
 		}
 	}
 	switch model.Phase {
 	case PhaseExchange:
 		return "换三张：选择 3 张同花色或按规则提示提交"
 	case PhaseQueMen:
-		return "定缺：按 m / p / s 选择一门"
+		return "定缺：按 1 缺万，2 缺筒，3 缺条"
 	case PhaseDiscard:
 		if containsAction(model.Allowed, ActionDiscard) {
 			return "◆ 该你出牌 ◆"
@@ -295,21 +295,21 @@ func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 	}
 	switch ux.Phase {
 	case PhaseExchange:
-		return "←→ 选牌    Space 标记/取消    Enter 提交    Esc 取消    i 房间信息"
+		return "←→ 选牌    回车 标记/提交    空格 标记/取消    Esc 菜单    i 房间信息"
 	case PhaseQueMen:
-		return "m 缺万    p 缺筒    s 缺条    i 房间信息    Esc 菜单"
+		return "1 缺万    2 缺筒    3 缺条    i 房间信息    Esc 菜单"
 	case PhaseMyTurnIdle, PhaseMyTurnSelected:
 		if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 {
-			return "←→ 选牌    Enter 出牌    Esc 取消    i 房间信息"
+			return "←→ 选牌    回车 出牌    Esc 菜单    i 房间信息"
 		}
-		return "←→ 选牌    Enter 出牌    i 房间信息    Esc 菜单"
+		return "←→ 选牌    回车 出牌    i 房间信息    Esc 菜单"
 	case PhaseClaim:
-		return "-- 鸣牌 --  ←→ 选项    Enter 确认    P 跳过"
+		return "-- 鸣牌 --  ←→ 选项    回车 确认    P 跳过"
 	case PhaseSettlement:
-		return "-- 结算 --  R 再开一桌    L 离桌    Enter 停留"
+		return "-- 结算 --  R 再开一桌    L 离桌    回车 停留"
 	case PhaseWaiting:
 		if emptySeatCount(view) > 0 {
-			return "b 补 1 个机器人    B 补满    Enter 等真人    Esc 菜单"
+			return "b 补 1 个机器人    B 补满    回车 等真人    Esc 菜单"
 		}
 	}
 	return "Tab 查看玩家    i 房间信息    ? 帮助    Esc 菜单"

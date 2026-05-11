@@ -245,9 +245,9 @@ func tableInnerSlots(frame Region, tier LayoutTier) TableInnerSlots {
 			Height: defaultStartingHandSize,
 		},
 		WestPond: Region{
-			X:      inner.X + 5,
+			X:      inner.X + 4,
 			Y:      inner.Y + tableSidePondY(inner.Height),
-			Width:  12,
+			Width:  18,
 			Height: tableSidePondRows(tier),
 		},
 		Dial: Region{
@@ -257,9 +257,9 @@ func tableInnerSlots(frame Region, tier LayoutTier) TableInnerSlots {
 			Height: 1,
 		},
 		EastPond: Region{
-			X:      inner.X + inner.Width - 17,
+			X:      inner.X + inner.Width - 22,
 			Y:      inner.Y + tableSidePondY(inner.Height),
-			Width:  12,
+			Width:  18,
 			Height: tableSidePondRows(tier),
 		},
 		EastWall: Region{

@@ -230,6 +230,25 @@ func TestRenderFrameTableContainsNoPlayerText(t *testing.T) {
 	require.NotContains(t, table, "·")
 }
 
+func TestRenderFrameDiscardsStayInEachSeatPond(t *testing.T) {
+	scr := makeSimScreen(t, 120, 36)
+	view := newWaitingTableView()
+	view.Players[view.SeatIndex].Discards = []string{"m1"}
+	view.Players[relativeSeatIndex(view.SeatIndex, SeatPosLeft)].Discards = []string{"p2"}
+	view.Players[relativeSeatIndex(view.SeatIndex, SeatPosTop)].Discards = []string{"s3"}
+	view.Players[relativeSeatIndex(view.SeatIndex, SeatPosRight)].Discards = []string{"m9"}
+	layout, ok := CalcLayout(120, 36)
+	require.True(t, ok)
+
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeEmoji})
+	scr.Show()
+
+	require.Contains(t, screenRegionText(scr, layout.Slots.SouthPond), TileGlyph("m1"))
+	require.Contains(t, screenRegionText(scr, layout.Slots.WestPond), TileGlyph("p2"))
+	require.Contains(t, screenRegionText(scr, layout.Slots.NorthPond), TileGlyph("s3"))
+	require.Contains(t, screenRegionText(scr, layout.Slots.EastPond), TileGlyph("m9"))
+}
+
 func TestRenderFrameSingleFrameOnly(t *testing.T) {
 	scr := makeSimScreen(t, 120, 36)
 	view := richTableView()

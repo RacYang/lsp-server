@@ -56,6 +56,19 @@ func (g exchangeGateway) ExchangeThree(_ context.Context, tiles []string, _ int3
 	return g.err
 }
 
+type queMenGateway struct {
+	stubTableGateway
+	suits chan int32
+}
+
+func (g queMenGateway) QueMen(_ context.Context, suit int32) error {
+	select {
+	case g.suits <- suit:
+	default:
+	}
+	return nil
+}
+
 // TestHandleOverlayKeyEnterClosesNonMenuOverlay 验证非菜单浮窗（房间信息 / 玩家详情）
 // 下按 Enter 会被当成"关闭",避免出现"Enter 在所有情景下都没反应"的疑惑。
 func TestHandleOverlayKeyEnterClosesNonMenuOverlay(t *testing.T) {
@@ -260,5 +273,52 @@ func TestSubmitExchangeRemovesTilesLocally(t *testing.T) {
 		require.Equal(t, []string{"m1", "m9", "p1"}, got)
 	case <-time.After(time.Second):
 		t.Fatal("expected exchange request")
+	}
+}
+
+func TestHandleTableKeyEnterMarksExchangeTileBeforeSubmit(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "r1"
+		v.SeatIndex = 0
+		v.WaitingAction = "exchange_three"
+		v.Players[0].Hand = []string{"m1", "m2", "m3", "p1"}
+		v.Players[0].HandCnt = 4
+	})
+	cursor := &HandCursor{Mode: CursorModeMulti3, Index: 1}
+	overlay := &OverlayState{}
+	theme := TileThemeUnicode
+	cfg := &Config{}
+
+	res := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), state, stubTableGateway{}, cursor, overlay, nil, &theme, cfg, nil)
+
+	require.Nil(t, res.exit)
+	require.Equal(t, []int{1}, cursor.Marked)
+	require.False(t, cursor.Pending)
+}
+
+func TestHandleTableKeyNumericQueMen(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "r1"
+		v.SeatIndex = 0
+		v.WaitingAction = "que_men"
+	})
+	cursor := &HandCursor{}
+	overlay := &OverlayState{}
+	theme := TileThemeUnicode
+	cfg := &Config{}
+	gw := queMenGateway{suits: make(chan int32, 1)}
+
+	res := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyRune, '2', tcell.ModNone), state, gw, cursor, overlay, nil, &theme, cfg, nil)
+
+	require.Nil(t, res.exit)
+	select {
+	case got := <-gw.suits:
+		require.Equal(t, int32(1), got)
+	case <-time.After(time.Second):
+		t.Fatal("expected QueMen request")
 	}
 }

@@ -181,23 +181,23 @@ func overlayPlayersLines(view RoomView) []string {
 func overlayHelpLines(view RoomView) []string {
 	phase := DerivePhase(view, nil)
 	lines := []string{
-		"←→ 选牌    Enter 出牌 / 确认",
-		"换三张: 空格标记三张,Enter 提交",
-		"定缺: m 万 / p 筒 / s 条",
+		"←→ 选牌    回车 出牌 / 确认",
+		"换三张: 回车标记三张,再按回车提交",
+		"定缺: 1 缺万 / 2 缺筒 / 3 缺条",
 		"碰杠胡: p 碰 / g 杠 / h 胡 / n 过",
 		"机器人: waiting 阶段 b 补一个 / B 补满",
 		"信息: i 房间信息 / Tab 玩家详情",
 		"离桌: q 返回大厅 / Esc 菜单",
 		"",
-		"按 ? 或 Enter 关闭",
+		"按 ? 或回车关闭",
 	}
 	switch phase {
 	case PhaseClaim:
-		lines = append([]string{"当前模式: -- 鸣牌 --", "P 跳过 / Enter 确认", ""}, lines...)
+		lines = append([]string{"当前模式: -- 鸣牌 --", "P 跳过 / 回车确认", ""}, lines...)
 	case PhaseExchange:
-		lines = append([]string{"当前模式: -- 换三张 --", "Space 标记三张 / Enter 提交", ""}, lines...)
+		lines = append([]string{"当前模式: -- 换三张 --", "回车标记三张 / 回车提交", ""}, lines...)
 	case PhaseSettlement:
-		lines = append([]string{"当前模式: -- 结算 --", "R 再来一局 / L 离桌 / Enter 停留", ""}, lines...)
+		lines = append([]string{"当前模式: -- 结算 --", "R 再来一局 / L 离桌 / 回车停留", ""}, lines...)
 	}
 	return lines
 }
