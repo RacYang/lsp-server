@@ -66,3 +66,4 @@
 - [ADR-0041 麻将规则 ID 命名规范](0041-mahjong-rule-id-naming.md)：已采纳；统一 `<region>_<variant>_<option>` 全拼音规则 ID，并禁止缩写与混合语言。
 - [ADR-0042 Agent 治理体系职责边界](0042-agent-governance.md)：已采纳；定义 AGENTS、ADR、rules、skills、templates 与 harness 的职责边界。
 - [ADR-0043 根因优先的问题处理策略](0043-root-cause-fix-policy.md)：已采纳；定义查问题与修问题必须先解释根因、拒绝补丁式修复。
+- [ADR-0044 房间状态与前后端交互契约](0044-room-state-and-client-contract.md)：已采纳；统一 RoomLifecycle、RoundProgress、SeatRoster、RoundFacts 与 UXTransient 的命名、投影和传输边界。

@@ -2,6 +2,18 @@
 
 本文面向后端实现 agent。当前 `lsp-cli` 全屏 TUI 首版所需的阻塞契约已经补齐：规则列表、结构化最后动作、结构化副露、权威剩牌数、行动 deadline、座位在线/托管状态、局号与累计分都已具备前端消费入口。
 
+## 0. 状态事实分层
+
+TUI 与后端交互遵循 [ADR-0044](adr/0044-room-state-and-client-contract.md)：
+
+- `RoomLifecycle` 来自房间 FSM，仅用于等待、准备、对局、结算和关闭等宏观状态。
+- `RoundProgress` 来自 room service 统一 projector，TUI 用 `phase`、`acting_seats`、`available_actions` 和 `waiting_action` 决定可见提示与输入许可。
+- `SeatRoster` 只来自服务端 `SeatInfo`，TUI 不改写 bot、ready、online、auto_play 或 status。
+- `RoundFacts` 包含手牌、牌河、副露、最近动作、规则元数据和结算事实，TUI 不从日志文本或最后一张弃牌反推。
+- `UXTransient` 包含光标、pending、notice、布局焦点和中文文案，可丢弃、可重建、不可持久化，也不得写回协议事实。
+
+本地模式与集群模式必须向 TUI 暴露等价的 `client.v1` 事实。gate 与 gateway 只转换字段，不创造下一行动者、座位状态或 UI 阶段。
+
 ## 1. 分类标准
 
 - **A 类**:阻塞前端启动。没有这些契约，玩家关键路径不能按设计实现。
@@ -40,13 +52,13 @@
 
 ### B2. `SeatInfo.status` 枚举固化
 
-- **现状**:`SeatInfo.status` 是字符串，前端需要猜测合法值。
+- **现状**:`SeatInfo.status` 仍是字符串，但协议文档已按 ADR-0044 固化当前值域；是否升级为 enum 另开协议演进。
 - **玩家场景**:座位状态需要稳定显示为空座、在线、离线、托管、投降、已胡。
 - **建议契约**:
-  - 新增 `SeatStatus` enum，或在协议文档中固化字符串集合。
-  - 建议值：`empty`、`online`、`offline`、`auto_play`、`surrendered`、`hu`。
+  - 后续可新增 `SeatStatus` enum，但不能直接替换现有字段编号。
+  - 当前字符串值域：`empty`、`online`、`offline`、`auto_play`、`surrendered`、`hu`、`ready`。
 - **前端消费方式**:座位图和牌桌四角显示密度块与短标签。
-- **临时降级**:优先使用 `online`、`auto_play`、`is_bot`、`surrendered` 布尔字段，`status` 只作日志辅助。
+- **临时降级**:未知值按通用在线/离线展示，但不得改写原始 `SeatInfo`。
 
 ### B3. `RoomMeta.stage` 玩家可读化
 

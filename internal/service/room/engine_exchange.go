@@ -74,17 +74,17 @@ func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, d
 	for i := range rs.exchangeSelection {
 		rs.exchangeSelection[i] = nil
 	}
+	rs.waitingQueMen = true
+	progress := rs.roundProgress()
 	exchangePayload, err := marshalExchangeThreeDoneEnvelope(
 		receivedTiles,
 		nil,
 		rs.exchangeDirection,
-		int64(rs.step),
-		pendingSeats(rs.queSubmitted),
+		progress,
 	)
 	if err != nil {
 		return nil, err
 	}
-	rs.waitingQueMen = true
 	project := func(target Seat) []byte {
 		if !target.Valid() {
 			return nil
@@ -94,8 +94,7 @@ func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, d
 			seatTiles,
 			exchangedAwayBySeat[target],
 			rs.exchangeDirection,
-			int64(rs.step),
-			pendingSeats(rs.queSubmitted),
+			progress,
 		)
 		if err != nil {
 			return nil
@@ -112,18 +111,17 @@ func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, d
 	return append(out, rs.promptSeatActions("que_men")...), nil
 }
 
-func marshalExchangeThreeDoneEnvelope(receivedTiles []*clientv1.SeatTiles, exchangedAway []string, direction int32, step int64, actingSeats []int32) ([]byte, error) {
+func marshalExchangeThreeDoneEnvelope(receivedTiles []*clientv1.SeatTiles, exchangedAway []string, direction int32, progress RoundProgress) ([]byte, error) {
+	done := &clientv1.ExchangeThreeDoneNotify{
+		PerSeat:           receivedTiles,
+		Direction:         direction,
+		YourExchangedAway: exchangedAway,
+	}
+	progress.applyToExchangeDone(done)
 	return marshalEnvelope(&clientv1.Envelope{
 		ReqId: "exchange",
 		Body: &clientv1.Envelope_ExchangeThreeDone{
-			ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-				PerSeat:           receivedTiles,
-				Direction:         direction,
-				Phase:             clientv1.Phase_PHASE_QUE_MEN,
-				Step:              step,
-				ActingSeats:       actingSeats,
-				YourExchangedAway: exchangedAway,
-			},
+			ExchangeThreeDone: done,
 		},
 	})
 }
@@ -176,18 +174,18 @@ func (rs *RoundState) hasOpeningStep(step string) bool {
 
 func (rs *RoundState) promptSeatActions(action string) []Notification {
 	out := make([]Notification, 0, 4)
+	progress := rs.roundProgress()
 	for seat := 0; seat < 4; seat++ {
 		seatIndex := SeatFromInt(seat).Proto()
+		notify := &clientv1.ActionNotify{
+			SeatIndex: seatIndex,
+			Action:    action,
+		}
+		progress.applyToAction(notify)
 		payload, err := marshalEnvelope(&clientv1.Envelope{
 			ReqId: fmt.Sprintf("%s-%d", action, seat),
 			Body: &clientv1.Envelope_Action{
-				Action: &clientv1.ActionNotify{
-					SeatIndex:   seatIndex,
-					Action:      action,
-					Phase:       rs.phase(),
-					Step:        int64(rs.step),
-					ActingSeats: rs.actingSeats(),
-				},
+				Action: notify,
 			},
 		})
 		if err != nil {

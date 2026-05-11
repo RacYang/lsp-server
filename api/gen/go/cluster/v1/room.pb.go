@@ -21,6 +21,77 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Phase 与 client.v1.Phase 保持同编号语义，用于保证本地与集群下行等价。
+type Phase int32
+
+const (
+	Phase_PHASE_UNSPECIFIED Phase = 0
+	Phase_PHASE_LOBBY       Phase = 1
+	Phase_PHASE_EXCHANGE    Phase = 2
+	Phase_PHASE_QUE_MEN     Phase = 3
+	Phase_PHASE_DRAW        Phase = 4
+	Phase_PHASE_DISCARD     Phase = 5
+	Phase_PHASE_CLAIM       Phase = 6
+	Phase_PHASE_TSUMO       Phase = 7
+	Phase_PHASE_SETTLE      Phase = 8
+	Phase_PHASE_CLOSED      Phase = 9
+)
+
+// Enum value maps for Phase.
+var (
+	Phase_name = map[int32]string{
+		0: "PHASE_UNSPECIFIED",
+		1: "PHASE_LOBBY",
+		2: "PHASE_EXCHANGE",
+		3: "PHASE_QUE_MEN",
+		4: "PHASE_DRAW",
+		5: "PHASE_DISCARD",
+		6: "PHASE_CLAIM",
+		7: "PHASE_TSUMO",
+		8: "PHASE_SETTLE",
+		9: "PHASE_CLOSED",
+	}
+	Phase_value = map[string]int32{
+		"PHASE_UNSPECIFIED": 0,
+		"PHASE_LOBBY":       1,
+		"PHASE_EXCHANGE":    2,
+		"PHASE_QUE_MEN":     3,
+		"PHASE_DRAW":        4,
+		"PHASE_DISCARD":     5,
+		"PHASE_CLAIM":       6,
+		"PHASE_TSUMO":       7,
+		"PHASE_SETTLE":      8,
+		"PHASE_CLOSED":      9,
+	}
+)
+
+func (x Phase) Enum() *Phase {
+	p := new(Phase)
+	*p = x
+	return p
+}
+
+func (x Phase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Phase) Descriptor() protoreflect.EnumDescriptor {
+	return file_cluster_v1_room_proto_enumTypes[0].Descriptor()
+}
+
+func (Phase) Type() protoreflect.EnumType {
+	return &file_cluster_v1_room_proto_enumTypes[0]
+}
+
+func (x Phase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Phase.Descriptor instead.
+func (Phase) EnumDescriptor() ([]byte, []int) {
+	return file_cluster_v1_room_proto_rawDescGZIP(), []int{0}
+}
+
 type ApplyEventRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	RoomId string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
@@ -457,6 +528,9 @@ type SnapshotRoomResponse struct {
 	HandIndex        int32                  `protobuf:"varint,20,opt,name=hand_index,json=handIndex,proto3" json:"hand_index,omitempty"`
 	TotalScores      []*SeatScore           `protobuf:"bytes,21,rep,name=total_scores,json=totalScores,proto3" json:"total_scores,omitempty"`
 	RuleMeta         *RuleMeta              `protobuf:"bytes,22,opt,name=rule_meta,json=ruleMeta,proto3" json:"rule_meta,omitempty"`
+	Phase            Phase                  `protobuf:"varint,23,opt,name=phase,proto3,enum=cluster.v1.Phase" json:"phase,omitempty"`
+	ActingSeats      []int32                `protobuf:"varint,24,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
+	LastStep         int64                  `protobuf:"varint,25,opt,name=last_step,json=lastStep,proto3" json:"last_step,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -645,6 +719,27 @@ func (x *SnapshotRoomResponse) GetRuleMeta() *RuleMeta {
 	return nil
 }
 
+func (x *SnapshotRoomResponse) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *SnapshotRoomResponse) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
+func (x *SnapshotRoomResponse) GetLastStep() int64 {
+	if x != nil {
+		return x.LastStep
+	}
+	return 0
+}
+
 type SeatInfo struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex        int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
@@ -657,6 +752,7 @@ type SeatInfo struct {
 	DisconnectedAtMs int64                  `protobuf:"varint,8,opt,name=disconnected_at_ms,json=disconnectedAtMs,proto3" json:"disconnected_at_ms,omitempty"`
 	Status           string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
 	TotalScore       int32                  `protobuf:"varint,10,opt,name=total_score,json=totalScore,proto3" json:"total_score,omitempty"`
+	HandCount        int32                  `protobuf:"varint,11,opt,name=hand_count,json=handCount,proto3" json:"hand_count,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -757,6 +853,13 @@ func (x *SeatInfo) GetStatus() string {
 func (x *SeatInfo) GetTotalScore() int32 {
 	if x != nil {
 		return x.TotalScore
+	}
+	return 0
+}
+
+func (x *SeatInfo) GetHandCount() int32 {
+	if x != nil {
+		return x.HandCount
 	}
 	return 0
 }
@@ -1297,6 +1400,13 @@ func (x *QueMenEvent) GetSuit() int32 {
 type StartGameEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DealerSeat    int32                  `protobuf:"varint,1,opt,name=dealer_seat,json=dealerSeat,proto3" json:"dealer_seat,omitempty"`
+	Phase         Phase                  `protobuf:"varint,2,opt,name=phase,proto3,enum=cluster.v1.Phase" json:"phase,omitempty"`
+	Step          int64                  `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32                `protobuf:"varint,4,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
+	WallRemaining int32                  `protobuf:"varint,5,opt,name=wall_remaining,json=wallRemaining,proto3" json:"wall_remaining,omitempty"`
+	RoundIndex    int32                  `protobuf:"varint,6,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"`
+	HandIndex     int32                  `protobuf:"varint,7,opt,name=hand_index,json=handIndex,proto3" json:"hand_index,omitempty"`
+	RuleMeta      *RuleMeta              `protobuf:"bytes,8,opt,name=rule_meta,json=ruleMeta,proto3" json:"rule_meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1338,10 +1448,60 @@ func (x *StartGameEvent) GetDealerSeat() int32 {
 	return 0
 }
 
+func (x *StartGameEvent) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *StartGameEvent) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *StartGameEvent) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
+func (x *StartGameEvent) GetWallRemaining() int32 {
+	if x != nil {
+		return x.WallRemaining
+	}
+	return 0
+}
+
+func (x *StartGameEvent) GetRoundIndex() int32 {
+	if x != nil {
+		return x.RoundIndex
+	}
+	return 0
+}
+
+func (x *StartGameEvent) GetHandIndex() int32 {
+	if x != nil {
+		return x.HandIndex
+	}
+	return 0
+}
+
+func (x *StartGameEvent) GetRuleMeta() *RuleMeta {
+	if x != nil {
+		return x.RuleMeta
+	}
+	return nil
+}
+
 type InitialDealEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
 	Tiles         []string               `protobuf:"bytes,2,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	Step          int64                  `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1390,12 +1550,22 @@ func (x *InitialDealEvent) GetTiles() []string {
 	return nil
 }
 
+func (x *InitialDealEvent) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
 type DrawTileEvent struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex      int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
 	Tile           string                 `protobuf:"bytes,2,opt,name=tile,proto3" json:"tile,omitempty"`
 	WallRemaining  int32                  `protobuf:"varint,3,opt,name=wall_remaining,json=wallRemaining,proto3" json:"wall_remaining,omitempty"`
 	DeadlineUnixMs int64                  `protobuf:"varint,4,opt,name=deadline_unix_ms,json=deadlineUnixMs,proto3" json:"deadline_unix_ms,omitempty"`
+	Phase          Phase                  `protobuf:"varint,5,opt,name=phase,proto3,enum=cluster.v1.Phase" json:"phase,omitempty"`
+	Step           int64                  `protobuf:"varint,6,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats    []int32                `protobuf:"varint,7,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1458,6 +1628,27 @@ func (x *DrawTileEvent) GetDeadlineUnixMs() int64 {
 	return 0
 }
 
+func (x *DrawTileEvent) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *DrawTileEvent) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *DrawTileEvent) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
 type ActionEvent struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex      int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
@@ -1466,6 +1657,9 @@ type ActionEvent struct {
 	Detail         *ActionDetail          `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
 	WallRemaining  int32                  `protobuf:"varint,5,opt,name=wall_remaining,json=wallRemaining,proto3" json:"wall_remaining,omitempty"`
 	DeadlineUnixMs int64                  `protobuf:"varint,6,opt,name=deadline_unix_ms,json=deadlineUnixMs,proto3" json:"deadline_unix_ms,omitempty"`
+	Phase          Phase                  `protobuf:"varint,7,opt,name=phase,proto3,enum=cluster.v1.Phase" json:"phase,omitempty"`
+	Step           int64                  `protobuf:"varint,8,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats    []int32                `protobuf:"varint,9,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1540,6 +1734,27 @@ func (x *ActionEvent) GetDeadlineUnixMs() int64 {
 		return x.DeadlineUnixMs
 	}
 	return 0
+}
+
+func (x *ActionEvent) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *ActionEvent) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *ActionEvent) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
 }
 
 type SettlementEvent struct {
@@ -1654,6 +1869,10 @@ type ExchangeThreeDoneEvent struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	SeatTiles         []*SeatTiles           `protobuf:"bytes,1,rep,name=seat_tiles,json=seatTiles,proto3" json:"seat_tiles,omitempty"`
 	YourExchangedAway []string               `protobuf:"bytes,2,rep,name=your_exchanged_away,json=yourExchangedAway,proto3" json:"your_exchanged_away,omitempty"`
+	Phase             Phase                  `protobuf:"varint,3,opt,name=phase,proto3,enum=cluster.v1.Phase" json:"phase,omitempty"`
+	Step              int64                  `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats       []int32                `protobuf:"varint,5,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
+	Direction         int32                  `protobuf:"varint,6,opt,name=direction,proto3" json:"direction,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1702,9 +1921,40 @@ func (x *ExchangeThreeDoneEvent) GetYourExchangedAway() []string {
 	return nil
 }
 
+func (x *ExchangeThreeDoneEvent) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *ExchangeThreeDoneEvent) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *ExchangeThreeDoneEvent) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
+	}
+	return nil
+}
+
+func (x *ExchangeThreeDoneEvent) GetDirection() int32 {
+	if x != nil {
+		return x.Direction
+	}
+	return 0
+}
+
 type QueMenDoneEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	QueSuitBySeat []int32                `protobuf:"varint,1,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
+	Phase         Phase                  `protobuf:"varint,2,opt,name=phase,proto3,enum=cluster.v1.Phase" json:"phase,omitempty"`
+	Step          int64                  `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32                `protobuf:"varint,4,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1742,6 +1992,27 @@ func (*QueMenDoneEvent) Descriptor() ([]byte, []int) {
 func (x *QueMenDoneEvent) GetQueSuitBySeat() []int32 {
 	if x != nil {
 		return x.QueSuitBySeat
+	}
+	return nil
+}
+
+func (x *QueMenDoneEvent) GetPhase() Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return Phase_PHASE_UNSPECIFIED
+}
+
+func (x *QueMenDoneEvent) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *QueMenDoneEvent) GetActingSeats() []int32 {
+	if x != nil {
+		return x.ActingSeats
 	}
 	return nil
 }
@@ -2534,7 +2805,7 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\fsince_cursor\x18\x02 \x01(\tR\vsinceCursor\"G\n" +
 	"\x13SnapshotRoomRequest\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\"\xd0\a\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\"\xb9\b\n" +
 	"\x14SnapshotRoomResponse\x12\x16\n" +
 	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12\x1d\n" +
 	"\n" +
@@ -2563,7 +2834,10 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\n" +
 	"hand_index\x18\x14 \x01(\x05R\thandIndex\x128\n" +
 	"\ftotal_scores\x18\x15 \x03(\v2\x15.cluster.v1.SeatScoreR\vtotalScores\x121\n" +
-	"\trule_meta\x18\x16 \x01(\v2\x14.cluster.v1.RuleMetaR\bruleMeta\"\xb3\x02\n" +
+	"\trule_meta\x18\x16 \x01(\v2\x14.cluster.v1.RuleMetaR\bruleMeta\x12'\n" +
+	"\x05phase\x18\x17 \x01(\x0e2\x11.cluster.v1.PhaseR\x05phase\x12!\n" +
+	"\facting_seats\x18\x18 \x03(\x05R\vactingSeats\x12\x1b\n" +
+	"\tlast_step\x18\x19 \x01(\x03R\blastStep\"\xd2\x02\n" +
 	"\bSeatInfo\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x17\n" +
@@ -2577,7 +2851,9 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\x06status\x18\t \x01(\tR\x06status\x12\x1f\n" +
 	"\vtotal_score\x18\n" +
 	" \x01(\x05R\n" +
-	"totalScore\"\x87\x05\n" +
+	"totalScore\x12\x1d\n" +
+	"\n" +
+	"hand_count\x18\v \x01(\x05R\thandCount\"\x87\x05\n" +
 	"\x1fRoomServiceStreamEventsResponse\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12;\n" +
 	"\n" +
@@ -2610,20 +2886,33 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\x05tiles\x18\x01 \x03(\tR\x05tiles\x12\x1c\n" +
 	"\tdirection\x18\x02 \x01(\x05R\tdirection\"!\n" +
 	"\vQueMenEvent\x12\x12\n" +
-	"\x04suit\x18\x01 \x01(\x05R\x04suit\"1\n" +
+	"\x04suit\x18\x01 \x01(\x05R\x04suit\"\xab\x02\n" +
 	"\x0eStartGameEvent\x12\x1f\n" +
 	"\vdealer_seat\x18\x01 \x01(\x05R\n" +
-	"dealerSeat\"G\n" +
+	"dealerSeat\x12'\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x11.cluster.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x03 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x04 \x03(\x05R\vactingSeats\x12%\n" +
+	"\x0ewall_remaining\x18\x05 \x01(\x05R\rwallRemaining\x12\x1f\n" +
+	"\vround_index\x18\x06 \x01(\x05R\n" +
+	"roundIndex\x12\x1d\n" +
+	"\n" +
+	"hand_index\x18\a \x01(\x05R\thandIndex\x121\n" +
+	"\trule_meta\x18\b \x01(\v2\x14.cluster.v1.RuleMetaR\bruleMeta\"[\n" +
 	"\x10InitialDealEvent\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x14\n" +
-	"\x05tiles\x18\x02 \x03(\tR\x05tiles\"\x93\x01\n" +
+	"\x05tiles\x18\x02 \x03(\tR\x05tiles\x12\x12\n" +
+	"\x04step\x18\x03 \x01(\x03R\x04step\"\xf3\x01\n" +
 	"\rDrawTileEvent\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x12\n" +
 	"\x04tile\x18\x02 \x01(\tR\x04tile\x12%\n" +
 	"\x0ewall_remaining\x18\x03 \x01(\x05R\rwallRemaining\x12(\n" +
-	"\x10deadline_unix_ms\x18\x04 \x01(\x03R\x0edeadlineUnixMs\"\xdb\x01\n" +
+	"\x10deadline_unix_ms\x18\x04 \x01(\x03R\x0edeadlineUnixMs\x12'\n" +
+	"\x05phase\x18\x05 \x01(\x0e2\x11.cluster.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x06 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\a \x03(\x05R\vactingSeats\"\xbb\x02\n" +
 	"\vActionEvent\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x16\n" +
@@ -2631,7 +2920,10 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"\x04tile\x18\x03 \x01(\tR\x04tile\x120\n" +
 	"\x06detail\x18\x04 \x01(\v2\x18.cluster.v1.ActionDetailR\x06detail\x12%\n" +
 	"\x0ewall_remaining\x18\x05 \x01(\x05R\rwallRemaining\x12(\n" +
-	"\x10deadline_unix_ms\x18\x06 \x01(\x03R\x0edeadlineUnixMs\"\xaf\x03\n" +
+	"\x10deadline_unix_ms\x18\x06 \x01(\x03R\x0edeadlineUnixMs\x12'\n" +
+	"\x05phase\x18\a \x01(\x0e2\x11.cluster.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\b \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\t \x03(\x05R\vactingSeats\"\xaf\x03\n" +
 	"\x0fSettlementEvent\x12&\n" +
 	"\x0fwinner_user_ids\x18\x01 \x03(\tR\rwinnerUserIds\x12\x1b\n" +
 	"\ttotal_fan\x18\x02 \x01(\x05R\btotalFan\x12\x1f\n" +
@@ -2645,13 +2937,20 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"roundIndex\x12\x1d\n" +
 	"\n" +
 	"hand_index\x18\b \x01(\x05R\thandIndex\x128\n" +
-	"\ftotal_scores\x18\t \x03(\v2\x15.cluster.v1.SeatScoreR\vtotalScores\"~\n" +
+	"\ftotal_scores\x18\t \x03(\v2\x15.cluster.v1.SeatScoreR\vtotalScores\"\xfc\x01\n" +
 	"\x16ExchangeThreeDoneEvent\x124\n" +
 	"\n" +
 	"seat_tiles\x18\x01 \x03(\v2\x15.cluster.v1.SeatTilesR\tseatTiles\x12.\n" +
-	"\x13your_exchanged_away\x18\x02 \x03(\tR\x11yourExchangedAway\":\n" +
+	"\x13your_exchanged_away\x18\x02 \x03(\tR\x11yourExchangedAway\x12'\n" +
+	"\x05phase\x18\x03 \x01(\x0e2\x11.cluster.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x04 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x05 \x03(\x05R\vactingSeats\x12\x1c\n" +
+	"\tdirection\x18\x06 \x01(\x05R\tdirection\"\x9a\x01\n" +
 	"\x0fQueMenDoneEvent\x12'\n" +
-	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"C\n" +
+	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\x12'\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x11.cluster.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\x03 \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\x04 \x03(\x05R\vactingSeats\"C\n" +
 	"\x12RouteRedirectEvent\x12\x15\n" +
 	"\x06ws_url\x18\x01 \x01(\tR\x05wsUrl\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"@\n" +
@@ -2720,7 +3019,19 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x10\n" +
 	"\x03fan\x18\x03 \x01(\x05R\x03fan\x12\x1b\n" +
-	"\tfan_names\x18\x04 \x03(\tR\bfanNames2\x8d\x02\n" +
+	"\tfan_names\x18\x04 \x03(\tR\bfanNames*\xbf\x01\n" +
+	"\x05Phase\x12\x15\n" +
+	"\x11PHASE_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vPHASE_LOBBY\x10\x01\x12\x12\n" +
+	"\x0ePHASE_EXCHANGE\x10\x02\x12\x11\n" +
+	"\rPHASE_QUE_MEN\x10\x03\x12\x0e\n" +
+	"\n" +
+	"PHASE_DRAW\x10\x04\x12\x11\n" +
+	"\rPHASE_DISCARD\x10\x05\x12\x0f\n" +
+	"\vPHASE_CLAIM\x10\x06\x12\x0f\n" +
+	"\vPHASE_TSUMO\x10\a\x12\x10\n" +
+	"\fPHASE_SETTLE\x10\b\x12\x10\n" +
+	"\fPHASE_CLOSED\x10\t2\x8d\x02\n" +
 	"\vRoomService\x12K\n" +
 	"\n" +
 	"ApplyEvent\x12\x1d.cluster.v1.ApplyEventRequest\x1a\x1e.cluster.v1.ApplyEventResponse\x12^\n" +
@@ -2739,87 +3050,96 @@ func file_cluster_v1_room_proto_rawDescGZIP() []byte {
 	return file_cluster_v1_room_proto_rawDescData
 }
 
+var file_cluster_v1_room_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_cluster_v1_room_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_cluster_v1_room_proto_goTypes = []any{
-	(*ApplyEventRequest)(nil),               // 0: cluster.v1.ApplyEventRequest
-	(*ApplyEventResponse)(nil),              // 1: cluster.v1.ApplyEventResponse
-	(*LeaveEvent)(nil),                      // 2: cluster.v1.LeaveEvent
-	(*StreamEventsRequest)(nil),             // 3: cluster.v1.StreamEventsRequest
-	(*SnapshotRoomRequest)(nil),             // 4: cluster.v1.SnapshotRoomRequest
-	(*SnapshotRoomResponse)(nil),            // 5: cluster.v1.SnapshotRoomResponse
-	(*SeatInfo)(nil),                        // 6: cluster.v1.SeatInfo
-	(*RoomServiceStreamEventsResponse)(nil), // 7: cluster.v1.RoomServiceStreamEventsResponse
-	(*ReadyEvent)(nil),                      // 8: cluster.v1.ReadyEvent
-	(*DiscardEvent)(nil),                    // 9: cluster.v1.DiscardEvent
-	(*PongEvent)(nil),                       // 10: cluster.v1.PongEvent
-	(*GangEvent)(nil),                       // 11: cluster.v1.GangEvent
-	(*HuEvent)(nil),                         // 12: cluster.v1.HuEvent
-	(*PassEvent)(nil),                       // 13: cluster.v1.PassEvent
-	(*ExchangeThreeEvent)(nil),              // 14: cluster.v1.ExchangeThreeEvent
-	(*QueMenEvent)(nil),                     // 15: cluster.v1.QueMenEvent
-	(*StartGameEvent)(nil),                  // 16: cluster.v1.StartGameEvent
-	(*InitialDealEvent)(nil),                // 17: cluster.v1.InitialDealEvent
-	(*DrawTileEvent)(nil),                   // 18: cluster.v1.DrawTileEvent
-	(*ActionEvent)(nil),                     // 19: cluster.v1.ActionEvent
-	(*SettlementEvent)(nil),                 // 20: cluster.v1.SettlementEvent
-	(*ExchangeThreeDoneEvent)(nil),          // 21: cluster.v1.ExchangeThreeDoneEvent
-	(*QueMenDoneEvent)(nil),                 // 22: cluster.v1.QueMenDoneEvent
-	(*RouteRedirectEvent)(nil),              // 23: cluster.v1.RouteRedirectEvent
-	(*SeatTiles)(nil),                       // 24: cluster.v1.SeatTiles
-	(*RuleMeta)(nil),                        // 25: cluster.v1.RuleMeta
-	(*ActionDetail)(nil),                    // 26: cluster.v1.ActionDetail
-	(*LastActionInfo)(nil),                  // 27: cluster.v1.LastActionInfo
-	(*MeldInfo)(nil),                        // 28: cluster.v1.MeldInfo
-	(*SeatMelds)(nil),                       // 29: cluster.v1.SeatMelds
-	(*ClaimCandidate)(nil),                  // 30: cluster.v1.ClaimCandidate
-	(*SeatScore)(nil),                       // 31: cluster.v1.SeatScore
-	(*PenaltyItem)(nil),                     // 32: cluster.v1.PenaltyItem
-	(*WinnerBreakdown)(nil),                 // 33: cluster.v1.WinnerBreakdown
+	(Phase)(0),                              // 0: cluster.v1.Phase
+	(*ApplyEventRequest)(nil),               // 1: cluster.v1.ApplyEventRequest
+	(*ApplyEventResponse)(nil),              // 2: cluster.v1.ApplyEventResponse
+	(*LeaveEvent)(nil),                      // 3: cluster.v1.LeaveEvent
+	(*StreamEventsRequest)(nil),             // 4: cluster.v1.StreamEventsRequest
+	(*SnapshotRoomRequest)(nil),             // 5: cluster.v1.SnapshotRoomRequest
+	(*SnapshotRoomResponse)(nil),            // 6: cluster.v1.SnapshotRoomResponse
+	(*SeatInfo)(nil),                        // 7: cluster.v1.SeatInfo
+	(*RoomServiceStreamEventsResponse)(nil), // 8: cluster.v1.RoomServiceStreamEventsResponse
+	(*ReadyEvent)(nil),                      // 9: cluster.v1.ReadyEvent
+	(*DiscardEvent)(nil),                    // 10: cluster.v1.DiscardEvent
+	(*PongEvent)(nil),                       // 11: cluster.v1.PongEvent
+	(*GangEvent)(nil),                       // 12: cluster.v1.GangEvent
+	(*HuEvent)(nil),                         // 13: cluster.v1.HuEvent
+	(*PassEvent)(nil),                       // 14: cluster.v1.PassEvent
+	(*ExchangeThreeEvent)(nil),              // 15: cluster.v1.ExchangeThreeEvent
+	(*QueMenEvent)(nil),                     // 16: cluster.v1.QueMenEvent
+	(*StartGameEvent)(nil),                  // 17: cluster.v1.StartGameEvent
+	(*InitialDealEvent)(nil),                // 18: cluster.v1.InitialDealEvent
+	(*DrawTileEvent)(nil),                   // 19: cluster.v1.DrawTileEvent
+	(*ActionEvent)(nil),                     // 20: cluster.v1.ActionEvent
+	(*SettlementEvent)(nil),                 // 21: cluster.v1.SettlementEvent
+	(*ExchangeThreeDoneEvent)(nil),          // 22: cluster.v1.ExchangeThreeDoneEvent
+	(*QueMenDoneEvent)(nil),                 // 23: cluster.v1.QueMenDoneEvent
+	(*RouteRedirectEvent)(nil),              // 24: cluster.v1.RouteRedirectEvent
+	(*SeatTiles)(nil),                       // 25: cluster.v1.SeatTiles
+	(*RuleMeta)(nil),                        // 26: cluster.v1.RuleMeta
+	(*ActionDetail)(nil),                    // 27: cluster.v1.ActionDetail
+	(*LastActionInfo)(nil),                  // 28: cluster.v1.LastActionInfo
+	(*MeldInfo)(nil),                        // 29: cluster.v1.MeldInfo
+	(*SeatMelds)(nil),                       // 30: cluster.v1.SeatMelds
+	(*ClaimCandidate)(nil),                  // 31: cluster.v1.ClaimCandidate
+	(*SeatScore)(nil),                       // 32: cluster.v1.SeatScore
+	(*PenaltyItem)(nil),                     // 33: cluster.v1.PenaltyItem
+	(*WinnerBreakdown)(nil),                 // 34: cluster.v1.WinnerBreakdown
 }
 var file_cluster_v1_room_proto_depIdxs = []int32{
-	8,  // 0: cluster.v1.ApplyEventRequest.ready:type_name -> cluster.v1.ReadyEvent
-	9,  // 1: cluster.v1.ApplyEventRequest.discard:type_name -> cluster.v1.DiscardEvent
-	10, // 2: cluster.v1.ApplyEventRequest.pong:type_name -> cluster.v1.PongEvent
-	11, // 3: cluster.v1.ApplyEventRequest.gang:type_name -> cluster.v1.GangEvent
-	12, // 4: cluster.v1.ApplyEventRequest.hu:type_name -> cluster.v1.HuEvent
-	14, // 5: cluster.v1.ApplyEventRequest.exchange_three:type_name -> cluster.v1.ExchangeThreeEvent
-	15, // 6: cluster.v1.ApplyEventRequest.que_men:type_name -> cluster.v1.QueMenEvent
-	13, // 7: cluster.v1.ApplyEventRequest.pass:type_name -> cluster.v1.PassEvent
-	2,  // 8: cluster.v1.ApplyEventRequest.leave:type_name -> cluster.v1.LeaveEvent
-	30, // 9: cluster.v1.SnapshotRoomResponse.claim_candidates:type_name -> cluster.v1.ClaimCandidate
-	24, // 10: cluster.v1.SnapshotRoomResponse.discards_by_seat:type_name -> cluster.v1.SeatTiles
-	24, // 11: cluster.v1.SnapshotRoomResponse.melds_by_seat:type_name -> cluster.v1.SeatTiles
-	6,  // 12: cluster.v1.SnapshotRoomResponse.seats:type_name -> cluster.v1.SeatInfo
-	27, // 13: cluster.v1.SnapshotRoomResponse.last_action:type_name -> cluster.v1.LastActionInfo
-	29, // 14: cluster.v1.SnapshotRoomResponse.meld_infos_by_seat:type_name -> cluster.v1.SeatMelds
-	31, // 15: cluster.v1.SnapshotRoomResponse.total_scores:type_name -> cluster.v1.SeatScore
-	25, // 16: cluster.v1.SnapshotRoomResponse.rule_meta:type_name -> cluster.v1.RuleMeta
-	16, // 17: cluster.v1.RoomServiceStreamEventsResponse.start_game:type_name -> cluster.v1.StartGameEvent
-	18, // 18: cluster.v1.RoomServiceStreamEventsResponse.draw_tile:type_name -> cluster.v1.DrawTileEvent
-	19, // 19: cluster.v1.RoomServiceStreamEventsResponse.action:type_name -> cluster.v1.ActionEvent
-	20, // 20: cluster.v1.RoomServiceStreamEventsResponse.settlement:type_name -> cluster.v1.SettlementEvent
-	21, // 21: cluster.v1.RoomServiceStreamEventsResponse.exchange_three_done:type_name -> cluster.v1.ExchangeThreeDoneEvent
-	22, // 22: cluster.v1.RoomServiceStreamEventsResponse.que_men_done:type_name -> cluster.v1.QueMenDoneEvent
-	23, // 23: cluster.v1.RoomServiceStreamEventsResponse.route_redirect:type_name -> cluster.v1.RouteRedirectEvent
-	17, // 24: cluster.v1.RoomServiceStreamEventsResponse.initial_deal:type_name -> cluster.v1.InitialDealEvent
-	26, // 25: cluster.v1.ActionEvent.detail:type_name -> cluster.v1.ActionDetail
-	31, // 26: cluster.v1.SettlementEvent.seat_scores:type_name -> cluster.v1.SeatScore
-	32, // 27: cluster.v1.SettlementEvent.penalties:type_name -> cluster.v1.PenaltyItem
-	33, // 28: cluster.v1.SettlementEvent.per_winner_breakdown:type_name -> cluster.v1.WinnerBreakdown
-	31, // 29: cluster.v1.SettlementEvent.total_scores:type_name -> cluster.v1.SeatScore
-	24, // 30: cluster.v1.ExchangeThreeDoneEvent.seat_tiles:type_name -> cluster.v1.SeatTiles
-	28, // 31: cluster.v1.SeatMelds.melds:type_name -> cluster.v1.MeldInfo
-	0,  // 32: cluster.v1.RoomService.ApplyEvent:input_type -> cluster.v1.ApplyEventRequest
-	3,  // 33: cluster.v1.RoomService.StreamEvents:input_type -> cluster.v1.StreamEventsRequest
-	4,  // 34: cluster.v1.RoomService.SnapshotRoom:input_type -> cluster.v1.SnapshotRoomRequest
-	1,  // 35: cluster.v1.RoomService.ApplyEvent:output_type -> cluster.v1.ApplyEventResponse
-	7,  // 36: cluster.v1.RoomService.StreamEvents:output_type -> cluster.v1.RoomServiceStreamEventsResponse
-	5,  // 37: cluster.v1.RoomService.SnapshotRoom:output_type -> cluster.v1.SnapshotRoomResponse
-	35, // [35:38] is the sub-list for method output_type
-	32, // [32:35] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	9,  // 0: cluster.v1.ApplyEventRequest.ready:type_name -> cluster.v1.ReadyEvent
+	10, // 1: cluster.v1.ApplyEventRequest.discard:type_name -> cluster.v1.DiscardEvent
+	11, // 2: cluster.v1.ApplyEventRequest.pong:type_name -> cluster.v1.PongEvent
+	12, // 3: cluster.v1.ApplyEventRequest.gang:type_name -> cluster.v1.GangEvent
+	13, // 4: cluster.v1.ApplyEventRequest.hu:type_name -> cluster.v1.HuEvent
+	15, // 5: cluster.v1.ApplyEventRequest.exchange_three:type_name -> cluster.v1.ExchangeThreeEvent
+	16, // 6: cluster.v1.ApplyEventRequest.que_men:type_name -> cluster.v1.QueMenEvent
+	14, // 7: cluster.v1.ApplyEventRequest.pass:type_name -> cluster.v1.PassEvent
+	3,  // 8: cluster.v1.ApplyEventRequest.leave:type_name -> cluster.v1.LeaveEvent
+	31, // 9: cluster.v1.SnapshotRoomResponse.claim_candidates:type_name -> cluster.v1.ClaimCandidate
+	25, // 10: cluster.v1.SnapshotRoomResponse.discards_by_seat:type_name -> cluster.v1.SeatTiles
+	25, // 11: cluster.v1.SnapshotRoomResponse.melds_by_seat:type_name -> cluster.v1.SeatTiles
+	7,  // 12: cluster.v1.SnapshotRoomResponse.seats:type_name -> cluster.v1.SeatInfo
+	28, // 13: cluster.v1.SnapshotRoomResponse.last_action:type_name -> cluster.v1.LastActionInfo
+	30, // 14: cluster.v1.SnapshotRoomResponse.meld_infos_by_seat:type_name -> cluster.v1.SeatMelds
+	32, // 15: cluster.v1.SnapshotRoomResponse.total_scores:type_name -> cluster.v1.SeatScore
+	26, // 16: cluster.v1.SnapshotRoomResponse.rule_meta:type_name -> cluster.v1.RuleMeta
+	0,  // 17: cluster.v1.SnapshotRoomResponse.phase:type_name -> cluster.v1.Phase
+	17, // 18: cluster.v1.RoomServiceStreamEventsResponse.start_game:type_name -> cluster.v1.StartGameEvent
+	19, // 19: cluster.v1.RoomServiceStreamEventsResponse.draw_tile:type_name -> cluster.v1.DrawTileEvent
+	20, // 20: cluster.v1.RoomServiceStreamEventsResponse.action:type_name -> cluster.v1.ActionEvent
+	21, // 21: cluster.v1.RoomServiceStreamEventsResponse.settlement:type_name -> cluster.v1.SettlementEvent
+	22, // 22: cluster.v1.RoomServiceStreamEventsResponse.exchange_three_done:type_name -> cluster.v1.ExchangeThreeDoneEvent
+	23, // 23: cluster.v1.RoomServiceStreamEventsResponse.que_men_done:type_name -> cluster.v1.QueMenDoneEvent
+	24, // 24: cluster.v1.RoomServiceStreamEventsResponse.route_redirect:type_name -> cluster.v1.RouteRedirectEvent
+	18, // 25: cluster.v1.RoomServiceStreamEventsResponse.initial_deal:type_name -> cluster.v1.InitialDealEvent
+	0,  // 26: cluster.v1.StartGameEvent.phase:type_name -> cluster.v1.Phase
+	26, // 27: cluster.v1.StartGameEvent.rule_meta:type_name -> cluster.v1.RuleMeta
+	0,  // 28: cluster.v1.DrawTileEvent.phase:type_name -> cluster.v1.Phase
+	27, // 29: cluster.v1.ActionEvent.detail:type_name -> cluster.v1.ActionDetail
+	0,  // 30: cluster.v1.ActionEvent.phase:type_name -> cluster.v1.Phase
+	32, // 31: cluster.v1.SettlementEvent.seat_scores:type_name -> cluster.v1.SeatScore
+	33, // 32: cluster.v1.SettlementEvent.penalties:type_name -> cluster.v1.PenaltyItem
+	34, // 33: cluster.v1.SettlementEvent.per_winner_breakdown:type_name -> cluster.v1.WinnerBreakdown
+	32, // 34: cluster.v1.SettlementEvent.total_scores:type_name -> cluster.v1.SeatScore
+	25, // 35: cluster.v1.ExchangeThreeDoneEvent.seat_tiles:type_name -> cluster.v1.SeatTiles
+	0,  // 36: cluster.v1.ExchangeThreeDoneEvent.phase:type_name -> cluster.v1.Phase
+	0,  // 37: cluster.v1.QueMenDoneEvent.phase:type_name -> cluster.v1.Phase
+	29, // 38: cluster.v1.SeatMelds.melds:type_name -> cluster.v1.MeldInfo
+	1,  // 39: cluster.v1.RoomService.ApplyEvent:input_type -> cluster.v1.ApplyEventRequest
+	4,  // 40: cluster.v1.RoomService.StreamEvents:input_type -> cluster.v1.StreamEventsRequest
+	5,  // 41: cluster.v1.RoomService.SnapshotRoom:input_type -> cluster.v1.SnapshotRoomRequest
+	2,  // 42: cluster.v1.RoomService.ApplyEvent:output_type -> cluster.v1.ApplyEventResponse
+	8,  // 43: cluster.v1.RoomService.StreamEvents:output_type -> cluster.v1.RoomServiceStreamEventsResponse
+	6,  // 44: cluster.v1.RoomService.SnapshotRoom:output_type -> cluster.v1.SnapshotRoomResponse
+	42, // [42:45] is the sub-list for method output_type
+	39, // [39:42] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_cluster_v1_room_proto_init() }
@@ -2853,13 +3173,14 @@ func file_cluster_v1_room_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cluster_v1_room_proto_rawDesc), len(file_cluster_v1_room_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_cluster_v1_room_proto_goTypes,
 		DependencyIndexes: file_cluster_v1_room_proto_depIdxs,
+		EnumInfos:         file_cluster_v1_room_proto_enumTypes,
 		MessageInfos:      file_cluster_v1_room_proto_msgTypes,
 	}.Build()
 	File_cluster_v1_room_proto = out.File

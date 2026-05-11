@@ -197,7 +197,6 @@ func (r *SceneRouter) renderRoomPrep(scr tcell.Screen, now time.Time) {
 func (r *SceneRouter) handleRoomPrepKey(ctx context.Context, ev *tcell.EventKey) {
 	switch ev.Key() {
 	case tcell.KeyEnter, tcell.KeyCtrlJ:
-		markSeatReadyLocally(r.state)
 		go func() { _ = r.tableGW.Ready(ctx) }()
 	case tcell.KeyRune:
 		switch ev.Rune() {

@@ -184,6 +184,43 @@ type RoundView struct {
 	RuleMeta          *clientv1.RuleMeta
 }
 
+// RoundProgress 是局内进度的权威投影，不承载房间生命周期或 UI 文案。
+type RoundProgress struct {
+	ActingSeat       int32
+	ActingSeats      []int32
+	WaitingAction    string
+	Phase            clientv1.Phase
+	Step             int64
+	PendingTile      string
+	AvailableActions []string
+	ClaimCandidates  []RoundClaimCandidate
+	WallRemaining    int32
+	DeadlineUnixMs   int64
+}
+
+// RoundFacts 是局内可见事实投影；调用方不得从 UI 日志反推这些字段。
+type RoundFacts struct {
+	HandsBySeat     [][]string
+	DiscardsBySeat  [][]string
+	MeldsBySeat     [][]string
+	MeldInfosBySeat []*clientv1.SeatMelds
+	QueBySeat       []int32
+	PlayerIDs       [4]string
+	HuedSeats       []bool
+	Closed          bool
+	LastAction      *clientv1.LastActionInfo
+	RoundIndex      int32
+	HandIndex       int32
+	TotalScores     []*clientv1.SeatScore
+	RuleMeta        *clientv1.RuleMeta
+}
+
+// RoundProjection 聚合 room service 对外暴露的局内事实。
+type RoundProjection struct {
+	Progress RoundProgress
+	Facts    RoundFacts
+}
+
 // RoundClaimCandidate 描述恢复快照中仍有效的抢答候选。
 type RoundClaimCandidate struct {
 	Seat    int32

@@ -192,7 +192,7 @@ func applyJoinResultToState(state *AppState, res LobbyJoinResult) {
 		if res.DisplayName != "" {
 			v.DisplayName = res.DisplayName
 		}
-		applySeatInfos(v, res.Seats)
+		applySeatRoster(v, res.Seats)
 		v.Phase = phaseTable
 	})
 }

@@ -95,7 +95,7 @@
 - `pong_req` / `gang_req` / `hu_req` / `pass_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口，`pass_req` 表示当前被询问玩家主动放弃本次抢答或自摸选择。
 - 服务端只允许当前最高优先级候选响应抢答窗口。候选主动 `pass_req` 后，服务端移除该候选并接力下一 top candidate；若无人可抢，则关闭窗口并继续摸牌。每个接力候选拿到完整 `ClaimWindow`。
 - 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端可发送 `hu_req` 胡牌，也可发送 `pass_req` 表示不胡。主动过会把摸到的牌加入手牌并进入 `discard` 等待态，让玩家自行选牌打出；服务端超时托管才会默认打出 `pendingDraw`。
-- `SnapshotNotify` 现已追加 `acting_seat`、`acting_seats`、`phase`、`waiting_action`、`pending_tile`、`available_actions`、`claim_candidates` 与 `last_step`，用于重连后恢复当前等待态。`SnapshotNotify.state` 只表示房间 FSM（waiting/ready/playing/settling/closed），局内 UI 优先以 `phase` 为准；`waiting_action` 保留给旧客户端。
+- `SnapshotNotify` 现已追加 `acting_seat`、`acting_seats`、`phase`、`waiting_action`、`pending_tile`、`available_actions`、`claim_candidates` 与 `last_step`，用于重连后恢复当前等待态。`SnapshotNotify.state` 只表示房间 FSM（waiting/ready/playing/settling/closed），局内进度优先以 `phase` 为准；`waiting_action` 只表示服务端等待的动作类型。
 - `ActionNotify.detail` 与 `SnapshotNotify.last_action` 是最近动作的结构化权威字段，包含 actor、source、target、tile 与 step；客户端不再从最后一张弃牌或日志文本推断桌心最近动作。
 - `StartGameNotify`、`DrawTileNotify`、`ActionNotify` 与 `SnapshotNotify` 追加 `wall_remaining`；桌内剩牌数必须以服务端字段为准。
 - `SnapshotNotify.deadline_unix_ms` 表示当前等待态的服务端 deadline；`DrawTileNotify` / `ActionNotify` 同名字段用于后续逐步覆盖实时提示。客户端只用本地计时做展示，不决定权威超时。
@@ -104,6 +104,19 @@
 - `DrawTileNotify` 通过每座位投影下发：摸牌本人收到具体 `tile`，其他座位收到空 `tile` 与相同 `seat_index`。隐私敏感局内事件不得全量明文广播。
 - 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。玩家显式请求不会触发自动出牌；碰牌后必须等待该玩家下一次 `discard_req` 或托管超时。
 - WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。
+
+## 状态事实与前后端契约
+
+本节落实 [ADR-0044](adr/0044-room-state-and-client-contract.md)，用于区分服务端事实、传输字段与客户端 UI 派生：
+
+- `SnapshotNotify.state` 只表示 `RoomLifecycle`，值域为 `waiting`、`ready`、`playing`、`settling`、`closed`。它不表达换三张、摸牌、出牌或抢答等局内阶段。
+- `phase` 表示 `RoundProgress` 中的局内阶段。Go 实现中应使用 `RoundPhase` 等命名避免与房间 FSM 混淆。
+- `waiting_action` 表示服务端正在等待的动作类型，值域为 `exchange_three`、`que_men`、`discard`、`claim_window`、`tsumo_window`、`none` 或空值。`draw`、`摸牌中` 等展示状态不是合法 `waiting_action`。
+- `PHASE_DRAW` 表示局内进度处于摸牌推进阶段，客户端可据此展示“摸牌中”；但它不是可提交动作的等待态，输入许可仍以 `available_actions`、`acting_seats` 和候选窗口为准。
+- `acting_seats` 使用复数语义，覆盖换三张、定缺、抢答候选和单座位出牌等场景。客户端不得只凭单个 `acting_seat` 推断权限。
+- `SeatInfo` 是座位名册与状态的权威来源。客户端不得本地改写 `is_bot`、`online`、`auto_play`、`status` 或 `hand_count` 来弥补响应缺口。
+- 本地单进程路径与 `cluster.v1 -> client.v1` 集群路径必须向客户端暴露等价的 `RoomLifecycle`、`RoundProgress`、`SeatRoster` 与 `RoundFacts`；gate 只转换字段，不拼业务事实。
+- `SnapshotNotify.last_step` 是重连恢复的切点。客户端应丢弃 `step <= last_step` 的局内推进事件，并只把光标、pending、notice 等 `UXTransient` 作为本地可丢弃状态。
 
 ## Phase 7 大厅列表与匹配
 

@@ -128,6 +128,9 @@ func (s *lobbyGRPCServer) AddBot(ctx context.Context, req *clusterv1.AddBotReque
 			UserId:    bot.UserID,
 			Nickname:  "机器人",
 			IsBot:     true,
+			Online:    true,
+			AutoPlay:  true,
+			Status:    "online",
 		})
 	}
 	return &clusterv1.AddBotResponse{Added: out}, nil

@@ -618,6 +618,9 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		HandIndex:        snapResp.GetHandIndex(),
 		TotalScores:      clusterSeatScoresToClient(snapResp.GetTotalScores()),
 		RuleMeta:         clusterRuleMetaToClient(snapResp.GetRuleMeta()),
+		Phase:            clusterPhaseToClient(snapResp.GetPhase()),
+		ActingSeats:      append([]int32(nil), snapResp.GetActingSeats()...),
+		LastStep:         snapResp.GetLastStep(),
 	}
 	g.rememberRoomPlayers(srec.RoomID, snapResp.GetPlayerIds())
 	if snap.GetState() == "closed" {
@@ -701,9 +704,14 @@ func clusterSeatsToClient(items []*clusterv1.SeatInfo) []*clientv1.SeatInfo {
 			DisconnectedAtMs: item.GetDisconnectedAtMs(),
 			Status:           item.GetStatus(),
 			TotalScore:       item.GetTotalScore(),
+			HandCount:        item.GetHandCount(),
 		})
 	}
 	return out
+}
+
+func clusterPhaseToClient(phase clusterv1.Phase) clientv1.Phase {
+	return clientv1.Phase(phase.Number())
 }
 
 func clusterRoomMetasToClient(rooms []*clusterv1.RoomMeta) []*clientv1.RoomMeta {
@@ -1016,14 +1024,22 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 			Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
 				SeatIndex: body.InitialDeal.GetSeatIndex(),
 				Tiles:     append([]string(nil), body.InitialDeal.GetTiles()...),
+				Step:      body.InitialDeal.GetStep(),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_StartGame:
 		return marshalClientEnvelope(msgid.StartGame, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
-				RoomId:     evt.GetRoomId(),
-				DealerSeat: body.StartGame.GetDealerSeat(),
+				RoomId:        evt.GetRoomId(),
+				DealerSeat:    body.StartGame.GetDealerSeat(),
+				Phase:         clusterPhaseToClient(body.StartGame.GetPhase()),
+				Step:          body.StartGame.GetStep(),
+				ActingSeats:   append([]int32(nil), body.StartGame.GetActingSeats()...),
+				WallRemaining: body.StartGame.GetWallRemaining(),
+				RoundIndex:    body.StartGame.GetRoundIndex(),
+				HandIndex:     body.StartGame.GetHandIndex(),
+				RuleMeta:      clusterRuleMetaToClient(body.StartGame.GetRuleMeta()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_DrawTile:
@@ -1032,6 +1048,9 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 			Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
 				SeatIndex:      body.DrawTile.GetSeatIndex(),
 				Tile:           body.DrawTile.GetTile(),
+				Phase:          clusterPhaseToClient(body.DrawTile.GetPhase()),
+				Step:           body.DrawTile.GetStep(),
+				ActingSeats:    append([]int32(nil), body.DrawTile.GetActingSeats()...),
 				WallRemaining:  body.DrawTile.GetWallRemaining(),
 				DeadlineUnixMs: body.DrawTile.GetDeadlineUnixMs(),
 			}},
@@ -1043,6 +1062,9 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				SeatIndex:      body.Action.GetSeatIndex(),
 				Action:         body.Action.GetAction(),
 				Tile:           body.Action.GetTile(),
+				Phase:          clusterPhaseToClient(body.Action.GetPhase()),
+				Step:           body.Action.GetStep(),
+				ActingSeats:    append([]int32(nil), body.Action.GetActingSeats()...),
 				Detail:         clusterActionDetailToClient(body.Action.GetDetail()),
 				WallRemaining:  body.Action.GetWallRemaining(),
 				DeadlineUnixMs: body.Action.GetDeadlineUnixMs(),
@@ -1077,6 +1099,10 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 			Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
 				PerSeat:           perSeat,
 				YourExchangedAway: append([]string(nil), body.ExchangeThreeDone.GetYourExchangedAway()...),
+				Direction:         body.ExchangeThreeDone.GetDirection(),
+				Phase:             clusterPhaseToClient(body.ExchangeThreeDone.GetPhase()),
+				Step:              body.ExchangeThreeDone.GetStep(),
+				ActingSeats:       append([]int32(nil), body.ExchangeThreeDone.GetActingSeats()...),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_QueMenDone:
@@ -1084,6 +1110,9 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 			ReqId: evt.GetCursor(),
 			Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
 				QueSuitBySeat: append([]int32(nil), body.QueMenDone.GetQueSuitBySeat()...),
+				Phase:         clusterPhaseToClient(body.QueMenDone.GetPhase()),
+				Step:          body.QueMenDone.GetStep(),
+				ActingSeats:   append([]int32(nil), body.QueMenDone.GetActingSeats()...),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_RouteRedirect:

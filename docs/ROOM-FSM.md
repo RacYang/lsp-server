@@ -1,18 +1,31 @@
-# 房间 FSM（Phase 5/6）
+# 房间 FSM 与局内进度（Phase 7）
 
-## 状态
+## 房间生命周期
+
+房间 FSM 只描述 `RoomLifecycle`，遵循 [ADR-0044](adr/0044-room-state-and-client-contract.md) 的状态分层。它不承载换三张、定缺、摸牌、出牌、抢答或结算明细等局内语义。
 
 - `idle`：占位，当前实现从 `waiting` 起步。
 - `waiting`：等待玩家进房与准备。
 - `ready`：四人已满且全准备，可开局。
-- `playing`：对局进行中。房间不再自动整局回放，而是进入真实交互循环：
-  - 广播换三张、定缺、开局。
-  - 当前座位摸牌后进入 `等待出牌`。
-  - 若摸牌立即可自摸，则先进入 `等待自摸决策`，客户端可发送 `hu_req` 或对摸到的牌发送 `discard_req`。
-  - 最近一次弃牌会保留一个抢答窗口；可抢座位收到 `hu_choice` / `pong_choice` / `gang_choice` / `qiang_gang_choice` 后，可发送对应请求中断当前待出牌座位。
-  - 玩家胡牌后记录 `hued_seats` 并退出后续轮转；牌局到三家胡或牌墙耗尽时进入结算。
+- `playing`：对局进行中。具体局内阶段由 `RoundProgress` 表达。
 - `settling`：结算中。
 - `closed`：房间关闭。
+
+## 局内进度
+
+局内进度由 `internal/service/room.RoundState` 统一投影为 `RoundProgress`，不是房间 FSM 的子状态。`RoundProgress` 包含 `phase`、`step` / `last_step`、`acting_seats`、`waiting_action`、`available_actions`、`claim_candidates`、`deadline_unix_ms` 与 `wall_remaining`。
+
+对局进入 `playing` 后，典型局内推进为：
+
+- 广播换三张、定缺、开局。
+- 当前座位摸牌后进入 `等待出牌`。
+- 若摸牌立即可自摸，则先进入 `等待自摸决策`，客户端可发送 `hu_req` 或对摸到的牌发送 `discard_req`。
+- 最近一次弃牌会保留一个抢答窗口；可抢座位收到 `hu_choice` / `pong_choice` / `gang_choice` / `qiang_gang_choice` 后，可发送对应请求中断当前待出牌座位。
+- 玩家胡牌后记录 `hued_seats` 并退出后续轮转；牌局到三家胡或牌墙耗尽时进入结算。
+
+`PHASE_DRAW` 表示服务端正在推进摸牌或即将下发摸牌事件，客户端可显示“摸牌中”；它不代表玩家可提交动作。是否允许输入只看 `acting_seats`、`available_actions` 与候选窗口。
+
+`waiting_action` 只表示服务端正在等待哪类动作，合法值集中在 `exchange_three`、`que_men`、`discard`、`claim_window`、`tsumo_window`、`none` 或空值；不得用 `draw` 表示展示状态。
 
 ## 迁移
 

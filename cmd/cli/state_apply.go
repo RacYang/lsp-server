@@ -37,7 +37,7 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		v.DisplayName = body.JoinRoomResp.GetDisplayName()
 		clearRoundFacts(v)
 		v.LastSettlement = nil
-		applySeatInfos(v, body.JoinRoomResp.GetSeats())
+		applySeatRoster(v, body.JoinRoomResp.GetSeats())
 		if v.SeatIndex >= 0 && v.SeatIndex < 4 {
 			v.Players[v.SeatIndex].Nickname = v.Nickname
 			v.Players[v.SeatIndex].UserID = v.UserID
@@ -73,7 +73,7 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 			v.DisplayName = meta.GetDisplayName()
 		}
 		v.RoomState = "playing"
-		applyPhase(v, body.StartGame.GetPhase(), body.StartGame.GetActingSeats(), body.StartGame.GetStep())
+		applyRoundProgressFromPhase(v, body.StartGame.GetPhase(), body.StartGame.GetStep(), body.StartGame.GetActingSeats())
 		v.LastSettlement = nil
 		appendLog(v, fmt.Sprintf("开局，庄家 %d", v.DealerSeat))
 	case *clientv1.Envelope_DrawTile:
@@ -88,7 +88,7 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		v.HandIndex = body.Settlement.GetHandIndex()
 		v.TotalScores = cloneSeatScores(body.Settlement.GetTotalScores())
 		v.RoomState = "settling"
-		setWaitingAction(v, "none", nil)
+		applyRoundProgress(v, clientv1.Phase_PHASE_SETTLE, 0, nil, "none", nil)
 		v.ClaimCandidates = map[int32][]string{}
 		appendLog(v, "收到结算")
 	case *clientv1.Envelope_HeartbeatResp:
@@ -115,9 +115,9 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 				v.QueBySeat[seat] = suit
 			}
 		}
-		applyPhase(v, body.QueMenDone.GetPhase(), body.QueMenDone.GetActingSeats(), body.QueMenDone.GetStep())
+		applyRoundProgressFromPhase(v, body.QueMenDone.GetPhase(), body.QueMenDone.GetStep(), body.QueMenDone.GetActingSeats())
 		if body.QueMenDone.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			setWaitingAction(v, "discard", []string{"discard"})
+			applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, body.QueMenDone.GetStep(), body.QueMenDone.GetActingSeats(), "discard", []string{"discard"})
 		}
 		appendLog(v, "定缺完成")
 	case *clientv1.Envelope_Snapshot:
@@ -132,7 +132,7 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		appendResponseLog(v, "过", body.PassResp.GetErrorCode(), body.PassResp.GetErrorMessage())
 		if body.PassResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
 			if v.WaitingAction == "tsumo_window" {
-				setWaitingAction(v, "discard", []string{"discard"})
+				applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, 0, []int32{v.ActingSeat}, "discard", []string{"discard"})
 				v.PendingTile = ""
 			} else {
 				v.AvailableActions = nil
@@ -142,7 +142,7 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 	case *clientv1.Envelope_AddBotResp:
 		appendResponseLog(v, "添加机器人", body.AddBotResp.GetErrorCode(), body.AddBotResp.GetErrorMessage())
 		if body.AddBotResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-			applySeatInfos(v, body.AddBotResp.GetAdded())
+			applySeatRoster(v, body.AddBotResp.GetAdded())
 		}
 	}
 }
@@ -202,7 +202,7 @@ func applyAutoMatch(v *RoomView, resp *clientv1.AutoMatchResponse) {
 		return
 	}
 	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex(), resp.GetRuleId(), resp.GetDisplayName())
-	applySeatInfos(v, resp.GetSeats())
+	applySeatRoster(v, resp.GetSeats())
 	appendLog(v, fmt.Sprintf("自动匹配成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
 }
 
@@ -213,7 +213,7 @@ func applyCreateRoom(v *RoomView, resp *clientv1.CreateRoomResponse) {
 		return
 	}
 	applyLobbySeat(v, resp.GetRoomId(), resp.GetSeatIndex(), resp.GetRuleId(), resp.GetDisplayName())
-	applySeatInfos(v, resp.GetSeats())
+	applySeatRoster(v, resp.GetSeats())
 	appendLog(v, fmt.Sprintf("创建房间成功: %s 座位 %d", resp.GetRoomId(), resp.GetSeatIndex()))
 }
 
@@ -249,9 +249,9 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	v.PendingTile = t
 	v.WallRemaining = draw.GetWallRemaining()
 	v.DeadlineUnixMS = draw.GetDeadlineUnixMs()
-	applyPhase(v, draw.GetPhase(), draw.GetActingSeats(), draw.GetStep())
+	applyRoundProgressFromPhase(v, draw.GetPhase(), draw.GetStep(), draw.GetActingSeats())
 	if draw.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-		setWaitingAction(v, "discard", []string{"discard"})
+		applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, draw.GetStep(), []int32{seat}, "discard", []string{"discard"})
 	}
 	if duplicate {
 		appendLog(v, "已忽略重复摸牌事件")
@@ -293,20 +293,26 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 			CreatedAtMs: detail.GetCreatedAtMs(),
 		}
 	}
-	applyPhase(v, action.GetPhase(), action.GetActingSeats(), action.GetStep())
+	applyRoundProgressFromPhase(v, action.GetPhase(), action.GetStep(), action.GetActingSeats())
 	switch action.GetAction() {
 	case "exchange_three":
 		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			setWaitingAction(v, "exchange_three", []string{"exchange_three"})
+			applyRoundProgress(v, clientv1.Phase_PHASE_EXCHANGE, action.GetStep(), action.GetActingSeats(), "exchange_three", []string{"exchange_three"})
 		}
 	case "que_men":
 		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			setWaitingAction(v, "que_men", []string{"que_men"})
+			applyRoundProgress(v, clientv1.Phase_PHASE_QUE_MEN, action.GetStep(), action.GetActingSeats(), "que_men", []string{"que_men"})
 		}
 	case "discard":
-		applyDiscardAction(v, seat, action.GetTile(), action.GetStep(), action.GetPhase() != clientv1.Phase_PHASE_UNSPECIFIED)
+		applyDiscardAction(v, seat, action.GetTile(), action.GetStep())
+		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
+			applyRoundProgress(v, clientv1.Phase_PHASE_UNSPECIFIED, action.GetStep(), nil, "none", nil)
+		}
 	case "pong":
 		applyPongAction(v, seat, action.GetTile())
+		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
+			applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, action.GetStep(), []int32{seat}, "discard", []string{"discard"})
+		}
 	case "gang":
 		recordMeld(v, seat, "gang:"+action.GetTile())
 		if seat >= 0 && seat < 4 {
@@ -318,7 +324,7 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 		}
 	case "hu_choice", "qiang_gang_choice", "pong_choice", "gang_choice":
 		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			setWaitingAction(v, "claim_window", nil)
+			applyRoundProgress(v, clientv1.Phase_PHASE_CLAIM, action.GetStep(), []int32{seat}, "claim_window", nil)
 		}
 		v.PendingTile = action.GetTile()
 		if seat >= 0 && seat < 4 {
@@ -332,7 +338,7 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 		}
 	case "tsumo_choice":
 		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			setWaitingAction(v, "tsumo_window", nil)
+			applyRoundProgress(v, clientv1.Phase_PHASE_TSUMO, action.GetStep(), []int32{seat}, "tsumo_window", nil)
 		}
 		v.PendingTile = action.GetTile()
 		if seat >= 0 && seat < 4 {
@@ -379,7 +385,7 @@ func formatActionLog(view RoomView, seat int32, action, tile string) string {
 	return ""
 }
 
-func applyDiscardAction(v *RoomView, seat int32, tile string, step int64, preserveNextFocus bool) {
+func applyDiscardAction(v *RoomView, seat int32, tile string, step int64) {
 	if seat < 0 || seat > 3 || tile == "" {
 		return
 	}
@@ -402,10 +408,6 @@ func applyDiscardAction(v *RoomView, seat int32, tile string, step int64, preser
 		// 对家弃牌时手牌计数 -1；保持与 applyDraw 的 +1 对称，UI 上的 "▢×N" 才不会越涨越高。
 		p.HandCnt--
 	}
-	if !preserveNextFocus {
-		v.ActingSeat = -1
-		setWaitingAction(v, "none", nil)
-	}
 	v.PendingTile = ""
 	v.ClaimCandidates = map[int32][]string{}
 }
@@ -427,7 +429,6 @@ func applyPongAction(v *RoomView, seat int32, tile string) {
 		}
 	}
 	v.ActingSeat = seat
-	setWaitingAction(v, "discard", []string{"discard"})
 	v.PendingTile = ""
 	v.ClaimCandidates = map[int32][]string{}
 }
@@ -447,7 +448,7 @@ func removeClaimedDiscard(v *RoomView, claimer int32, tile string) {
 }
 
 func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
-	applyPhase(v, done.GetPhase(), done.GetActingSeats(), done.GetStep())
+	applyRoundProgressFromPhase(v, done.GetPhase(), done.GetStep(), done.GetActingSeats())
 	if done.GetDirection() > 0 {
 		v.ExchangeDirection = done.GetDirection()
 	}
@@ -468,7 +469,7 @@ func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
 		}
 	}
 	if done.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-		setWaitingAction(v, "que_men", []string{"que_men"})
+		applyRoundProgress(v, clientv1.Phase_PHASE_QUE_MEN, done.GetStep(), done.GetActingSeats(), "que_men", []string{"que_men"})
 	}
 	appendLog(v, "换三张完成")
 }
@@ -484,38 +485,51 @@ func setWaitingAction(v *RoomView, action string, available []string) {
 	v.AvailableActions = append([]string(nil), available...)
 }
 
-func applyPhase(v *RoomView, phase clientv1.Phase, actingSeats []int32, step int64) {
+func applyRoundProgressFromPhase(v *RoomView, phase clientv1.Phase, step int64, actingSeats []int32) {
 	if phase == clientv1.Phase_PHASE_UNSPECIFIED {
 		if step > v.LastStep {
 			v.LastStep = step
 		}
 		return
 	}
+	waitingAction, available := waitKindForRoundPhase(phase)
+	applyRoundProgress(v, phase, step, actingSeats, waitingAction, available)
+}
+
+func applyRoundProgress(v *RoomView, phase clientv1.Phase, step int64, actingSeats []int32, waitingAction string, available []string) {
 	if step > v.LastStep {
 		v.LastStep = step
 	}
-	v.RoundPhase = phase
+	if phase != clientv1.Phase_PHASE_UNSPECIFIED {
+		v.RoundPhase = phase
+	}
 	v.ActingSeats = append([]int32(nil), actingSeats...)
 	if len(actingSeats) > 0 {
 		v.ActingSeat = actingSeats[0]
+	} else if waitingAction == "none" {
+		v.ActingSeat = -1
 	}
+	setWaitingAction(v, waitingAction, available)
+}
+
+func waitKindForRoundPhase(phase clientv1.Phase) (string, []string) {
 	switch phase {
 	case clientv1.Phase_PHASE_EXCHANGE:
-		setWaitingAction(v, "exchange_three", []string{"exchange_three"})
+		return "exchange_three", []string{"exchange_three"}
 	case clientv1.Phase_PHASE_QUE_MEN:
-		setWaitingAction(v, "que_men", []string{"que_men"})
+		return "que_men", []string{"que_men"}
 	case clientv1.Phase_PHASE_DRAW:
-		setWaitingAction(v, "draw", nil)
+		return "none", nil
 	case clientv1.Phase_PHASE_DISCARD:
-		setWaitingAction(v, "discard", []string{"discard"})
+		return "discard", []string{"discard"}
 	case clientv1.Phase_PHASE_CLAIM:
-		setWaitingAction(v, "claim_window", nil)
+		return "claim_window", nil
 	case clientv1.Phase_PHASE_TSUMO:
-		setWaitingAction(v, "tsumo_window", nil)
+		return "tsumo_window", nil
 	case clientv1.Phase_PHASE_SETTLE:
-		setWaitingAction(v, "none", nil)
+		return "none", nil
 	default:
-		setWaitingAction(v, "none", nil)
+		return "none", nil
 	}
 }
 
@@ -587,7 +601,7 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 			v.Players[seat].UserID = userID
 		}
 	}
-	applySeatInfos(v, snap.GetSeats())
+	applySeatRoster(v, snap.GetSeats())
 	for seat, suit := range snap.GetQueSuitBySeat() {
 		if seat < len(v.QueBySeat) {
 			v.QueBySeat[seat] = suit
@@ -604,7 +618,7 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 	appendLog(v, "快照已恢复")
 }
 
-func applySeatInfos(v *RoomView, seats []*clientv1.SeatInfo) {
+func applySeatRoster(v *RoomView, seats []*clientv1.SeatInfo) {
 	if len(seats) == 0 {
 		return
 	}

@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"time"
+
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 )
 
 // TablePhase 是 TUI 可渲染和可输入的局内阶段。
@@ -111,6 +113,11 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 		model.Hint = "大厅"
 		return model
 	}
+	if view.RoundPhase == clientv1.Phase_PHASE_DRAW {
+		model.Phase = PhaseOtherTurn
+		model.Hint = waitingDrawHint(view)
+		return model
+	}
 	switch view.WaitingAction {
 	case "exchange_three":
 		model.Phase = PhaseExchange
@@ -142,9 +149,6 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 		} else {
 			model.Hint = waitingHint(view)
 		}
-	case "draw":
-		model.Phase = PhaseOtherTurn
-		model.Hint = waitingDrawHint(view)
 	case "claim_window":
 		model.Phase = PhaseClaim
 		actions := claimActionsForSeat(view, view.SeatIndex)

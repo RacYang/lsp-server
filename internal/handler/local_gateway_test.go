@@ -182,6 +182,26 @@ func TestLocalRoomGatewayReadyBroadcastSkippedWhenHubNil(t *testing.T) {
 	cb()
 }
 
+func TestLocalRoomGatewayAddBotReturnsAuthoritativeSeatInfo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	svc := roomsvc.NewService(roomsvc.NewLobby())
+	gw := NewLocalRoomGateway(svc, nil, nil)
+
+	_, err := gw.Join(ctx, "bot-room", "human")
+	require.NoError(t, err)
+
+	added, after, err := gw.AddBot(ctx, "bot-room", "human", 1, "", "")
+	require.NoError(t, err)
+	require.Len(t, added, 1)
+	require.NotNil(t, after)
+	require.Equal(t, "ready", added[0].GetStatus())
+	require.True(t, added[0].GetOnline())
+	require.True(t, added[0].GetAutoPlay())
+	require.True(t, added[0].GetIsBot())
+}
+
 func TestLocalRoomGatewayResumeRoomMissing(t *testing.T) {
 	t.Parallel()
 	mr, err := miniredis.Run()

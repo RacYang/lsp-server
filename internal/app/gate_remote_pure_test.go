@@ -208,6 +208,156 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 	})
 }
 
+func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		evt    *clusterv1.RoomServiceStreamEventsResponse
+		assert func(*testing.T, *clientv1.Envelope)
+	}{
+		{
+			name: "start",
+			evt: &clusterv1.RoomServiceStreamEventsResponse{
+				RoomId: "r-progress",
+				Cursor: "r-progress:10",
+				Body: &clusterv1.RoomServiceStreamEventsResponse_StartGame{
+					StartGame: &clusterv1.StartGameEvent{
+						DealerSeat:    0,
+						Phase:         clusterv1.Phase_PHASE_DRAW,
+						Step:          10,
+						ActingSeats:   []int32{0},
+						WallRemaining: 55,
+					},
+				},
+			},
+			assert: func(t *testing.T, env *clientv1.Envelope) {
+				t.Helper()
+				require.Equal(t, clientv1.Phase_PHASE_DRAW, env.GetStartGame().GetPhase())
+				require.EqualValues(t, 10, env.GetStartGame().GetStep())
+				require.Equal(t, []int32{0}, env.GetStartGame().GetActingSeats())
+				require.EqualValues(t, 55, env.GetStartGame().GetWallRemaining())
+			},
+		},
+		{
+			name: "draw",
+			evt: &clusterv1.RoomServiceStreamEventsResponse{
+				RoomId: "r-progress",
+				Cursor: "r-progress:11",
+				Body: &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
+					DrawTile: &clusterv1.DrawTileEvent{
+						SeatIndex:      1,
+						Tile:           "p9",
+						Phase:          clusterv1.Phase_PHASE_DISCARD,
+						Step:           11,
+						ActingSeats:    []int32{1},
+						WallRemaining:  54,
+						DeadlineUnixMs: 1234,
+					},
+				},
+			},
+			assert: func(t *testing.T, env *clientv1.Envelope) {
+				t.Helper()
+				require.Equal(t, clientv1.Phase_PHASE_DISCARD, env.GetDrawTile().GetPhase())
+				require.EqualValues(t, 11, env.GetDrawTile().GetStep())
+				require.Equal(t, []int32{1}, env.GetDrawTile().GetActingSeats())
+				require.EqualValues(t, 54, env.GetDrawTile().GetWallRemaining())
+				require.EqualValues(t, 1234, env.GetDrawTile().GetDeadlineUnixMs())
+			},
+		},
+		{
+			name: "action",
+			evt: &clusterv1.RoomServiceStreamEventsResponse{
+				RoomId: "r-progress",
+				Cursor: "r-progress:12",
+				Body: &clusterv1.RoomServiceStreamEventsResponse_Action{
+					Action: &clusterv1.ActionEvent{
+						SeatIndex:   1,
+						Action:      "discard",
+						Tile:        "p9",
+						Phase:       clusterv1.Phase_PHASE_DRAW,
+						Step:        12,
+						ActingSeats: []int32{2},
+					},
+				},
+			},
+			assert: func(t *testing.T, env *clientv1.Envelope) {
+				t.Helper()
+				require.Equal(t, clientv1.Phase_PHASE_DRAW, env.GetAction().GetPhase())
+				require.EqualValues(t, 12, env.GetAction().GetStep())
+				require.Equal(t, []int32{2}, env.GetAction().GetActingSeats())
+			},
+		},
+		{
+			name: "exchange",
+			evt: &clusterv1.RoomServiceStreamEventsResponse{
+				RoomId: "r-progress",
+				Cursor: "r-progress:13",
+				Body: &clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone{
+					ExchangeThreeDone: &clusterv1.ExchangeThreeDoneEvent{
+						Phase:       clusterv1.Phase_PHASE_QUE_MEN,
+						Step:        13,
+						ActingSeats: []int32{0, 1, 2, 3},
+						Direction:   3,
+					},
+				},
+			},
+			assert: func(t *testing.T, env *clientv1.Envelope) {
+				t.Helper()
+				require.Equal(t, clientv1.Phase_PHASE_QUE_MEN, env.GetExchangeThreeDone().GetPhase())
+				require.EqualValues(t, 13, env.GetExchangeThreeDone().GetStep())
+				require.Equal(t, []int32{0, 1, 2, 3}, env.GetExchangeThreeDone().GetActingSeats())
+				require.EqualValues(t, 3, env.GetExchangeThreeDone().GetDirection())
+			},
+		},
+		{
+			name: "que",
+			evt: &clusterv1.RoomServiceStreamEventsResponse{
+				RoomId: "r-progress",
+				Cursor: "r-progress:14",
+				Body: &clusterv1.RoomServiceStreamEventsResponse_QueMenDone{
+					QueMenDone: &clusterv1.QueMenDoneEvent{
+						Phase:       clusterv1.Phase_PHASE_DRAW,
+						Step:        14,
+						ActingSeats: []int32{0},
+					},
+				},
+			},
+			assert: func(t *testing.T, env *clientv1.Envelope) {
+				t.Helper()
+				require.Equal(t, clientv1.Phase_PHASE_DRAW, env.GetQueMenDone().GetPhase())
+				require.EqualValues(t, 14, env.GetQueMenDone().GetStep())
+				require.Equal(t, []int32{0}, env.GetQueMenDone().GetActingSeats())
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, payload, err := encodeClusterRoomEvent(tc.evt)
+			require.NoError(t, err)
+
+			var env clientv1.Envelope
+			require.NoError(t, proto.Unmarshal(payload, &env))
+			tc.assert(t, &env)
+		})
+	}
+}
+
+func TestClusterSeatInfoCarriesHandCount(t *testing.T) {
+	t.Parallel()
+
+	seats := clusterSeatsToClient([]*clusterv1.SeatInfo{{
+		SeatIndex: 1,
+		UserId:    "bot:r1:1",
+		Status:    "ready",
+		HandCount: 13,
+	}})
+
+	require.Len(t, seats, 1)
+	require.EqualValues(t, 13, seats[0].GetHandCount())
+	require.Equal(t, "ready", seats[0].GetStatus())
+}
+
 // TestRetryGRPC 校验 retryGRPC 的三条主要路径：成功立即返回、非可重试错误立刻返回、ctx 取消快速返回。
 func TestRetryGRPC(t *testing.T) {
 	t.Parallel()

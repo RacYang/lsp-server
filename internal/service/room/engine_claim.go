@@ -54,19 +54,18 @@ func (e *Engine) ApplyPongByPlayer(_ context.Context, rs *RoundState, seat Seat)
 	seatIndex := seat.Proto()
 	detail := rs.actionDetail(seat, "pong", claimedTile, seat, claimedFromSeat)
 	rs.rememberLastAction(detail)
+	progress := rs.roundProgress()
+	action := &clientv1.ActionNotify{
+		SeatIndex: seatIndex,
+		Action:    "pong",
+		Tile:      claimedTile.String(),
+		Detail:    detail,
+	}
+	progress.applyToAction(action)
 	payload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("pong-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{
-				SeatIndex:     seatIndex,
-				Action:        "pong",
-				Tile:          claimedTile.String(),
-				Phase:         clientv1.Phase_PHASE_DISCARD,
-				Step:          int64(rs.step),
-				ActingSeats:   []int32{seatIndex},
-				Detail:        detail,
-				WallRemaining: rs.wallRemaining(),
-			},
+			Action: action,
 		},
 	})
 	if err != nil {
@@ -165,19 +164,18 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 		detail.SourceSeat = gangFromSeat.Proto()
 	}
 	rs.rememberLastAction(detail)
+	progress := rs.drawTransitionProgress()
+	action := &clientv1.ActionNotify{
+		SeatIndex: seatIndex,
+		Action:    "gang",
+		Tile:      gangTile.String(),
+		Detail:    detail,
+	}
+	progress.applyToAction(action)
 	payload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("gang-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{
-				SeatIndex:     seatIndex,
-				Action:        "gang",
-				Tile:          gangTile.String(),
-				Phase:         clientv1.Phase_PHASE_DRAW,
-				Step:          int64(rs.step),
-				ActingSeats:   []int32{seatIndex},
-				Detail:        detail,
-				WallRemaining: rs.wallRemaining(),
-			},
+			Action: action,
 		},
 	})
 	if err != nil {
@@ -412,18 +410,17 @@ func (rs *RoundState) claimPromptNotifications(discard tile.Tile) ([]Notificatio
 	}
 	claimAction := candidate.claimChoiceAction()
 	claimSeatIndex := candidate.seat.Proto()
+	progress := rs.roundProgress()
+	action := &clientv1.ActionNotify{
+		SeatIndex: claimSeatIndex,
+		Action:    claimAction,
+		Tile:      discard.String(),
+	}
+	progress.applyToAction(action)
 	claimPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("claim-%d-%d", rs.step, candidate.seat),
 		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{
-				SeatIndex:     claimSeatIndex,
-				Action:        claimAction,
-				Tile:          discard.String(),
-				Phase:         clientv1.Phase_PHASE_CLAIM,
-				Step:          int64(rs.step),
-				ActingSeats:   []int32{claimSeatIndex},
-				WallRemaining: rs.wallRemaining(),
-			},
+			Action: action,
 		},
 	})
 	if err != nil {

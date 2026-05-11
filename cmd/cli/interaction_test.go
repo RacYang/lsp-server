@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 )
 
 func TestDeriveInteractionModelPhases(t *testing.T) {
@@ -17,7 +18,7 @@ func TestDeriveInteractionModelPhases(t *testing.T) {
 		{name: "lobby", view: RoomView{Phase: phaseLobby}, want: PhaseLobby},
 		{name: "exchange", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "exchange_three"}, want: PhaseExchange},
 		{name: "que", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "que_men"}, want: PhaseQueMen},
-		{name: "draw", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 1, WaitingAction: "draw"}, want: PhaseOtherTurn},
+		{name: "draw", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 1, RoundPhase: clientv1.Phase_PHASE_DRAW, WaitingAction: "none"}, want: PhaseOtherTurn},
 		{name: "discard", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "discard"}, want: PhaseDiscard},
 		{name: "claim", view: RoomView{Phase: phaseTable, SeatIndex: 1, ActingSeat: 1, WaitingAction: "claim_window", ClaimCandidates: map[int32][]string{1: {"hu", "pass"}}}, want: PhaseClaim},
 		{name: "tsumo", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "tsumo_window"}, want: PhaseTsumo},
@@ -80,7 +81,8 @@ func TestDrawPhaseShowsNextSeatInsteadOfWaitingStart(t *testing.T) {
 		RoomState:     "playing",
 		SeatIndex:     1,
 		ActingSeat:    2,
-		WaitingAction: "draw",
+		RoundPhase:    clientv1.Phase_PHASE_DRAW,
+		WaitingAction: "none",
 	}
 
 	ux := DeriveTableUXModel(view, nil, nowForTest())

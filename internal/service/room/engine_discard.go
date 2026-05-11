@@ -87,15 +87,12 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	rs.lastDiscardSeat = seat
 	rs.turn = rs.nextActiveSeat(seat)
 	rs.openClaimWindow()
-	actionPhase := clientv1.Phase_PHASE_DRAW
-	actionSeats := []int32{rs.turn.Proto()}
+	progress := rs.drawTransitionProgress()
 	if len(rs.claimCandidates) > 0 {
-		actionPhase = clientv1.Phase_PHASE_CLAIM
-		actionSeats = rs.actingSeats()
+		progress = rs.roundProgress()
 		if actionEnv := new(clientv1.Envelope); proto.Unmarshal(actionPayload, actionEnv) == nil {
 			if action := actionEnv.GetAction(); action != nil {
-				action.Phase = actionPhase
-				action.ActingSeats = actionSeats
+				progress.applyToAction(action)
 				if payload, err := marshalEnvelope(actionEnv); err == nil {
 					out[0].Payload = payload
 				}
@@ -112,8 +109,7 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	rs.closeOpeningClaimWindow()
 	if actionEnv := new(clientv1.Envelope); proto.Unmarshal(actionPayload, actionEnv) == nil {
 		if action := actionEnv.GetAction(); action != nil {
-			action.Phase = actionPhase
-			action.ActingSeats = actionSeats
+			progress.applyToAction(action)
 			if payload, err := marshalEnvelope(actionEnv); err == nil {
 				out[0].Payload = payload
 			}
@@ -209,17 +205,15 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	seatIndex := seat.Proto()
 	detail := rs.actionDetail(seat, "hu", winTile, seat, payer)
 	rs.rememberLastAction(detail)
+	progress := rs.roundProgress()
 	huPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: fmt.Sprintf("hu-%d", rs.step),
 		Body: &clientv1.Envelope_Action{
 			Action: &clientv1.ActionNotify{
-				SeatIndex:     seatIndex,
-				Action:        "hu",
-				Tile:          winTile.String(),
-				Phase:         rs.phase(),
-				Step:          int64(rs.step),
-				Detail:        detail,
-				WallRemaining: rs.wallRemaining(),
+				SeatIndex: seatIndex,
+				Action:    "hu",
+				Tile:      winTile.String(),
+				Detail:    detail,
 			},
 		},
 	})
@@ -227,6 +221,14 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		return nil, err
 	}
 	out := []Notification{{Kind: KindAction, Payload: huPayload, TargetSeat: BroadcastSeat}}
+	if actionEnv := new(clientv1.Envelope); proto.Unmarshal(out[0].Payload, actionEnv) == nil {
+		if action := actionEnv.GetAction(); action != nil {
+			progress.applyToAction(action)
+			if payload, err := marshalEnvelope(actionEnv); err == nil {
+				out[0].Payload = payload
+			}
+		}
+	}
 	if rs.shouldFinishRound() {
 		settlement, err := rs.finishRound()
 		if err != nil {
@@ -285,62 +287,39 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		return nil, err
 	}
 	seatIndex := rs.turn.Proto()
-	drawPayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: fmt.Sprintf("draw-%d", rs.step),
-		Body: &clientv1.Envelope_DrawTile{
-			DrawTile: &clientv1.DrawTileNotify{
-				SeatIndex:     seatIndex,
-				Tile:          drawn.String(),
-				Phase:         clientv1.Phase_PHASE_DISCARD,
-				Step:          int64(rs.step),
-				ActingSeats:   []int32{seatIndex},
-				WallRemaining: rs.wallRemaining(),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
 	rs.currentDraw = drawn
-	out := []Notification{{
-		Kind:       KindDrawTile,
-		Payload:    drawPayload,
-		TargetSeat: BroadcastSeat,
-		Privacy:    PrivacyPerSeat,
-		Project: func(target Seat) []byte {
-			visible := target == rs.turn
-			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_DISCARD, int64(rs.step), []int32{seatIndex}, visible, rs.wallRemaining())
-			if err != nil {
-				return drawPayload
-			}
-			return payload
-		},
-	}}
 	if _, ok := rs.rule.CheckHu(rs.hands[rs.turn], drawn, rules.HuContext{}); ok {
 		rs.pendingDraw = drawn
 		rs.waitingTsumo = true
 		rs.waitingDiscard = false
-		out[0].Project = func(target Seat) []byte {
-			visible := target == rs.turn
-			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), clientv1.Phase_PHASE_TSUMO, int64(rs.step), []int32{seatIndex}, visible, rs.wallRemaining())
-			if err != nil {
-				return drawPayload
-			}
-			return payload
+		progress := rs.roundProgress()
+		drawPayload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, true)
+		if err != nil {
+			return nil, err
 		}
+		out := []Notification{{
+			Kind:       KindDrawTile,
+			Payload:    drawPayload,
+			TargetSeat: BroadcastSeat,
+			Privacy:    PrivacyPerSeat,
+			Project: func(target Seat) []byte {
+				visible := target == rs.turn
+				payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, visible)
+				if err != nil {
+					return drawPayload
+				}
+				return payload
+			},
+		}}
+		choice := &clientv1.ActionNotify{
+			SeatIndex: seatIndex,
+			Action:    "tsumo_choice",
+			Tile:      drawn.String(),
+		}
+		progress.applyToAction(choice)
 		choicePayload, err := marshalEnvelope(&clientv1.Envelope{
 			ReqId: fmt.Sprintf("tsumo-choice-%d", rs.step),
-			Body: &clientv1.Envelope_Action{
-				Action: &clientv1.ActionNotify{
-					SeatIndex:     seatIndex,
-					Action:        "tsumo_choice",
-					Tile:          drawn.String(),
-					Phase:         clientv1.Phase_PHASE_TSUMO,
-					Step:          int64(rs.step),
-					ActingSeats:   []int32{seatIndex},
-					WallRemaining: rs.wallRemaining(),
-				},
-			},
+			Body:  &clientv1.Envelope_Action{Action: choice},
 		})
 		if err != nil {
 			return nil, err
@@ -349,24 +328,41 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	}
 	rs.hands[rs.turn].Add(drawn)
 	rs.waitingDiscard = true
+	progress := rs.roundProgress()
+	drawPayload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, true)
+	if err != nil {
+		return nil, err
+	}
+	out := []Notification{{
+		Kind:       KindDrawTile,
+		Payload:    drawPayload,
+		TargetSeat: BroadcastSeat,
+		Privacy:    PrivacyPerSeat,
+		Project: func(target Seat) []byte {
+			visible := target == rs.turn
+			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, visible)
+			if err != nil {
+				return drawPayload
+			}
+			return payload
+		},
+	}}
 	return out, nil
 }
 
-func drawTilePayload(reqID string, seatIndex int32, tileText string, phase clientv1.Phase, step int64, actingSeats []int32, visible bool, wallRemaining int32) ([]byte, error) {
+func drawTilePayload(reqID string, seatIndex int32, tileText string, progress RoundProgress, visible bool) ([]byte, error) {
 	if !visible {
 		tileText = ""
 	}
+	draw := &clientv1.DrawTileNotify{
+		SeatIndex: seatIndex,
+		Tile:      tileText,
+	}
+	progress.applyToDraw(draw)
 	return marshalEnvelope(&clientv1.Envelope{
 		ReqId: reqID,
 		Body: &clientv1.Envelope_DrawTile{
-			DrawTile: &clientv1.DrawTileNotify{
-				SeatIndex:     seatIndex,
-				Tile:          tileText,
-				Phase:         phase,
-				Step:          step,
-				ActingSeats:   append([]int32(nil), actingSeats...),
-				WallRemaining: wallRemaining,
-			},
+			DrawTile: draw,
 		},
 	})
 }

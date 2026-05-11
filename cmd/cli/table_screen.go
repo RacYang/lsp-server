@@ -342,35 +342,11 @@ func submitAddBot(ctx context.Context, state *AppState, gateway TableGateway, co
 		if state == nil {
 			return
 		}
-		markAddedSeatsReady(added)
 		state.Mutate(func(v *RoomView) {
-			applySeatInfos(v, added)
+			applySeatRoster(v, added)
 		})
 	}()
 	return tableEventResult{}
-}
-
-func markSeatReadyLocally(state *AppState) {
-	if state == nil {
-		return
-	}
-	state.Mutate(func(v *RoomView) {
-		if v.SeatIndex < 0 || v.SeatIndex > 3 {
-			return
-		}
-		p := &v.Players[v.SeatIndex]
-		p.Ready = true
-		p.Status = "ready"
-	})
-}
-
-func markAddedSeatsReady(seats []*clientv1.SeatInfo) {
-	for _, seat := range seats {
-		if seat == nil {
-			continue
-		}
-		seat.Status = "ready"
-	}
 }
 
 func emptySeatCount(view RoomView) int32 {

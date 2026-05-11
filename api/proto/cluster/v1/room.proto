@@ -4,6 +4,20 @@ package cluster.v1;
 
 option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
 
+// Phase 与 client.v1.Phase 保持同编号语义，用于保证本地与集群下行等价。
+enum Phase {
+  PHASE_UNSPECIFIED = 0;
+  PHASE_LOBBY = 1;
+  PHASE_EXCHANGE = 2;
+  PHASE_QUE_MEN = 3;
+  PHASE_DRAW = 4;
+  PHASE_DISCARD = 5;
+  PHASE_CLAIM = 6;
+  PHASE_TSUMO = 7;
+  PHASE_SETTLE = 8;
+  PHASE_CLOSED = 9;
+}
+
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC）。
 service RoomService {
   rpc ApplyEvent(ApplyEventRequest) returns (ApplyEventResponse);
@@ -71,6 +85,9 @@ message SnapshotRoomResponse {
   int32 hand_index = 20;
   repeated SeatScore total_scores = 21;
   RuleMeta rule_meta = 22;
+  Phase phase = 23;
+  repeated int32 acting_seats = 24;
+  int64 last_step = 25;
 }
 
 message SeatInfo {
@@ -84,6 +101,7 @@ message SeatInfo {
   int64 disconnected_at_ms = 8;
   string status = 9;
   int32 total_score = 10;
+  int32 hand_count = 11;
 }
 
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
@@ -132,11 +150,19 @@ message QueMenEvent {
 
 message StartGameEvent {
   int32 dealer_seat = 1;
+  Phase phase = 2;
+  int64 step = 3;
+  repeated int32 acting_seats = 4;
+  int32 wall_remaining = 5;
+  int32 round_index = 6;
+  int32 hand_index = 7;
+  RuleMeta rule_meta = 8;
 }
 
 message InitialDealEvent {
   int32 seat_index = 1;
   repeated string tiles = 2;
+  int64 step = 3;
 }
 
 message DrawTileEvent {
@@ -144,6 +170,9 @@ message DrawTileEvent {
   string tile = 2;
   int32 wall_remaining = 3;
   int64 deadline_unix_ms = 4;
+  Phase phase = 5;
+  int64 step = 6;
+  repeated int32 acting_seats = 7;
 }
 
 message ActionEvent {
@@ -153,6 +182,9 @@ message ActionEvent {
   ActionDetail detail = 4;
   int32 wall_remaining = 5;
   int64 deadline_unix_ms = 6;
+  Phase phase = 7;
+  int64 step = 8;
+  repeated int32 acting_seats = 9;
 }
 
 message SettlementEvent {
@@ -170,10 +202,17 @@ message SettlementEvent {
 message ExchangeThreeDoneEvent {
   repeated SeatTiles seat_tiles = 1;
   repeated string your_exchanged_away = 2;
+  Phase phase = 3;
+  int64 step = 4;
+  repeated int32 acting_seats = 5;
+  int32 direction = 6;
 }
 
 message QueMenDoneEvent {
   repeated int32 que_suit_by_seat = 1;
+  Phase phase = 2;
+  int64 step = 3;
+  repeated int32 acting_seats = 4;
 }
 
 message RouteRedirectEvent {

@@ -93,6 +93,7 @@ func (ErrorCode) EnumDescriptor() ([]byte, []int) {
 }
 
 // Phase 表示局内权威阶段；客户端优先以该字段驱动交互状态。
+// 注意：PHASE_DRAW 仅表示服务端正在推进摸牌，不是可提交动作的 waiting_action。
 type Phase int32
 
 const (
@@ -4502,7 +4503,7 @@ func (x *QueMenDoneNotify) GetActingSeats() []int32 {
 
 // SnapshotNotify 为重连恢复下发的房间视图摘要；cursor 为快照游标，格式见 ADR-0013。
 // state 表示房间 FSM（waiting/ready/playing/settling/closed）；
-// waiting_action 表示局内 UI 阶段（exchange_three/que_men/discard/claim_window/tsumo_window/none）。
+// waiting_action 仅表示服务端正在等待的动作类型（exchange_three/que_men/discard/claim_window/tsumo_window/none）。
 type SnapshotNotify struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	RoomId string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`

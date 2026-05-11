@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 )
 
 func drawTitleBar(scr tcell.Screen, in FrameInputs) {
@@ -81,7 +82,7 @@ func focusSummary(view RoomView, now time.Time) string {
 	case PhaseMyTurnIdle, PhaseMyTurnSelected, PhaseDiscard:
 		action = "出牌中"
 	case PhaseOtherTurn:
-		if view.WaitingAction == "draw" {
+		if view.RoundPhase == clientv1.Phase_PHASE_DRAW {
 			action = "摸牌中"
 		} else {
 			action = "出牌中"

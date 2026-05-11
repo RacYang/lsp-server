@@ -14,38 +14,77 @@ import (
 
 const roundPersistSchemaVersion = 3
 
+// ProjectRoundState 返回当前局面面向协议、快照和 bot 的统一事实投影。
+func ProjectRoundState(rs *RoundState) RoundProjection {
+	if rs == nil {
+		return RoundProjection{}
+	}
+	actingSeat, waitingAction, pendingTile, available := rs.snapshotWaiting()
+	return RoundProjection{
+		Progress: RoundProgress{
+			ActingSeat:       actingSeat,
+			ActingSeats:      rs.actingSeats(),
+			WaitingAction:    waitingAction,
+			Phase:            rs.phase(),
+			Step:             int64(rs.step),
+			PendingTile:      pendingTile,
+			AvailableActions: append([]string(nil), available...),
+			ClaimCandidates:  rs.roundClaimCandidates(),
+			WallRemaining:    rs.wallRemaining(),
+			DeadlineUnixMs:   rs.deadlineUnixMs,
+		},
+		Facts: RoundFacts{
+			HandsBySeat:     rs.handStringsBySeat(),
+			DiscardsBySeat:  rs.discardStringsBySeat(),
+			MeldsBySeat:     cloneStringMatrix(rs.melds),
+			MeldInfosBySeat: rs.meldInfosBySeat(),
+			PlayerIDs:       rs.playerIDs,
+			QueBySeat:       append([]int32(nil), rs.queBySeat...),
+			HuedSeats:       append([]bool(nil), rs.huedSeats...),
+			Closed:          rs.closed,
+			LastAction:      rs.lastAction,
+			RoundIndex:      0,
+			HandIndex:       0,
+			TotalScores:     rs.totalScores(),
+			RuleMeta:        rs.ruleMeta(),
+		},
+	}
+}
+
 // SnapshotView 返回当前局面的最小等待态摘要。
 func (rs *RoundState) SnapshotView() RoundView {
 	if rs == nil {
 		return RoundView{}
 	}
-	actingSeat, waitingAction, pendingTile, available := rs.snapshotWaiting()
+	projection := ProjectRoundState(rs)
+	progress := projection.Progress
+	facts := projection.Facts
 	return RoundView{
-		ActingSeat:        actingSeat,
-		ActingSeats:       rs.actingSeats(),
-		WaitingAction:     waitingAction,
-		Phase:             rs.phase(),
-		LastStep:          int64(rs.step),
-		PendingTile:       pendingTile,
-		AvailableActions:  append([]string(nil), available...),
-		ClaimCandidates:   rs.roundClaimCandidates(),
-		HandsBySeat:       rs.handStringsBySeat(),
-		DiscardsBySeat:    rs.discardStringsBySeat(),
-		MeldsBySeat:       cloneStringMatrix(rs.melds),
-		MeldInfosBySeat:   rs.meldInfosBySeat(),
-		PlayerIDs:         rs.playerIDs,
-		QueBySeat:         append([]int32(nil), rs.queBySeat...),
-		HuedSeats:         append([]bool(nil), rs.huedSeats...),
+		ActingSeat:        progress.ActingSeat,
+		ActingSeats:       append([]int32(nil), progress.ActingSeats...),
+		WaitingAction:     progress.WaitingAction,
+		Phase:             progress.Phase,
+		LastStep:          progress.Step,
+		PendingTile:       progress.PendingTile,
+		AvailableActions:  append([]string(nil), progress.AvailableActions...),
+		ClaimCandidates:   append([]RoundClaimCandidate(nil), progress.ClaimCandidates...),
+		HandsBySeat:       facts.HandsBySeat,
+		DiscardsBySeat:    facts.DiscardsBySeat,
+		MeldsBySeat:       facts.MeldsBySeat,
+		MeldInfosBySeat:   facts.MeldInfosBySeat,
+		PlayerIDs:         facts.PlayerIDs,
+		QueBySeat:         facts.QueBySeat,
+		HuedSeats:         facts.HuedSeats,
 		ExchangeSubmitted: append([]bool(nil), rs.exchangeSubmitted...),
 		QueSubmitted:      append([]bool(nil), rs.queSubmitted...),
-		Closed:            rs.closed,
-		LastAction:        rs.lastAction,
-		WallRemaining:     rs.wallRemaining(),
-		DeadlineUnixMs:    rs.deadlineUnixMs,
-		RoundIndex:        0,
-		HandIndex:         0,
-		TotalScores:       rs.totalScores(),
-		RuleMeta:          rs.ruleMeta(),
+		Closed:            facts.Closed,
+		LastAction:        facts.LastAction,
+		WallRemaining:     progress.WallRemaining,
+		DeadlineUnixMs:    progress.DeadlineUnixMs,
+		RoundIndex:        facts.RoundIndex,
+		HandIndex:         facts.HandIndex,
+		TotalScores:       facts.TotalScores,
+		RuleMeta:          facts.RuleMeta,
 	}
 }
 

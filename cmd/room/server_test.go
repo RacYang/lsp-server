@@ -221,6 +221,118 @@ func TestMapPGRowToEvent(t *testing.T) {
 	require.EqualValues(t, 2, evt.GetStartGame().GetDealerSeat())
 }
 
+func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		kind   roomsvc.Kind
+		env    *clientv1.Envelope
+		assert func(*testing.T, *clusterv1.RoomServiceStreamEventsResponse)
+	}{
+		{
+			name: "start",
+			kind: roomsvc.KindStartGame,
+			env: &clientv1.Envelope{Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
+				Phase:         clientv1.Phase_PHASE_DRAW,
+				Step:          10,
+				ActingSeats:   []int32{0},
+				WallRemaining: 55,
+			}}},
+			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+				t.Helper()
+				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetStartGame().GetPhase())
+				require.EqualValues(t, 10, evt.GetStartGame().GetStep())
+				require.Equal(t, []int32{0}, evt.GetStartGame().GetActingSeats())
+				require.EqualValues(t, 55, evt.GetStartGame().GetWallRemaining())
+			},
+		},
+		{
+			name: "draw",
+			kind: roomsvc.KindDrawTile,
+			env: &clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
+				Phase:          clientv1.Phase_PHASE_DISCARD,
+				Step:           11,
+				ActingSeats:    []int32{1},
+				WallRemaining:  54,
+				DeadlineUnixMs: 1234,
+			}}},
+			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+				t.Helper()
+				require.Equal(t, clusterv1.Phase_PHASE_DISCARD, evt.GetDrawTile().GetPhase())
+				require.EqualValues(t, 11, evt.GetDrawTile().GetStep())
+				require.Equal(t, []int32{1}, evt.GetDrawTile().GetActingSeats())
+				require.EqualValues(t, 54, evt.GetDrawTile().GetWallRemaining())
+				require.EqualValues(t, 1234, evt.GetDrawTile().GetDeadlineUnixMs())
+			},
+		},
+		{
+			name: "action",
+			kind: roomsvc.KindAction,
+			env: &clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
+				SeatIndex:   1,
+				Action:      "discard",
+				Tile:        "p9",
+				Phase:       clientv1.Phase_PHASE_DRAW,
+				Step:        12,
+				ActingSeats: []int32{2},
+			}}},
+			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+				t.Helper()
+				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetAction().GetPhase())
+				require.EqualValues(t, 12, evt.GetAction().GetStep())
+				require.Equal(t, []int32{2}, evt.GetAction().GetActingSeats())
+			},
+		},
+		{
+			name: "exchange",
+			kind: roomsvc.KindExchangeThreeDone,
+			env: &clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
+				Phase:       clientv1.Phase_PHASE_QUE_MEN,
+				Step:        13,
+				ActingSeats: []int32{0, 1, 2, 3},
+				Direction:   3,
+			}}},
+			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+				t.Helper()
+				require.Equal(t, clusterv1.Phase_PHASE_QUE_MEN, evt.GetExchangeThreeDone().GetPhase())
+				require.EqualValues(t, 13, evt.GetExchangeThreeDone().GetStep())
+				require.Equal(t, []int32{0, 1, 2, 3}, evt.GetExchangeThreeDone().GetActingSeats())
+				require.EqualValues(t, 3, evt.GetExchangeThreeDone().GetDirection())
+			},
+		},
+		{
+			name: "que",
+			kind: roomsvc.KindQueMenDone,
+			env: &clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
+				Phase:       clientv1.Phase_PHASE_DRAW,
+				Step:        14,
+				ActingSeats: []int32{0},
+			}}},
+			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+				t.Helper()
+				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetQueMenDone().GetPhase())
+				require.EqualValues(t, 14, evt.GetQueMenDone().GetStep())
+				require.Equal(t, []int32{0}, evt.GetQueMenDone().GetActingSeats())
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := proto.Marshal(tc.env)
+			require.NoError(t, err)
+
+			evt, err := mapNotificationToEvent("r-progress", "r-progress:12", roomsvc.Notification{
+				Kind:       tc.kind,
+				Payload:    payload,
+				TargetSeat: roomsvc.BroadcastSeat,
+			})
+			require.NoError(t, err)
+			tc.assert(t, evt)
+		})
+	}
+}
+
 func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 	t.Parallel()
 

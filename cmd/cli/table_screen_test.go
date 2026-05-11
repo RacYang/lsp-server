@@ -121,7 +121,7 @@ func TestHandleOverlayKeyEnterClosesNonMenuOverlay(t *testing.T) {
 func TestSubmitAddBotAppliesReturnedSeats(t *testing.T) {
 	state := NewAppState("racoo")
 	submitAddBot(context.Background(), state, addBotGateway{added: []*clientv1.SeatInfo{
-		{SeatIndex: 1, UserId: "bot:r1:1", Nickname: "机器人", IsBot: true},
+		{SeatIndex: 1, UserId: "bot:r1:1", Nickname: "机器人", IsBot: true, Status: "ready"},
 	}}, 1)
 
 	require.Eventually(t, func() bool {

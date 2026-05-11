@@ -70,7 +70,7 @@ func TestApplyDiscardPreservesNextDrawFocus(t *testing.T) {
 
 	view := st.Snapshot()
 	require.Equal(t, clientv1.Phase_PHASE_DRAW, view.RoundPhase)
-	require.Equal(t, "draw", view.WaitingAction)
+	require.Equal(t, "none", view.WaitingAction)
 	require.EqualValues(t, 2, view.ActingSeat)
 	require.Equal(t, []string{"p9"}, view.Players[1].Discards)
 }
@@ -180,7 +180,7 @@ func TestQueMenStartGameDrawKeepsAuthoritativePhase(t *testing.T) {
 
 	view := st.Snapshot()
 	require.Equal(t, clientv1.Phase_PHASE_DRAW, view.RoundPhase)
-	require.Equal(t, "draw", view.WaitingAction)
+	require.Equal(t, "none", view.WaitingAction)
 	require.EqualValues(t, 0, view.ActingSeat)
 	require.Equal(t, 3, view.Players[0].HandCnt)
 
@@ -324,7 +324,7 @@ func TestLeaveRoomLocallyDropsStaleSnapshot(t *testing.T) {
 	require.Equal(t, "r1", view.PendingLeaveRoomID)
 }
 
-func TestApplySeatInfosUpdatesPlayerLabels(t *testing.T) {
+func TestApplySeatRosterUpdatesPlayerLabels(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Snapshot{Snapshot: &clientv1.SnapshotNotify{
 		RoomId: "r1",

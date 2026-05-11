@@ -41,34 +41,30 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat Seat, sui
 		}
 	}
 	rs.waitingQueMen = false
+	progress := rs.drawTransitionProgress()
+	queDone := &clientv1.QueMenDoneNotify{QueSuitBySeat: rs.queBySeat}
+	progress.applyToQueMenDone(queDone)
 	quePayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "que-men",
 		Body: &clientv1.Envelope_QueMenDone{
-			QueMenDone: &clientv1.QueMenDoneNotify{
-				QueSuitBySeat: rs.queBySeat,
-				Phase:         clientv1.Phase_PHASE_DRAW,
-				Step:          int64(rs.step),
-				ActingSeats:   []int32{rs.turn.Proto()},
-			},
+			QueMenDone: queDone,
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
+	start := &clientv1.StartGameNotify{
+		RoomId:     rs.roomID,
+		DealerSeat: rs.dealerSeat.Proto(),
+		RoundIndex: 0,
+		HandIndex:  0,
+		RuleMeta:   rs.ruleMeta(),
+	}
+	progress.applyToStart(start)
 	startPayload, err := marshalEnvelope(&clientv1.Envelope{
 		ReqId: "start",
 		Body: &clientv1.Envelope_StartGame{
-			StartGame: &clientv1.StartGameNotify{
-				RoomId:        rs.roomID,
-				DealerSeat:    rs.dealerSeat.Proto(),
-				Phase:         clientv1.Phase_PHASE_DRAW,
-				Step:          int64(rs.step),
-				ActingSeats:   []int32{rs.turn.Proto()},
-				WallRemaining: rs.wallRemaining(),
-				RoundIndex:    0,
-				HandIndex:     0,
-				RuleMeta:      rs.ruleMeta(),
-			},
+			StartGame: start,
 		},
 	})
 	if err != nil {

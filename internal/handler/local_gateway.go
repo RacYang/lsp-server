@@ -129,6 +129,9 @@ func (g *LocalRoomGateway) AddBot(ctx context.Context, roomID, userID string, co
 			UserId:    bot.UserID,
 			Nickname:  "机器人",
 			IsBot:     true,
+			Online:    true,
+			AutoPlay:  true,
+			Status:    "ready",
 		})
 	}
 	return out, g.broadcastAfter(roomID, notifications), nil

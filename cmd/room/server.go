@@ -244,14 +244,19 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					}
 				}
 				mySeat := seatIndexForUser(meta.PlayerIDs, req.GetUserId())
+				seats := clusterSeatsFromPlayerIDs(meta.PlayerIDs, [4]bool{}, meta.State)
+				applyHandCountsToClusterSeats(seats, view.HandsBySeat)
 				return &clusterv1.SnapshotRoomResponse{
 					Cursor:           cur,
 					PlayerIds:        append([]string(nil), meta.PlayerIDs...),
-					Seats:            clusterSeatsFromPlayerIDs(meta.PlayerIDs, [4]bool{}, meta.State),
+					Seats:            seats,
 					QueSuitBySeat:    append([]int32(nil), meta.QueSuits...),
 					State:            meta.State,
 					ActingSeat:       view.ActingSeat,
 					WaitingAction:    view.WaitingAction,
+					Phase:            clientPhaseToCluster(view.Phase),
+					ActingSeats:      append([]int32(nil), view.ActingSeats...),
+					LastStep:         view.LastStep,
 					PendingTile:      view.PendingTile,
 					AvailableActions: append([]string(nil), view.AvailableActions...),
 					ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
@@ -284,14 +289,19 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	qs := pickLastQueSuits(ctx, s, roomID)
 	view, _, _ := s.rooms.RoundView(ctx, roomID)
 	mySeat := seatIndexForUser(players, req.GetUserId())
+	seats := clusterSeatsFromPlayerIDs(players, ready, state)
+	applyHandCountsToClusterSeats(seats, view.HandsBySeat)
 	return &clusterv1.SnapshotRoomResponse{
 		Cursor:           cur,
 		PlayerIds:        players,
-		Seats:            clusterSeatsFromPlayerIDs(players, ready, state),
+		Seats:            seats,
 		QueSuitBySeat:    qs,
 		State:            state,
 		ActingSeat:       view.ActingSeat,
 		WaitingAction:    view.WaitingAction,
+		Phase:            clientPhaseToCluster(view.Phase),
+		ActingSeats:      append([]int32(nil), view.ActingSeats...),
+		LastStep:         view.LastStep,
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),
 		ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
@@ -325,6 +335,10 @@ func handForSeat(hands [][]string, seat int) []string {
 	return append([]string(nil), hands[seat]...)
 }
 
+func clientPhaseToCluster(phase clientv1.Phase) clusterv1.Phase {
+	return clusterv1.Phase(phase.Number())
+}
+
 func clusterSeatsFromPlayerIDs(players []string, ready [4]bool, fsmState string) []*clusterv1.SeatInfo {
 	seats := make([]*clusterv1.SeatInfo, 0, 4)
 	for i := 0; i < 4; i++ {
@@ -342,6 +356,15 @@ func clusterSeatsFromPlayerIDs(players []string, ready [4]bool, fsmState string)
 		seats = append(seats, info)
 	}
 	return seats
+}
+
+func applyHandCountsToClusterSeats(seats []*clusterv1.SeatInfo, hands [][]string) {
+	for _, seat := range seats {
+		idx := int(seat.GetSeatIndex())
+		if idx >= 0 && idx < len(hands) {
+			seat.HandCount = int32(len(hands[idx])) //nolint:gosec // hand length is bounded by Mahjong deck size.
+		}
+	}
 }
 
 func stringMatrixToClusterSeatTiles(items [][]string) []*clusterv1.SeatTiles {
@@ -526,6 +549,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 			InitialDeal: &clusterv1.InitialDealEvent{
 				SeatIndex: env.GetInitialDeal().GetSeatIndex(),
 				Tiles:     append([]string(nil), env.GetInitialDeal().GetTiles()...),
+				Step:      env.GetInitialDeal().GetStep(),
 			},
 		}
 	case roomsvc.KindExchangeThreeDone:
@@ -541,15 +565,33 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 			ExchangeThreeDone: &clusterv1.ExchangeThreeDoneEvent{
 				SeatTiles:         seatTiles,
 				YourExchangedAway: append([]string(nil), env.GetExchangeThreeDone().GetYourExchangedAway()...),
+				Phase:             clientPhaseToCluster(env.GetExchangeThreeDone().GetPhase()),
+				Step:              env.GetExchangeThreeDone().GetStep(),
+				ActingSeats:       append([]int32(nil), env.GetExchangeThreeDone().GetActingSeats()...),
+				Direction:         env.GetExchangeThreeDone().GetDirection(),
 			},
 		}
 	case roomsvc.KindQueMenDone:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_QueMenDone{
-			QueMenDone: &clusterv1.QueMenDoneEvent{QueSuitBySeat: append([]int32(nil), env.GetQueMenDone().GetQueSuitBySeat()...)},
+			QueMenDone: &clusterv1.QueMenDoneEvent{
+				QueSuitBySeat: append([]int32(nil), env.GetQueMenDone().GetQueSuitBySeat()...),
+				Phase:         clientPhaseToCluster(env.GetQueMenDone().GetPhase()),
+				Step:          env.GetQueMenDone().GetStep(),
+				ActingSeats:   append([]int32(nil), env.GetQueMenDone().GetActingSeats()...),
+			},
 		}
 	case roomsvc.KindStartGame:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_StartGame{
-			StartGame: &clusterv1.StartGameEvent{DealerSeat: env.GetStartGame().GetDealerSeat()},
+			StartGame: &clusterv1.StartGameEvent{
+				DealerSeat:    env.GetStartGame().GetDealerSeat(),
+				Phase:         clientPhaseToCluster(env.GetStartGame().GetPhase()),
+				Step:          env.GetStartGame().GetStep(),
+				ActingSeats:   append([]int32(nil), env.GetStartGame().GetActingSeats()...),
+				WallRemaining: env.GetStartGame().GetWallRemaining(),
+				RoundIndex:    env.GetStartGame().GetRoundIndex(),
+				HandIndex:     env.GetStartGame().GetHandIndex(),
+				RuleMeta:      clientRuleMetaToCluster(env.GetStartGame().GetRuleMeta()),
+			},
 		}
 	case roomsvc.KindDrawTile:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
@@ -558,6 +600,9 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				Tile:           env.GetDrawTile().GetTile(),
 				WallRemaining:  env.GetDrawTile().GetWallRemaining(),
 				DeadlineUnixMs: env.GetDrawTile().GetDeadlineUnixMs(),
+				Phase:          clientPhaseToCluster(env.GetDrawTile().GetPhase()),
+				Step:           env.GetDrawTile().GetStep(),
+				ActingSeats:    append([]int32(nil), env.GetDrawTile().GetActingSeats()...),
 			},
 		}
 	case roomsvc.KindAction:
@@ -569,6 +614,9 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				Detail:         clientActionDetailToCluster(env.GetAction().GetDetail()),
 				WallRemaining:  env.GetAction().GetWallRemaining(),
 				DeadlineUnixMs: env.GetAction().GetDeadlineUnixMs(),
+				Phase:          clientPhaseToCluster(env.GetAction().GetPhase()),
+				Step:           env.GetAction().GetStep(),
+				ActingSeats:    append([]int32(nil), env.GetAction().GetActingSeats()...),
 			},
 		}
 	case roomsvc.KindSettlement:

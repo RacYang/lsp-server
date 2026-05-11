@@ -94,6 +94,9 @@ func TestRegisterLobbyService_RoundTrip(t *testing.T) {
 	addResp, err := cli.AddBot(ctx, &clusterv1.AddBotRequest{RoomId: "r-grpc", UserId: "u1", Count: 2})
 	require.NoError(t, err)
 	require.Len(t, addResp.GetAdded(), 2)
+	require.Equal(t, "online", addResp.GetAdded()[0].GetStatus())
+	require.True(t, addResp.GetAdded()[0].GetOnline())
+	require.True(t, addResp.GetAdded()[0].GetAutoPlay())
 
 	leaveResp, err := cli.LeaveRoom(ctx, &clusterv1.LeaveRoomRequest{RoomId: "r-grpc", UserId: "u1"})
 	require.NoError(t, err)
