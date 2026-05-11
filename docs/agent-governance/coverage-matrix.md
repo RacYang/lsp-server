@@ -10,7 +10,7 @@
 | build | 构造代码、协议、配置或玩法能力 | `.cursor/skills/scaffold-package/SKILL.md`、`.cursor/skills/add-pb-message/SKILL.md`、`.cursor/skills/add-mahjong-rule/SKILL.md` |
 | verify | 增加测试、压测、夹具与回归验证 | `.cursor/skills/add-table-test/SKILL.md`、`.cursor/skills/add-integration-test/SKILL.md`、`.cursor/skills/add-bench-scenario/SKILL.md` |
 | operate | 增加观测、部署覆盖或运行手册 | `.cursor/skills/add-metric/SKILL.md`、`.cursor/skills/add-log-boundary/SKILL.md`、`.cursor/skills/add-deploy-overlay/SKILL.md` |
-| evolve | 升级、退役、修复或维护治理资产 | `.cursor/skills/fix-bug/SKILL.md`、`.cursor/skills/update-ssot/SKILL.md`、`.cursor/skills/add-constraint/SKILL.md` |
+| evolve | 升级、退役、根因修复或维护治理资产 | `.cursor/skills/fix-bug/SKILL.md`、`.cursor/skills/update-ssot/SKILL.md`、`.cursor/skills/add-constraint/SKILL.md` |
 
 ## 架构层
 
@@ -34,6 +34,7 @@
 | skill | `.cursor/skills/add-skill/SKILL.md` | `.cursor/templates/doc/skill/manifest.yaml` | `.cursor/rules/skill-shape.mdc` | `docs/adr/0042-agent-governance.md` |
 | template | `.cursor/skills/add-template/SKILL.md` | `.cursor/templates/doc/template/manifest.yaml` | `.cursor/rules/template-shape.mdc` | `docs/adr/0042-agent-governance.md` |
 | 注释 | `.cursor/skills/scaffold-package/SKILL.md` | `.cursor/templates/comment/exported-func/manifest.yaml` | `.cursor/rules/code-comments-chinese.mdc` | `docs/adr/0005-comment-system.md` |
+| 根因修复 | `.cursor/skills/fix-bug/SKILL.md` | `.cursor/templates/code/go-table-test/manifest.yaml` | `.cursor/rules/test-layout.mdc` | `docs/adr/0043-root-cause-fix-policy.md` |
 | 错误处理 | `.cursor/skills/fix-bug/SKILL.md` | `.cursor/templates/code/go-table-test/manifest.yaml` | `.cursor/rules/error-handling.mdc` | `docs/adr/0000-engineering-charter.md` |
 | 日志 | `.cursor/skills/add-log-boundary/SKILL.md` | `.cursor/templates/doc/runbook/manifest.yaml` | `.cursor/rules/no-direct-logging.mdc` | `docs/adr/0006-logging-system-and-facade.md` |
 | 指标 | `.cursor/skills/add-metric/SKILL.md` | `.cursor/templates/doc/runbook/manifest.yaml` | `.cursor/rules/metrics-naming.mdc` | `docs/adr/0019-observability-metrics.md` |

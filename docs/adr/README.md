@@ -65,3 +65,4 @@
 - [ADR-0040 组合式麻将规则能力](0040-composable-mahjong-rule-capabilities.md)：已采纳；定义换三张、定缺、吃碰杠胡、轮转、计分与结算的规则能力组合边界。
 - [ADR-0041 麻将规则 ID 命名规范](0041-mahjong-rule-id-naming.md)：已采纳；统一 `<region>_<variant>_<option>` 全拼音规则 ID，并禁止缩写与混合语言。
 - [ADR-0042 Agent 治理体系职责边界](0042-agent-governance.md)：已采纳；定义 AGENTS、ADR、rules、skills、templates 与 harness 的职责边界。
+- [ADR-0043 根因优先的问题处理策略](0043-root-cause-fix-policy.md)：已采纳；定义查问题与修问题必须先解释根因、拒绝补丁式修复。
