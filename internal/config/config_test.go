@@ -10,7 +10,7 @@ import (
 func TestLoadTempFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "c.yaml")
-	content := "server:\n  addr: \":19999\"\n  ws_allowed_origins:\n    - \"https://trusted.example\"\nrule:\n  default_id: \"sichuan_xuezhandaodi_huansanzhang\"\ncluster:\n  advertise_addr: \"room:19082\"\nruntime:\n  gate:\n    ws_rate_limit_per_second: 7\n    ws_rate_limit_burst: 9\n    ws_idempotency_cache: 11\n  room:\n    mailbox_capacity: 13\n    surrender_action_timeout: 1500ms\n    allow_leave_during_play: true\n  lobby:\n    bot_supervisor_enabled: true\n    max_bots_per_room: 2\n  redis:\n    idempotency_ttl: 2m\n  logging:\n    level: debug\n    format: console\n    otel_enabled: true\n    otel_endpoint: \"localhost:4317\"\n    dynamic_level: true\n    sample:\n      initial: 3\n      thereafter: 5\n      tick: 2s\n      error_never: true\n"
+	content := "server:\n  addr: \":19999\"\n  ws_allowed_origins:\n    - \"https://trusted.example\"\nrule:\n  default_id: \"sichuan_xuezhandaodi_huansanzhang\"\ncluster:\n  advertise_addr: \"room:19082\"\nruntime:\n  gate:\n    ws_rate_limit_per_second: 7\n    ws_rate_limit_burst: 9\n    ws_idempotency_cache: 11\n  room:\n    mailbox_capacity: 13\n    surrender_action_timeout: 1500ms\n    allow_leave_during_play: true\n  lobby:\n    bot_supervisor_enabled: true\n    max_bots_per_room: 2\n  redis:\n    idempotency_ttl: 2m\n  postgres:\n    pool:\n      max_conns: 17\n      min_conns: 2\n      max_conn_lifetime: 45m\n      max_conn_idle_time: 5m\n      health_check_period: 30s\n  logging:\n    level: debug\n    format: console\n    otel_enabled: true\n    otel_endpoint: \"localhost:4317\"\n    dynamic_level: true\n    sample:\n      initial: 3\n      thereafter: 5\n      tick: 2s\n      error_never: true\n"
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -37,6 +37,13 @@ func TestLoadTempFile(t *testing.T) {
 		cfg.Runtime.LobbyMaxBotsPerRoom != 2 ||
 		cfg.Runtime.RedisIdempotencyTTL.String() != "2m0s" {
 		t.Fatalf("%+v", cfg.Runtime)
+	}
+	if cfg.Runtime.Postgres.Pool.MaxConns != 17 ||
+		cfg.Runtime.Postgres.Pool.MinConns != 2 ||
+		cfg.Runtime.Postgres.Pool.MaxConnLifetime.String() != "45m0s" ||
+		cfg.Runtime.Postgres.Pool.MaxConnIdleTime.String() != "5m0s" ||
+		cfg.Runtime.Postgres.Pool.HealthCheckPeriod.String() != "30s" {
+		t.Fatalf("%+v", cfg.Runtime.Postgres.Pool)
 	}
 	if cfg.Runtime.Logging.Level != "debug" ||
 		cfg.Runtime.Logging.Format != "console" ||

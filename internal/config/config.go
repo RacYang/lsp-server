@@ -51,7 +51,22 @@ type RuntimeConfig struct {
 	LobbyBotSupervisorEnabled  bool
 	LobbyMaxBotsPerRoom        int
 	RedisIdempotencyTTL        time.Duration
+	Postgres                   PostgresRuntimeConfig
 	Logging                    LoggingConfig
+}
+
+// PostgresRuntimeConfig 定义 PostgreSQL 运行时参数。
+type PostgresRuntimeConfig struct {
+	Pool PostgresPoolConfig
+}
+
+// PostgresPoolConfig 定义 PostgreSQL 连接池参数；零值表示沿用 pgx/DSN 默认值。
+type PostgresPoolConfig struct {
+	MaxConns          int32
+	MinConns          int32
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
 }
 
 // LoggingConfig 定义日志门面的运行时开关。
@@ -171,6 +186,15 @@ func Load(path string) (Config, error) {
 			LobbyBotSupervisorEnabled:  v.GetBool("runtime.lobby.bot_supervisor_enabled"),
 			LobbyMaxBotsPerRoom:        v.GetInt("runtime.lobby.max_bots_per_room"),
 			RedisIdempotencyTTL:        v.GetDuration("runtime.redis.idempotency_ttl"),
+			Postgres: PostgresRuntimeConfig{
+				Pool: PostgresPoolConfig{
+					MaxConns:          v.GetInt32("runtime.postgres.pool.max_conns"),
+					MinConns:          v.GetInt32("runtime.postgres.pool.min_conns"),
+					MaxConnLifetime:   v.GetDuration("runtime.postgres.pool.max_conn_lifetime"),
+					MaxConnIdleTime:   v.GetDuration("runtime.postgres.pool.max_conn_idle_time"),
+					HealthCheckPeriod: v.GetDuration("runtime.postgres.pool.health_check_period"),
+				},
+			},
 			Logging: LoggingConfig{
 				Level:        v.GetString("runtime.logging.level"),
 				Format:       v.GetString("runtime.logging.format"),

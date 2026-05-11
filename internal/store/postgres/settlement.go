@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/metrics"
+	storex "racoo.cn/lsp/internal/store"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -35,43 +38,70 @@ func NewSettlementStore(pool settlementPool) *SettlementStore {
 
 // AppendSettlement 记录一局结算摘要。
 func (s *SettlementStore) AppendSettlement(ctx context.Context, settlement *clientv1.SettlementNotify) error {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("postgres", "append_settlement", started, opErr) }()
 	if s == nil || s.pool == nil {
-		return fmt.Errorf("nil settlement store")
+		opErr = fmt.Errorf("nil settlement store")
+		return opErr
 	}
 	if settlement == nil || settlement.GetRoomId() == "" {
-		return fmt.Errorf("nil settlement or empty room_id")
+		opErr = fmt.Errorf("nil settlement or empty room_id")
+		return opErr
 	}
 	payload, err := proto.Marshal(settlement)
 	if err != nil {
-		return fmt.Errorf("marshal settlement payload: %w", err)
+		opErr = fmt.Errorf("marshal settlement payload: %w", err)
+		return opErr
 	}
-	_, err = s.pool.Exec(ctx, `
-		INSERT INTO settlements (room_id, winner_user_ids, total_fan, detail_text, payload)
-		VALUES ($1, $2, $3, $4, $5)
-	`, settlement.GetRoomId(), settlement.GetWinnerUserIds(), settlement.GetTotalFan(), settlement.GetDetailText(), payload)
-	return err
+	opCtx, cancel := storex.WithOperationTimeout(ctx)
+	defer cancel()
+	_, opErr = s.pool.Exec(opCtx, `
+		INSERT INTO settlements (room_id, winner_user_ids, total_fan, detail_text, payload, round_index, hand_index)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (room_id, round_index, hand_index)
+		WHERE round_index IS NOT NULL AND hand_index IS NOT NULL
+		DO UPDATE SET
+		    winner_user_ids = EXCLUDED.winner_user_ids,
+		    total_fan = EXCLUDED.total_fan,
+		    detail_text = EXCLUDED.detail_text,
+		    payload = EXCLUDED.payload
+	`, settlement.GetRoomId(), settlement.GetWinnerUserIds(), settlement.GetTotalFan(), settlement.GetDetailText(), payload, settlement.GetRoundIndex(), settlement.GetHandIndex())
+	return opErr
 }
 
 // HasSettlement 判断房间是否已有结算记录。
 func (s *SettlementStore) HasSettlement(ctx context.Context, roomID string) (bool, error) {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("postgres", "has_settlement", started, opErr) }()
 	if s == nil || s.pool == nil {
-		return false, fmt.Errorf("nil settlement store")
+		opErr = fmt.Errorf("nil settlement store")
+		return false, opErr
 	}
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT COUNT(1) FROM settlements WHERE room_id = $1`, roomID).Scan(&n)
-	if err != nil {
-		return false, err
+	opCtx, cancel := storex.WithOperationTimeout(ctx)
+	defer cancel()
+	opErr = s.pool.QueryRow(opCtx, `SELECT COUNT(1) FROM settlements WHERE room_id = $1`, roomID).Scan(&n)
+	if opErr != nil {
+		return false, opErr
 	}
 	return n > 0, nil
 }
 
 // GetLatestSettlement 读取房间最近一次结算详情，供断线重连 fallback。
 func (s *SettlementStore) GetLatestSettlement(ctx context.Context, roomID string) (*clientv1.SettlementNotify, error) {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("postgres", "get_latest_settlement", started, opErr) }()
 	if s == nil || s.pool == nil {
-		return nil, fmt.Errorf("nil settlement store")
+		opErr = fmt.Errorf("nil settlement store")
+		return nil, opErr
 	}
 	var payload []byte
-	err := s.pool.QueryRow(ctx, `
+	opCtx, cancel := storex.WithOperationTimeout(ctx)
+	defer cancel()
+	err := s.pool.QueryRow(opCtx, `
 		SELECT payload
 		FROM settlements
 		WHERE room_id = $1
@@ -80,13 +110,16 @@ func (s *SettlementStore) GetLatestSettlement(ctx context.Context, roomID string
 	`, roomID).Scan(&payload)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			opErr = ErrSettlementNotFound
 			return nil, ErrSettlementNotFound
 		}
+		opErr = err
 		return nil, err
 	}
 	var settlement clientv1.SettlementNotify
 	if err := proto.Unmarshal(payload, &settlement); err != nil {
-		return nil, fmt.Errorf("unmarshal settlement payload: %w", err)
+		opErr = fmt.Errorf("unmarshal settlement payload: %w", err)
+		return nil, opErr
 	}
 	return &settlement, nil
 }

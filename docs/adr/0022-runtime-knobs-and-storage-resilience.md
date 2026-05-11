@@ -27,6 +27,11 @@ Phase 5 已引入 WebSocket 限流、幂等重放去重、room actor 有界 mail
 - `runtime.gate.ws_idempotency_cache`: 4096。
 - `runtime.room.mailbox_capacity`: 96（Phase 6 首轮本地基线后由 64 保守上调）。
 - `runtime.redis.idempotency_ttl`: 10 分钟。
+- `runtime.postgres.pool.max_conns`: 0，零值表示沿用 DSN 或 pgx 默认值。
+- `runtime.postgres.pool.min_conns`: 0，零值表示沿用 DSN 或 pgx 默认值。
+- `runtime.postgres.pool.max_conn_lifetime`: 0s，零值表示沿用 DSN 或 pgx 默认值。
+- `runtime.postgres.pool.max_conn_idle_time`: 0s，零值表示沿用 DSN 或 pgx 默认值。
+- `runtime.postgres.pool.health_check_period`: 0s，零值表示沿用 DSN 或 pgx 默认值。
 
 ### 2. 存储弹性
 

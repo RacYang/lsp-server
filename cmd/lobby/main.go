@@ -69,7 +69,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		logx.Error(ctx, "大厅服务装配失败", "err", err.Error())
 		return 1
 	}
-	obsStop, err := app.StartObsHTTP(cfg.ObsAddr, nil)
+	obsStop, err := app.StartObsHTTP(cfg.ObsAddr)
 	if err != nil {
 		logx.Error(ctx, "可观测性 HTTP 启动失败", "err", err.Error())
 		return 1

@@ -89,6 +89,17 @@ groups:
         annotations:
           summary: 结算持久化 p99 持续异常
           description: PostgreSQL append_event p99 超过 1s 且持续 30 分钟。
+      - alert: LSPStorageRetryExhaustedWarn
+        expr: lsp:storage_retry_exhausted:rate_5m > 0
+        for: 5m
+        labels:
+          severity: warn
+          service: '{{ $labels.service }}'
+          room_id: ""
+          build_sha: '{{ $labels.build_sha }}'
+        annotations:
+          summary: 存储操作重试耗尽
+          description: store={{ $labels.store }} op={{ $labels.op }} 在 5 分钟窗口内出现重试耗尽。
       - alert: LSPWebSocketRateLimitedWarn
         expr: lsp:slo_ws_rate_limited:rate_5m > 1
         for: 5m

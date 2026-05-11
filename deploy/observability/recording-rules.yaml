@@ -26,3 +26,5 @@ groups:
         expr: sum by (service, build_sha) (rate(lsp_rate_limited_total{layer="ws"}[5m]))
       - record: lsp:slo_unknown_msg:rate_5m
         expr: sum by (service, build_sha) (rate(lsp_unknown_msg_total[5m]))
+      - record: lsp:storage_retry_exhausted:rate_5m
+        expr: sum by (service, build_sha, store, op) (rate(lsp_storage_retry_total{result="exhausted"}[5m]))

@@ -67,6 +67,7 @@ Kubernetes 是首选；不强制 Kubernetes 之外的形态。每个服务给出
 | 抢答窗口完成率 | `lsp_claim_window_total{result}` | 90 天 `result="completed"` / 总和 ≥ 99% | 5 分钟内 `result="timeout"` / 总和 > 5% |
 | 重连成功率 | `lsp_reconnect_total{result}` | 30 天 `result="ok"` ≥ 99% | 5 分钟 `result="ok"` < 95% |
 | 结算延迟 p99 | `lsp_storage_op_seconds{store="postgres",op="append_event"}` | p99 ≤ 200ms | p99 > 500ms 持续 5 分钟 |
+| 存储重试耗尽 | `lsp_storage_retry_total{result="exhausted"}` | 5 分钟窗口内为 0 | 5 分钟窗口内 > 0 |
 | WebSocket 入站限流 | `lsp_rate_limited_total{layer="ws"}` | 占同期入站 < 0.1% | 5 分钟 > 1% |
 | 未知消息率 | `lsp_unknown_msg_total` | < 0.01% | 5 分钟 > 0.1% |
 

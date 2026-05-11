@@ -58,7 +58,7 @@ func (s *RoomEventStore) AppendEvent(ctx context.Context, roomID, kind string, p
 func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events []RoomEventRow) ([]RoomEventRow, error) {
 	started := time.Now()
 	var opErr error
-	defer func() { metrics.ObserveStorage("postgres", "append_events", started, opErr) }()
+	defer func() { metrics.ObserveStorage("postgres", "append_event", started, opErr) }()
 	if s == nil || s.pool == nil {
 		opErr = fmt.Errorf("nil room event store")
 		return nil, opErr
@@ -76,16 +76,18 @@ func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events
 			return nil, opErr
 		}
 	}
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	opCtx, cancel := storex.WithOperationTimeout(ctx)
+	defer cancel()
+	tx, err := s.pool.BeginTx(opCtx, pgx.TxOptions{})
 	if err != nil {
 		opErr = err
 		return nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { _ = tx.Rollback(opCtx) }()
 
 	var next int64
 	var lastSeq int64
-	err = tx.QueryRow(ctx, `SELECT seq FROM room_events WHERE room_id = $1 ORDER BY seq DESC LIMIT 1 FOR UPDATE`, roomID).Scan(&lastSeq)
+	err = tx.QueryRow(opCtx, `SELECT seq FROM room_events WHERE room_id = $1 ORDER BY seq DESC LIMIT 1 FOR UPDATE`, roomID).Scan(&lastSeq)
 	switch {
 	case err == nil:
 		next = lastSeq + 1
@@ -102,7 +104,7 @@ func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events
 			opErr = fmt.Errorf("invalid target seat: %d", event.TargetSeat)
 			return nil, opErr
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO room_events (room_id, seq, kind, payload, target_seat) VALUES ($1, $2, $3, $4, $5)`, roomID, next, event.Kind, event.Payload, event.TargetSeat); err != nil {
+		if _, err := tx.Exec(opCtx, `INSERT INTO room_events (room_id, seq, kind, payload, target_seat) VALUES ($1, $2, $3, $4, $5)`, roomID, next, event.Kind, event.Payload, event.TargetSeat); err != nil {
 			opErr = fmt.Errorf("insert event: %w", err)
 			return nil, opErr
 		}
@@ -115,7 +117,7 @@ func (s *RoomEventStore) AppendEvents(ctx context.Context, roomID string, events
 		})
 		next++
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := tx.Commit(opCtx); err != nil {
 		opErr = err
 		return nil, err
 	}
@@ -175,10 +177,16 @@ func (s *RoomEventStore) ListEventsAfter(ctx context.Context, roomID string, aft
 
 // MaxSeq 返回房间当前最大 seq；无记录时为 0。
 func (s *RoomEventStore) MaxSeq(ctx context.Context, roomID string) (int64, error) {
+	started := time.Now()
+	var opErr error
+	defer func() { metrics.ObserveStorage("postgres", "max_seq", started, opErr) }()
 	if s == nil || s.pool == nil {
-		return 0, fmt.Errorf("nil room event store")
+		opErr = fmt.Errorf("nil room event store")
+		return 0, opErr
 	}
 	var m int64
-	err := s.pool.QueryRow(ctx, `SELECT COALESCE(MAX(seq), 0) FROM room_events WHERE room_id = $1`, roomID).Scan(&m)
-	return m, err
+	opCtx, cancel := storex.WithOperationTimeout(ctx)
+	defer cancel()
+	opErr = s.pool.QueryRow(opCtx, `SELECT COALESCE(MAX(seq), 0) FROM room_events WHERE room_id = $1`, roomID).Scan(&m)
+	return m, opErr
 }

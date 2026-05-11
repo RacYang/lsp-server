@@ -60,7 +60,7 @@ func waitFor(t *testing.T, fn func() bool) {
 // TestStartObsHTTPEmptyAddr 校验空地址走捷径返回 noop stop，不会启动监听端口。
 func TestStartObsHTTPEmptyAddr(t *testing.T) {
 	t.Parallel()
-	stop, err := StartObsHTTP("", nil)
+	stop, err := StartObsHTTP("")
 	require.NoError(t, err)
 	require.NotNil(t, stop)
 	stop()
@@ -69,7 +69,7 @@ func TestStartObsHTTPEmptyAddr(t *testing.T) {
 // TestStartObsHTTPEndpoints 校验四个核心端点：健康检查、就绪检查、指标、pprof 索引页都能正常响应。
 func TestStartObsHTTPEndpoints(t *testing.T) {
 	addr := freePort(t)
-	stop, err := StartObsHTTP(addr, nil)
+	stop, err := StartObsHTTP(addr)
 	require.NoError(t, err)
 	t.Cleanup(stop)
 
@@ -113,7 +113,7 @@ func TestStartObsHTTPReadyzReportsRedisFailure(t *testing.T) {
 	cli := redisstore.NewClientFromUniversal(rcli)
 
 	addr := freePort(t)
-	stop, err := StartObsHTTP(addr, cli)
+	stop, err := StartObsHTTP(addr, RedisReadinessProbe(cli))
 	require.NoError(t, err)
 	t.Cleanup(stop)
 
@@ -138,6 +138,33 @@ func TestStartObsHTTPReadyzReportsRedisFailure(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode, "redis 不可达必须导致 readyz 返回 503")
+}
+
+// TestStartObsHTTPReadyzReportsCustomProbeFailure 校验 readyz 会逐个执行具名依赖探针。
+func TestStartObsHTTPReadyzReportsCustomProbeFailure(t *testing.T) {
+	addr := freePort(t)
+	stop, err := StartObsHTTP(addr, ReadinessProbe{
+		Name: "postgres",
+		Check: func(context.Context) error {
+			return context.DeadlineExceeded
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(stop)
+
+	dialer := &net.Dialer{Timeout: 100 * time.Millisecond}
+	waitFor(t, func() bool {
+		conn, derr := dialer.DialContext(t.Context(), "tcp", addr)
+		if derr != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	})
+
+	code, body := httpGet(t, "http://"+addr+"/readyz")
+	require.Equal(t, http.StatusServiceUnavailable, code)
+	require.Contains(t, body, "postgres")
 }
 
 // TestRegisterCollectorIdempotent 校验已注册过的 collector 再次注册不会引发 panic 或残留错误。

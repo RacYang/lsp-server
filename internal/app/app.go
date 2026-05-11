@@ -69,7 +69,13 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 	if cfg.ClusterLobbyAddr != "" && cfg.ClusterRoomAddr != "" {
 		if cfg.PostgresDSN != "" {
-			pool, err := postgres.OpenPool(context.Background(), cfg.PostgresDSN)
+			pool, err := postgres.OpenPoolWithOptions(ctx, cfg.PostgresDSN, postgres.PoolOptions{
+				MaxConns:          cfg.Runtime.Postgres.Pool.MaxConns,
+				MinConns:          cfg.Runtime.Postgres.Pool.MinConns,
+				MaxConnLifetime:   cfg.Runtime.Postgres.Pool.MaxConnLifetime,
+				MaxConnIdleTime:   cfg.Runtime.Postgres.Pool.MaxConnIdleTime,
+				HealthCheckPeriod: cfg.Runtime.Postgres.Pool.HealthCheckPeriod,
+			})
 			if err != nil {
 				if redisCleanup != nil {
 					redisCleanup()
@@ -128,7 +134,11 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		}
 	}
 	deps := handler.Deps{Rooms: gateway, Hub: hub, Session: sessMgr, Users: session.NewUserDirectory(redisClient), AllowedOrigins: append([]string(nil), cfg.WSAllowedOrigins...)}
-	obsStop, errObs := StartObsHTTP(cfg.ObsAddr, redisClient)
+	var readiness []ReadinessProbe
+	if redisClient != nil {
+		readiness = append(readiness, RedisReadinessProbe(redisClient))
+	}
+	obsStop, errObs := StartObsHTTP(cfg.ObsAddr, readiness...)
 	if errObs != nil {
 		if redisCleanup != nil {
 			redisCleanup()

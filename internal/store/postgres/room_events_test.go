@@ -205,11 +205,13 @@ func TestSettlementStoreAppendAndHas(t *testing.T) {
 		WinnerUserIds: []string{"u1"},
 		TotalFan:      8,
 		DetailText:    "detail",
+		RoundIndex:    1,
+		HandIndex:     2,
 	}
 	payload, err := proto.Marshal(settlement)
 	require.NoError(t, err)
 	mock.ExpectExec("INSERT INTO settlements").
-		WithArgs("r1", []string{"u1"}, int32(8), "detail", payload).
+		WithArgs("r1", []string{"u1"}, int32(8), "detail", payload, int32(1), int32(2)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectQuery("SELECT COUNT").
 		WithArgs("r1").

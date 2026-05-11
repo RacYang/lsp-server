@@ -28,6 +28,13 @@ data:
         mailbox_capacity: 96
       redis:
         idempotency_ttl: 10m
+      postgres:
+        pool:
+          max_conns: 0
+          min_conns: 0
+          max_conn_lifetime: 0s
+          max_conn_idle_time: 0s
+          health_check_period: 0s
   room.yaml: |
     server:
       addr: ":19082"
@@ -53,6 +60,13 @@ data:
         mailbox_capacity: 96
       redis:
         idempotency_ttl: 10m
+      postgres:
+        pool:
+          max_conns: 16
+          min_conns: 0
+          max_conn_lifetime: 1h
+          max_conn_idle_time: 30m
+          health_check_period: 1m
   lobby.yaml: |
     server:
       addr: ":19081"
@@ -78,3 +92,10 @@ data:
         mailbox_capacity: 96
       redis:
         idempotency_ttl: 10m
+      postgres:
+        pool:
+          max_conns: 0
+          min_conns: 0
+          max_conn_lifetime: 0s
+          max_conn_idle_time: 0s
+          health_check_period: 0s

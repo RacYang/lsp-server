@@ -16,7 +16,7 @@ HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 .PHONY: bootstrap generate fix fix-file build-cli build-bot build-cli-all verify verify-fast verify-pre-commit verify-image verify-bench \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
-	verify-meta verify-config verify-config-schema verify-tools verify-determinism verify-commit-msg verify-lang verify-nolint-policy verify-domain verify-redis-keys verify-metrics-naming verify-gate-session-routing verify-skeleton \
+	verify-meta verify-config verify-config-schema verify-tools verify-determinism verify-commit-msg verify-lang verify-nolint-policy verify-domain verify-redis-keys verify-metrics-naming verify-observability verify-postgres-migrations verify-gate-session-routing verify-skeleton \
 	verify-cli-release-targets verify-mahjong-rule-ids verify-git-repo verify-git-local verify-git-push
 
 bootstrap:
@@ -199,13 +199,19 @@ verify-tidy:
 verify-secrets:
 	@gitleaks detect --no-banner --no-git --source . --redact
 
-verify-meta:
+verify-meta: verify-observability verify-postgres-migrations
 	@markdownlint-cli2 "docs/**/*.md" "*.md"
 	@shellcheck scripts/*.sh .build/derive.sh .githooks/*
 	@python3 -m yamllint -c .yamllint.yml .build buf.yaml .github/workflows
 	@python3 scripts/verify-meta.py
 	@python3 scripts/verify-doc-links.py
 	@bash scripts/verify-negatives.sh
+
+verify-observability:
+	@python3 scripts/verify-observability.py
+
+verify-postgres-migrations:
+	@python3 scripts/verify-postgres-migrations.py
 
 verify-config:
 	@tmp_dir="$$(mktemp -d)"; \

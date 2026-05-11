@@ -72,8 +72,8 @@ func (s *roomGRPCServer) persistPublishAndFinalize(ctx context.Context, roomID, 
 	}
 	s.markIdempotency(ctx, roomID, idemKey)
 	for idx, event := range events {
-		s.publish(roomID, event.evt)
 		s.afterEventSideEffects(ctx, roomID, notifications[idx], event.evt, event.cursor)
+		s.publish(roomID, event.evt)
 	}
 	return nil
 }
@@ -157,6 +157,12 @@ func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID strin
 			SeatScores:    clusterSeatScoresToClient(st.GetSeatScores()),
 			Penalties:     clusterPenaltiesToClient(st.GetPenalties()),
 			DetailText:    st.GetDetailText(),
+			PerWinnerBreakdown: clusterWinnerBreakdownsToClient(
+				st.GetPerWinnerBreakdown(),
+			),
+			RoundIndex:  st.GetRoundIndex(),
+			HandIndex:   st.GetHandIndex(),
+			TotalScores: clusterSeatScoresToClient(st.GetTotalScores()),
 		})
 	}
 	if notification.Kind == roomsvc.KindSettlement && s.gs != nil {
@@ -715,6 +721,19 @@ func clientWinnerBreakdownsToCluster(items []*clientv1.WinnerBreakdown) []*clust
 	out := make([]*clusterv1.WinnerBreakdown, 0, len(items))
 	for _, item := range items {
 		out = append(out, &clusterv1.WinnerBreakdown{
+			SeatIndex: item.GetSeatIndex(),
+			UserId:    item.GetUserId(),
+			Fan:       item.GetFan(),
+			FanNames:  append([]string(nil), item.GetFanNames()...),
+		})
+	}
+	return out
+}
+
+func clusterWinnerBreakdownsToClient(items []*clusterv1.WinnerBreakdown) []*clientv1.WinnerBreakdown {
+	out := make([]*clientv1.WinnerBreakdown, 0, len(items))
+	for _, item := range items {
+		out = append(out, &clientv1.WinnerBreakdown{
 			SeatIndex: item.GetSeatIndex(),
 			UserId:    item.GetUserId(),
 			Fan:       item.GetFan(),

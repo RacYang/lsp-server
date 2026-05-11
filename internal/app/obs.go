@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/pprof"
 	"sync"
@@ -17,8 +18,27 @@ import (
 
 var registerRuntimeCollectorsOnce sync.Once
 
+// ReadinessProbe 描述一个进程就绪依赖探针。
+type ReadinessProbe struct {
+	Name  string
+	Check func(context.Context) error
+}
+
+// RedisReadinessProbe 将 Redis ping 纳入 /readyz。
+func RedisReadinessProbe(rcli *redis.Client) ReadinessProbe {
+	return ReadinessProbe{
+		Name: "redis",
+		Check: func(ctx context.Context) error {
+			if rcli == nil {
+				return nil
+			}
+			return rcli.Ping(ctx)
+		},
+	}
+}
+
 // StartObsHTTP 若 addr 非空则启动可观测性 HTTP 服务（健康检查、就绪检查、指标、pprof）。
-func StartObsHTTP(addr string, rcli *redis.Client) (stop func(), err error) {
+func StartObsHTTP(addr string, probes ...ReadinessProbe) (stop func(), err error) {
 	if addr == "" {
 		return func() {}, nil
 	}
@@ -29,11 +49,19 @@ func StartObsHTTP(addr string, rcli *redis.Client) (stop func(), err error) {
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		if rcli != nil {
+		for _, probe := range probes {
+			if probe.Check == nil {
+				continue
+			}
 			pingCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-			defer cancel()
-			if err := rcli.Ping(pingCtx); err != nil {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			err := probe.Check(pingCtx)
+			cancel()
+			if err != nil {
+				name := probe.Name
+				if name == "" {
+					name = "dependency"
+				}
+				http.Error(w, fmt.Sprintf("%s: %v", name, err), http.StatusServiceUnavailable)
 				return
 			}
 		}

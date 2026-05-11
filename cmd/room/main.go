@@ -44,15 +44,23 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		ev   *postgres.RoomEventStore
 		gs   *postgres.GameSummaryStore
 		st   *postgres.SettlementStore
+		pg   postgres.Pinger
 		rcli *redis.Client
 	)
 	if cfg.PostgresDSN != "" {
-		pool, err := postgres.OpenPool(ctx, cfg.PostgresDSN)
+		pool, err := postgres.OpenPoolWithOptions(ctx, cfg.PostgresDSN, postgres.PoolOptions{
+			MaxConns:          cfg.Runtime.Postgres.Pool.MaxConns,
+			MinConns:          cfg.Runtime.Postgres.Pool.MinConns,
+			MaxConnLifetime:   cfg.Runtime.Postgres.Pool.MaxConnLifetime,
+			MaxConnIdleTime:   cfg.Runtime.Postgres.Pool.MaxConnIdleTime,
+			HealthCheckPeriod: cfg.Runtime.Postgres.Pool.HealthCheckPeriod,
+		})
 		if err != nil {
 			logx.Error(ctx, "房间事件持久化数据库连接失败", "err", err.Error())
 			return 1
 		}
 		defer pool.Close()
+		pg = pool
 		ev = postgres.NewRoomEventStore(pool)
 		gs = postgres.NewGameSummaryStore(pool)
 		st = postgres.NewSettlementStore(pool)
@@ -125,7 +133,17 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		logx.Error(ctx, "房间服务装配失败", "err", err.Error())
 		return 1
 	}
-	obsStop, err := app.StartObsHTTP(cfg.ObsAddr, rcli)
+	var readiness []app.ReadinessProbe
+	if rcli != nil {
+		readiness = append(readiness, app.RedisReadinessProbe(rcli))
+	}
+	if pg != nil {
+		readiness = append(readiness, app.ReadinessProbe{
+			Name:  "postgres",
+			Check: pg.Ping,
+		})
+	}
+	obsStop, err := app.StartObsHTTP(cfg.ObsAddr, readiness...)
 	if err != nil {
 		logx.Error(ctx, "可观测性 HTTP 启动失败", "err", err.Error())
 		return 1

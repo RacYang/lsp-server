@@ -28,6 +28,12 @@
 
 进程级重启恢复回放仍保留为专项测试，默认 integration 目标优先选择稳定且耗时可控的链路。
 
+数据库治理相关改动的验证边界：
+
+- 修改 PostgreSQL 迁移、连接池、readyz PostgreSQL 探测或 `room_events` 写读契约时，必须运行 `RUN_INTEGRATION=1 make verify-test-integration-pg`。
+- 修改无 Docker 重连、幂等或 Redis 快照元数据语义时，必须运行 `RUN_INTEGRATION=1 make verify-test-integration-nodocker`。
+- 修改观测规则或存储操作标签时，必须运行 `make verify-observability`；迁移命名与幂等 DDL 由 `make verify-postgres-migrations` 覆盖。
+
 ## 压测
 
 `cmd/loadgen` 与 `bench/scenarios/scenario_*` 提供 Phase 6 压测入口，默认不进入 `make verify`：

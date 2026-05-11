@@ -8,6 +8,7 @@
 - 已准备临时 PostgreSQL 实例，实例网络只允许 `room` 演练进程访问。
 - 已准备只读校验用的 `room_id`、目标恢复时间点与预期事件游标。
 - 已准备临时 `room` 配置文件，只替换 `postgres.dsn` 指向临时实例。
+- 若使用单机 Compose 备份且未配置 WAL 归档，需在演练报告中标注 RPO 例外；该形态不能直接承诺 ADR-0026 的 15 分钟 RPO。
 
 ## 恢复步骤
 
@@ -15,10 +16,11 @@
 2. 从最新全量备份恢复到临时 PostgreSQL 实例。
 3. 回放 WAL 到目标时间点，确认 `room_events` 与 `game_summaries` schema 版本可读。
 4. 启动临时 `room` 进程，`postgres.dsn` 指向临时实例，Redis 与 etcd 指向预发隔离资源。
-5. 调用 `cluster.v1.RoomService.SnapshotRoom`，确认快照能返回座位、阶段与最近事件游标。
-6. 调用 `cluster.v1.RoomService.StreamEvents`，从快照游标继续读取事件，确认无断档与重复。
-7. 关闭临时 `room` 进程，销毁临时 PostgreSQL 实例。
-8. 输出演练报告，记录 RPO、RTO、数据缺口、异常、责任人与下一次演练日期。
+5. 调用临时 `room` 的 `/readyz`，确认 PostgreSQL 依赖探测通过。
+6. 调用 `cluster.v1.RoomService.SnapshotRoom`，确认快照能返回座位、阶段与最近事件游标。
+7. 调用 `cluster.v1.RoomService.StreamEvents`，从快照游标继续读取事件，确认无断档与重复。
+8. 关闭临时 `room` 进程，销毁临时 PostgreSQL 实例。
+9. 输出演练报告，记录 RPO、RTO、数据缺口、异常、责任人与下一次演练日期。
 
 ## 报告模板
 
@@ -38,6 +40,7 @@ snapshot_room_result:
 stream_events_result:
 data_gap:
 incidents:
+rpo_exception:
 next_drill_due:
 ```
 
