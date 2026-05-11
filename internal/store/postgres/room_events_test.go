@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pashagolub/pgxmock/v3"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -156,6 +157,21 @@ func TestRoomEventStoreListEventsAfter(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestRoomEventStoreListEventsAfterKeepsQueryContextUntilRowsRead(t *testing.T) {
+	t.Parallel()
+	s := postgres.NewRoomEventStore(&contextSensitiveRoomEventPool{})
+
+	out, err := s.ListEventsAfter(context.Background(), "r1", 0)
+	require.NoError(t, err)
+	require.Equal(t, []postgres.RoomEventRow{{
+		RoomID:     "r1",
+		Seq:        1,
+		Kind:       "k1",
+		Payload:    []byte("a"),
+		TargetSeat: -1,
+	}}, out)
+}
+
 func TestRoomEventStoreMaxSeq(t *testing.T) {
 	t.Parallel()
 	mock, err := pgxmock.NewPool()
@@ -281,4 +297,79 @@ func TestRoomEventStoreNilReceiver(t *testing.T) {
 	require.Error(t, err)
 	_, err = s.MaxSeq(context.Background(), "r")
 	require.Error(t, err)
+}
+
+type contextSensitiveRoomEventPool struct{}
+
+func (p *contextSensitiveRoomEventPool) BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error) {
+	return nil, errors.New("unexpected BeginTx")
+}
+
+func (p *contextSensitiveRoomEventPool) Query(ctx context.Context, _ string, _ ...any) (pgx.Rows, error) {
+	return &contextSensitiveRows{ctx: ctx}, nil
+}
+
+func (p *contextSensitiveRoomEventPool) QueryRow(context.Context, string, ...any) pgx.Row {
+	return contextSensitiveRow{}
+}
+
+type contextSensitiveRows struct {
+	ctx    context.Context
+	read   bool
+	closed bool
+}
+
+func (r *contextSensitiveRows) Close() {
+	r.closed = true
+}
+
+func (r *contextSensitiveRows) Err() error {
+	if err := r.ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *contextSensitiveRows) CommandTag() pgconn.CommandTag {
+	return pgconn.CommandTag{}
+}
+
+func (r *contextSensitiveRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+
+func (r *contextSensitiveRows) Next() bool {
+	if r.ctx.Err() != nil || r.read {
+		r.closed = true
+		return false
+	}
+	r.read = true
+	return true
+}
+
+func (r *contextSensitiveRows) Scan(dest ...any) error {
+	*(dest[0].(*string)) = "r1"
+	*(dest[1].(*int64)) = 1
+	*(dest[2].(*string)) = "k1"
+	*(dest[3].(*[]byte)) = []byte("a")
+	*(dest[4].(*int32)) = -1
+	return nil
+}
+
+func (r *contextSensitiveRows) Values() ([]any, error) {
+	return nil, errors.New("unexpected Values")
+}
+
+func (r *contextSensitiveRows) RawValues() [][]byte {
+	return nil
+}
+
+func (r *contextSensitiveRows) Conn() *pgx.Conn {
+	return nil
+}
+
+type contextSensitiveRow struct{}
+
+func (contextSensitiveRow) Scan(...any) error {
+	return errors.New("unexpected QueryRow")
 }

@@ -132,15 +132,33 @@ func (s *RoomEventStore) ListEventsAfter(ctx context.Context, roomID string, aft
 		return nil, opErr
 	}
 	var rows pgx.Rows
-	err := storex.Retry(ctx, "postgres", "list_events_after", 2, func(opCtx context.Context) error {
-		var err error
+	var err error
+	var cancel context.CancelFunc
+	for attempt := 1; attempt <= 2; attempt++ {
+		var opCtx context.Context
+		opCtx, cancel = storex.WithOperationTimeout(ctx)
 		rows, err = s.pool.Query(opCtx, `SELECT room_id, seq, kind, payload, target_seat FROM room_events WHERE room_id = $1 AND seq > $2 ORDER BY seq ASC`, roomID, afterSeq)
-		return err
-	})
-	if err != nil {
-		opErr = err
-		return nil, err
+		if err == nil {
+			break
+		}
+		cancel()
+		cancel = nil
+		if !storex.IsRetryable(err) || attempt == 2 {
+			opErr = err
+			if storex.IsRetryable(err) {
+				metrics.StorageRetryTotal.WithLabelValues("postgres", "list_events_after", "exhausted").Inc()
+			}
+			return nil, err
+		}
+		metrics.StorageRetryTotal.WithLabelValues("postgres", "list_events_after", "retry").Inc()
+		select {
+		case <-ctx.Done():
+			opErr = ctx.Err()
+			return nil, opErr
+		case <-time.After(time.Duration(attempt) * 25 * time.Millisecond):
+		}
 	}
+	defer cancel()
 	defer rows.Close()
 	var out []RoomEventRow
 	for rows.Next() {
