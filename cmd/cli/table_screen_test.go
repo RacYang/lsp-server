@@ -165,7 +165,7 @@ func TestHandleOverlayKeyCtrlJBehavesLikeEnter(t *testing.T) {
 
 func TestHandleTableKeyQuestionTogglesHelp(t *testing.T) {
 	state := NewAppState("racoo")
-	cursor := &HandCursor{}
+	cursor := &HandCursor{Index: -1}
 	overlay := &OverlayState{}
 	theme := TileThemeUnicode
 	cfg := &Config{}
@@ -186,7 +186,7 @@ func TestHandleTableEventResizeKeepsTableOpen(t *testing.T) {
 	defer scr.Fini()
 	scr.SetSize(MinTableWidth, MinTableHeight)
 	state := NewAppState("racoo")
-	cursor := &HandCursor{}
+	cursor := &HandCursor{Index: -1}
 	overlay := &OverlayState{}
 	theme := TileThemeUnicode
 	cfg := &Config{}
@@ -352,6 +352,51 @@ func TestSubmitDiscardFailureShowsNotice(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return strings.Contains(state.Snapshot().UXNotice, "出牌失败: 当前不是你的回合")
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestCursorPendingClearsWhenAuthoritativeStepAdvances(t *testing.T) {
+	cursor := &HandCursor{Mode: CursorModeSingle, Index: -1, Pending: true, PendingSinceStep: 10}
+
+	view := RoomView{
+		Phase:         phaseTable,
+		SeatIndex:     0,
+		ActingSeat:    0,
+		WaitingAction: "discard",
+		LastStep:      11,
+	}
+	view.Players[0].Hand = []string{"m1", "m2"}
+
+	cursor.SyncMode(view)
+
+	require.False(t, cursor.Pending)
+	require.Equal(t, int64(0), cursor.PendingSinceStep)
+	require.Equal(t, 1, cursor.Index)
+	require.True(t, cursor.CanSubmit(), "bot 快速推进后回到自己出牌时，Enter 不能被旧 Pending 卡住")
+}
+
+func TestHandleTableKeyArrowsMoveClaimDialogSelection(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "r1"
+		v.RoomState = "playing"
+		v.SeatIndex = 0
+		v.ActingSeat = 1
+		v.WaitingAction = "claim_window"
+		v.PendingTile = "p5"
+		v.ClaimCandidates = map[int32][]string{0: {"hu", "pong", "pass"}}
+	})
+	cursor := &HandCursor{Index: -1}
+	overlay := &OverlayState{}
+	theme := TileThemeUnicode
+	cfg := &Config{}
+	dialog := &ClaimDialogState{Actions: []ClaimAction{ClaimActionHu, ClaimActionPong, ClaimActionPass}}
+
+	res := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModNone), state, stubTableGateway{}, cursor, overlay, nil, &theme, cfg, dialog)
+
+	require.Nil(t, res.exit)
+	require.Equal(t, 1, dialog.SelectedIndex)
+	require.Equal(t, -1, cursor.Index, "抢答浮窗打开时左右键应切换按钮，不应移动手牌光标")
 }
 
 func TestHandleTableKeyEnterMarksExchangeTileBeforeSubmit(t *testing.T) {

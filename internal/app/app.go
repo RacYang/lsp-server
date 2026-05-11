@@ -120,12 +120,13 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 			Discard:         cfg.RoomTimeouts.Discard,
 			SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 		})
-		// 单进程聚合也跑 BotSupervisor，让 cmd/all 与生产 cmd/room 行为一致。
-		botSup := NewBotSupervisor(rs)
-		rs.SetAfterCmdHook(botSup.AfterCmd)
 		gateway = handler.NewLocalRoomGateway(rs, hub, sessMgr)
 		if local, ok := gateway.(*handler.LocalRoomGateway); ok {
 			local.SetOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline)
+			// 单进程聚合也跑 BotSupervisor，并把 bot 动作通知接回本地 gateway。
+			botSup := NewBotSupervisor(rs)
+			botSup.SetNotificationHandler(local.BroadcastNotifications)
+			rs.SetAfterCmdHook(botSup.AfterCmd)
 		}
 		cleanup = func() {
 			if redisCleanup != nil {

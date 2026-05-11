@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
@@ -278,7 +279,7 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 		return waitingUXHint(view)
 	case PhaseClaim, PhaseTsumo:
 		if model.Claim != nil {
-			return "请决定：胡 / 杠 / 碰 / 过"
+			return "请决定：" + playerActionList(model.Allowed)
 		}
 		return waitingUXHint(view)
 	case PhaseSettlement:
@@ -311,7 +312,7 @@ func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 		}
 		return "←→ 选牌    回车 出牌    i 房间信息    Esc 菜单"
 	case PhaseClaim:
-		return "-- 鸣牌 --  ←→ 选项    回车 确认    P 跳过"
+		return claimKeyHint(ux)
 	case PhaseSettlement:
 		return "-- 结算 --  R 再开一桌    L 离桌    回车 停留"
 	case PhaseWaiting:
@@ -332,18 +333,64 @@ func disabledReason(view RoomView, cursor *HandCursor, model InteractionModel) s
 	switch model.Phase {
 	case PhaseDiscard:
 		if !containsAction(model.Allowed, ActionDiscard) {
-			return waitingHint(view)
+			return "还没轮到你：" + waitingUXHint(view)
 		}
 	case PhaseClaim, PhaseTsumo:
 		if model.Claim == nil {
-			return waitingHint(view)
+			return "还没轮到你：" + waitingUXHint(view)
 		}
 	case PhaseExchange, PhaseQueMen:
 		if len(model.Allowed) == 0 {
-			return waitingHint(view)
+			return "当前不能操作：" + waitingUXHint(view)
 		}
 	}
 	return ""
+}
+
+func playerActionList(actions []PlayerAction) string {
+	if len(actions) == 0 {
+		return "过"
+	}
+	labels := make([]string, 0, len(actions))
+	for _, action := range actions {
+		switch action {
+		case ActionHu:
+			labels = append(labels, "胡")
+		case ActionGang:
+			labels = append(labels, "杠")
+		case ActionPong:
+			labels = append(labels, "碰")
+		case ActionPass:
+			labels = append(labels, "过")
+		case ActionDiscard:
+			labels = append(labels, "出牌")
+		case ActionExchangeThree:
+			labels = append(labels, "换三张")
+		case ActionQueMen:
+			labels = append(labels, "定缺")
+		}
+	}
+	return strings.Join(labels, " / ")
+}
+
+func claimKeyHint(ux TableUXModel) string {
+	shortcuts := make([]string, 0, len(ux.AllowedActions))
+	for _, action := range ux.AllowedActions {
+		switch action {
+		case ActionHu:
+			shortcuts = append(shortcuts, "h 胡")
+		case ActionGang:
+			shortcuts = append(shortcuts, "g 杠")
+		case ActionPong:
+			shortcuts = append(shortcuts, "p 碰")
+		case ActionPass:
+			shortcuts = append(shortcuts, "n 过")
+		}
+	}
+	if len(shortcuts) == 0 {
+		shortcuts = append(shortcuts, "n 过")
+	}
+	return "-- 鸣牌 --  ←→ 选项    回车确认    " + strings.Join(shortcuts, "    ")
 }
 
 func pendingFeedback(view RoomView, cursor *HandCursor) string {

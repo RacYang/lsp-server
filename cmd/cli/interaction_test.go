@@ -107,6 +107,43 @@ func TestDeriveInteractionModelFiltersNonTargetClaim(t *testing.T) {
 	require.Contains(t, model.Hint, "等待")
 }
 
+func TestClaimUXShowsCorrectPassShortcut(t *testing.T) {
+	view := RoomView{
+		Phase:           phaseTable,
+		RoomState:       "playing",
+		SeatIndex:       0,
+		ActingSeat:      2,
+		WaitingAction:   "claim_window",
+		PendingTile:     "p5",
+		ClaimCandidates: map[int32][]string{0: {"pong", "pass"}},
+	}
+
+	ux := DeriveTableUXModel(view, nil, nowForTest())
+
+	require.Contains(t, ux.PrimaryPrompt, "碰")
+	require.Contains(t, ux.PrimaryPrompt, "过")
+	require.Contains(t, ux.KeyHint, "p 碰")
+	require.Contains(t, ux.KeyHint, "n 过")
+	require.NotContains(t, ux.KeyHint, "P 跳过")
+}
+
+func TestDisabledReasonExplainsNotYourTurn(t *testing.T) {
+	view := RoomView{
+		Phase:         phaseTable,
+		RoomState:     "playing",
+		SeatIndex:     0,
+		ActingSeat:    3,
+		WaitingAction: "discard",
+	}
+	view.Players[3].Nickname = "机器人"
+
+	ux := DeriveTableUXModel(view, nil, nowForTest())
+
+	require.Contains(t, ux.DisabledReason, "还没轮到你")
+	require.Contains(t, ux.DisabledReason, "上家")
+	require.Contains(t, ux.KeyHint, ux.DisabledReason)
+}
+
 func nowForTest() time.Time {
 	return time.Date(2026, 5, 11, 8, 0, 0, 0, time.UTC)
 }

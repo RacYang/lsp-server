@@ -189,12 +189,17 @@ func claimDialogLines(d *ClaimDialogState, now time.Time, innerWidth int) []stri
 	buttonLine := strings.Repeat(" ", pad) + strings.Join(buttons, strings.Repeat(" ", gap))
 
 	progressLine := claimProgressBar(d, now, innerWidth)
+	hint := "快捷键: h胡  g杠  p碰  n过  ←→切换  回车确认"
+	if d.Pending {
+		hint = "已提交，等待服务端确认..."
+	}
 	return []string{
 		centerVisual(title, innerWidth),
 		"",
 		buttonLine,
 		"",
 		centerVisual(progressLine, innerWidth),
+		centerVisual(hint, innerWidth),
 	}
 }
 

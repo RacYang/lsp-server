@@ -26,10 +26,11 @@ const (
 // 注意 Marked 槽位即为对应 Hand 的索引。Hand 顺序变化（如服务端推 InitialDeal 重新发牌）
 // 时调用方必须 Reset，避免索引错位。
 type HandCursor struct {
-	Mode    CursorMode
-	Index   int   // 当前光标位置；-1 表示尚未选择
-	Marked  []int // 已标记的手牌索引（仅 Multi 模式有效）
-	Pending bool  // 已提交,等待服务器 ack
+	Mode             CursorMode
+	Index            int   // 当前光标位置；-1 表示尚未选择
+	Marked           []int // 已标记的手牌索引（仅 Multi 模式有效）
+	Pending          bool  // 已提交,等待服务器 ack
+	PendingSinceStep int64 // 提交时看到的服务端步进；权威步进前进后解除 Pending。
 }
 
 // DeriveCursorMode 根据玩家视图派生当前应该启用的光标模式。
@@ -134,16 +135,26 @@ func (c *HandCursor) CanSubmit() bool {
 //
 // 调用方在 Submit 后应立即发起网络请求；服务器返回成功调 Reset，失败调 RollbackPending。
 func (c *HandCursor) Submit() bool {
+	return c.SubmitAt(0)
+}
+
+// SubmitAt 把状态切到 Pending，并记录提交时的权威步进。
+//
+// 如果服务端和 bot 在两次渲染之间连续推进，光标可能看不到中间的 CursorModeNone。
+// 记录 step 后，SyncMode 可在下一次权威事件到达时解除 Pending，避免 Enter 永久被禁用。
+func (c *HandCursor) SubmitAt(step int64) bool {
 	if !c.CanSubmit() {
 		return false
 	}
 	c.Pending = true
+	c.PendingSinceStep = step
 	return true
 }
 
 // RollbackPending 在服务器返回失败时恢复"可操作"状态，让玩家重选。
 func (c *HandCursor) RollbackPending() {
 	c.Pending = false
+	c.PendingSinceStep = 0
 }
 
 // Cancel 在玩家按 Esc 时清空选择；Pending 状态下拒绝取消（已经送出，等服务端权威结果）。
@@ -160,6 +171,7 @@ func (c *HandCursor) Reset() {
 	c.Index = -1
 	c.Marked = c.Marked[:0]
 	c.Pending = false
+	c.PendingSinceStep = 0
 }
 
 // SyncMode 在阶段切换时把 Mode 更新为最新派生值；如果 Mode 改变则 Reset 清除旧索引。
@@ -180,6 +192,10 @@ func (c *HandCursor) SyncMode(view RoomView) {
 	if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 		handLen = len(view.Players[view.SeatIndex].Hand)
 	}
+	if c.Pending && c.PendingSinceStep > 0 && view.LastStep > c.PendingSinceStep {
+		c.Pending = false
+		c.PendingSinceStep = 0
+	}
 	if mode != c.Mode {
 		c.Reset()
 		c.Mode = mode
@@ -193,11 +209,19 @@ func (c *HandCursor) SyncMode(view RoomView) {
 		}
 		return
 	}
-	if (mode == CursorModeSingle || mode == CursorModeMulti3) && c.Index >= 0 && c.Index >= handLen {
-		if handLen > 0 {
-			c.Index = handLen - 1
-		} else {
+	if mode == CursorModeSingle || mode == CursorModeMulti3 {
+		switch {
+		case handLen <= 0:
 			c.Index = -1
+		case c.Index < 0:
+			switch mode {
+			case CursorModeSingle:
+				c.Index = handLen - 1
+			case CursorModeMulti3:
+				c.Index = 0
+			}
+		case c.Index >= handLen:
+			c.Index = handLen - 1
 		}
 	}
 }

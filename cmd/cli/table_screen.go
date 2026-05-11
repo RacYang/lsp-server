@@ -204,6 +204,7 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		return handleOverlayKey(ctx, ev, state, gateway, overlay, theme, cfg)
 	}
 	view := state.Snapshot()
+	cursor.SyncMode(view)
 	model := DeriveInteractionModel(view)
 	ux := DeriveTableUXModel(view, cursor, time.Now())
 	hand := []string{}
@@ -298,8 +299,16 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionPass)
 		}
 	case tcell.KeyLeft:
+		if claimDialog != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
+			claimDialog.Move(-1)
+			return tableEventResult{}
+		}
 		cursor.Move(-1, len(hand))
 	case tcell.KeyRight:
+		if claimDialog != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
+			claimDialog.Move(1)
+			return tableEventResult{}
+		}
 		cursor.Move(1, len(hand))
 	// KeyEnter (KeyCR=\r) 与 KeyCtrlJ (\n) 都视为提交,
 	// 兼容部分终端将回车映射为换行符的情况（如 stty icrnl 关闭、tmux 配置等）。
@@ -496,7 +505,7 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 			return tableEventResult{}
 		}
 		tile := hand[idx]
-		cursor.Submit()
+		cursor.SubmitAt(view.LastStep)
 		go func() {
 			if err := gateway.Discard(ctx, tile); err != nil {
 				cursor.RollbackPending()
@@ -517,7 +526,7 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 			return tableEventResult{}
 		}
 		recordPendingExchange(state, view.SeatIndex, tiles)
-		cursor.Submit()
+		cursor.SubmitAt(view.LastStep)
 		go func() {
 			if err := gateway.ExchangeThree(ctx, tiles, 0); err != nil {
 				cursor.RollbackPending()

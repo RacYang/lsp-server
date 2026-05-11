@@ -84,7 +84,7 @@ func TestClaimDialogLinesContainTitleButtonsAndBar(t *testing.T) {
 		[]ClaimAction{ClaimActionHu, ClaimActionPass}, now, 4*time.Second)
 	d.SelectedIndex = 0
 	lines := claimDialogLines(d, now.Add(time.Second), 36)
-	require.Len(t, lines, 5)
+	require.Len(t, lines, 6)
 	require.Contains(t, lines[0], "胡 alice 打出的 m4")
 	require.Contains(t, lines[2], "[ 胡 ]")
 	require.Contains(t, lines[2], "过")
@@ -92,6 +92,7 @@ func TestClaimDialogLinesContainTitleButtonsAndBar(t *testing.T) {
 	require.Contains(t, bar, "█")
 	require.Contains(t, bar, "░")
 	require.Contains(t, bar, "3.0s")
+	require.Contains(t, lines[5], "n过")
 }
 
 func TestClaimDialogLinesEmphasizesSelected(t *testing.T) {
@@ -125,6 +126,19 @@ func TestDrawClaimDialogRendersFullBox(t *testing.T) {
 	require.Contains(t, out, "你 自 摸 了 !")
 	require.Contains(t, out, "[ 胡 ]")
 	require.Contains(t, out, "不胡")
+	require.Contains(t, out, "n过")
 	require.True(t, strings.Contains(out, "┌") && strings.Contains(out, "└"), "需要绘制完整边框: %q", out)
 	require.Contains(t, out, "3.0s")
+}
+
+func TestClaimDialogLinesShowPendingFeedback(t *testing.T) {
+	now := time.Date(2026, 4, 28, 12, 0, 0, 0, time.UTC)
+	d := NewClaimDialog(ClaimTriggerPong, 1, "alice", "p5",
+		[]ClaimAction{ClaimActionPong, ClaimActionPass}, now, 5*time.Second)
+	d.Pending = true
+
+	lines := claimDialogLines(d, now.Add(time.Second), 40)
+
+	require.Contains(t, lines[len(lines)-1], "已提交")
+	require.NotContains(t, lines[len(lines)-1], "n过")
 }

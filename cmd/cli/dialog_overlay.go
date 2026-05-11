@@ -193,7 +193,7 @@ func overlayHelpLines(view RoomView) []string {
 	}
 	switch phase {
 	case PhaseClaim:
-		lines = append([]string{"当前模式: -- 鸣牌 --", "P 跳过 / 回车确认", ""}, lines...)
+		lines = append([]string{"当前模式: -- 鸣牌 --", "h 胡 / g 杠 / p 碰 / n 过 / 回车确认", ""}, lines...)
 	case PhaseExchange:
 		lines = append([]string{"当前模式: -- 换三张 --", "回车标记三张 / 回车提交", ""}, lines...)
 	case PhaseSettlement:

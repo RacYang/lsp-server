@@ -42,6 +42,7 @@ type BotSupervisor struct {
 	maxIterations  int
 	tickTimeout    time.Duration
 	humanRoomDelay time.Duration
+	notify         func(context.Context, string, []roomsvc.Notification)
 	postSubmit     func(roomID, userID string, action bot.Action) // 测试钩子；nil 时为生产路径。
 }
 
@@ -74,6 +75,17 @@ func (b *BotSupervisor) SetMaxIterations(n int) {
 		return
 	}
 	b.maxIterations = n
+}
+
+// SetNotificationHandler 注册 bot 动作完成后的客户端通知分发器。
+//
+// BotSupervisor 通过 room.Service 公共入口提交动作；这些入口只返回权威通知，不知道如何触达
+// WebSocket 客户端。单进程 app 需要把通知交回 gateway 广播，否则真人 TUI 会停在旧帧。
+func (b *BotSupervisor) SetNotificationHandler(fn func(context.Context, string, []roomsvc.Notification)) {
+	if b == nil {
+		return
+	}
+	b.notify = fn
 }
 
 // AfterCmd 是要挂到 Service.SetAfterCmdHook 的回调。
@@ -116,17 +128,26 @@ func (b *BotSupervisor) clearGateIfDrained(roomID string, gate *atomic.Int32) {
 // 每次迭代都重新拉 RoundView，避免在 actor 串行处理过程中错过状态变更。
 func (b *BotSupervisor) tickRoom(roomID string, gate *atomic.Int32) {
 	defer func() {
-		// 把当前批次的"已处理"计数清空；如果期间又涨了就再起一轮。
 		for {
 			cur := gate.Load()
-			if cur == 0 {
-				break
-			}
-			if gate.CompareAndSwap(cur, 0) {
-				break
+			switch cur {
+			case 0:
+				b.clearGateIfDrained(roomID, gate)
+				return
+			case 1:
+				if gate.CompareAndSwap(1, 0) {
+					b.clearGateIfDrained(roomID, gate)
+					return
+				}
+			default:
+				// 本轮运行期间又有 actor 命令完成；保留一个待处理信号并接力再跑，
+				// 避免 bot 碰牌后产生的新 discard 等待态被当前批次吞掉。
+				if gate.CompareAndSwap(cur, 1) {
+					go b.tickRoom(roomID, gate)
+					return
+				}
 			}
 		}
-		b.clearGateIfDrained(roomID, gate)
 	}()
 
 	logCtx := logx.WithRoomID(context.Background(), roomID)
@@ -209,8 +230,12 @@ func (b *BotSupervisor) tickBotSeat(ctx context.Context, roomID, userID string, 
 		case <-timer.C:
 		}
 	}
-	if err := b.submit(ctx, roomID, userID, action); err != nil {
+	notifications, err := b.submit(ctx, roomID, userID, action)
+	if err != nil {
 		return false, err
+	}
+	if b.notify != nil && len(notifications) > 0 {
+		b.notify(ctx, roomID, notifications)
 	}
 	if b.postSubmit != nil {
 		b.postSubmit(roomID, userID, action)
@@ -315,34 +340,26 @@ func botAvailableForSeat(seat int32, view roomsvc.RoundView) []string {
 	}
 }
 
-func (b *BotSupervisor) submit(ctx context.Context, roomID, userID string, action bot.Action) error {
+func (b *BotSupervisor) submit(ctx context.Context, roomID, userID string, action bot.Action) ([]roomsvc.Notification, error) {
 	switch action.Kind {
 	case bot.ActionExchangeThree:
-		_, err := b.svc.ExchangeThree(ctx, roomID, userID, action.Tiles, action.Suit)
-		return err
+		return b.svc.ExchangeThree(ctx, roomID, userID, action.Tiles, action.Suit)
 	case bot.ActionQueMen:
-		_, err := b.svc.QueMen(ctx, roomID, userID, action.Suit)
-		return err
+		return b.svc.QueMen(ctx, roomID, userID, action.Suit)
 	case bot.ActionDiscard:
-		_, err := b.svc.Discard(ctx, roomID, userID, action.Tile)
-		return err
+		return b.svc.Discard(ctx, roomID, userID, action.Tile)
 	case bot.ActionPong:
-		_, err := b.svc.Pong(ctx, roomID, userID)
-		return err
+		return b.svc.Pong(ctx, roomID, userID)
 	case bot.ActionGang:
-		_, err := b.svc.Gang(ctx, roomID, userID, action.Tile)
-		return err
+		return b.svc.Gang(ctx, roomID, userID, action.Tile)
 	case bot.ActionHu:
-		_, err := b.svc.Hu(ctx, roomID, userID)
-		return err
+		return b.svc.Hu(ctx, roomID, userID)
 	case bot.ActionPass:
-		_, err := b.svc.Pass(ctx, roomID, userID)
-		return err
+		return b.svc.Pass(ctx, roomID, userID)
 	case bot.ActionReady:
-		_, err := b.svc.Ready(ctx, roomID, userID)
-		return err
+		return b.svc.Ready(ctx, roomID, userID)
 	default:
-		return nil
+		return nil, nil
 	}
 }
 

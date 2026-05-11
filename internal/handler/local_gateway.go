@@ -269,6 +269,17 @@ func (g *LocalRoomGateway) broadcastAfter(roomID string, notifications []roomsvc
 	}
 }
 
+// BroadcastNotifications 将 room.Service 返回的权威通知推送给房间内客户端。
+//
+// 常规玩家动作通过各 handler 在响应后调用 broadcastAfter；进程内 bot supervisor 不经过
+// WebSocket handler，因此需要这个显式入口复用同一套隐私投影与座位定向逻辑。
+func (g *LocalRoomGateway) BroadcastNotifications(_ context.Context, roomID string, notifications []roomsvc.Notification) {
+	if g == nil || roomID == "" || len(notifications) == 0 {
+		return
+	}
+	g.broadcastAfter(roomID, notifications)()
+}
+
 func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.Notification) {
 	outMsgID, ok := outboundMsgID(notification.Kind)
 	if !ok || g == nil || g.hub == nil {
