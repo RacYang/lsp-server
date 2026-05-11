@@ -73,3 +73,49 @@ func TestBreadcrumbHUDShowsRuleAndRoomDistinctly(t *testing.T) {
 	out := breadcrumbHUD(view, PhaseMyTurnIdle)
 	require.Equal(t, "川麻血战 ▸ VMMEZ6 ▸ 你的回合", out)
 }
+
+func TestFocusSummaryUsesCurrentStageInsteadOfAlwaysDiscard(t *testing.T) {
+	tests := []struct {
+		name          string
+		waitingAction string
+		want          string
+		notWant       string
+	}{
+		{
+			name:          "exchange",
+			waitingAction: "exchange_three",
+			want:          "换三张",
+			notWant:       "出牌中",
+		},
+		{
+			name:          "que_men",
+			waitingAction: "que_men",
+			want:          "定缺",
+			notWant:       "出牌中",
+		},
+		{
+			name:          "discard",
+			waitingAction: "discard",
+			want:          "出牌中",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			view := RoomView{
+				Phase:         phaseTable,
+				RoomState:     "playing",
+				SeatIndex:     2,
+				ActingSeat:    0,
+				WaitingAction: tt.waitingAction,
+			}
+			view.Players[0].Nickname = "BOT-0"
+
+			got := focusSummary(view, nowForTest())
+
+			require.Contains(t, got, tt.want)
+			if tt.notWant != "" {
+				require.NotContains(t, got, tt.notWant)
+			}
+		})
+	}
+}

@@ -4197,13 +4197,15 @@ func (x *ExchangeThreeResponse) GetErrorMessage() string {
 type ExchangeThreeDoneNotify struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 每座位实际换入的三张，按座位索引排列；不展示他人手牌时可为空并仅靠日志回放。
-	PerSeat       []*SeatTiles `protobuf:"bytes,1,rep,name=per_seat,json=perSeat,proto3" json:"per_seat,omitempty"`
-	Direction     int32        `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
-	Phase         Phase        `protobuf:"varint,3,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
-	Step          int64        `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
-	ActingSeats   []int32      `protobuf:"varint,5,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PerSeat     []*SeatTiles `protobuf:"bytes,1,rep,name=per_seat,json=perSeat,proto3" json:"per_seat,omitempty"`
+	Direction   int32        `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
+	Phase       Phase        `protobuf:"varint,3,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	Step        int64        `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats []int32      `protobuf:"varint,5,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
+	// 当前连接所属座位实际交出的三张牌；用于客户端在广播完成时校正本地手牌。
+	YourExchangedAway []string `protobuf:"bytes,6,rep,name=your_exchanged_away,json=yourExchangedAway,proto3" json:"your_exchanged_away,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ExchangeThreeDoneNotify) Reset() {
@@ -4267,6 +4269,13 @@ func (x *ExchangeThreeDoneNotify) GetStep() int64 {
 func (x *ExchangeThreeDoneNotify) GetActingSeats() []int32 {
 	if x != nil {
 		return x.ActingSeats
+	}
+	return nil
+}
+
+func (x *ExchangeThreeDoneNotify) GetYourExchangedAway() []string {
+	if x != nil {
+		return x.YourExchangedAway
 	}
 	return nil
 }
@@ -5130,13 +5139,14 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x15ExchangeThreeResponse\x123\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"\xc7\x01\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"\xf7\x01\n" +
 	"\x17ExchangeThreeDoneNotify\x12/\n" +
 	"\bper_seat\x18\x01 \x03(\v2\x14.client.v1.SeatTilesR\aperSeat\x12\x1c\n" +
 	"\tdirection\x18\x02 \x01(\x05R\tdirection\x12&\n" +
 	"\x05phase\x18\x03 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
 	"\x04step\x18\x04 \x01(\x03R\x04step\x12!\n" +
-	"\facting_seats\x18\x05 \x03(\x05R\vactingSeats\"@\n" +
+	"\facting_seats\x18\x05 \x03(\x05R\vactingSeats\x12.\n" +
+	"\x13your_exchanged_away\x18\x06 \x03(\tR\x11yourExchangedAway\"@\n" +
 	"\tSeatTiles\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x14\n" +

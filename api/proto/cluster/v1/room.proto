@@ -169,6 +169,7 @@ message SettlementEvent {
 
 message ExchangeThreeDoneEvent {
   repeated SeatTiles seat_tiles = 1;
+  repeated string your_exchanged_away = 2;
 }
 
 message QueMenDoneEvent {

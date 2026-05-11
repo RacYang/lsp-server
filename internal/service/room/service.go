@@ -438,28 +438,28 @@ func restoreFSMForRecover(r *domainroom.Room, fsmState string) error {
 	}
 }
 
-// RoomSnapshot 返回当前内存房间的玩家列表与 FSM 状态字符串，供快照与 Redis 元数据写入。
-func (s *Service) RoomSnapshot(roomID string) (playerIDs []string, fsmState string, ok bool) {
+// RoomSnapshot 返回当前内存房间的玩家列表、准备状态与 FSM 状态字符串，供快照与 Redis 元数据写入。
+func (s *Service) RoomSnapshot(roomID string) (playerIDs []string, fsmState string, ready [4]bool, ok bool) {
 	if s == nil || s.lobby == nil {
-		return nil, "", false
+		return nil, "", [4]bool{}, false
 	}
 	if a := s.getActor(roomID); a != nil {
-		players, state, err := a.submitRoomSnapshot(context.Background())
+		players, state, ready, err := a.submitRoomSnapshot(context.Background())
 		if err == nil {
-			return players, state, true
+			return players, state, ready, true
 		}
-		return nil, "", false
+		return nil, "", [4]bool{}, false
 	}
 	r, exists := s.lobby.GetRoom(roomID)
 	if !exists || r == nil {
-		return nil, "", false
+		return nil, "", [4]bool{}, false
 	}
 	out := append([]string(nil), r.PlayerIDs[:]...)
 	st := ""
 	if r.FSM != nil {
 		st = string(r.FSM.State())
 	}
-	return out, st, true
+	return out, st, r.Ready, true
 }
 
 // RuleID 返回当前房间服务使用的规则 ID，供持久化摘要写入。

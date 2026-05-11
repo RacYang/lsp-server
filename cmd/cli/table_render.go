@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -142,81 +141,12 @@ func prettifyTileList(raw string) string {
 
 // centralPrompt 是中央区域的玩家可读提示语，纯函数便于单测。
 func centralPrompt(view RoomView, cursor *HandCursor) string {
-	model := DeriveInteractionModel(view)
-	phase := DerivePhase(view, cursor)
-	if phase == PhaseExchange && cursor != nil && cursor.Mode == CursorModeMulti3 && view.SeatIndex >= 0 {
-		need := 3 - len(cursor.Marked)
-		if cursor.Pending {
-			return "→ 提交中..."
-		}
-		if need > 0 {
-			return fmt.Sprintf("请用 Space 标记换 3 张牌 (还需 %d)", need)
-		}
-		return "已选 3 张, 按 Enter 提交  /  Esc 取消"
-	}
-	if phase == PhaseMyTurnSelected && cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
-		hand := view.Players[view.SeatIndex].Hand
-		if cursor.Index < len(hand) {
-			tile := TileName(hand[cursor.Index])
-			if cursor.Pending {
-				return fmt.Sprintf("→ 出牌中... %s", tile)
-			}
-			return fmt.Sprintf("已选 %s,按 Enter 出牌  /  Esc 取消", tile)
-		}
-	}
-	switch phase {
-	case PhaseMyTurnIdle:
-		switch model.Phase {
-		case PhaseDiscard:
-			return "◆ 该你出牌 ◆"
-		case PhaseQueMen:
-			return "请定缺 (m / p / s)"
-		case PhaseExchange:
-			return "请选择三张换三张"
-		case PhaseClaim, PhaseTsumo:
-			return "请决定"
-		}
-	case PhaseClaim:
-		return "请决定"
-	case PhaseOtherTurn:
-		name := view.Players[view.ActingSeat].Nickname
-		if name == "" {
-			name = fmt.Sprintf("%d 号位", view.ActingSeat+1)
-		}
-		return fmt.Sprintf("等待 %s", name)
-	case PhaseWaiting:
-		if emptySeatCount(view) > 0 {
-			return "座位未满 - b 补一个 / B 补满"
-		}
-		return "已自动准备,等待其他玩家就位"
-	}
-	return "等待开始"
+	return DeriveTableUXModel(view, cursor, time.Now()).PrimaryPrompt
 }
 
 // bottomHint 给最下面的提示行输出操作引导。
 func bottomHint(view RoomView, cursor *HandCursor) string {
-	phase := DerivePhase(view, cursor)
-	if phase == PhaseExchange && cursor != nil && cursor.Mode == CursorModeMulti3 && !cursor.Pending {
-		return "←→ 选牌    Space 标记/取消    Enter 提交    Esc 取消    i 房间信息"
-	}
-	if phase == PhaseMyTurnSelected && cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && !cursor.Pending {
-		return "←→ 选牌    Enter 出牌    Esc 取消    i 房间信息"
-	}
-	switch phase {
-	case PhaseMyTurnIdle:
-		return "←→ 选牌    Enter 出牌    i 房间信息    Esc 菜单"
-	case PhaseClaim:
-		return "-- 鸣牌 --  ←→ 选项    Enter 确认    P 跳过"
-	case PhaseSettlement:
-		return "-- 结算 --  R 再来一局    L 离桌    Enter 停留"
-	case PhaseWaiting:
-		if emptySeatCount(view) > 0 {
-			return "b 补 1 个机器人    B 补满    Enter 等真人    Esc 菜单"
-		}
-		return "Tab 查看玩家    i 房间信息    ? 帮助    Esc 菜单"
-	default:
-		return "Tab 查看玩家    i 房间信息    ? 帮助    Esc 菜单"
-	}
+	return DeriveTableUXModel(view, cursor, time.Now()).KeyHint
 }
 
 // centerVisual 把文本按 visual width 居中到指定宽度；CJK 字符算 2 cell。

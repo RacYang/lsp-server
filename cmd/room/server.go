@@ -143,7 +143,7 @@ func expandPerSeatNotifications(notifications []roomsvc.Notification) []roomsvc.
 func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification roomsvc.Notification, evt *clusterv1.RoomServiceStreamEventsResponse, cursor string) {
 	s.persistRoomMeta(ctx, roomID, parseSinceSeq(roomID, cursor), &notification)
 	if s.gs != nil {
-		players, _, ok := s.rooms.RoomSnapshot(roomID)
+		players, _, _, ok := s.rooms.RoomSnapshot(roomID)
 		if ok && len(players) > 0 {
 			_ = s.gs.CreateGameSummary(ctx, roomID, s.rooms.RuleID(), append([]string(nil), players...))
 		}
@@ -172,7 +172,7 @@ func (s *roomGRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq
 	if meta, ok, err := s.rdb.GetRoomSnapMeta(ctx, roomID); err == nil && ok {
 		prev = meta
 	}
-	players, state, ok := s.rooms.RoomSnapshot(roomID)
+	players, state, _, ok := s.rooms.RoomSnapshot(roomID)
 	if !ok {
 		state = ""
 	}
@@ -221,7 +221,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	if roomID == "" {
 		return &clusterv1.SnapshotRoomResponse{Error: "empty room_id"}, nil
 	}
-	players, state, ok := s.rooms.RoomSnapshot(roomID)
+	players, state, ready, ok := s.rooms.RoomSnapshot(roomID)
 	if !ok {
 		if s.rdb != nil {
 			if meta, okm, _ := s.rdb.GetRoomSnapMeta(ctx, roomID); okm {
@@ -241,7 +241,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 				return &clusterv1.SnapshotRoomResponse{
 					Cursor:           cur,
 					PlayerIds:        append([]string(nil), meta.PlayerIDs...),
-					Seats:            clusterSeatsFromPlayerIDs(meta.PlayerIDs),
+					Seats:            clusterSeatsFromPlayerIDs(meta.PlayerIDs, [4]bool{}, meta.State),
 					QueSuitBySeat:    append([]int32(nil), meta.QueSuits...),
 					State:            meta.State,
 					ActingSeat:       view.ActingSeat,
@@ -281,7 +281,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	return &clusterv1.SnapshotRoomResponse{
 		Cursor:           cur,
 		PlayerIds:        players,
-		Seats:            clusterSeatsFromPlayerIDs(players),
+		Seats:            clusterSeatsFromPlayerIDs(players, ready, state),
 		QueSuitBySeat:    qs,
 		State:            state,
 		ActingSeat:       view.ActingSeat,
@@ -319,7 +319,7 @@ func handForSeat(hands [][]string, seat int) []string {
 	return append([]string(nil), hands[seat]...)
 }
 
-func clusterSeatsFromPlayerIDs(players []string) []*clusterv1.SeatInfo {
+func clusterSeatsFromPlayerIDs(players []string, ready [4]bool, fsmState string) []*clusterv1.SeatInfo {
 	seats := make([]*clusterv1.SeatInfo, 0, 4)
 	for i := 0; i < 4; i++ {
 		info := &clusterv1.SeatInfo{SeatIndex: int32(i), Status: "empty"} //nolint:gosec // 固定座位范围 0..3
@@ -328,6 +328,9 @@ func clusterSeatsFromPlayerIDs(players []string) []*clusterv1.SeatInfo {
 			if players[i] != "" {
 				info.Online = true
 				info.Status = "online"
+				if ready[i] && (fsmState == "" || fsmState == "waiting" || fsmState == "ready") {
+					info.Status = "ready"
+				}
 			}
 		}
 		seats = append(seats, info)
@@ -529,7 +532,10 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 			})
 		}
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone{
-			ExchangeThreeDone: &clusterv1.ExchangeThreeDoneEvent{SeatTiles: seatTiles},
+			ExchangeThreeDone: &clusterv1.ExchangeThreeDoneEvent{
+				SeatTiles:         seatTiles,
+				YourExchangedAway: append([]string(nil), env.GetExchangeThreeDone().GetYourExchangedAway()...),
+			},
 		}
 	case roomsvc.KindQueMenDone:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_QueMenDone{

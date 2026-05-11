@@ -25,7 +25,7 @@ func TestLocalGatewayOfflineThenSurrender(t *testing.T) {
 
 	require.NoError(t, gateway.MarkSeatOffline(ctx, "room-offline", "user-1"))
 	time.Sleep(80 * time.Millisecond)
-	players, _, ok := rooms.RoomSnapshot("room-offline")
+	players, _, _, ok := rooms.RoomSnapshot("room-offline")
 	require.True(t, ok)
 	require.NotEmpty(t, players)
 	require.Empty(t, players[0])
@@ -46,7 +46,7 @@ func TestLocalGatewayReconnectBeforeSurrender(t *testing.T) {
 
 	hub.Register("user-1", "room-reconnect", nil)
 	time.Sleep(80 * time.Millisecond)
-	players, _, ok := rooms.RoomSnapshot("room-reconnect")
+	players, _, _, ok := rooms.RoomSnapshot("room-reconnect")
 	require.True(t, ok)
 	require.NotEmpty(t, players)
 	require.Equal(t, "user-1", players[0])

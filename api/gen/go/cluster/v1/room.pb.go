@@ -1651,10 +1651,11 @@ func (x *SettlementEvent) GetTotalScores() []*SeatScore {
 }
 
 type ExchangeThreeDoneEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SeatTiles     []*SeatTiles           `protobuf:"bytes,1,rep,name=seat_tiles,json=seatTiles,proto3" json:"seat_tiles,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SeatTiles         []*SeatTiles           `protobuf:"bytes,1,rep,name=seat_tiles,json=seatTiles,proto3" json:"seat_tiles,omitempty"`
+	YourExchangedAway []string               `protobuf:"bytes,2,rep,name=your_exchanged_away,json=yourExchangedAway,proto3" json:"your_exchanged_away,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ExchangeThreeDoneEvent) Reset() {
@@ -1690,6 +1691,13 @@ func (*ExchangeThreeDoneEvent) Descriptor() ([]byte, []int) {
 func (x *ExchangeThreeDoneEvent) GetSeatTiles() []*SeatTiles {
 	if x != nil {
 		return x.SeatTiles
+	}
+	return nil
+}
+
+func (x *ExchangeThreeDoneEvent) GetYourExchangedAway() []string {
+	if x != nil {
+		return x.YourExchangedAway
 	}
 	return nil
 }
@@ -2637,10 +2645,11 @@ const file_cluster_v1_room_proto_rawDesc = "" +
 	"roundIndex\x12\x1d\n" +
 	"\n" +
 	"hand_index\x18\b \x01(\x05R\thandIndex\x128\n" +
-	"\ftotal_scores\x18\t \x03(\v2\x15.cluster.v1.SeatScoreR\vtotalScores\"N\n" +
+	"\ftotal_scores\x18\t \x03(\v2\x15.cluster.v1.SeatScoreR\vtotalScores\"~\n" +
 	"\x16ExchangeThreeDoneEvent\x124\n" +
 	"\n" +
-	"seat_tiles\x18\x01 \x03(\v2\x15.cluster.v1.SeatTilesR\tseatTiles\":\n" +
+	"seat_tiles\x18\x01 \x03(\v2\x15.cluster.v1.SeatTilesR\tseatTiles\x12.\n" +
+	"\x13your_exchanged_away\x18\x02 \x03(\tR\x11yourExchangedAway\":\n" +
 	"\x0fQueMenDoneEvent\x12'\n" +
 	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\"C\n" +
 	"\x12RouteRedirectEvent\x12\x15\n" +

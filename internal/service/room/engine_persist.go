@@ -42,8 +42,8 @@ func (rs *RoundState) SnapshotView() RoundView {
 		LastAction:        rs.lastAction,
 		WallRemaining:     rs.wallRemaining(),
 		DeadlineUnixMs:    rs.deadlineUnixMs,
-		RoundIndex:        1,
-		HandIndex:         1,
+		RoundIndex:        0,
+		HandIndex:         0,
 		TotalScores:       rs.totalScores(),
 		RuleMeta:          rs.ruleMeta(),
 	}

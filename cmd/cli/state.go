@@ -45,15 +45,16 @@ type RoomView struct {
 	TotalScores     []*clientv1.SeatScore
 	LastAction      *clientv1.LastActionInfo
 
-	DealerSeat        int32
-	ActingSeat        int32
-	ActingSeats       []int32
-	PendingTile       string
-	AvailableActions  []string
-	ClaimCandidates   map[int32][]string
-	QueBySeat         [4]int32
-	ExchangeDirection int32
-	Players           [4]PlayerView
+	DealerSeat          int32
+	ActingSeat          int32
+	ActingSeats         []int32
+	PendingTile         string
+	PendingExchangeAway []string
+	AvailableActions    []string
+	ClaimCandidates     map[int32][]string
+	QueBySeat           [4]int32
+	ExchangeDirection   int32
+	Players             [4]PlayerView
 
 	LastSettlement     *clientv1.SettlementNotify
 	RoomList           []*clientv1.RoomMeta
@@ -63,6 +64,8 @@ type RoomView struct {
 	ResumeRoomID       string
 	Log                []LogEntry
 	LastError          string
+	UXNotice           string
+	UXNoticeUntil      time.Time
 	RTTms              int64
 	Reconnecting       bool
 	Connected          bool
@@ -127,6 +130,21 @@ func (s *AppState) AddLog(text string) {
 	s.addLogLocked(text)
 }
 
+// SetNotice 设置一条短时玩家提示，用于输入被拒绝、等待确认等非协议事实。
+func (s *AppState) SetNotice(text string, ttl time.Duration) {
+	if text == "" {
+		return
+	}
+	if ttl <= 0 {
+		ttl = 2 * time.Second
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.view.UXNotice = text
+	s.view.UXNoticeUntil = time.Now().Add(ttl)
+	s.view.UpdatedAt = time.Now()
+}
+
 // LeaveRoomLocally 让客户端先回到大厅，服务端离房请求在后台继续重试。
 func (s *AppState) LeaveRoomLocally(reason string) string {
 	s.mu.Lock()
@@ -155,6 +173,7 @@ func (s *AppState) addLogLocked(text string) {
 func cloneRoomView(in RoomView) RoomView {
 	out := in
 	out.AvailableActions = append([]string(nil), in.AvailableActions...)
+	out.PendingExchangeAway = append([]string(nil), in.PendingExchangeAway...)
 	out.ActingSeats = append([]int32(nil), in.ActingSeats...)
 	out.TotalScores = cloneSeatScores(in.TotalScores)
 	if in.LastAction != nil {

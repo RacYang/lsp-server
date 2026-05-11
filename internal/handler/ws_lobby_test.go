@@ -52,6 +52,32 @@ func TestWebSocketLobbyCreateListAndAutoMatch(t *testing.T) {
 	require.EqualValues(t, 1, matchResp.GetSeatIndex())
 }
 
+func TestWebSocketAutoMatchWithBotsReadyEmitsOpeningEvents(t *testing.T) {
+	t.Parallel()
+	roomRegistry := roomsvc.NewLobby()
+	roomService := roomsvc.NewService(roomRegistry)
+	hub := session.NewHub()
+	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
+
+	conn := dialWS(t, srv)
+	loginOnly(t, conn, "matcher")
+	match := &clientv1.Envelope{ReqId: "match-bots", IdempotencyKey: "idem-match-bots", Body: &clientv1.Envelope_AutoMatchReq{
+		AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: "sichuan_xuezhandaodi_huansanzhang", PadWithBots: true},
+	}}
+	writeEnv(t, conn, msgid.AutoMatchReq, match)
+	matchResp := readEnv(t, conn, msgid.AutoMatchResp).GetAutoMatchResp()
+	require.Empty(t, matchResp.GetErrorMessage())
+	require.Len(t, matchResp.GetSeats(), 4)
+
+	ready := &clientv1.Envelope{ReqId: "ready-after-bots", IdempotencyKey: "idem-ready-after-bots", Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}}
+	writeEnv(t, conn, msgid.ReadyReq, ready)
+	readyResp := readEnv(t, conn, msgid.ReadyResp).GetReadyResp()
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, readyResp.GetErrorCode())
+
+	require.NotNil(t, readUntilEnv(t, conn, msgid.InitialDealNotify, 8).GetInitialDeal())
+	require.Equal(t, "exchange_three", readUntilEnv(t, conn, msgid.ActionNotify, 8).GetAction().GetAction())
+}
+
 func TestWebSocketPrivateRoomHiddenFromList(t *testing.T) {
 	t.Parallel()
 	roomRegistry := roomsvc.NewLobby()

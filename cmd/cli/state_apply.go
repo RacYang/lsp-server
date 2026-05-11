@@ -56,6 +56,7 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		appendResponseLog(v, "准备", body.ReadyResp.GetErrorCode(), body.ReadyResp.GetErrorMessage())
 	case *clientv1.Envelope_InitialDeal:
 		deal := body.InitialDeal
+		v.RoomState = "playing"
 		v.SeatIndex = deal.GetSeatIndex()
 		player := &v.Players[v.SeatIndex]
 		player.Hand = sortedTiles(deal.GetTiles())
@@ -247,7 +248,7 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	}
 	p := &v.Players[seat]
 	if seat == v.SeatIndex {
-		if t != "" && (v.SnapshotStep <= 0 || len(p.Hand) < 14) {
+		if t != "" {
 			p.Hand = sortedTiles(append(p.Hand, t))
 		}
 		p.HandCnt = len(p.Hand)
@@ -264,6 +265,7 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 
 func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 	seat := action.GetSeatIndex()
+	v.RoomState = "playing"
 	v.WallRemaining = action.GetWallRemaining()
 	v.DeadlineUnixMS = action.GetDeadlineUnixMs()
 	if detail := action.GetDetail(); detail != nil {
@@ -426,6 +428,13 @@ func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
 	for _, item := range done.GetPerSeat() {
 		if item.GetSeatIndex() == v.SeatIndex {
 			p := &v.Players[v.SeatIndex]
+			away := done.GetYourExchangedAway()
+			if !sameTileMultiset(away, v.PendingExchangeAway) {
+				for _, tile := range away {
+					p.Hand = removeOneTile(p.Hand, tile)
+				}
+			}
+			v.PendingExchangeAway = nil
 			p.Hand = sortedTiles(append(p.Hand, item.GetTiles()...))
 			p.HandCnt = len(p.Hand)
 			break
@@ -446,6 +455,22 @@ func setWaitingAction(v *RoomView, action string, available []string) {
 	}
 	v.WaitingAction = action
 	v.AvailableActions = append([]string(nil), available...)
+}
+
+func sameTileMultiset(a, b []string) bool {
+	if len(a) == 0 || len(a) != len(b) {
+		return false
+	}
+	aa := append([]string(nil), a...)
+	bb := append([]string(nil), b...)
+	sort.Strings(aa)
+	sort.Strings(bb)
+	for i := range aa {
+		if aa[i] != bb[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func applyPhase(v *RoomView, phase clientv1.Phase, actingSeats []int32, step int64) {
@@ -583,6 +608,7 @@ func applySeatInfos(v *RoomView, seats []*clientv1.SeatInfo) {
 		p.Online = seat.GetOnline()
 		p.AutoPlay = seat.GetAutoPlay()
 		p.Status = seat.GetStatus()
+		p.Ready = p.Status == "ready"
 		p.TotalScore = seat.GetTotalScore()
 		if count := seat.GetHandCount(); count > 0 {
 			p.HandCnt = int(count)

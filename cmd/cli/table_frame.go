@@ -13,18 +13,34 @@ func drawTableEdge(scr tcell.Screen, region Region) {
 		return
 	}
 	style := defaultStyle()
-	drawText(scr, region.X, region.Y, style, "┌"+strings.Repeat("─", region.Width-2)+"┐")
+	scr.SetContent(region.X, region.Y, tcell.RuneULCorner, nil, style)
+	scr.SetContent(region.X+region.Width-1, region.Y, tcell.RuneURCorner, nil, style)
 	for y := region.Y + 1; y < region.Y+region.Height-1; y++ {
-		drawText(scr, region.X, y, style, "│")
-		drawText(scr, region.X+region.Width-1, y, style, "│")
+		scr.SetContent(region.X, y, tcell.RuneVLine, nil, style)
+		scr.SetContent(region.X+region.Width-1, y, tcell.RuneVLine, nil, style)
 	}
-	drawText(scr, region.X, region.Y+region.Height-1, style, "└"+strings.Repeat("─", region.Width-2)+"┘")
+	for x := region.X + 1; x < region.X+region.Width-1; x++ {
+		scr.SetContent(x, region.Y, tcell.RuneHLine, nil, style)
+		scr.SetContent(x, region.Y+region.Height-1, tcell.RuneHLine, nil, style)
+	}
+	scr.SetContent(region.X, region.Y+region.Height-1, tcell.RuneLLCorner, nil, style)
+	scr.SetContent(region.X+region.Width-1, region.Y+region.Height-1, tcell.RuneLRCorner, nil, style)
 }
 
 func drawCenterDial(scr tcell.Screen, in FrameInputs) {
 	region := in.Layout.Slots.Dial
 	if region.Empty() {
 		return
+	}
+	ux := DeriveTableUXModel(in.View, in.Cursor, in.Now)
+	promptRegion := Region{
+		X:      in.Layout.TableFrame.X + 2,
+		Y:      region.Y - 1,
+		Width:  in.Layout.TableFrame.Width - 4,
+		Height: 1,
+	}
+	if promptRegion.Y > in.Layout.TableFrame.Y && ux.PrimaryPrompt != "" {
+		drawClippedText(scr, promptRegion.X, promptRegion.Y, defaultStyle().Bold(true), centerVisual(ux.PrimaryPrompt, promptRegion.Width), promptRegion.Width)
 	}
 	label := "--"
 	if in.View.WallRemaining > 0 {
@@ -40,6 +56,10 @@ func drawCenterDial(scr tcell.Screen, in FrameInputs) {
 		text += " ★"
 	}
 	drawClippedText(scr, region.X, region.Y, defaultStyle(), centerVisual(text, region.Width), region.Width)
+	if ux.HasCountdown {
+		countdown := fmt.Sprintf("%02ds", ux.CountdownSeconds)
+		drawClippedText(scr, region.X, region.Y+1, defaultStyle(), centerVisual(countdown, region.Width), region.Width)
+	}
 }
 
 func remainingTilesEstimate(view RoomView) (int, bool) {

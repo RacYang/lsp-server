@@ -10,7 +10,8 @@ import (
 )
 
 func drawTitleBar(scr tcell.Screen, in FrameInputs) {
-	left := fmt.Sprintf("%s · %s · %s · 剩%s", ruleLabel(in.View), roomLabel(in.View), phaseLabel(DerivePhase(in.View, in.Cursor)), remainingLabel(in.View))
+	ux := DeriveTableUXModel(in.View, in.Cursor, in.Now)
+	left := fmt.Sprintf("%s · %s · %s · 剩%s", ruleLabel(in.View), roomLabel(in.View), phaseLabel(ux.Phase), remainingLabel(in.View))
 	right := scoreSummary(in.View)
 	drawBandLine(scr, in.Layout.TitleBar, left, right, false, false)
 }
@@ -21,7 +22,7 @@ func drawNorthBand(scr tcell.Screen, in FrameInputs) {
 		return
 	}
 	seat := relativeSeatIndex(in.View.SeatIndex, SeatPosTop)
-	drawBandLine(scr, in.Layout.NorthBand, "▼ "+compactPlayerLine(in.View, seat), focusSummary(in.View, in.Now), focusOnSeat(in.View, seat), false)
+	drawBandLine(scr, in.Layout.NorthBand, "▼ "+compactPlayerLine(in.View, seat), focusSummary(in.View, in.Now), focusOnSeat(in.View, in.Cursor, seat), false)
 }
 
 func drawSouthBand(scr tcell.Screen, in FrameInputs) {
@@ -29,7 +30,8 @@ func drawSouthBand(scr tcell.Screen, in FrameInputs) {
 		drawBandLine(scr, in.Layout.SouthBand, "▲ 等待入座", bottomActionHint(in.View, in.Cursor, in.Now), false, false)
 		return
 	}
-	drawBandLine(scr, in.Layout.SouthBand, "▲ "+compactPlayerLine(in.View, in.View.SeatIndex), bottomActionHint(in.View, in.Cursor, in.Now), focusOnSeat(in.View, in.View.SeatIndex), false)
+	ux := DeriveTableUXModel(in.View, in.Cursor, in.Now)
+	drawBandLine(scr, in.Layout.SouthBand, "▲ "+compactPlayerLine(in.View, in.View.SeatIndex), ux.PrimaryPrompt, focusOnSeat(in.View, in.Cursor, in.View.SeatIndex), false)
 }
 
 func drawKeybar(scr tcell.Screen, in FrameInputs) {
@@ -61,10 +63,32 @@ func compactPlayerLine(view RoomView, seat int32) string {
 }
 
 func focusSummary(view RoomView, now time.Time) string {
-	if view.ActingSeat < 0 || view.ActingSeat > 3 || !gameStarted(view) {
+	if !gameStarted(view) {
 		return ""
 	}
-	out := "▶ " + sideLabel(view, view.ActingSeat) + " " + playerDisplayName(view, view.ActingSeat) + " 出牌中"
+	ux := DeriveTableUXModel(view, nil, now)
+	seat := view.ActingSeat
+	var action string
+	switch ux.Phase {
+	case PhaseExchange:
+		seat = view.SeatIndex
+		action = "换三张"
+	case PhaseQueMen:
+		seat = view.SeatIndex
+		action = "定缺"
+	case PhaseClaim:
+		action = "等待响应"
+	case PhaseMyTurnIdle, PhaseMyTurnSelected, PhaseDiscard:
+		action = "出牌中"
+	case PhaseOtherTurn:
+		action = "出牌中"
+	default:
+		action = phaseLabel(ux.Phase)
+	}
+	if seat < 0 || seat > 3 {
+		return ""
+	}
+	out := "▶ " + sideLabel(view, seat) + " " + playerDisplayName(view, seat) + " " + action
 	if left, ok := actionCountdown(view, now); ok {
 		out += fmt.Sprintf(" · %02ds", left)
 	}
@@ -72,23 +96,13 @@ func focusSummary(view RoomView, now time.Time) string {
 }
 
 func bottomActionHint(view RoomView, cursor *HandCursor, now time.Time) string {
-	phase := DerivePhase(view, cursor)
-	countdown := ""
+	ux := DeriveTableUXModel(view, cursor, now)
 	if left, ok := actionCountdown(view, now); ok {
-		countdown = fmt.Sprintf("  %02ds", left)
+		if ux.PrimaryPrompt != "" {
+			return fmt.Sprintf("%s  %02ds", ux.PrimaryPrompt, left)
+		}
 	}
-	switch phase {
-	case PhaseMyTurnIdle, PhaseMyTurnSelected:
-		return "◆ 该你出牌 ◆" + countdown
-	case PhaseExchange:
-		return "◆ 换三张 ◆" + countdown
-	case PhaseQueMen:
-		return "◆ 定缺 ◆" + countdown
-	case PhaseClaim, PhaseTsumo:
-		return "◆ 请决定 ◆" + countdown
-	default:
-		return ""
-	}
+	return ux.PrimaryPrompt
 }
 
 func actionCountdown(view RoomView, now time.Time) (int, bool) {
@@ -121,20 +135,39 @@ func actionCountdown(view RoomView, now time.Time) (int, bool) {
 	return int(math.Ceil(left.Seconds())), true
 }
 
-func focusOnSeat(view RoomView, seat int32) bool {
-	return seat >= 0 && seat == view.ActingSeat && gameStarted(view)
+func focusOnSeat(view RoomView, cursor *HandCursor, seat int32) bool {
+	if seat < 0 || !gameStarted(view) {
+		return false
+	}
+	if seat == view.SeatIndex && selfHasActionFocus(view, cursor) {
+		return true
+	}
+	return seat == view.ActingSeat
+}
+
+func selfHasActionFocus(view RoomView, cursor *HandCursor) bool {
+	switch DerivePhase(view, cursor) {
+	case PhaseExchange, PhaseQueMen, PhaseClaim, PhaseTsumo, PhaseMyTurnIdle, PhaseMyTurnSelected:
+		return true
+	}
+	switch DeriveInteractionModel(view).Phase {
+	case PhaseExchange, PhaseQueMen, PhaseClaim, PhaseTsumo:
+		return true
+	default:
+		return false
+	}
 }
 
 func sideLabel(view RoomView, seat int32) string {
 	switch RelativeSeat(view.SeatIndex, seat) {
 	case SeatPosBottom:
-		return "南家"
+		return "我"
 	case SeatPosTop:
-		return "北家"
+		return "对家"
 	case SeatPosLeft:
-		return "西家"
+		return "下家"
 	case SeatPosRight:
-		return "东家"
+		return "上家"
 	default:
 		return "玩家"
 	}

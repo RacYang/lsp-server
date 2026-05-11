@@ -209,7 +209,7 @@ func TestRecoverRoomAndRuleID(t *testing.T) {
 	err := svc.RecoverRoom("room-recover", []string{"u1", "u2", "u3", "u4"}, "ready", nil)
 	require.NoError(t, err)
 
-	players, state, ok := svc.RoomSnapshot("room-recover")
+	players, state, _, ok := svc.RoomSnapshot("room-recover")
 	require.True(t, ok)
 	require.Equal(t, "ready", state)
 	require.ElementsMatch(t, []string{"u1", "u2", "u3", "u4"}, players)
@@ -258,7 +258,7 @@ func TestRecoverRoomFSMStates(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			_, state, ok := svc.RoomSnapshot(roomID)
+			_, state, _, ok := svc.RoomSnapshot(roomID)
 			require.True(t, ok)
 			require.Equal(t, tc.wantState, state)
 		})
@@ -274,7 +274,7 @@ func TestRecoverRoomReadyDoesNotChainTransitions(t *testing.T) {
 	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
 	err := svc.RecoverRoom("room-direct-settling", []string{"u1", "u2", "u3", "u4"}, "settling", nil)
 	require.NoError(t, err)
-	_, state, ok := svc.RoomSnapshot("room-direct-settling")
+	_, state, _, ok := svc.RoomSnapshot("room-direct-settling")
 	require.True(t, ok)
 	require.Equal(t, "settling", state)
 }
@@ -289,7 +289,7 @@ func TestRecoverRoomIdempotentForExistingRoom(t *testing.T) {
 	// 第二次调用应当复用 lobby 中已有 room，不返回错误也不重置 FSM。
 	require.NoError(t, svc.RecoverRoom(rid, []string{"u1", "u2", "u3", "u4"}, "playing", nil))
 
-	_, state, ok := svc.RoomSnapshot(rid)
+	_, state, _, ok := svc.RoomSnapshot(rid)
 	require.True(t, ok)
 	require.Equal(t, "ready", state, "已存在房间不应被第二次 RecoverRoom 改写")
 }
@@ -439,6 +439,39 @@ func TestQueMenUsesClientSuit(t *testing.T) {
 	_, err := e.ApplyQueMen(context.Background(), rs, 0, int32(tile.SuitBamboo))
 	require.NoError(t, err)
 	require.EqualValues(t, tile.SuitBamboo, rs.queBySeat[0])
+}
+
+func TestQueMenStartGameUsesZeroBasedRoundAndHandIndex(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-que-start",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		queSubmitted:    []bool{true, true, true, false},
+		waitingQueMen:   true,
+		lastDiscardSeat: -1,
+	}
+	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
+	notifs, err := e.ApplyQueMen(context.Background(), rs, 3, int32(tile.SuitBamboo))
+	require.NoError(t, err)
+
+	var start *clientv1.StartGameNotify
+	for _, notification := range notifs {
+		if notification.Kind != KindStartGame {
+			continue
+		}
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		start = env.GetStartGame()
+	}
+	require.NotNil(t, start)
+	require.Zero(t, start.GetRoundIndex())
+	require.Zero(t, start.GetHandIndex())
 }
 
 func TestApplyPongInterruptsPendingTurn(t *testing.T) {

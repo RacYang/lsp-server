@@ -205,6 +205,7 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 	}
 	view := state.Snapshot()
 	model := DeriveInteractionModel(view)
+	ux := DeriveTableUXModel(view, cursor, time.Now())
 	hand := []string{}
 	if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 		hand = view.Players[view.SeatIndex].Hand
@@ -221,7 +222,9 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		case '?':
 			overlay.Toggle(OverlayHelp)
 		case ' ':
-			cursor.ToggleMark()
+			if !cursor.ToggleMark() {
+				noticeInputRejected(state, ux, "当前不能标记手牌")
+			}
 		case 'q', 'Q':
 			return leaveRoomFireAndForget(ctx, state, gateway, TableExitLeaveRoom)
 		case 'b':
@@ -237,19 +240,43 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 				return leaveRoomFireAndForget(ctx, state, gateway, TableExitGameOver)
 			}
 		case 'm', 'M':
+			if !containsAction(ux.AllowedActions, ActionQueMen) {
+				noticeInputRejected(state, ux, "当前不能定缺")
+				return tableEventResult{}
+			}
 			return submitQueMen(ctx, gateway, model, 0)
 		case 'p', 'P':
 			if claimDialog != nil && model.Phase == PhaseClaim {
 				return submitClaimAction(ctx, gateway, claimDialog, ClaimActionPong)
 			}
+			if !containsAction(ux.AllowedActions, ActionQueMen) {
+				noticeInputRejected(state, ux, "当前不能定缺")
+				return tableEventResult{}
+			}
 			return submitQueMen(ctx, gateway, model, 1)
 		case 's', 'S':
+			if !containsAction(ux.AllowedActions, ActionQueMen) {
+				noticeInputRejected(state, ux, "当前不能定缺")
+				return tableEventResult{}
+			}
 			return submitQueMen(ctx, gateway, model, 2)
 		case 'h', 'H':
+			if claimDialog == nil {
+				noticeInputRejected(state, ux, "当前不能胡")
+				return tableEventResult{}
+			}
 			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionHu)
 		case 'g', 'G':
+			if claimDialog == nil {
+				noticeInputRejected(state, ux, "当前不能杠")
+				return tableEventResult{}
+			}
 			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionGang)
 		case 'n', 'N':
+			if claimDialog == nil {
+				noticeInputRejected(state, ux, "当前不能过")
+				return tableEventResult{}
+			}
 			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionPass)
 		}
 	case tcell.KeyLeft:
@@ -283,11 +310,35 @@ func submitAddBot(ctx context.Context, state *AppState, gateway TableGateway, co
 		if err != nil || len(added) == 0 || state == nil {
 			return
 		}
+		markAddedSeatsReady(added)
 		state.Mutate(func(v *RoomView) {
 			applySeatInfos(v, added)
 		})
 	}()
 	return tableEventResult{}
+}
+
+func markSeatReadyLocally(state *AppState) {
+	if state == nil {
+		return
+	}
+	state.Mutate(func(v *RoomView) {
+		if v.SeatIndex < 0 || v.SeatIndex > 3 {
+			return
+		}
+		p := &v.Players[v.SeatIndex]
+		p.Ready = true
+		p.Status = "ready"
+	})
+}
+
+func markAddedSeatsReady(seats []*clientv1.SeatInfo) {
+	for _, seat := range seats {
+		if seat == nil {
+			continue
+		}
+		seat.Status = "ready"
+	}
 }
 
 func emptySeatCount(view RoomView) int32 {
@@ -426,6 +477,8 @@ func submitClaimAction(ctx context.Context, gateway TableGateway, dialog *ClaimD
 // submitCursorAction 处理 Enter 提交：单选模式直接 Discard，多选模式打 ExchangeThree。
 func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor, hand []string, gateway TableGateway, view RoomView) tableEventResult {
 	if !cursor.CanSubmit() {
+		ux := DeriveTableUXModel(view, cursor, time.Now())
+		noticeInputRejected(state, ux, cursorSubmitDisabledReason(cursor))
 		return tableEventResult{}
 	}
 	switch cursor.Mode {
@@ -466,12 +519,41 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 	return tableEventResult{}
 }
 
+func noticeInputRejected(state *AppState, ux TableUXModel, fallback string) {
+	if state == nil {
+		return
+	}
+	msg := ux.DisabledReason
+	if msg == "" {
+		msg = fallback
+	}
+	state.SetNotice(msg, 2*time.Second)
+}
+
+func cursorSubmitDisabledReason(cursor *HandCursor) string {
+	if cursor == nil {
+		return "当前不能提交"
+	}
+	if cursor.Pending {
+		return "正在等待服务端确认"
+	}
+	switch cursor.Mode {
+	case CursorModeSingle:
+		return "请先用 ←→ 选择要出的牌"
+	case CursorModeMulti3:
+		return "请先用 Space 标记 3 张牌"
+	default:
+		return "当前阶段不能操作手牌"
+	}
+}
+
 func removeExchangedTilesLocally(state *AppState, seat int32, tiles []string) {
 	if state == nil || seat < 0 || seat > 3 || len(tiles) == 0 {
 		return
 	}
 	state.Mutate(func(v *RoomView) {
 		p := &v.Players[seat]
+		v.PendingExchangeAway = append([]string(nil), tiles...)
 		for _, tile := range tiles {
 			p.Hand = removeOneTile(p.Hand, tile)
 		}
@@ -485,6 +567,7 @@ func restoreExchangedTilesLocally(state *AppState, seat int32, tiles []string) {
 	}
 	state.Mutate(func(v *RoomView) {
 		p := &v.Players[seat]
+		v.PendingExchangeAway = nil
 		p.Hand = sortedTiles(append(p.Hand, tiles...))
 		p.HandCnt = len(p.Hand)
 	})

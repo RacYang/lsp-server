@@ -12,9 +12,9 @@ func TestRenderTileUnicodeNumbers(t *testing.T) {
 		name string
 		want [4]string
 	}{
-		{"m1", [4]string{"┌──┐", "│一│", "│万│", "└──┘"}},
-		{"p5", [4]string{"┌──┐", "│五│", "│筒│", "└──┘"}},
-		{"s9", [4]string{"┌──┐", "│九│", "│条│", "└──┘"}},
+		{"m1", [4]string{"+--+", "|一|", "|万|", "+--+"}},
+		{"p5", [4]string{"+--+", "|五|", "|筒|", "+--+"}},
+		{"s9", [4]string{"+--+", "|九|", "|条|", "+--+"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -27,10 +27,10 @@ func TestRenderTileUnicodeNumbers(t *testing.T) {
 
 func TestRenderTileUnicodeHonors(t *testing.T) {
 	got := RenderTile("z1", TileThemeUnicode)
-	require.Equal(t, "┌──┐", got.Lines[0])
-	require.Equal(t, "│东│", got.Lines[1])
-	require.Equal(t, "│  │", got.Lines[2])
-	require.Equal(t, "└──┘", got.Lines[3])
+	require.Equal(t, "+--+", got.Lines[0])
+	require.Equal(t, "|东|", got.Lines[1])
+	require.Equal(t, "|  |", got.Lines[2])
+	require.Equal(t, "+--+", got.Lines[3])
 }
 
 func TestRenderTileASCII(t *testing.T) {
@@ -46,7 +46,7 @@ func TestRenderTileASCIIHonor(t *testing.T) {
 
 func TestRenderTileFallbackOnUnknownInput(t *testing.T) {
 	got := RenderTile("???", TileThemeUnicode)
-	require.Len(t, got.Lines[0], len("┌──┐"))
+	require.Len(t, got.Lines[0], len("+--+"))
 }
 
 func TestParseTileTheme(t *testing.T) {

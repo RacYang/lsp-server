@@ -69,28 +69,85 @@ func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, d
 		}
 	}
 	rs.waitingExchange = false
+	exchangedAwayBySeat := exchangeSelectionsToStrings(rs.exchangeSelection)
 	receivedTiles := exchangeThreeWithSelections(rs.hands, rs.exchangeSelection, rs.exchangeDirection)
 	for i := range rs.exchangeSelection {
 		rs.exchangeSelection[i] = nil
 	}
-	exchangePayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: "exchange",
-		Body: &clientv1.Envelope_ExchangeThreeDone{
-			ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-				PerSeat:     receivedTiles,
-				Direction:   rs.exchangeDirection,
-				Phase:       clientv1.Phase_PHASE_QUE_MEN,
-				Step:        int64(rs.step),
-				ActingSeats: pendingSeats(rs.queSubmitted),
-			},
-		},
-	})
+	exchangePayload, err := marshalExchangeThreeDoneEnvelope(
+		receivedTiles,
+		nil,
+		rs.exchangeDirection,
+		int64(rs.step),
+		pendingSeats(rs.queSubmitted),
+	)
 	if err != nil {
 		return nil, err
 	}
 	rs.waitingQueMen = true
-	out := []Notification{{Kind: KindExchangeThreeDone, Payload: exchangePayload, TargetSeat: BroadcastSeat}}
+	project := func(target Seat) []byte {
+		if !target.Valid() {
+			return nil
+		}
+		seatTiles := receivedTilesForSeat(receivedTiles, target)
+		payload, err := marshalExchangeThreeDoneEnvelope(
+			seatTiles,
+			exchangedAwayBySeat[target],
+			rs.exchangeDirection,
+			int64(rs.step),
+			pendingSeats(rs.queSubmitted),
+		)
+		if err != nil {
+			return nil
+		}
+		return payload
+	}
+	out := []Notification{{
+		Kind:       KindExchangeThreeDone,
+		Payload:    exchangePayload,
+		TargetSeat: BroadcastSeat,
+		Privacy:    PrivacyPerSeat,
+		Project:    project,
+	}}
 	return append(out, rs.promptSeatActions("que_men")...), nil
+}
+
+func marshalExchangeThreeDoneEnvelope(receivedTiles []*clientv1.SeatTiles, exchangedAway []string, direction int32, step int64, actingSeats []int32) ([]byte, error) {
+	return marshalEnvelope(&clientv1.Envelope{
+		ReqId: "exchange",
+		Body: &clientv1.Envelope_ExchangeThreeDone{
+			ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
+				PerSeat:           receivedTiles,
+				Direction:         direction,
+				Phase:             clientv1.Phase_PHASE_QUE_MEN,
+				Step:              step,
+				ActingSeats:       actingSeats,
+				YourExchangedAway: exchangedAway,
+			},
+		},
+	})
+}
+
+func receivedTilesForSeat(receivedTiles []*clientv1.SeatTiles, seat Seat) []*clientv1.SeatTiles {
+	out := make([]*clientv1.SeatTiles, 0, 1)
+	for _, item := range receivedTiles {
+		if item.GetSeatIndex() != seat.Proto() {
+			continue
+		}
+		out = append(out, &clientv1.SeatTiles{
+			SeatIndex: item.GetSeatIndex(),
+			Tiles:     append([]string(nil), item.GetTiles()...),
+		})
+	}
+	return out
+}
+
+func exchangeSelectionsToStrings(selections [][]tile.Tile) [][]string {
+	out := make([][]string, len(selections))
+	for seat := range selections {
+		out[seat] = tilesToStrings(selections[seat])
+	}
+	return out
 }
 
 func (rs *RoundState) initRoundNotifications() ([]Notification, error) {

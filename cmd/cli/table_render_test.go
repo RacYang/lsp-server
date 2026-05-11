@@ -320,7 +320,7 @@ func TestCentralPromptStates(t *testing.T) {
 
 	v.ActingSeat = 0
 	v.WaitingAction = "discard"
-	require.Contains(t, centralPrompt(v, nil), "等待 carl")
+	require.Contains(t, centralPrompt(v, nil), "等待")
 
 	v.ActingSeat = v.SeatIndex
 	v.WaitingAction = "discard"
@@ -334,6 +334,20 @@ func TestCentralPromptStates(t *testing.T) {
 	require.Contains(t, centralPrompt(v, multi), "还需 1")
 	multi.Marked = []int{1, 2, 3}
 	require.Contains(t, centralPrompt(v, multi), "已选 3 张")
+}
+
+func TestRenderFrameDrawsPrimaryPromptInCenter(t *testing.T) {
+	scr := makeSimScreen(t, MinTableWidth, MinTableHeight)
+	view := newWaitingTableView()
+	view.ActingSeat = view.SeatIndex
+	view.WaitingAction = "discard"
+	layout, ok := CalcLayout(MinTableWidth, MinTableHeight)
+	require.True(t, ok)
+
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeASCII, Cursor: &HandCursor{Mode: CursorModeSingle, Index: 0}})
+	scr.Show()
+
+	require.Contains(t, dumpScreen(scr), "已选 一万")
 }
 
 func TestPrettifyMeld(t *testing.T) {

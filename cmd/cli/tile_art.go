@@ -11,7 +11,7 @@ import (
 type TileTheme int
 
 const (
-	// TileThemeUnicode 默认拟物风格，使用中文「一二三...九」「万 筒 条」与 ┌─┐│└─┘ 框线。
+	// TileThemeUnicode 默认拟物风格，使用中文「一二三...九」「万 筒 条」与 ASCII 边框。
 	// 牌占 4 个 cell 宽 × 3 行高（1 列宽度 = 1 个 ASCII char；CJK 字符占 2 列）。
 	TileThemeUnicode TileTheme = iota
 	// TileThemeASCII 是降级风格，使用纯 ASCII 字符 +-|，便于在 CJK 渲染异常的终端上保留可读性。
@@ -218,29 +218,29 @@ func honorAscii(b byte) string {
 	}
 }
 
-// renderUnicode 输出双宽中文字符 + 框线，每张牌占 4 cell 宽 × 4 行高：
+// renderUnicode 输出双宽中文字符 + 单宽 ASCII 边框，每张牌占 4 cell 宽 × 4 行高：
 //
-//	┌──┐
-//	│一│
-//	│万│
-//	└──┘
+//	+--+
+//	|一|
+//	|万|
+//	+--+
 //
 // 字牌（如东风）只有花色字，把字放在 rank 行，suit 行留空白填充。
 func renderUnicode(face tileFace) TileArt {
 	rank := face.rank
 	suit := face.suit
-	rankLine := "│" + padCJK(rank, 2) + "│"
-	suitLine := "│" + padCJK(suit, 2) + "│"
+	rankLine := "|" + padCJK(rank, 2) + "|"
+	suitLine := "|" + padCJK(suit, 2) + "|"
 	if suit == "" {
 		// 字牌：rank 行放中文，suit 行只有空白，保持 4 行布局对齐。
-		suitLine = "│" + strings.Repeat(" ", 2) + "│"
+		suitLine = "|" + strings.Repeat(" ", 2) + "|"
 	}
 	return TileArt{
 		Lines: [TileArtHeight]string{
-			"┌──┐",
+			"+--+",
 			rankLine,
 			suitLine,
-			"└──┘",
+			"+--+",
 		},
 		Width: TileArtWidth,
 	}

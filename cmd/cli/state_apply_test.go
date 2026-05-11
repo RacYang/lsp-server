@@ -116,6 +116,56 @@ func TestQueMenStartGameDrawKeepsAuthoritativePhase(t *testing.T) {
 	require.Equal(t, []string{"m1", "m2", "m3", "p9"}, view.Players[0].Hand)
 }
 
+func TestApplyExchangeDoneReplacesExchangedTiles(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
+		SeatIndex: 0,
+		Tiles:     []string{"m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "s1", "s2", "s3", "s4"},
+	}}})
+
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
+		PerSeat: []*clientv1.SeatTiles{{
+			SeatIndex: 0,
+			Tiles:     []string{"p7", "p8", "p9"},
+		}},
+		YourExchangedAway: []string{"m1", "m2", "m3"},
+	}}})
+
+	view := st.Snapshot()
+	require.Len(t, view.Players[0].Hand, 13)
+	require.NotContains(t, view.Players[0].Hand, "m1")
+	require.NotContains(t, view.Players[0].Hand, "m2")
+	require.NotContains(t, view.Players[0].Hand, "m3")
+	require.Contains(t, view.Players[0].Hand, "p7")
+	require.Contains(t, view.Players[0].Hand, "p8")
+	require.Contains(t, view.Players[0].Hand, "p9")
+}
+
+func TestApplyExchangeDoneDoesNotRemoveOptimisticExchangeTwice(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Mutate(func(v *RoomView) {
+		v.Players[0].Hand = []string{"m1", "s1"}
+		v.Players[0].HandCnt = 2
+		v.PendingExchangeAway = []string{"m1", "m1", "m2"}
+	})
+
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
+		PerSeat: []*clientv1.SeatTiles{{
+			SeatIndex: 0,
+			Tiles:     []string{"p7", "p8", "p9"},
+		}},
+		YourExchangedAway: []string{"m1", "m1", "m2"},
+	}}})
+
+	view := st.Snapshot()
+	require.Empty(t, view.PendingExchangeAway)
+	require.Equal(t, []string{"m1", "p7", "p8", "p9", "s1"}, view.Players[0].Hand)
+}
+
 func TestSnapshotStepDropsStaleDrawTile(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})

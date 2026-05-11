@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -34,9 +35,10 @@ func TestExchangeAndQueMenAllowConcurrentSeats(t *testing.T) {
 	cases := []struct {
 		action string
 		want   PlayerAction
+		phase  TablePhase
 	}{
-		{"exchange_three", ActionExchangeThree},
-		{"que_men", ActionQueMen},
+		{"exchange_three", ActionExchangeThree, PhaseExchange},
+		{"que_men", ActionQueMen, PhaseQueMen},
 	}
 	for _, tc := range cases {
 		t.Run(tc.action, func(t *testing.T) {
@@ -49,8 +51,26 @@ func TestExchangeAndQueMenAllowConcurrentSeats(t *testing.T) {
 			model := DeriveInteractionModel(view)
 			require.Contains(t, model.Allowed, tc.want)
 			require.NotContains(t, model.Hint, "等待")
+			require.Equal(t, tc.phase, DeriveTableUXModel(view, nil, nowForTest()).Phase)
 		})
 	}
+}
+
+func TestTableUXModelUsesRelativeSeatLabels(t *testing.T) {
+	view := RoomView{
+		Phase:         phaseTable,
+		RoomState:     "playing",
+		SeatIndex:     1,
+		ActingSeat:    0,
+		WaitingAction: "discard",
+	}
+	view.Players[0].Nickname = "BOT-2"
+
+	ux := DeriveTableUXModel(view, nil, nowForTest())
+
+	require.Equal(t, "上家", ux.Seats[0].RelativeLabel)
+	require.Contains(t, ux.PrimaryPrompt, "上家")
+	require.NotContains(t, ux.PrimaryPrompt, "BOT")
 }
 
 func TestDeriveInteractionModelFiltersNonTargetClaim(t *testing.T) {
@@ -66,4 +86,8 @@ func TestDeriveInteractionModelFiltersNonTargetClaim(t *testing.T) {
 	require.Empty(t, model.Allowed)
 	require.Nil(t, model.Claim)
 	require.Contains(t, model.Hint, "等待")
+}
+
+func nowForTest() time.Time {
+	return time.Date(2026, 5, 11, 8, 0, 0, 0, time.UTC)
 }

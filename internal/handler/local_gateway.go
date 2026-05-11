@@ -273,7 +273,7 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.
 	}
 	encoded := frame.Encode(outMsgID, notification.Payload)
 	if notification.Privacy == roomsvc.PrivacyPerSeat && notification.Project != nil {
-		players, _, ok := g.rooms.RoomSnapshot(roomID)
+		players, _, _, ok := g.rooms.RoomSnapshot(roomID)
 		if !ok {
 			return
 		}
@@ -290,7 +290,7 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.
 		g.hub.Broadcast(roomID, encoded)
 		return
 	}
-	players, _, ok := g.rooms.RoomSnapshot(roomID)
+	players, _, _, ok := g.rooms.RoomSnapshot(roomID)
 	targetSeat := int(notification.TargetSeat)
 	if !ok || targetSeat >= len(players) || targetSeat < 0 {
 		return
@@ -318,7 +318,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 	if srec.RoomID == "" {
 		return &ResumeResult{UserID: uid, Resumed: false}, nil
 	}
-	players, state, ok := g.rooms.RoomSnapshot(srec.RoomID)
+	players, state, _, ok := g.rooms.RoomSnapshot(srec.RoomID)
 	if !ok {
 		return nil, fmt.Errorf("房间不存在或已回收")
 	}

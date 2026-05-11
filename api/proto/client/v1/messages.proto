@@ -457,6 +457,8 @@ message ExchangeThreeDoneNotify {
   Phase phase = 3;
   int64 step = 4;
   repeated int32 acting_seats = 5;
+  // 当前连接所属座位实际交出的三张牌；用于客户端在广播完成时校正本地手牌。
+  repeated string your_exchanged_away = 6;
 }
 
 message SeatTiles {

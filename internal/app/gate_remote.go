@@ -1075,7 +1075,8 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 		return marshalClientEnvelope(msgid.ExchangeThreeDone, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-				PerSeat: perSeat,
+				PerSeat:           perSeat,
+				YourExchangedAway: append([]string(nil), body.ExchangeThreeDone.GetYourExchangedAway()...),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_QueMenDone:

@@ -83,6 +83,26 @@ func TestSceneRouterRenderRoomPrep(t *testing.T) {
 	requireGolden(t, "room_prep_ascii", dumpScreen(scr))
 }
 
+func TestSceneRouterOpeningExchangeUsesTableScene(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	state.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "ROOM1", SeatIndex: 0}}})
+	state.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
+		SeatIndex: 0,
+		Tiles:     []string{"m1", "m2", "m3", "m4", "m5"},
+	}}})
+	state.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
+		SeatIndex:   0,
+		Action:      "exchange_three",
+		ActingSeats: []int32{0, 1, 2, 3},
+	}}})
+
+	router := NewSceneRouter(state, fakeSceneLobbyGateway{}, fakeSceneTableGateway{}, &Config{TileTheme: tileThemeASCII})
+	if got := router.CurrentSceneID(); got != SceneTable {
+		t.Fatalf("opening exchange should render table, got %s", got)
+	}
+}
+
 func TestSceneRouterRenderSettle(t *testing.T) {
 	scr := makeSimScreen(t, 100, 30)
 	state := NewAppState("racoo")

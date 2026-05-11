@@ -129,6 +129,7 @@ type cmdRoomSnapshot struct {
 type roomSnapshotResult struct {
 	playerIDs []string
 	fsmState  string
+	ready     [4]bool
 }
 
 type roundViewResult struct {
@@ -238,7 +239,7 @@ func (a *roomActor) run() {
 			if a.room.FSM != nil {
 				state = string(a.room.FSM.State())
 			}
-			m.res <- roomSnapshotResult{playerIDs: out, fsmState: state}
+			m.res <- roomSnapshotResult{playerIDs: out, fsmState: state, ready: a.room.Ready}
 		default:
 		}
 		if a.onAfterCmd != nil && a.room != nil {
@@ -437,29 +438,29 @@ func (a *roomActor) submitRoundView(ctx context.Context) (RoundView, bool, error
 	}
 }
 
-func (a *roomActor) submitRoomSnapshot(ctx context.Context) ([]string, string, error) {
+func (a *roomActor) submitRoomSnapshot(ctx context.Context) ([]string, string, [4]bool, error) {
 	if a == nil {
-		return nil, "", fmt.Errorf("nil actor")
+		return nil, "", [4]bool{}, fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
 	defer a.submitMu.Unlock()
 	if a.closed.Load() {
-		return nil, "", fmt.Errorf("room closed")
+		return nil, "", [4]bool{}, fmt.Errorf("room closed")
 	}
 	res := make(chan roomSnapshotResult, 1)
 	cmd := cmdRoomSnapshot{res: res}
 	select {
 	case a.ch <- cmd:
 	default:
-		return nil, "", ErrRateLimited
+		return nil, "", [4]bool{}, ErrRateLimited
 	case <-ctx.Done():
-		return nil, "", ctx.Err()
+		return nil, "", [4]bool{}, ctx.Err()
 	}
 	select {
 	case rr := <-res:
-		return rr.playerIDs, rr.fsmState, nil
+		return rr.playerIDs, rr.fsmState, rr.ready, nil
 	case <-ctx.Done():
-		return nil, "", ctx.Err()
+		return nil, "", [4]bool{}, ctx.Err()
 	}
 }
 

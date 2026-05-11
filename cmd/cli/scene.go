@@ -197,14 +197,15 @@ func (r *SceneRouter) renderRoomPrep(scr tcell.Screen, now time.Time) {
 func (r *SceneRouter) handleRoomPrepKey(ctx context.Context, ev *tcell.EventKey) {
 	switch ev.Key() {
 	case tcell.KeyEnter, tcell.KeyCtrlJ:
+		markSeatReadyLocally(r.state)
 		go func() { _ = r.tableGW.Ready(ctx) }()
 	case tcell.KeyRune:
 		switch ev.Rune() {
 		case 'b':
-			go func() { _, _ = r.tableGW.AddBot(ctx, 1) }()
+			_ = submitAddBot(ctx, r.state, r.tableGW, 1)
 		case 'B':
 			view := r.state.Snapshot()
-			go func() { _, _ = r.tableGW.AddBot(ctx, emptySeatCount(view)) }()
+			_ = submitAddBot(ctx, r.state, r.tableGW, emptySeatCount(view))
 		case 'q', 'Q':
 			r.applyTableExit(leaveRoomFireAndForget(ctx, r.state, r.tableGW, TableExitLeaveRoom).exit)
 		case '?':
@@ -293,14 +294,21 @@ func drawSimpleBox(scr tcell.Screen, region Region, title string) {
 	if region.Width < 4 || region.Height < 3 {
 		return
 	}
-	drawText(scr, region.X, region.Y, defaultStyle(), "┌"+strings.Repeat("─", region.Width-2)+"┐")
+	style := defaultStyle()
+	scr.SetContent(region.X, region.Y, tcell.RuneULCorner, nil, style)
+	scr.SetContent(region.X+region.Width-1, region.Y, tcell.RuneURCorner, nil, style)
 	for y := region.Y + 1; y < region.Y+region.Height-1; y++ {
-		drawText(scr, region.X, y, defaultStyle(), "│")
-		drawText(scr, region.X+region.Width-1, y, defaultStyle(), "│")
+		scr.SetContent(region.X, y, tcell.RuneVLine, nil, style)
+		scr.SetContent(region.X+region.Width-1, y, tcell.RuneVLine, nil, style)
 	}
-	drawText(scr, region.X, region.Y+region.Height-1, defaultStyle(), "└"+strings.Repeat("─", region.Width-2)+"┘")
+	for x := region.X + 1; x < region.X+region.Width-1; x++ {
+		scr.SetContent(x, region.Y, tcell.RuneHLine, nil, style)
+		scr.SetContent(x, region.Y+region.Height-1, tcell.RuneHLine, nil, style)
+	}
+	scr.SetContent(region.X, region.Y+region.Height-1, tcell.RuneLLCorner, nil, style)
+	scr.SetContent(region.X+region.Width-1, region.Y+region.Height-1, tcell.RuneLRCorner, nil, style)
 	if title != "" && region.Width > 6 {
-		drawClippedText(scr, region.X+2, region.Y, defaultStyle().Bold(true), " "+title+" ", region.Width-4)
+		drawClippedText(scr, region.X+2, region.Y, style.Bold(true), " "+title+" ", region.Width-4)
 	}
 }
 
@@ -318,6 +326,8 @@ func seatPrepLabel(view RoomView, seat int) string {
 	}
 	mark := "●"
 	switch {
+	case p.Status == "ready" || p.Ready:
+		mark = "√"
 	case p.IsBot:
 		mark = "▣"
 	case p.AutoPlay:
