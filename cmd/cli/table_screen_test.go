@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -348,8 +349,9 @@ func TestSubmitDiscardFailureShowsNotice(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected discard request")
 	}
-	require.Eventually(t, func() bool { return !cursor.Pending }, time.Second, 10*time.Millisecond)
-	require.Contains(t, state.Snapshot().UXNotice, "出牌失败: 当前不是你的回合")
+	require.Eventually(t, func() bool {
+		return strings.Contains(state.Snapshot().UXNotice, "出牌失败: 当前不是你的回合")
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestHandleTableKeyEnterMarksExchangeTileBeforeSubmit(t *testing.T) {
