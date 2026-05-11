@@ -331,7 +331,15 @@ func submitAddBot(ctx context.Context, state *AppState, gateway TableGateway, co
 	}
 	go func() {
 		added, err := gateway.AddBot(ctx, count)
-		if err != nil || len(added) == 0 || state == nil {
+		if err != nil {
+			noticeAsyncFailure(state, "添加机器人失败", err)
+			return
+		}
+		if len(added) == 0 {
+			noticeAsyncFailure(state, "添加机器人失败", errors.New("没有可补的空座"))
+			return
+		}
+		if state == nil {
 			return
 		}
 		markAddedSeatsReady(added)
@@ -516,6 +524,7 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 		go func() {
 			if err := gateway.Discard(ctx, tile); err != nil {
 				cursor.RollbackPending()
+				noticeAsyncFailure(state, "出牌失败", err)
 			}
 		}()
 	case CursorModeMulti3:
@@ -531,12 +540,12 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 		if len(tiles) != 3 {
 			return tableEventResult{}
 		}
-		removeExchangedTilesLocally(state, view.SeatIndex, tiles)
+		recordPendingExchange(state, view.SeatIndex, tiles)
 		cursor.Submit()
 		go func() {
 			if err := gateway.ExchangeThree(ctx, tiles, 0); err != nil {
 				cursor.RollbackPending()
-				restoreExchangedTilesLocally(state, view.SeatIndex, tiles)
+				clearPendingExchange(state, view.SeatIndex)
 			}
 		}()
 	}
@@ -552,6 +561,14 @@ func noticeInputRejected(state *AppState, ux TableUXModel, fallback string) {
 		msg = fallback
 	}
 	state.SetNotice(msg, 2*time.Second)
+}
+
+func noticeAsyncFailure(state *AppState, label string, err error) {
+	if state == nil || err == nil {
+		return
+	}
+	state.SetNotice(label+": "+err.Error(), 2*time.Second)
+	state.AddLog(label + ": " + err.Error())
 }
 
 func cursorSubmitDisabledReason(cursor *HandCursor) string {
@@ -571,28 +588,20 @@ func cursorSubmitDisabledReason(cursor *HandCursor) string {
 	}
 }
 
-func removeExchangedTilesLocally(state *AppState, seat int32, tiles []string) {
+func recordPendingExchange(state *AppState, seat int32, tiles []string) {
 	if state == nil || seat < 0 || seat > 3 || len(tiles) == 0 {
 		return
 	}
 	state.Mutate(func(v *RoomView) {
-		p := &v.Players[seat]
 		v.PendingExchangeAway = append([]string(nil), tiles...)
-		for _, tile := range tiles {
-			p.Hand = removeOneTile(p.Hand, tile)
-		}
-		p.HandCnt = len(p.Hand)
 	})
 }
 
-func restoreExchangedTilesLocally(state *AppState, seat int32, tiles []string) {
-	if state == nil || seat < 0 || seat > 3 || len(tiles) == 0 {
+func clearPendingExchange(state *AppState, seat int32) {
+	if state == nil || seat < 0 || seat > 3 {
 		return
 	}
 	state.Mutate(func(v *RoomView) {
-		p := &v.Players[seat]
 		v.PendingExchangeAway = nil
-		p.Hand = sortedTiles(append(p.Hand, tiles...))
-		p.HandCnt = len(p.Hand)
 	})
 }

@@ -91,3 +91,22 @@ func TestCalcLayoutSupportedTiersStaySquare(t *testing.T) {
 		require.Equalf(t, l.RightPlayerSlot.X, l.TableFrame.X+l.TableFrame.Width, "%dx%d", size.w, size.h)
 	}
 }
+
+func TestEastPondAndWallStaySeparatedAcrossTiers(t *testing.T) {
+	for _, size := range []struct{ w, h int }{{100, 30}, {120, 36}, {140, 40}, {200, 60}} {
+		l, ok := CalcLayout(size.w, size.h)
+		require.True(t, ok)
+		require.Falsef(t, regionsOverlap(l.Slots.EastPond, l.Slots.EastWall), "%dx%d EastPond=%+v EastWall=%+v", size.w, size.h, l.Slots.EastPond, l.Slots.EastWall)
+		require.Lessf(t, l.Slots.EastPond.X+l.Slots.EastPond.Width, l.Slots.EastWall.X, "%dx%d 右侧牌河和暗牌墙之间应保留空隙", size.w, size.h)
+	}
+}
+
+func regionsOverlap(a, b Region) bool {
+	if a.Empty() || b.Empty() {
+		return false
+	}
+	return a.X < b.X+b.Width &&
+		b.X < a.X+a.Width &&
+		a.Y < b.Y+b.Height &&
+		b.Y < a.Y+a.Height
+}

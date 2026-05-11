@@ -189,7 +189,9 @@ func applyListRooms(v *RoomView, resp *clientv1.ListRoomsResponse) {
 	}
 	v.RoomList = cloneRoomMetas(resp.GetRooms())
 	v.NextRoomPage = resp.GetNextPageToken()
-	v.Phase = phaseLobby
+	if v.RoomID == "" {
+		v.Phase = phaseLobby
+	}
 	appendLog(v, fmt.Sprintf("刷新房间列表: %d 间", len(v.RoomList)))
 }
 
@@ -302,7 +304,7 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 			setWaitingAction(v, "que_men", []string{"que_men"})
 		}
 	case "discard":
-		applyDiscardAction(v, seat, action.GetTile(), action.GetStep())
+		applyDiscardAction(v, seat, action.GetTile(), action.GetStep(), action.GetPhase() != clientv1.Phase_PHASE_UNSPECIFIED)
 	case "pong":
 		applyPongAction(v, seat, action.GetTile())
 	case "gang":
@@ -377,7 +379,7 @@ func formatActionLog(view RoomView, seat int32, action, tile string) string {
 	return ""
 }
 
-func applyDiscardAction(v *RoomView, seat int32, tile string, step int64) {
+func applyDiscardAction(v *RoomView, seat int32, tile string, step int64, preserveNextFocus bool) {
 	if seat < 0 || seat > 3 || tile == "" {
 		return
 	}
@@ -400,8 +402,10 @@ func applyDiscardAction(v *RoomView, seat int32, tile string, step int64) {
 		// 对家弃牌时手牌计数 -1；保持与 applyDraw 的 +1 对称，UI 上的 "▢×N" 才不会越涨越高。
 		p.HandCnt--
 	}
-	v.ActingSeat = -1
-	setWaitingAction(v, "none", nil)
+	if !preserveNextFocus {
+		v.ActingSeat = -1
+		setWaitingAction(v, "none", nil)
+	}
 	v.PendingTile = ""
 	v.ClaimCandidates = map[int32][]string{}
 }
@@ -451,10 +455,11 @@ func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
 		if item.GetSeatIndex() == v.SeatIndex {
 			p := &v.Players[v.SeatIndex]
 			away := done.GetYourExchangedAway()
-			if !sameTileMultiset(away, v.PendingExchangeAway) {
-				for _, tile := range away {
-					p.Hand = removeOneTile(p.Hand, tile)
-				}
+			if len(away) == 0 {
+				away = v.PendingExchangeAway
+			}
+			for _, tile := range away {
+				p.Hand = removeOneTile(p.Hand, tile)
 			}
 			v.PendingExchangeAway = nil
 			p.Hand = sortedTiles(append(p.Hand, item.GetTiles()...))
@@ -479,22 +484,6 @@ func setWaitingAction(v *RoomView, action string, available []string) {
 	v.AvailableActions = append([]string(nil), available...)
 }
 
-func sameTileMultiset(a, b []string) bool {
-	if len(a) == 0 || len(a) != len(b) {
-		return false
-	}
-	aa := append([]string(nil), a...)
-	bb := append([]string(nil), b...)
-	sort.Strings(aa)
-	sort.Strings(bb)
-	for i := range aa {
-		if aa[i] != bb[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func applyPhase(v *RoomView, phase clientv1.Phase, actingSeats []int32, step int64) {
 	if phase == clientv1.Phase_PHASE_UNSPECIFIED {
 		if step > v.LastStep {
@@ -515,6 +504,8 @@ func applyPhase(v *RoomView, phase clientv1.Phase, actingSeats []int32, step int
 		setWaitingAction(v, "exchange_three", []string{"exchange_three"})
 	case clientv1.Phase_PHASE_QUE_MEN:
 		setWaitingAction(v, "que_men", []string{"que_men"})
+	case clientv1.Phase_PHASE_DRAW:
+		setWaitingAction(v, "draw", nil)
 	case clientv1.Phase_PHASE_DISCARD:
 		setWaitingAction(v, "discard", []string{"discard"})
 	case clientv1.Phase_PHASE_CLAIM:
@@ -765,7 +756,10 @@ func appendResponseLog(v *RoomView, label string, code clientv1.ErrorCode, messa
 		message = code.String()
 	}
 	v.LastError = message
-	appendLog(v, label+"失败: "+message)
+	notice := label + "失败: " + message
+	v.UXNotice = notice
+	v.UXNoticeUntil = time.Now().Add(2 * time.Second)
+	appendLog(v, notice)
 }
 
 func appendLog(v *RoomView, text string) {

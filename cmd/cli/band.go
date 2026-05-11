@@ -81,7 +81,11 @@ func focusSummary(view RoomView, now time.Time) string {
 	case PhaseMyTurnIdle, PhaseMyTurnSelected, PhaseDiscard:
 		action = "出牌中"
 	case PhaseOtherTurn:
-		action = "出牌中"
+		if view.WaitingAction == "draw" {
+			action = "摸牌中"
+		} else {
+			action = "出牌中"
+		}
 	default:
 		action = phaseLabel(ux.Phase)
 	}

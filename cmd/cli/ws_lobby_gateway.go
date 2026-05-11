@@ -44,6 +44,7 @@ func (g *wsLobbyGateway) AutoMatch(ctx context.Context, ruleID string) (LobbyJoi
 		SeatIndex:   resp.GetSeatIndex(),
 		DisplayName: resp.GetDisplayName(),
 		RuleID:      resp.GetRuleId(),
+		Seats:       resp.GetSeats(),
 	}
 	applyJoinResultToState(g.state, result)
 	return result, nil
@@ -144,6 +145,7 @@ func (g *wsLobbyGateway) CreateRoom(ctx context.Context, opts LobbyCreateOpts) (
 		SeatIndex:   resp.GetSeatIndex(),
 		DisplayName: resp.GetDisplayName(),
 		RuleID:      resp.GetRuleId(),
+		Seats:       resp.GetSeats(),
 	}
 	applyJoinResultToState(g.state, result)
 	return result, nil
@@ -167,6 +169,7 @@ func (g *wsLobbyGateway) JoinRoom(ctx context.Context, roomID string) (LobbyJoin
 		SeatIndex:   resp.GetSeatIndex(),
 		DisplayName: resp.GetDisplayName(),
 		RuleID:      resp.GetRuleId(),
+		Seats:       resp.GetSeats(),
 	}
 	// JoinRoomResp 不携带 room_id，state.Apply 走 envelope 分支也写不进 RoomID；
 	// 这里由客户端把它补上，并切到 phaseTable，让 main 主循环识别"已入桌"。
@@ -189,6 +192,7 @@ func applyJoinResultToState(state *AppState, res LobbyJoinResult) {
 		if res.DisplayName != "" {
 			v.DisplayName = res.DisplayName
 		}
+		applySeatInfos(v, res.Seats)
 		v.Phase = phaseTable
 	})
 }

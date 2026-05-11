@@ -249,6 +249,41 @@ func TestRenderFrameDiscardsStayInEachSeatPond(t *testing.T) {
 	require.Contains(t, screenRegionText(scr, layout.Slots.EastPond), TileGlyph("m9"))
 }
 
+func TestRenderFrameEastDiscardsDoNotBleedIntoWall(t *testing.T) {
+	scr := makeSimScreen(t, 120, 36)
+	view := newWaitingTableView()
+	view.Players[relativeSeatIndex(view.SeatIndex, SeatPosRight)].Discards = []string{"m9", "p9", "s9"}
+	layout, ok := CalcLayout(120, 36)
+	require.True(t, ok)
+
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeEmoji})
+	scr.Show()
+
+	require.Contains(t, screenRegionText(scr, layout.Slots.EastPond), TileGlyph("m9"))
+	require.NotContains(t, screenRegionText(scr, layout.Slots.EastWall), TileGlyph("m9"))
+	require.NotContains(t, screenRegionText(scr, layout.Slots.EastWall), TileGlyph("p9"))
+	require.NotContains(t, screenRegionText(scr, layout.Slots.EastWall), TileGlyph("s9"))
+}
+
+func TestRenderFrameClearsEastPondBetweenFrames(t *testing.T) {
+	scr := makeSimScreen(t, 120, 36)
+	view := newWaitingTableView()
+	eastSeat := relativeSeatIndex(view.SeatIndex, SeatPosRight)
+	view.Players[eastSeat].Discards = []string{"m9"}
+	layout, ok := CalcLayout(120, 36)
+	require.True(t, ok)
+
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeEmoji})
+	scr.Show()
+	require.Contains(t, screenRegionText(scr, layout.Slots.EastPond), TileGlyph("m9"))
+
+	view.Players[eastSeat].Discards = nil
+	RenderFrame(scr, FrameInputs{View: view, Layout: layout, Theme: TileThemeEmoji})
+	scr.Show()
+
+	require.NotContains(t, screenRegionText(scr, layout.Slots.EastPond), TileGlyph("m9"))
+}
+
 func TestRenderFrameSingleFrameOnly(t *testing.T) {
 	scr := makeSimScreen(t, 120, 36)
 	view := richTableView()

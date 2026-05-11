@@ -55,6 +55,26 @@ func TestApplyDiscardDoesNotKeepDiscarderAsActingSeat(t *testing.T) {
 	require.Empty(t, view.Players[0].Discards)
 }
 
+func TestApplyDiscardPreservesNextDrawFocus(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
+		SeatIndex:   1,
+		Action:      "discard",
+		Tile:        "p9",
+		Phase:       clientv1.Phase_PHASE_DRAW,
+		ActingSeats: []int32{2},
+		Step:        10,
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, clientv1.Phase_PHASE_DRAW, view.RoundPhase)
+	require.Equal(t, "draw", view.WaitingAction)
+	require.EqualValues(t, 2, view.ActingSeat)
+	require.Equal(t, []string{"p9"}, view.Players[1].Discards)
+}
+
 func TestApplyDuplicateDrawDoesNotGrowSelfHand(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
@@ -125,6 +145,20 @@ func TestApplyResponsesAndSettlement(t *testing.T) {
 	require.NotNil(t, view.LastSettlement)
 }
 
+func TestApplyDiscardRespFailureShowsNotice(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DiscardResp{DiscardResp: &clientv1.DiscardResponse{
+		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
+		ErrorMessage: "当前不是你的回合",
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, "当前不是你的回合", view.LastError)
+	require.Equal(t, "出牌失败: 当前不是你的回合", view.UXNotice)
+	require.False(t, view.UXNoticeUntil.IsZero())
+	require.Contains(t, view.Log[len(view.Log)-1].Text, "出牌失败: 当前不是你的回合")
+}
+
 func TestQueMenStartGameDrawKeepsAuthoritativePhase(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
@@ -146,7 +180,8 @@ func TestQueMenStartGameDrawKeepsAuthoritativePhase(t *testing.T) {
 
 	view := st.Snapshot()
 	require.Equal(t, clientv1.Phase_PHASE_DRAW, view.RoundPhase)
-	require.Equal(t, "none", view.WaitingAction)
+	require.Equal(t, "draw", view.WaitingAction)
+	require.EqualValues(t, 0, view.ActingSeat)
 	require.Equal(t, 3, view.Players[0].HandCnt)
 
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
@@ -189,13 +224,13 @@ func TestApplyExchangeDoneReplacesExchangedTiles(t *testing.T) {
 	require.Contains(t, view.Players[0].Hand, "p9")
 }
 
-func TestApplyExchangeDoneDoesNotRemoveOptimisticExchangeTwice(t *testing.T) {
+func TestApplyExchangeDoneUsesPendingAwayWhenProjectionOmitsAway(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
 	st.Mutate(func(v *RoomView) {
-		v.Players[0].Hand = []string{"m1", "s1"}
-		v.Players[0].HandCnt = 2
+		v.Players[0].Hand = []string{"m1", "m1", "m2", "s1"}
+		v.Players[0].HandCnt = 4
 		v.PendingExchangeAway = []string{"m1", "m1", "m2"}
 	})
 
@@ -204,12 +239,13 @@ func TestApplyExchangeDoneDoesNotRemoveOptimisticExchangeTwice(t *testing.T) {
 			SeatIndex: 0,
 			Tiles:     []string{"p7", "p8", "p9"},
 		}},
-		YourExchangedAway: []string{"m1", "m1", "m2"},
 	}}})
 
 	view := st.Snapshot()
 	require.Empty(t, view.PendingExchangeAway)
-	require.Equal(t, []string{"m1", "p7", "p8", "p9", "s1"}, view.Players[0].Hand)
+	require.Equal(t, []string{"p7", "p8", "p9", "s1"}, view.Players[0].Hand)
+	require.NotContains(t, view.Players[0].Hand, "m1")
+	require.NotContains(t, view.Players[0].Hand, "m2")
 }
 
 func TestSnapshotStepDropsStaleDrawTile(t *testing.T) {

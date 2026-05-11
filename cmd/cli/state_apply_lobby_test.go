@@ -47,6 +47,26 @@ func TestApplyLobbyListMatchAndCreate(t *testing.T) {
 	require.EqualValues(t, 0, view.SeatIndex)
 }
 
+func TestLateListRoomsDoesNotReturnCreatedRoomToLobby(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
+		RoomId:      "ROOM02",
+		SeatIndex:   0,
+		RuleId:      "sichuan_xuezhandaodi_huansanzhang",
+		DisplayName: "我的房间",
+	}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ListRoomsResp{ListRoomsResp: &clientv1.ListRoomsResponse{
+		Rooms: []*clientv1.RoomMeta{{RoomId: "OTHER", DisplayName: "其它房间"}},
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, phaseTable, view.Phase)
+	require.Equal(t, "ROOM02", view.RoomID)
+	require.EqualValues(t, 0, view.SeatIndex)
+	require.Len(t, view.RoomList, 1)
+}
+
 func TestApplyLobbyErrorsStayInLobby(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})

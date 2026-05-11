@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -56,6 +57,20 @@ func (g exchangeGateway) ExchangeThree(_ context.Context, tiles []string, _ int3
 	return g.err
 }
 
+type discardGateway struct {
+	stubTableGateway
+	tiles chan string
+	err   error
+}
+
+func (g discardGateway) Discard(_ context.Context, tile string) error {
+	select {
+	case g.tiles <- tile:
+	default:
+	}
+	return g.err
+}
+
 type queMenGateway struct {
 	stubTableGateway
 	suits chan int32
@@ -67,6 +82,16 @@ func (g queMenGateway) QueMen(_ context.Context, suit int32) error {
 	default:
 	}
 	return nil
+}
+
+type addBotGateway struct {
+	stubTableGateway
+	added []*clientv1.SeatInfo
+	err   error
+}
+
+func (g addBotGateway) AddBot(context.Context, int32) ([]*clientv1.SeatInfo, error) {
+	return g.added, g.err
 }
 
 // TestHandleOverlayKeyEnterClosesNonMenuOverlay 验证非菜单浮窗（房间信息 / 玩家详情）
@@ -90,6 +115,27 @@ func TestHandleOverlayKeyEnterClosesNonMenuOverlay(t *testing.T) {
 			require.Equal(t, OverlayNone, overlay.Kind, "Enter 应把非菜单浮窗关闭")
 		})
 	}
+}
+
+func TestSubmitAddBotAppliesReturnedSeats(t *testing.T) {
+	state := NewAppState("racoo")
+	submitAddBot(context.Background(), state, addBotGateway{added: []*clientv1.SeatInfo{
+		{SeatIndex: 1, UserId: "bot:r1:1", Nickname: "机器人", IsBot: true},
+	}}, 1)
+
+	require.Eventually(t, func() bool {
+		view := state.Snapshot()
+		return view.Players[1].IsBot && view.Players[1].Ready
+	}, time.Second, 10*time.Millisecond)
+}
+
+func TestSubmitAddBotFailureShowsNotice(t *testing.T) {
+	state := NewAppState("racoo")
+	submitAddBot(context.Background(), state, addBotGateway{err: errors.New("room full")}, 1)
+
+	require.Eventually(t, func() bool {
+		return state.Snapshot().UXNotice == "添加机器人失败: room full"
+	}, time.Second, 10*time.Millisecond)
 }
 
 // TestHandleOverlayKeyEnterStillTriggersMenuAction 兜底校验:菜单浮窗里的 Enter
@@ -249,7 +295,7 @@ func TestHandleTableKeyRRestartsOnSettlement(t *testing.T) {
 	require.Equal(t, TableExitRestart, res.exit.Reason)
 }
 
-func TestSubmitExchangeRemovesTilesLocally(t *testing.T) {
+func TestSubmitExchangeRecordsPendingWithoutChangingHand(t *testing.T) {
 	state := NewAppState("racoo")
 	state.Mutate(func(v *RoomView) {
 		v.Phase = phaseTable
@@ -266,7 +312,9 @@ func TestSubmitExchangeRemovesTilesLocally(t *testing.T) {
 	res := submitCursorAction(context.Background(), state, cursor, view.Players[0].Hand, gw, view)
 	require.Nil(t, res.exit)
 	require.True(t, cursor.Pending)
-	require.Equal(t, []string{"s1"}, state.Snapshot().Players[0].Hand)
+	after := state.Snapshot()
+	require.Equal(t, []string{"m1", "m9", "p1", "s1"}, after.Players[0].Hand)
+	require.Equal(t, []string{"m1", "m9", "p1"}, after.PendingExchangeAway)
 
 	select {
 	case got := <-gw.tiles:
@@ -274,6 +322,34 @@ func TestSubmitExchangeRemovesTilesLocally(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected exchange request")
 	}
+}
+
+func TestSubmitDiscardFailureShowsNotice(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "r1"
+		v.SeatIndex = 0
+		v.ActingSeat = 0
+		v.WaitingAction = "discard"
+		v.Players[0].Hand = []string{"m1", "m2"}
+		v.Players[0].HandCnt = 2
+	})
+	cursor := &HandCursor{Mode: CursorModeSingle, Index: 1}
+	gw := discardGateway{tiles: make(chan string, 1), err: errors.New("当前不是你的回合")}
+	view := state.Snapshot()
+
+	res := submitCursorAction(context.Background(), state, cursor, view.Players[0].Hand, gw, view)
+	require.Nil(t, res.exit)
+
+	select {
+	case got := <-gw.tiles:
+		require.Equal(t, "m2", got)
+	case <-time.After(time.Second):
+		t.Fatal("expected discard request")
+	}
+	require.Eventually(t, func() bool { return !cursor.Pending }, time.Second, 10*time.Millisecond)
+	require.Contains(t, state.Snapshot().UXNotice, "出牌失败: 当前不是你的回合")
 }
 
 func TestHandleTableKeyEnterMarksExchangeTileBeforeSubmit(t *testing.T) {

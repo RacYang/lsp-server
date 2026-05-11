@@ -167,3 +167,17 @@ func TestIsBotUserID(t *testing.T) {
 	require.False(t, IsBotUserID(""))
 	require.False(t, IsBotUserID(strings.ToUpper("bot:R1:0")), "前缀大小写敏感，避免误判普通用户")
 }
+
+func TestBotSupervisorHumanRoomDelayIsVisible(t *testing.T) {
+	t.Parallel()
+
+	sup := NewBotSupervisor(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"))
+
+	require.GreaterOrEqual(t, sup.humanRoomDelay, time.Second)
+	require.Greater(t, sup.tickTimeout, sup.humanRoomDelay)
+	require.True(t, shouldDelayBotAction("discard"))
+	require.True(t, shouldDelayBotAction("claim_window"))
+	require.True(t, shouldDelayBotAction("tsumo_window"))
+	require.False(t, shouldDelayBotAction("exchange_three"))
+	require.False(t, shouldDelayBotAction("que_men"))
+}

@@ -142,6 +142,9 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 		} else {
 			model.Hint = waitingHint(view)
 		}
+	case "draw":
+		model.Phase = PhaseOtherTurn
+		model.Hint = waitingDrawHint(view)
 	case "claim_window":
 		model.Phase = PhaseClaim
 		actions := claimActionsForSeat(view, view.SeatIndex)
@@ -475,6 +478,13 @@ func waitingHint(view RoomView) string {
 		return "等待 " + nicknameForSeat(view, view.ActingSeat)
 	}
 	return "等待开始"
+}
+
+func waitingDrawHint(view RoomView) string {
+	if view.ActingSeat >= 0 && view.ActingSeat < 4 && gameStarted(view) {
+		return "等待" + sideLabel(view, view.ActingSeat) + "摸牌"
+	}
+	return waitingHint(view)
 }
 
 func waitingUXHint(view RoomView) string {

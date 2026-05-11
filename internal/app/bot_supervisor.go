@@ -16,6 +16,11 @@ import (
 // supervisor 直接按这个前缀识别 bot 座位，不需要额外协议字段。
 const BotUserIDPrefix = "bot:"
 
+const (
+	defaultBotTickTimeout    = 4 * time.Second
+	defaultHumanRoomBotDelay = 1200 * time.Millisecond
+)
+
 // IsBotUserID 判断 user_id 是否为 lobby 分配的机器人座位。
 func IsBotUserID(userID string) bool {
 	return strings.HasPrefix(userID, BotUserIDPrefix)
@@ -49,9 +54,9 @@ func NewBotSupervisor(svc *roomsvc.Service) *BotSupervisor {
 		// 一局完整对战通常 60~120 步，再加并发 exchange/quemen 各 4 次，
 		// 单次 tick 上限设为 256 既能容纳一局，也能在策略 bug 时及时报警。
 		maxIterations: 256,
-		tickTimeout:   2 * time.Second,
+		tickTimeout:   defaultBotTickTimeout,
 		// 有真人在桌时，机器人出牌稍作停顿，让客户端有时间展示轮转和倒计时。
-		humanRoomDelay: 650 * time.Millisecond,
+		humanRoomDelay: defaultHumanRoomBotDelay,
 	}
 }
 

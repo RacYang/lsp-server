@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 )
 
 // TestApplyJoinResultToStateSetsRoomIDAndPhase 锁住「JoinRoomResp 不带 room_id 时
@@ -27,6 +28,30 @@ func TestApplyJoinResultToStateSetsRoomIDAndPhase(t *testing.T) {
 	require.EqualValues(t, 2, view.SeatIndex)
 	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", view.RuleID)
 	require.Equal(t, "三缺一", view.DisplayName)
+}
+
+func TestApplyJoinResultToStateAppliesSeats(t *testing.T) {
+	st := NewAppState("我")
+	st.Mutate(func(v *RoomView) { v.Phase = phaseLobby })
+
+	applyJoinResultToState(st, LobbyJoinResult{
+		RoomID:    "ROOMB",
+		SeatIndex: 0,
+		Seats: []*clientv1.SeatInfo{
+			{SeatIndex: 0, UserId: "u0", Nickname: "我", Online: true, Status: "online"},
+			{SeatIndex: 1, UserId: "bot:ROOMB:1", Nickname: "机器人", IsBot: true, Status: "ready"},
+			{SeatIndex: 2, UserId: "bot:ROOMB:2", Nickname: "机器人", IsBot: true, Status: "ready"},
+			{SeatIndex: 3, UserId: "bot:ROOMB:3", Nickname: "机器人", IsBot: true, Status: "ready"},
+		},
+	})
+
+	view := st.Snapshot()
+	require.Equal(t, phaseTable, view.Phase)
+	for seat := 1; seat <= 3; seat++ {
+		require.True(t, view.Players[seat].IsBot)
+		require.Equal(t, "机器人", view.Players[seat].Nickname)
+		require.True(t, view.Players[seat].Ready)
+	}
 }
 
 // TestApplyJoinResultToStateNoOpOnEmptyRoomID 服务端返回空 room_id 或 state 自身为 nil

@@ -17,6 +17,7 @@ func TestDeriveInteractionModelPhases(t *testing.T) {
 		{name: "lobby", view: RoomView{Phase: phaseLobby}, want: PhaseLobby},
 		{name: "exchange", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "exchange_three"}, want: PhaseExchange},
 		{name: "que", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "que_men"}, want: PhaseQueMen},
+		{name: "draw", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 1, WaitingAction: "draw"}, want: PhaseOtherTurn},
 		{name: "discard", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "discard"}, want: PhaseDiscard},
 		{name: "claim", view: RoomView{Phase: phaseTable, SeatIndex: 1, ActingSeat: 1, WaitingAction: "claim_window", ClaimCandidates: map[int32][]string{1: {"hu", "pass"}}}, want: PhaseClaim},
 		{name: "tsumo", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "tsumo_window"}, want: PhaseTsumo},
@@ -71,6 +72,22 @@ func TestTableUXModelUsesRelativeSeatLabels(t *testing.T) {
 	require.Equal(t, "上家", ux.Seats[0].RelativeLabel)
 	require.Contains(t, ux.PrimaryPrompt, "上家")
 	require.NotContains(t, ux.PrimaryPrompt, "BOT")
+}
+
+func TestDrawPhaseShowsNextSeatInsteadOfWaitingStart(t *testing.T) {
+	view := RoomView{
+		Phase:         phaseTable,
+		RoomState:     "playing",
+		SeatIndex:     1,
+		ActingSeat:    2,
+		WaitingAction: "draw",
+	}
+
+	ux := DeriveTableUXModel(view, nil, nowForTest())
+
+	require.Equal(t, PhaseOtherTurn, ux.Phase)
+	require.Contains(t, ux.PrimaryPrompt, "等待下家摸牌")
+	require.NotContains(t, ux.PrimaryPrompt, "等待开")
 }
 
 func TestDeriveInteractionModelFiltersNonTargetClaim(t *testing.T) {

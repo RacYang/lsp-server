@@ -1,6 +1,10 @@
 package main
 
-import "context"
+import (
+	"context"
+
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+)
 
 // LobbyGateway 抽象大厅场景对网络层的所有依赖。
 type LobbyGateway interface {
@@ -19,6 +23,7 @@ type LobbyJoinResult struct {
 	SeatIndex   int32
 	DisplayName string
 	RuleID      string
+	Seats       []*clientv1.SeatInfo
 }
 
 // LobbyRoomMeta 是公开房间列表中每条房间的玩家可读视图。
