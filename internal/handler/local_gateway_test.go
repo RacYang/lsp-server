@@ -224,6 +224,67 @@ func TestLocalRoomGatewayResumeRoomMissing(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestPlayerJourney_L3_1_RoomAcceptsAutoMatchLocal 锁定 spec [L3.1] 的本地侧契约：
+// 仅 waiting/ready 阶段（或房间尚未在房服层登记）才允许 AutoMatch 加入；其余阶段必须跳过。
+// 这条契约必须与 internal/app/gate_remote.go 的 remoteRoomGateway.roomAcceptsAutoMatch 同语义，
+// 否则违反 spec [G3]（local 与 cluster 模式事实集等价）。
+func TestPlayerJourney_L3_1_RoomAcceptsAutoMatchLocal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		state    string
+		found    bool
+		expected bool
+	}{
+		{name: "not_registered_yet_treated_as_joinable", state: "", found: false, expected: true},
+		{name: "empty_state_joinable", state: "", found: true, expected: true},
+		{name: "waiting_joinable", state: "waiting", found: true, expected: true},
+		{name: "ready_joinable", state: "ready", found: true, expected: true},
+		{name: "playing_skipped", state: "playing", found: true, expected: false},
+		{name: "settling_skipped", state: "settling", found: true, expected: false},
+		{name: "closed_skipped", state: "closed", found: true, expected: false},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			probe := &stubRoomStateProbe{state: tt.state, found: tt.found}
+			require.Equal(t, tt.expected, roomAcceptsAutoMatchLocal(probe, "R1"),
+				"[L3.1] roomAcceptsAutoMatchLocal(state=%q, found=%v)", tt.state, tt.found)
+		})
+	}
+
+	t.Run("nil_probe_rejects", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, roomAcceptsAutoMatchLocal(nil, "R1"),
+			"[L3.1] nil probe 必须按拒绝处理，避免无来源信任")
+	})
+}
+
+// TestPlayerJourney_L3_2_AutoMatchFallsBackToCreateRoomLocal 锁定 spec [L3.2]：
+// AutoMatch 找不到可加入现房时必须新建公开房并占座 0；玩家无需额外确认。
+// 这里大厅与房服都空，AutoMatch 应当回落到 CreateRoom 路径并返回 seat=0。
+func TestPlayerJourney_L3_2_AutoMatchFallsBackToCreateRoomLocal(t *testing.T) {
+	t.Parallel()
+	svc := roomsvc.NewService(roomsvc.NewLobby())
+	gw := NewLocalRoomGateway(svc, session.NewHub(), nil)
+
+	roomID, seat, err := gw.AutoMatch(context.Background(), "sichuan_xuezhandaodi_huansanzhang", "u-quickstart", false)
+	require.NoError(t, err, "[L3.2] 空大厅时 AutoMatch 必须落到 CreateRoom 成功")
+	require.NotEmpty(t, roomID, "[L3.2] CreateRoom 必须返回 room_id")
+	require.Equal(t, 0, seat, "[L3.2] AutoMatch 创建公开房后必须占座 0")
+}
+
+type stubRoomStateProbe struct {
+	state string
+	found bool
+}
+
+func (s *stubRoomStateProbe) RoomSnapshot(_ string) ([]string, string, [4]bool, bool) {
+	return nil, s.state, [4]bool{}, s.found
+}
+
 func TestLocalRoomGatewayResumeLobbySession(t *testing.T) {
 	t.Parallel()
 	mr, err := miniredis.Run()

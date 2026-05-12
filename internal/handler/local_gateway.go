@@ -78,16 +78,69 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 	if g == nil || g.lobby == nil || g.rooms == nil {
 		return "", -1, fmt.Errorf("nil local lobby gateway")
 	}
-	roomID, _, err := g.lobby.AutoMatch(ctx, ruleID, userID)
+	rooms, _, err := g.lobby.ListRooms(ctx, 100, "")
+	if err != nil {
+		return "", -1, err
+	}
+	for _, room := range rooms {
+		if ruleID != "" && room.RuleID != ruleID {
+			continue
+		}
+		if !roomAcceptsAutoMatchLocal(g.rooms, room.RoomID) {
+			continue
+		}
+		seat, joinErr := g.lobby.JoinRoom(ctx, room.RoomID, userID)
+		if joinErr != nil {
+			continue
+		}
+		// 再次复核：lobby.JoinRoom 与 rooms.Join 之间存在 FSM 推进的窗口，
+		// 极端竞态下房间可能已 → playing，按 [L3.1] 必须显式退出。
+		if !roomAcceptsAutoMatchLocal(g.rooms, room.RoomID) {
+			_ = g.lobby.LeaveRoom(ctx, room.RoomID, userID)
+			continue
+		}
+		if _, err := g.rooms.Join(ctx, room.RoomID, userID); err != nil {
+			_ = g.lobby.LeaveRoom(ctx, room.RoomID, userID)
+			continue
+		}
+		_ = padWithBots
+		return room.RoomID, int(seat), nil
+	}
+	roomID, _, err := g.lobby.CreateRoomWithMeta(ctx, ruleID, "", false, userID)
 	if err != nil {
 		return "", -1, err
 	}
 	seat, err := g.rooms.Join(ctx, roomID, userID)
 	if err != nil {
+		_ = g.lobby.LeaveRoom(ctx, roomID, userID)
 		return "", -1, err
 	}
 	_ = padWithBots
 	return roomID, seat, nil
+}
+
+// roomStateProbe 隔离 rooms.RoomSnapshot 依赖，便于 [L3.1] 单元测试构造五类 FSM 状态。
+type roomStateProbe interface {
+	RoomSnapshot(roomID string) (playerIDs []string, fsmState string, ready [4]bool, ok bool)
+}
+
+// roomAcceptsAutoMatchLocal 与 remoteRoomGateway.roomAcceptsAutoMatch 同语义：
+// 仅 waiting/ready 接受自动匹配；playing/settling/closed 必须跳过。
+// 房间尚未在房服层登记（RoomSnapshot 返回 ok=false）时视为"未开局可加入"。
+func roomAcceptsAutoMatchLocal(rooms roomStateProbe, roomID string) bool {
+	if rooms == nil {
+		return false
+	}
+	_, state, _, ok := rooms.RoomSnapshot(roomID)
+	if !ok {
+		return true
+	}
+	switch state {
+	case "", "waiting", "ready":
+		return true
+	default:
+		return false
+	}
 }
 
 func (g *LocalRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error) {

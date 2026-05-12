@@ -206,29 +206,93 @@ func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string
 	if g == nil {
 		return "", -1, fmt.Errorf("nil remote room gateway")
 	}
-	var resp *clusterv1.AutoMatchResponse
-	err := retryGRPC(ctx, func(callCtx context.Context) error {
-		var callErr error
-		resp, callErr = g.lobby.AutoMatch(withOutgoingTrace(callCtx), &clusterv1.AutoMatchRequest{
-			RuleId:      ruleID,
-			UserId:      userID,
-			PadWithBots: padWithBots,
-		})
-		return callErr
-	})
+	ruleID = strings.TrimSpace(ruleID)
+	rooms, _, err := g.ListRooms(ctx, 100, "")
 	if err != nil {
 		return "", -1, err
 	}
+	for _, room := range rooms {
+		if !matchRuleID(ruleID, room.GetRuleId()) {
+			continue
+		}
+		roomID := room.GetRoomId()
+		seat, joinErr := g.joinLobbyRoom(ctx, roomID, userID)
+		if joinErr != nil {
+			continue
+		}
+		ok, probeErr := g.roomAcceptsAutoMatch(ctx, roomID)
+		if probeErr != nil {
+			logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+			logx.Warn(logCtx, "自动匹配校验房间状态失败按不可加入处理", "err", probeErr.Error())
+		}
+		if !ok || probeErr != nil {
+			_ = g.leaveLobbyRoom(ctx, roomID, userID)
+			continue
+		}
+		if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
+			logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+			logx.Warn(logCtx, "自动匹配后订阅房间事件流失败稍后重试", "err", err.Error())
+		}
+		g.rememberRoomSeat(roomID, int32(seat), userID) //nolint:gosec // 座位号由 lobby 限制为 0..3。
+		return roomID, seat, nil
+	}
+	return g.CreateRoom(ctx, ruleID, "", false, userID)
+}
+
+func matchRuleID(want, got string) bool {
+	want = strings.TrimSpace(want)
+	got = strings.TrimSpace(got)
+	return want == "" || got == "" || want == got
+}
+
+func (g *remoteRoomGateway) joinLobbyRoom(ctx context.Context, roomID, userID string) (int, error) {
+	var resp *clusterv1.JoinRoomResponse
+	err := retryGRPC(ctx, func(callCtx context.Context) error {
+		var callErr error
+		resp, callErr = g.lobby.JoinRoom(withOutgoingTrace(callCtx), &clusterv1.JoinRoomRequest{RoomId: roomID, UserId: userID})
+		return callErr
+	})
+	if err != nil {
+		return -1, err
+	}
 	if resp.GetError() != "" {
-		return "", -1, errors.New(resp.GetError())
+		return -1, errors.New(resp.GetError())
 	}
-	roomID := resp.GetRoomId()
-	if err := g.EnsureRoomEventSubscription(ctx, roomID, ""); err != nil {
-		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
-		logx.Warn(logCtx, "自动匹配后订阅房间事件流失败稍后重试", "err", err.Error())
+	return int(resp.GetSeatIndex()), nil
+}
+
+func (g *remoteRoomGateway) leaveLobbyRoom(ctx context.Context, roomID, userID string) error {
+	resp, err := g.lobby.LeaveRoom(withOutgoingTrace(ctx), &clusterv1.LeaveRoomRequest{RoomId: roomID, UserId: userID})
+	if err != nil {
+		return err
 	}
-	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
-	return roomID, int(resp.GetSeatIndex()), nil
+	if resp.GetError() != "" {
+		return errors.New(resp.GetError())
+	}
+	return nil
+}
+
+func (g *remoteRoomGateway) roomAcceptsAutoMatch(ctx context.Context, roomID string) (bool, error) {
+	roomClient, _, err := g.roomClientForRoom(ctx, roomID)
+	if err != nil {
+		return false, err
+	}
+	resp, err := roomClient.SnapshotRoom(withOutgoingTrace(ctx), &clusterv1.SnapshotRoomRequest{RoomId: roomID})
+	if err != nil {
+		return false, err
+	}
+	if resp.GetError() != "" {
+		if strings.Contains(strings.ToLower(resp.GetError()), "room not found") {
+			return true, nil
+		}
+		return false, errors.New(resp.GetError())
+	}
+	switch strings.ToLower(resp.GetState()) {
+	case "", "waiting", "ready":
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, func(), error) {

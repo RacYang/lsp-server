@@ -93,6 +93,9 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	botSup := app.NewBotSupervisor(svcCore)
 	svcCore.SetAfterCmdHook(botSup.AfterCmd)
 	svc := newRoomGRPCServer(svcCore, ev, gs, st, rcli)
+	botSup.SetNotificationHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
+		_ = svc.persistPublishAndFinalize(ctx, roomID, "", notifications)
+	})
 	svc.setIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {
 		svc.setReady(false)

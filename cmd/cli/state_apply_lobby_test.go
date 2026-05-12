@@ -67,6 +67,24 @@ func TestLateListRoomsDoesNotReturnCreatedRoomToLobby(t *testing.T) {
 	require.Len(t, view.RoomList, 1)
 }
 
+func TestLoginRefreshKeepsCurrentRoom(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0", SessionToken: "tok1"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
+		RoomId:      "ROOM02",
+		SeatIndex:   0,
+		RuleId:      "sichuan_xuezhandaodi_huansanzhang",
+		DisplayName: "我的房间",
+	}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0", SessionToken: "tok2"}}})
+
+	view := st.Snapshot()
+	require.Equal(t, phaseTable, view.Phase)
+	require.Equal(t, "ROOM02", view.RoomID)
+	require.EqualValues(t, 0, view.SeatIndex)
+	require.Equal(t, "tok2", view.SessionToken)
+}
+
 func TestApplyLobbyErrorsStayInLobby(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})

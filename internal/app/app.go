@@ -123,6 +123,7 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		gateway = handler.NewLocalRoomGateway(rs, hub, sessMgr)
 		if local, ok := gateway.(*handler.LocalRoomGateway); ok {
 			local.SetOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline)
+			rs.SetAutoTimeoutHandler(local.BroadcastNotifications)
 			// 单进程聚合也跑 BotSupervisor，并把 bot 动作通知接回本地 gateway。
 			botSup := NewBotSupervisor(rs)
 			botSup.SetNotificationHandler(local.BroadcastNotifications)

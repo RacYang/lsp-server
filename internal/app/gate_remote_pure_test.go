@@ -509,7 +509,10 @@ func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
 	g := &remoteRoomGateway{
 		lobby:           &fakeLobbyClient{},
 		roomSeats:       make(map[string]map[int32]string),
-		defaultRoomAddr: "",
+		defaultRoomAddr: "room-local",
+		roomClients:     map[string]clusterv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "waiting"}},
+		streamCtx:       context.Background(),
+		roomStreams:     make(map[string]*roomStreamHandle),
 	}
 	ctx := context.Background()
 
@@ -535,14 +538,89 @@ func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
 	require.Equal(t, "u3", gotUser)
 }
 
+func TestRemoteRoomGatewayAutoMatchSkipsStartedRoom(t *testing.T) {
+	t.Parallel()
+	lobby := &fakeAutoMatchLobby{}
+	g := &remoteRoomGateway{
+		lobby:           lobby,
+		defaultRoomAddr: "room-local",
+		roomClients:     map[string]clusterv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "playing"}},
+		roomSeats:       make(map[string]map[int32]string),
+		streamCtx:       context.Background(),
+		roomStreams:     make(map[string]*roomStreamHandle),
+	}
+
+	roomID, seat, err := g.AutoMatch(context.Background(), "sichuan_xuezhandaodi_huansanzhang", "u2", false)
+	require.NoError(t, err)
+	require.Equal(t, "ROOM02", roomID)
+	require.Equal(t, 0, seat)
+	require.Equal(t, 1, lobby.left)
+}
+
 type fakeLobbyClient struct{}
+
+type fakeAutoMatchLobby struct {
+	left int
+}
+
+func (f *fakeAutoMatchLobby) CreateRoom(_ context.Context, _ *clusterv1.CreateRoomRequest, _ ...grpc.CallOption) (*clusterv1.CreateRoomResponse, error) {
+	return &clusterv1.CreateRoomResponse{RoomId: "ROOM02", SeatIndex: 0}, nil
+}
+
+func (f *fakeAutoMatchLobby) JoinRoom(_ context.Context, req *clusterv1.JoinRoomRequest, _ ...grpc.CallOption) (*clusterv1.JoinRoomResponse, error) {
+	if req.GetRoomId() == "ROOM01" {
+		return &clusterv1.JoinRoomResponse{SeatIndex: 1}, nil
+	}
+	return &clusterv1.JoinRoomResponse{Error: "room not found"}, nil
+}
+
+func (f *fakeAutoMatchLobby) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequest, _ ...grpc.CallOption) (*clusterv1.GetRoomResponse, error) {
+	return &clusterv1.GetRoomResponse{RoomId: "ROOM01", RoomNodeId: "room-local"}, nil
+}
+
+func (f *fakeAutoMatchLobby) ListRooms(_ context.Context, _ *clusterv1.ListRoomsRequest, _ ...grpc.CallOption) (*clusterv1.ListRoomsResponse, error) {
+	return &clusterv1.ListRoomsResponse{Rooms: []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}}, nil
+}
+
+func (f *fakeAutoMatchLobby) ListRules(_ context.Context, _ *clusterv1.ListRulesRequest, _ ...grpc.CallOption) (*clusterv1.ListRulesResponse, error) {
+	return &clusterv1.ListRulesResponse{}, nil
+}
+
+func (f *fakeAutoMatchLobby) AutoMatch(_ context.Context, _ *clusterv1.AutoMatchRequest, _ ...grpc.CallOption) (*clusterv1.AutoMatchResponse, error) {
+	return &clusterv1.AutoMatchResponse{}, nil
+}
+
+func (f *fakeAutoMatchLobby) AddBot(_ context.Context, _ *clusterv1.AddBotRequest, _ ...grpc.CallOption) (*clusterv1.AddBotResponse, error) {
+	return &clusterv1.AddBotResponse{}, nil
+}
+
+func (f *fakeAutoMatchLobby) LeaveRoom(_ context.Context, _ *clusterv1.LeaveRoomRequest, _ ...grpc.CallOption) (*clusterv1.LeaveRoomResponse, error) {
+	f.left++
+	return &clusterv1.LeaveRoomResponse{}, nil
+}
+
+type fakeRoomClient struct {
+	state string
+}
+
+func (f *fakeRoomClient) ApplyEvent(_ context.Context, _ *clusterv1.ApplyEventRequest, _ ...grpc.CallOption) (*clusterv1.ApplyEventResponse, error) {
+	return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+}
+
+func (f *fakeRoomClient) StreamEvents(_ context.Context, _ *clusterv1.StreamEventsRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], error) {
+	return nil, errors.New("stream not implemented")
+}
+
+func (f *fakeRoomClient) SnapshotRoom(_ context.Context, _ *clusterv1.SnapshotRoomRequest, _ ...grpc.CallOption) (*clusterv1.SnapshotRoomResponse, error) {
+	return &clusterv1.SnapshotRoomResponse{State: f.state}, nil
+}
 
 func (f *fakeLobbyClient) CreateRoom(_ context.Context, _ *clusterv1.CreateRoomRequest, _ ...grpc.CallOption) (*clusterv1.CreateRoomResponse, error) {
 	return &clusterv1.CreateRoomResponse{RoomId: "ROOM02", SeatIndex: 0}, nil
 }
 
 func (f *fakeLobbyClient) JoinRoom(_ context.Context, _ *clusterv1.JoinRoomRequest, _ ...grpc.CallOption) (*clusterv1.JoinRoomResponse, error) {
-	return &clusterv1.JoinRoomResponse{SeatIndex: 0}, nil
+	return &clusterv1.JoinRoomResponse{SeatIndex: 1}, nil
 }
 
 func (f *fakeLobbyClient) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequest, _ ...grpc.CallOption) (*clusterv1.GetRoomResponse, error) {
