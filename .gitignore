@@ -4,3 +4,4 @@ dist/
 bench/runs/
 deploy/compose/.env
 /cli
+tmp/

@@ -19,6 +19,10 @@ func RunSceneApp(ctx context.Context, switcher *TerminalSwitch, state *AppState,
 	defer switcher.LeaveFullscreen()
 
 	router := NewSceneRouter(state, lobbyGW, tableGW, cfg)
+	if frameLog := NewFrameLoggerFromEnv(); frameLog != nil {
+		router.SetFrameLog(frameLog)
+		defer func() { _ = frameLog.Close() }()
+	}
 	eventCh := make(chan tcell.Event, 16)
 	tcellCtx, cancelTcell := context.WithCancel(ctx)
 	defer cancelTcell()
