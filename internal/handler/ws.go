@@ -73,7 +73,7 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 			_ = deps.Rooms.MarkSeatOffline(context.Background(), state.roomID, state.userID)
 		}
 		if deps.Hub != nil && state.userID != "" {
-			deps.Hub.Unregister(state.userID, state.roomID)
+			deps.Hub.UnregisterConn(state.userID, state.roomID, conn)
 		}
 		_ = session.CloseConn(conn)
 	}()

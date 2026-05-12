@@ -42,6 +42,22 @@ func TestApplyInitialDealDrawDiscardAndSnapshot(t *testing.T) {
 	require.Equal(t, int32(2), view.ActingSeat)
 }
 
+func TestApplyInitialDealIgnoresForeignSeat(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
+		SeatIndex: 2,
+		Tiles:     []string{"m6", "p1", "s1"},
+	}}})
+
+	view := st.Snapshot()
+	require.EqualValues(t, 0, view.SeatIndex)
+	require.Empty(t, view.Players[0].Hand)
+	require.Empty(t, view.Players[2].Hand)
+	require.Contains(t, view.Log[len(view.Log)-1].Text, "已忽略非本座位发牌")
+}
+
 func TestApplyDiscardDoesNotKeepDiscarderAsActingSeat(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})

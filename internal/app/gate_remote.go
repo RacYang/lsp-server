@@ -622,7 +622,11 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		ActingSeats:      append([]int32(nil), snapResp.GetActingSeats()...),
 		LastStep:         snapResp.GetLastStep(),
 	}
-	g.rememberRoomPlayers(srec.RoomID, snapResp.GetPlayerIds())
+	if len(snapResp.GetSeats()) > 0 {
+		g.rememberRoomSeatInfos(srec.RoomID, snapResp.GetSeats())
+	} else {
+		g.rememberRoomPlayers(srec.RoomID, snapResp.GetPlayerIds())
+	}
 	if snap.GetState() == "closed" {
 		if fallback, ok, ferr := g.loadSettlementFallback(ctx, uid, srec.RoomID); ferr != nil {
 			return nil, ferr
@@ -653,9 +657,49 @@ func (g *remoteRoomGateway) rememberRoomSeat(roomID string, seat int32, userID s
 }
 
 func (g *remoteRoomGateway) rememberRoomPlayers(roomID string, players []string) {
-	for seat, userID := range players {
-		g.rememberRoomSeat(roomID, int32(seat), userID) //nolint:gosec // 座位范围来自 room 快照
+	if g == nil || roomID == "" || len(players) == 0 {
+		return
 	}
+	g.seatMu.Lock()
+	defer g.seatMu.Unlock()
+	if g.roomSeats == nil {
+		g.roomSeats = make(map[string]map[int32]string)
+	}
+	next := make(map[int32]string, 4)
+	for seat, userID := range players {
+		if seat >= 4 || userID == "" {
+			continue
+		}
+		next[int32(seat)] = userID //nolint:gosec // seat 已限制在 0..3
+	}
+	g.roomSeats[roomID] = next
+}
+
+func (g *remoteRoomGateway) rememberRoomSeatInfos(roomID string, seats []*clusterv1.SeatInfo) {
+	if g == nil || roomID == "" || len(seats) == 0 {
+		return
+	}
+	g.seatMu.Lock()
+	defer g.seatMu.Unlock()
+	if g.roomSeats == nil {
+		g.roomSeats = make(map[string]map[int32]string)
+	}
+	next := make(map[int32]string, 4)
+	for _, seat := range seats {
+		idx := seat.GetSeatIndex()
+		userID := seat.GetUserId()
+		if idx < 0 || idx > 3 || userID == "" {
+			continue
+		}
+		next[idx] = userID
+	}
+	if len(next) < len(g.roomSeats[roomID]) {
+		for idx, userID := range next {
+			g.roomSeats[roomID][idx] = userID
+		}
+		return
+	}
+	g.roomSeats[roomID] = next
 }
 
 func (g *remoteRoomGateway) userForSeat(roomID string, seat int32) (string, bool) {

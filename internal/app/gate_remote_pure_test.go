@@ -408,6 +408,33 @@ func TestRemoteRoomGatewaySeatMemoryAndSeatTiles(t *testing.T) {
 	got, ok = g.userForSeat("r2", 3)
 	require.True(t, ok)
 	require.Equal(t, "u3", got)
+	g.rememberRoomPlayers("r2", []string{"u0-new", "u1-new"})
+	got, ok = g.userForSeat("r2", 0)
+	require.True(t, ok)
+	require.Equal(t, "u0-new", got)
+	_, ok = g.userForSeat("r2", 3)
+	require.False(t, ok, "快照刷新座位映射时必须清掉已经离座的旧用户")
+	g.rememberRoomPlayers("r2", nil)
+	got, ok = g.userForSeat("r2", 0)
+	require.True(t, ok)
+	require.Equal(t, "u0-new", got, "旧版空 player_ids 快照不能清空已有定向映射")
+	g.rememberRoomSeatInfos("r2", []*clusterv1.SeatInfo{{SeatIndex: 2, UserId: "u2-seat"}})
+	got, ok = g.userForSeat("r2", 2)
+	require.True(t, ok)
+	require.Equal(t, "u2-seat", got)
+	got, ok = g.userForSeat("r2", 0)
+	require.True(t, ok)
+	require.Equal(t, "u0-new", got, "room 进程部分快照不能清掉 lobby 已知座位")
+	g.rememberRoomSeatInfos("r2", []*clusterv1.SeatInfo{
+		{SeatIndex: 1, UserId: "u1-final"},
+		{SeatIndex: 2, UserId: "u2-final"},
+		{SeatIndex: 3, UserId: "u3-final"},
+	})
+	_, ok = g.userForSeat("r2", 0)
+	require.False(t, ok, "完整度更高的 seats 快照应清理旧座位")
+	got, ok = g.userForSeat("r2", 3)
+	require.True(t, ok)
+	require.Equal(t, "u3-final", got)
 
 	items := clusterSeatTilesToClient([]*clusterv1.SeatTiles{{SeatIndex: 1, Tiles: []string{"m1", "p2"}}})
 	require.Len(t, items, 1)

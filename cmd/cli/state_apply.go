@@ -56,9 +56,18 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		appendResponseLog(v, "准备", body.ReadyResp.GetErrorCode(), body.ReadyResp.GetErrorMessage())
 	case *clientv1.Envelope_InitialDeal:
 		deal := body.InitialDeal
+		seat := deal.GetSeatIndex()
+		if v.SeatIndex >= 0 && v.SeatIndex < 4 && seat != v.SeatIndex {
+			appendLog(v, fmt.Sprintf("已忽略非本座位发牌: seat=%d self=%d", seat, v.SeatIndex))
+			return
+		}
+		if seat < 0 || seat > 3 {
+			appendLog(v, fmt.Sprintf("已忽略非法座位发牌: seat=%d", seat))
+			return
+		}
 		v.RoomState = "playing"
-		v.SeatIndex = deal.GetSeatIndex()
-		player := &v.Players[v.SeatIndex]
+		v.SeatIndex = seat
+		player := &v.Players[seat]
 		player.Hand = sortedTiles(deal.GetTiles())
 		player.HandCnt = len(player.Hand)
 		appendLog(v, fmt.Sprintf("收到开局手牌 %d 张", len(player.Hand)))

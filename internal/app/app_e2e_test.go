@@ -222,11 +222,13 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 
 func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clientv1.SettlementNotify, error) {
 	hand := make([]string, 0, 14)
+	lastProgress := "no message"
 	for n := 0; n < max; n++ {
 		msg, err := readWSClientMessage(conn, 8*time.Second)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w; seat=%d hand=%v last=%s", err, seat, hand, lastProgress)
 		}
+		lastProgress = fmt.Sprintf("msg=%d action=%s waiting_tile=%s hand_len=%d", msg.msgID, msg.env.GetAction().GetAction(), msg.env.GetDrawTile().GetTile(), len(hand))
 		switch msg.msgID {
 		case msgid.InitialDealNotify:
 			if deal := msg.env.GetInitialDeal(); deal != nil && deal.GetSeatIndex() == seat {
@@ -338,7 +340,7 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 			}
 		}
 	}
-	return nil, fmt.Errorf("未收到结算推送")
+	return nil, fmt.Errorf("未收到结算推送; seat=%d hand=%v last=%s", seat, hand, lastProgress)
 }
 
 func drivePlayersUntilSettlement(t *testing.T, conns []*websocket.Conn) *clientv1.SettlementNotify {
@@ -359,11 +361,16 @@ func drivePlayersUntilSettlement(t *testing.T, conns []*websocket.Conn) *clientv
 	}
 	wg.Wait()
 	var last *clientv1.SettlementNotify
+	var errs []error
 	for _, result := range results {
 		if result.err != nil {
-			t.Fatal(result.err)
+			errs = append(errs, result.err)
+			continue
 		}
 		last = result.sn
+	}
+	if len(errs) > 0 {
+		t.Fatalf("驱动座位失败: %v", errs)
 	}
 	return last
 }

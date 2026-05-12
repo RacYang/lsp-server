@@ -80,6 +80,11 @@ func TestSceneRouterPlaysOneRoundWithBots(t *testing.T) {
 		view := state.Snapshot()
 		return view.Phase == phaseTable && view.RoomID != ""
 	}, 5*time.Second, 20*time.Millisecond, "快速开始后没有进入房间，screen=%q", simulationScreenText(screen))
+	initialView := state.Snapshot()
+	selfUserID := initialView.UserID
+	selfSeat := initialView.SeatIndex
+	require.NotEmpty(t, selfUserID, "登录用户必须存在")
+	require.GreaterOrEqual(t, selfSeat, int32(0), "进入牌桌后必须绑定座位")
 
 	var (
 		exchangeSubmitted bool
@@ -95,6 +100,9 @@ func TestSceneRouterPlaysOneRoundWithBots(t *testing.T) {
 			router.CurrentSceneID(), view.RoomState, view.WaitingAction, view.RoundPhase.String(), view.ActingSeat,
 			router.cursor.Mode, router.cursor.Index, router.cursor.Pending, router.cursor.PendingSinceStep, router.cursor.Marked,
 			selfHand(view), selfDiscardsView(view), view.UXNotice, lastLogLine(view), simulationScreenText(screen))
+		require.Equal(t, selfUserID, view.UserID, "对局中登录用户不应漂移，progress=%s", lastProgress)
+		require.Equal(t, selfSeat, view.SeatIndex, "对局中客户端自我座位不应被推送事件改写，progress=%s", lastProgress)
+		require.Equal(t, selfUserID, view.Players[selfSeat].UserID, "自我座位必须持续绑定登录用户，progress=%s", lastProgress)
 		if view.LastSettlement != nil || router.CurrentSceneID() == SceneSettle {
 			require.Positive(t, selfDiscards, "至少应完成一次真人出牌，progress=%s", lastProgress)
 			return
@@ -107,6 +115,7 @@ func TestSceneRouterPlaysOneRoundWithBots(t *testing.T) {
 			switch view.WaitingAction {
 			case "exchange_three":
 				if !exchangeSubmitted {
+					require.Len(t, selfHand(view), defaultStartingHandSize, "换三张必须基于自己的 13 张权威手牌，progress=%s", lastProgress)
 					pressEnter()
 					pressRight()
 					pressEnter()

@@ -125,6 +125,27 @@ func TestHubUnregister(t *testing.T) {
 	}
 }
 
+func TestHubUnregisterConnDoesNotRemoveNewerConnection(t *testing.T) {
+	h := NewHub()
+	oldConn := &websocket.Conn{}
+	newConn := &websocket.Conn{}
+	h.Register("u1", "room1", oldConn)
+	h.Register("u1", "room1", newConn)
+
+	if h.UnregisterConn("u1", "room1", oldConn) {
+		t.Fatal("旧连接关闭清理不应删除后注册的新连接")
+	}
+	if h.users["u1"] != newConn {
+		t.Fatal("新连接应继续保留")
+	}
+	if !h.UnregisterConn("u1", "room1", newConn) {
+		t.Fatal("当前连接应能正常注销")
+	}
+	if _, ok := h.users["u1"]; ok {
+		t.Fatal("当前连接注销后用户应被移除")
+	}
+}
+
 func TestHubIsRegistered(t *testing.T) {
 	h := NewHub()
 	if h.IsRegistered("u1", "room1") {

@@ -140,6 +140,27 @@ func (h *Hub) Unregister(userID, roomID string) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.unregisterLocked(userID, roomID)
+}
+
+// UnregisterConn 仅当当前注册连接仍是 c 时才删除用户映射。
+//
+// WebSocket 断线清理可能晚于同一用户的新连接重连；如果只按 user_id 删除，会把新连接误删，
+// 造成后续按座位定向的私有事件发不到客户端。
+func (h *Hub) UnregisterConn(userID, roomID string, c *websocket.Conn) bool {
+	if h == nil || userID == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.users[userID] != c {
+		return false
+	}
+	h.unregisterLocked(userID, roomID)
+	return true
+}
+
+func (h *Hub) unregisterLocked(userID, roomID string) {
 	delete(h.users, userID)
 	delete(h.lastHeartbeat, userID)
 	if roomID == "" {
