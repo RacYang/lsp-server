@@ -24,6 +24,10 @@ type LobbyJoinResult struct {
 	DisplayName string
 	RuleID      string
 	Seats       []*clientv1.SeatInfo
+	// Private 由 cli 在调用 CreateRoom(opts.Private=true) 时本地写入；
+	// client.v1 协议没有把 private 回包，故只能由发起方记账。
+	// 用于 [L5.2]/[P4.2]：进入预备页后房间码需持续醒目展示。
+	Private bool
 }
 
 // LobbyRoomMeta 是公开房间列表中每条房间的玩家可读视图。

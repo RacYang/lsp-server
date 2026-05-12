@@ -55,6 +55,12 @@ func drawText(scr tcell.Screen, x, y int, style tcell.Style, s string) int {
 
 func defaultStyle() tcell.Style { return tcell.StyleDefault }
 
+// highlightStyle 用于醒目展示，例如 [L5.2] 私密房间码。
+// 仅切前景色与 Bold，避免与背景填充字符抢占终端列宽。
+func highlightStyle() tcell.Style {
+	return tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true)
+}
+
 func drawTileGlyph(scr tcell.Screen, x, y int, style tcell.Style, glyph string) {
 	width := visualWidth(glyph)
 	if width < 1 {

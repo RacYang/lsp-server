@@ -47,8 +47,15 @@ type SceneRouter struct {
 	theme       TileTheme
 	lastTier    LayoutTier
 
+	frameLog *FrameLogger
+
 	quit bool
 	err  error
+}
+
+// SetFrameLog 把联调显微镜挂到 Router。nil 安全；多次设置以最后一次为准。
+func (r *SceneRouter) SetFrameLog(l *FrameLogger) {
+	r.frameLog = l
 }
 
 func NewSceneRouter(state *AppState, lobbyGW LobbyGateway, tableGW TableGateway, cfg *Config) *SceneRouter {
@@ -96,6 +103,9 @@ func (r *SceneRouter) Render(scr tcell.Screen, now time.Time) {
 	}
 	r.renderNetwork(scr, now)
 	scr.Show()
+	if r.frameLog != nil {
+		r.frameLog.Capture(r.CurrentSceneID(), r.state.Snapshot(), now)
+	}
 }
 
 func (r *SceneRouter) HandleEvent(ctx context.Context, ev tcell.Event, scr tcell.Screen) {
@@ -190,7 +200,13 @@ func (r *SceneRouter) renderRoomPrep(scr tcell.Screen, now time.Time) {
 	drawClippedText(scr, box.X+box.Width/2+2, box.Y+7, defaultStyle(), seatPrepLabel(view, 3), box.Width/2-4)
 	drawClippedText(scr, box.X+2, box.Y+12, defaultStyle(), centerVisual(seatPrepLabel(view, 0), box.Width-4), box.Width-4)
 	drawClippedText(scr, 2, 2, defaultStyle(), "规则: "+ruleLabel(view), w-4)
-	drawClippedText(scr, 2, 3, defaultStyle(), "房间: "+view.RoomID, w-4)
+	// [L5.2]/[P4.2] 私密房：把房间码作为分享凭据持续醒目展示直到进入 playing；
+	// 进入 playing 后 cli 切到 round 场景，本分支自然停止渲染，无需额外条件。
+	if view.Private {
+		drawClippedText(scr, 2, 3, highlightStyle(), "★ 私密房间码（分享给好友加入）: "+view.RoomID, w-4)
+	} else {
+		drawClippedText(scr, 2, 3, defaultStyle(), "房间: "+view.RoomID, w-4)
+	}
 	drawBandLine(scr, Region{X: 0, Y: h - 1, Width: w, Height: 1}, "Enter 准备    b 补 1 个机器人    B 补满    q 返回大厅    ? 帮助", "", false, false)
 }
 
@@ -323,14 +339,19 @@ func seatPrepLabel(view RoomView, seat int) string {
 	if name == "" {
 		return fmt.Sprintf("□ %s 空座", windLabel(seat))
 	}
+	// [G12] 座位状态值域：● 在线 / ○ 离线 / ▲ 弃局 / ✓ 已胡 / ▣ 机器人 / □ 空座；
+	// 预备页额外允许 √ 表示已 ready。托管态作为独立 feature 暂不实现，故 AutoPlay
+	// 字段在 cli 渲染层不参与判定（参见 docs/spec/player-journey.md v0.5 [G12]）。
 	mark := "●"
 	switch {
+	case p.Hued:
+		mark = "✓"
+	case p.Surrendered:
+		mark = "▲"
 	case p.Status == "ready" || p.Ready:
 		mark = "√"
 	case p.IsBot:
 		mark = "▣"
-	case p.AutoPlay:
-		mark = "◐"
 	case !p.Online:
 		mark = "○"
 	}

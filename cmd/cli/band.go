@@ -202,13 +202,19 @@ func scoreSummary(view RoomView) string {
 	return fmt.Sprintf("第%d局 第%d手", view.RoundIndex+1, view.HandIndex+1)
 }
 
+// [G12] 局内座位状态值域：● 在线 / ○ 离线 / ▲ 弃局 / ✓ 已胡 / ▣ 机器人 / □ 空座。
+// 托管 feature 暂不推进，AutoPlay 字段不再参与 cli 渲染。
 func seatStatusMark(p PlayerView) string {
 	switch {
+	case p.UserID == "":
+		return "□"
+	case p.Hued:
+		return "✓"
+	case p.Surrendered:
+		return "▲"
 	case p.IsBot:
 		return "▣"
-	case p.AutoPlay:
-		return "◐"
-	case !p.Online && p.UserID != "":
+	case !p.Online:
 		return "○"
 	default:
 		return "●"

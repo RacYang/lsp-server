@@ -23,13 +23,16 @@ type AppState struct {
 
 // RoomView 是渲染层唯一读取的数据结构。
 type RoomView struct {
-	UserID             string
-	Nickname           string
-	ServerURL          string
-	Phase              string
-	RoomID             string
-	RuleID             string
-	DisplayName        string
+	UserID      string
+	Nickname    string
+	ServerURL   string
+	Phase       string
+	RoomID      string
+	RuleID      string
+	DisplayName string
+	// Private 仅在本人作为创建者发起 CreateRoom(private=true) 时为真，
+	// 用于 [L5.2]/[P4.2] 在预备页持续醒目展示房间码；LeaveRoom 后必须复位。
+	Private            bool
 	SessionToken       string
 	SeatIndex          int32
 	RoomState          string

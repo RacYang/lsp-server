@@ -169,7 +169,10 @@ func overlayPlayersLines(view RoomView) []string {
 			ready += "  [BOT]"
 		}
 		if p.Surrendered {
-			ready += "  托管中"
+			ready += "  ▲ 弃局"
+		}
+		if p.Hued {
+			ready += "  ✓ 已胡"
 		}
 		lines = append(lines, fmt.Sprintf(" %s %d 号位  %-12s 手:%2d%s", mark, i+1, nickname, p.HandCnt, ready))
 	}

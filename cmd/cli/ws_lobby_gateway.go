@@ -146,6 +146,7 @@ func (g *wsLobbyGateway) CreateRoom(ctx context.Context, opts LobbyCreateOpts) (
 		DisplayName: resp.GetDisplayName(),
 		RuleID:      resp.GetRuleId(),
 		Seats:       resp.GetSeats(),
+		Private:     opts.Private,
 	}
 	applyJoinResultToState(g.state, result)
 	return result, nil
@@ -194,6 +195,9 @@ func applyJoinResultToState(state *AppState, res LobbyJoinResult) {
 		}
 		applySeatRoster(v, res.Seats)
 		v.Phase = phaseTable
+		// [L5.2]/[P4.2] 只有本次"成功创建私密房"这一种语义来源写 Private=true；
+		// AutoMatch/JoinRoom 与 LeaveRoom 路径走 false，避免私密标签泄漏到下一房。
+		v.Private = res.Private
 	})
 }
 
