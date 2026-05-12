@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -200,6 +201,11 @@ func startManagedProc(t *testing.T, ctx context.Context, repoRoot, target, cfgPa
 	cmd := exec.CommandContext(ctx, "go", "run", target)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "LSP_CONFIG="+cfgPath)
+	// `go run` 自身在收到 SIGINT 后并不会把信号转发给已 exec 出去的子二进制；
+	// 不把子进程隔离成独立 process group 的话，10s 超时后只杀掉 `go run`，子二进制变成 PPID=1 的孤儿
+	// 继续占着端口/etcd 租约，下一次 startManagedProc 启的新进程根本绑不上端口，
+	// 重连快照走到旧孤儿身上，Ready 自然永远等不到响应。
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -214,7 +220,7 @@ func (p *managedProc) Stop(t *testing.T) {
 	if p == nil || p.cmd == nil || p.cmd.Process == nil {
 		return
 	}
-	_ = p.cmd.Process.Signal(os.Interrupt)
+	signalProcessGroup(p.cmd.Process.Pid, syscall.SIGINT)
 	done := make(chan error, 1)
 	go func() { done <- p.cmd.Wait() }()
 	select {
@@ -223,10 +229,22 @@ func (p *managedProc) Stop(t *testing.T) {
 			t.Logf("%s 退出日志:\n%s", p.target, p.out.String())
 		}
 	case <-time.After(10 * time.Second):
+		signalProcessGroup(p.cmd.Process.Pid, syscall.SIGKILL)
 		_ = p.cmd.Process.Kill()
+		<-done
 		t.Logf("%s 超时被强制终止，日志:\n%s", p.target, p.out.String())
 	}
 	p.cmd = nil
+}
+
+func signalProcessGroup(pid int, sig syscall.Signal) {
+	if pid <= 0 {
+		return
+	}
+	// 负 pid 把信号广播给整个 process group，含 `go run` 父及其 exec 出的子二进制。
+	if err := syscall.Kill(-pid, sig); err != nil {
+		_ = syscall.Kill(pid, sig)
+	}
 }
 
 func requireReconnectSnapshot(t *testing.T, gateAddr, token, roomID string, connRef **websocket.Conn) {
