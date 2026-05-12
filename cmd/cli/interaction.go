@@ -135,7 +135,8 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 		// 定缺同理：4 家并发选缺一门，不依赖 ActingSeat。
 		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 			model.Allowed = []PlayerAction{ActionQueMen}
-			model.Hint = "请定缺：1 缺万，2 缺筒，3 缺条"
+			// [Q1.1]/[G2] 定缺键位为 m / p / s；[Q2.1] 必须提示「选定后不可更改」。
+			model.Hint = "请定缺：m 缺万 / p 缺筒 / s 缺条（选定后不可更改）"
 		} else {
 			model.Hint = waitingHint(view)
 		}
@@ -255,11 +256,12 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 		return ux.PendingFeedback
 	}
 	if phase := ux.Phase; phase == PhaseExchange && cursor != nil && cursor.Mode == CursorModeMulti3 && view.SeatIndex >= 0 {
-		need := 3 - len(cursor.Marked)
-		if need > 0 {
-			return fmt.Sprintf("换三张：移动到手牌后按回车标记，还需 %d 张", need)
+		// [E2.1] 底栏必须实时显示「已选 N/3」字面格式；满 3 张时切到提交提示。
+		marked := len(cursor.Marked)
+		if marked < 3 {
+			return fmt.Sprintf("换三张 · 已选 %d/3 · ←/→ 移动，Space 标记，Enter 提交（须同花色）", marked)
 		}
-		return "已选 3 张，按回车提交换牌"
+		return "换三张 · 已选 3/3 · 按 Enter 提交换牌"
 	}
 	if ux.Phase == PhaseMyTurnSelected && cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
 		hand := view.Players[view.SeatIndex].Hand
@@ -269,9 +271,10 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 	}
 	switch model.Phase {
 	case PhaseExchange:
-		return "换三张：选择 3 张同花色或按规则提示提交"
+		return "换三张 · 已选 0/3 · 选 3 张同花色后按 Enter 提交"
 	case PhaseQueMen:
-		return "定缺：按 1 缺万，2 缺筒，3 缺条"
+		// [Q1.1]/[Q2.1] 键位 m/p/s 且必须告知不可更改。
+		return "定缺：m 缺万 / p 缺筒 / s 缺条（选定后不可更改）"
 	case PhaseDiscard:
 		if containsAction(model.Allowed, ActionDiscard) {
 			return "◆ 该你出牌 ◆"

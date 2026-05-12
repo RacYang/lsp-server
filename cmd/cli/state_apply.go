@@ -114,10 +114,21 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		appendLog(v, "收到路由重定向: "+body.RouteRedirect.GetWsUrl())
 	case *clientv1.Envelope_ExchangeThreeResp:
 		appendResponseLog(v, "换三张", body.ExchangeThreeResp.GetErrorCode(), body.ExchangeThreeResp.GetErrorMessage())
+		// [E2.2] 服务端拒绝必须把原因落到 UXTransient notice，便于玩家立刻读到并改选；
+		// 不在这里清 Marked，让 cursor 继续保留先前选择以便玩家改 1～2 张就重新提交。
+		if reason := envelopeError(body.ExchangeThreeResp.GetErrorCode(), body.ExchangeThreeResp.GetErrorMessage()); reason != "" {
+			v.UXNotice = "换三张被拒绝：" + reason
+			v.UXNoticeUntil = time.Now().Add(3 * time.Second)
+		}
 	case *clientv1.Envelope_ExchangeThreeDone:
 		applyExchangeDone(v, body.ExchangeThreeDone)
 	case *clientv1.Envelope_QueMenResp:
 		appendResponseLog(v, "定缺", body.QueMenResp.GetErrorCode(), body.QueMenResp.GetErrorMessage())
+		// [Q1.1] 服务端拒绝定缺时同样把原因落到 UXTransient，避免玩家误以为已生效。
+		if reason := envelopeError(body.QueMenResp.GetErrorCode(), body.QueMenResp.GetErrorMessage()); reason != "" {
+			v.UXNotice = "定缺被拒绝：" + reason
+			v.UXNoticeUntil = time.Now().Add(3 * time.Second)
+		}
 	case *clientv1.Envelope_QueMenDone:
 		for seat, suit := range body.QueMenDone.GetQueSuitBySeat() {
 			if seat < len(v.QueBySeat) {
@@ -168,6 +179,7 @@ func applyLogin(v *RoomView, resp *clientv1.LoginResponse) {
 		appendLog(v, "登录失败: "+resp.GetErrorMessage())
 		return
 	}
+	prevUserID := v.UserID
 	v.UserID = resp.GetUserId()
 	v.SessionToken = resp.GetSessionToken()
 	v.Phase = phaseLobby
@@ -177,6 +189,11 @@ func applyLogin(v *RoomView, resp *clientv1.LoginResponse) {
 		v.DisplayName = ""
 		v.SeatIndex = -1
 		clearRoundFacts(v)
+	}
+	if !resp.GetResumed() && v.RoomID != "" && v.LastSettlement == nil && v.RoomState != "settling" && (prevUserID == "" || prevUserID == v.UserID) {
+		v.Phase = phaseTable
+		appendLog(v, "登录状态已刷新，保留当前房间")
+		return
 	}
 	if !resp.GetResumed() {
 		v.RoomID = ""
@@ -674,6 +691,7 @@ func resetRoomToLobby(v *RoomView, keepSettlement bool) {
 	v.RoomID = ""
 	v.RuleID = ""
 	v.DisplayName = ""
+	v.Private = false
 	v.SeatIndex = -1
 	v.RoomState = ""
 	v.LastStep = 0
