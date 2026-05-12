@@ -80,7 +80,9 @@ func TestSettlementDialogIncludesAllScoresWhenRevealed(t *testing.T) {
 	require.Contains(t, joined, "共 3 番")
 	require.Contains(t, joined, "+9")
 	require.Contains(t, joined, "-3")
-	require.Contains(t, joined, "R 再来一局")
+	require.Contains(t, joined, "r 再开一桌")
+	require.Contains(t, joined, "l 离桌")
+	require.Contains(t, joined, "Enter 停留")
 }
 
 func TestDrawSettlementDialogRendersBorderlessSummary(t *testing.T) {

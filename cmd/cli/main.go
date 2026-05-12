@@ -278,6 +278,22 @@ func snapshotSettlementSummary(view RoomView) *SettlementSummary {
 		if int(breakdown.GetFan()) > sum.TotalFan {
 			sum.TotalFan = int(breakdown.GetFan())
 		}
+		// [S3.1] 多家胡：必须把每位胡家独立列出，而不是只保留第一个 winner。
+		sum.Winners = append(sum.Winners, SettlementWinner{
+			Nickname: nicknameForSeat(view, breakdown.GetSeatIndex()),
+			IsSelf:   breakdown.GetSeatIndex() == view.SeatIndex,
+			Fan:      int(breakdown.GetFan()),
+			FanNames: append([]string(nil), breakdown.GetFanNames()...),
+		})
+	}
+	// [S4.1] 流局或查叫罚分必须独立显示 reason / from / to / amount。
+	for _, p := range notify.GetPenalties() {
+		sum.Penalties = append(sum.Penalties, SettlementPenalty{
+			Reason:   p.GetReason(),
+			FromNick: nicknameForSeat(view, p.GetFromSeat()),
+			ToNick:   nicknameForSeat(view, p.GetToSeat()),
+			Amount:   int(p.GetAmount()),
+		})
 	}
 	return sum
 }
