@@ -30,13 +30,44 @@ func drawSouthHand(scr tcell.Screen, in FrameInputs) {
 	}
 	region := in.Layout.Slots.SouthHand
 	x := region.X
+	queSuit := in.View.QueBySeat[seat]
 	for i, tile := range hand {
 		offset, style := tileStyle(in.Cursor, i)
+		// [Q2.2] 自家手牌：缺门花色一律灰显，提示「优先打缺门」；
+		// 光标 / Marked / Pending 三种高亮覆盖缺门灰，避免与正在操作的牌互相吃掉。
+		if isQueSuitTile(tile, queSuit) && !cursorHighlightedAt(in.Cursor, i) {
+			style = style.Foreground(tcell.ColorGray)
+		}
 		if marker := handSelectionMarker(in.Cursor, i); marker != "" && region.Y > 0 {
 			drawText(scr, x+i*3, region.Y-1, style, marker)
 		}
 		drawTileGlyph(scr, x+i*3, region.Y+offset, style, TileGlyph(tile))
 	}
+}
+
+// isQueSuitTile 判断 tile 是否落在 que 花色上；que=-1 / tile 非 m/p/s 时返回 false。
+func isQueSuitTile(tile string, que int32) bool {
+	if que < 0 || que > 2 || len(tile) == 0 {
+		return false
+	}
+	switch tile[0] {
+	case 'm':
+		return que == 0
+	case 'p':
+		return que == 1
+	case 's':
+		return que == 2
+	}
+	return false
+}
+
+// cursorHighlightedAt 让 [Q2.2] 灰显规则在「玩家正在操作」的格子上让位，
+// 避免缺门灰把光标 / Marked / Pending 的高亮吃掉。
+func cursorHighlightedAt(cursor *HandCursor, idx int) bool {
+	if cursor == nil {
+		return false
+	}
+	return cursor.Index == idx || cursor.IsMarked(idx)
 }
 
 func handSelectionMarker(cursor *HandCursor, idx int) string {

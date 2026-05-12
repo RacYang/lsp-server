@@ -202,7 +202,13 @@ func (c *HandCursor) SyncMode(view RoomView) {
 		if handLen > 0 {
 			switch mode {
 			case CursorModeSingle:
+				// [D1.2] 切入出牌单选时，光标默认停在「刚摸到的那张牌」在排序后手牌中的位置。
+				// 当 view.PendingTile 已被服务端权威下发且仍在手牌中时优先使用它定位；
+				// 否则回退到最右一张（顺手出最右是 cli 长期约定，仅在没有摸牌信息时使用）。
 				c.Index = handLen - 1
+				if idx := indexOfPendingDrawTile(view, handLen); idx >= 0 {
+					c.Index = idx
+				}
 			case CursorModeMulti3:
 				c.Index = 0
 			}
@@ -224,6 +230,25 @@ func (c *HandCursor) SyncMode(view RoomView) {
 			c.Index = handLen - 1
 		}
 	}
+}
+
+// indexOfPendingDrawTile 在自家排序后手牌里找 view.PendingTile 的索引；
+// 找不到返回 -1。仅对 SeatIndex==ActingSeat 且 PendingTile 非空时尝试匹配，
+// 避免抢答 pending 牌（如他家被点的炮牌）误把光标移走。
+func indexOfPendingDrawTile(view RoomView, handLen int) int {
+	if view.PendingTile == "" || view.SeatIndex < 0 || view.SeatIndex > 3 {
+		return -1
+	}
+	if view.SeatIndex != view.ActingSeat {
+		return -1
+	}
+	hand := view.Players[view.SeatIndex].Hand
+	for i := handLen - 1; i >= 0; i-- {
+		if i < len(hand) && hand[i] == view.PendingTile {
+			return i
+		}
+	}
+	return -1
 }
 
 // IsMarked 判断索引是否在已标记集合中（渲染层用于决定是否凸起 / 染色）。

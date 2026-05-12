@@ -223,6 +223,14 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		case '?':
 			overlay.Toggle(OverlayHelp)
 		case ' ':
+			// [E1.2] 换三张：选第二张异花色时 UI 必须立刻拒绝标记，不下发到服务端。
+			// 仅在 Multi3 模式 + 当前光标落在合法手牌位置 + 已存在标记时校验花色。
+			if cursor.Mode == CursorModeMulti3 && cursor.Index >= 0 && cursor.Index < len(hand) && len(cursor.Marked) > 0 && !cursor.IsMarked(cursor.Index) {
+				if !sameExchangeSuit(hand, cursor.Marked, cursor.Index) {
+					noticeInputRejected(state, ux, "换三张必须同一花色")
+					return tableEventResult{}
+				}
+			}
 			if !cursor.ToggleMark() {
 				noticeInputRejected(state, ux, "当前不能标记手牌")
 			}
@@ -240,42 +248,24 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			if model.Phase == PhaseSettlement {
 				return leaveRoomFireAndForget(ctx, state, gateway, TableExitGameOver)
 			}
-		case '1':
-			if !containsAction(ux.AllowedActions, ActionQueMen) {
-				noticeInputRejected(state, ux, "当前不能定缺")
-				return tableEventResult{}
-			}
-			return submitQueMen(ctx, gateway, model, 0)
-		case '2':
-			if !containsAction(ux.AllowedActions, ActionQueMen) {
-				noticeInputRejected(state, ux, "当前不能定缺")
-				return tableEventResult{}
-			}
-			return submitQueMen(ctx, gateway, model, 1)
-		case '3':
-			if !containsAction(ux.AllowedActions, ActionQueMen) {
-				noticeInputRejected(state, ux, "当前不能定缺")
-				return tableEventResult{}
-			}
-			return submitQueMen(ctx, gateway, model, 2)
+		// [Q1.1] 仅 m/p/s 三键提交定缺；其它键（含 1/2/3）按"其它键忽略且无副作用"
+		// 收口，避免误触发"当前不能定缺"的提示成为副作用。
 		case 'm', 'M':
 			if !containsAction(ux.AllowedActions, ActionQueMen) {
-				noticeInputRejected(state, ux, "当前不能定缺")
 				return tableEventResult{}
 			}
 			return submitQueMen(ctx, gateway, model, 0)
 		case 'p', 'P':
+			// 抢答弹窗下 p 优先解释为碰，避免与定缺冲突；[G2] 对局动作级键的层级。
 			if claimDialog != nil && model.Phase == PhaseClaim {
 				return submitClaimAction(ctx, gateway, claimDialog, ClaimActionPong)
 			}
 			if !containsAction(ux.AllowedActions, ActionQueMen) {
-				noticeInputRejected(state, ux, "当前不能定缺")
 				return tableEventResult{}
 			}
 			return submitQueMen(ctx, gateway, model, 1)
 		case 's', 'S':
 			if !containsAction(ux.AllowedActions, ActionQueMen) {
-				noticeInputRejected(state, ux, "当前不能定缺")
 				return tableEventResult{}
 			}
 			return submitQueMen(ctx, gateway, model, 2)
@@ -492,7 +482,14 @@ func submitClaimAction(ctx context.Context, gateway TableGateway, dialog *ClaimD
 }
 
 // submitCursorAction 处理 Enter 提交：单选模式直接 Discard，多选模式打 ExchangeThree。
+//
+// [D2.1] 若当前不满足出牌许可（cursor.Mode == None 或 acting_seats 不含本家），
+// Enter 必须静默无效，不弹任何 UXTransient；只有「光标已落在合法位置但尚未选完」
+// 这种"可推进 + 用户欠操作"语义才走 noticeInputRejected。
 func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor, hand []string, gateway TableGateway, view RoomView) tableEventResult {
+	if cursor == nil || cursor.Mode == CursorModeNone {
+		return tableEventResult{}
+	}
 	if !cursor.CanSubmit() {
 		ux := DeriveTableUXModel(view, cursor, time.Now())
 		noticeInputRejected(state, ux, cursorSubmitDisabledReason(cursor))
@@ -554,6 +551,29 @@ func noticeAsyncFailure(state *AppState, label string, err error) {
 	}
 	state.SetNotice(label+": "+err.Error(), 2*time.Second)
 	state.AddLog(label + ": " + err.Error())
+}
+
+// sameExchangeSuit 校验换三张候选索引与已 Mark 的索引是否同一花色。
+//
+// 协议层手牌以 `m1/p3/s9` 形式编码，suit 即首字符。任何花色不在 m/p/s
+// 三种之内（如字牌 z*）均直接判失败，避免规则边界外的误标。
+func sameExchangeSuit(hand []string, marked []int, candidate int) bool {
+	suit := func(idx int) byte {
+		if idx < 0 || idx >= len(hand) || len(hand[idx]) == 0 {
+			return 0
+		}
+		return hand[idx][0]
+	}
+	cand := suit(candidate)
+	if cand != 'm' && cand != 'p' && cand != 's' {
+		return false
+	}
+	for _, idx := range marked {
+		if suit(idx) != cand {
+			return false
+		}
+	}
+	return true
 }
 
 func cursorSubmitDisabledReason(cursor *HandCursor) string {
