@@ -385,9 +385,10 @@ func TestCentralPromptStates(t *testing.T) {
 
 	v.WaitingAction = "exchange_three"
 	multi := &HandCursor{Mode: CursorModeMulti3, Index: 0, Marked: []int{1, 2}}
-	require.Contains(t, centralPrompt(v, multi), "还需 1")
+	// [E2.1] 底栏须含字面格式「已选 N/3」；满 3 张时同样保留 N/3 表述。
+	require.Contains(t, centralPrompt(v, multi), "已选 2/3")
 	multi.Marked = []int{1, 2, 3}
-	require.Contains(t, centralPrompt(v, multi), "已选 3 张")
+	require.Contains(t, centralPrompt(v, multi), "已选 3/3")
 }
 
 func TestRenderFrameDrawsPrimaryPromptInCenter(t *testing.T) {
