@@ -282,18 +282,20 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		}
 		return []Notification{settlement}, nil
 	}
+	turn := rs.turn
+	reqID := fmt.Sprintf("draw-%d", rs.step)
 	drawn, err := rs.wall.Draw()
 	if err != nil {
 		return nil, err
 	}
-	seatIndex := rs.turn.Proto()
+	seatIndex := turn.Proto()
 	rs.currentDraw = drawn
-	if _, ok := rs.rule.CheckHu(rs.hands[rs.turn], drawn, rules.HuContext{}); ok {
+	if _, ok := rs.rule.CheckHu(rs.hands[turn], drawn, rules.HuContext{}); ok {
 		rs.pendingDraw = drawn
 		rs.waitingTsumo = true
 		rs.waitingDiscard = false
 		progress := rs.roundProgress()
-		drawPayload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, true)
+		drawPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, true)
 		if err != nil {
 			return nil, err
 		}
@@ -303,8 +305,8 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 			TargetSeat: BroadcastSeat,
 			Privacy:    PrivacyPerSeat,
 			Project: func(target Seat) []byte {
-				visible := target == rs.turn
-				payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, visible)
+				visible := target == turn
+				payload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, visible)
 				if err != nil {
 					return drawPayload
 				}
@@ -326,10 +328,10 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		}
 		return append(out, Notification{Kind: KindAction, Payload: choicePayload, TargetSeat: BroadcastSeat}), nil
 	}
-	rs.hands[rs.turn].Add(drawn)
+	rs.hands[turn].Add(drawn)
 	rs.waitingDiscard = true
 	progress := rs.roundProgress()
-	drawPayload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, true)
+	drawPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, true)
 	if err != nil {
 		return nil, err
 	}
@@ -339,8 +341,8 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		TargetSeat: BroadcastSeat,
 		Privacy:    PrivacyPerSeat,
 		Project: func(target Seat) []byte {
-			visible := target == rs.turn
-			payload, err := drawTilePayload(fmt.Sprintf("draw-%d", rs.step), seatIndex, drawn.String(), progress, visible)
+			visible := target == turn
+			payload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, visible)
 			if err != nil {
 				return drawPayload
 			}
