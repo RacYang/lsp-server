@@ -18,6 +18,35 @@ enum Phase {
   PHASE_CLOSED = 9;
 }
 
+// WaitingReason 与 client.v1.WaitingReason 保持同编号；详见 ADR-0045。
+enum WaitingReason {
+  WAITING_REASON_UNSPECIFIED = 0;
+  WAITING_REASON_NONE = 1;
+  WAITING_REASON_EXCHANGE_THREE = 2;
+  WAITING_REASON_QUE_MEN = 3;
+  WAITING_REASON_CLAIM_WINDOW = 4;
+  WAITING_REASON_TSUMO = 5;
+  WAITING_REASON_DISCARD = 6;
+  WAITING_REASON_SURRENDER = 7;
+}
+
+// PhaseUpdate 与 client.v1.PhaseUpdate 镜像；gate 透传，不重组业务事实。
+message PhaseUpdate {
+  Phase phase = 1;
+  int64 step = 2;
+  WaitingReason reason = 3;
+  int64 deadline_unix_ms = 4;
+  int64 server_now_unix_ms = 5;
+  repeated int32 acting_seats = 6;
+  repeated string available_actions = 7;
+}
+
+// PhaseToken 与 client.v1.PhaseToken 镜像；ApplyEventRequest 透传客户端令牌。
+message PhaseToken {
+  int64 step = 1;
+  WaitingReason reason = 2;
+}
+
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC）。
 service RoomService {
   rpc ApplyEvent(ApplyEventRequest) returns (ApplyEventResponse);
@@ -41,11 +70,16 @@ message ApplyEventRequest {
   }
   string idempotency_key = 9;
   string user_id = 10;
+  // phase_token 透传客户端发起请求时的 (step, reason)，房间 actor 在入口校验。
+  PhaseToken phase_token = 13;
 }
 
 message ApplyEventResponse {
   bool accepted = 1;
   string error = 2;
+  // error_code 枚举值与 client.v1.ErrorCode 保持同编号；用于回传 PHASE_DRIFTED 等。
+  int32 error_code = 3;
+  PhaseUpdate phase_update = 4;
 }
 
 message LeaveEvent {}
@@ -88,6 +122,7 @@ message SnapshotRoomResponse {
   Phase phase = 23;
   repeated int32 acting_seats = 24;
   int64 last_step = 25;
+  PhaseUpdate phase_update = 26;
 }
 
 message SeatInfo {
@@ -157,6 +192,7 @@ message StartGameEvent {
   int32 round_index = 6;
   int32 hand_index = 7;
   RuleMeta rule_meta = 8;
+  PhaseUpdate phase_update = 9;
 }
 
 message InitialDealEvent {
@@ -173,6 +209,7 @@ message DrawTileEvent {
   Phase phase = 5;
   int64 step = 6;
   repeated int32 acting_seats = 7;
+  PhaseUpdate phase_update = 8;
 }
 
 message ActionEvent {
@@ -185,6 +222,7 @@ message ActionEvent {
   Phase phase = 7;
   int64 step = 8;
   repeated int32 acting_seats = 9;
+  PhaseUpdate phase_update = 10;
 }
 
 message SettlementEvent {
@@ -197,6 +235,7 @@ message SettlementEvent {
   int32 round_index = 7;
   int32 hand_index = 8;
   repeated SeatScore total_scores = 9;
+  PhaseUpdate phase_update = 10;
 }
 
 message ExchangeThreeDoneEvent {
@@ -206,6 +245,7 @@ message ExchangeThreeDoneEvent {
   int64 step = 4;
   repeated int32 acting_seats = 5;
   int32 direction = 6;
+  PhaseUpdate phase_update = 7;
 }
 
 message QueMenDoneEvent {
@@ -213,6 +253,7 @@ message QueMenDoneEvent {
   Phase phase = 2;
   int64 step = 3;
   repeated int32 acting_seats = 4;
+  PhaseUpdate phase_update = 5;
 }
 
 message RouteRedirectEvent {

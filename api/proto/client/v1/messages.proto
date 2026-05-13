@@ -18,6 +18,9 @@ enum ErrorCode {
   ERROR_CODE_RATE_LIMITED = 7;
   ERROR_CODE_RECONNECTING = 8;
   ERROR_CODE_FEATURE_DISABLED = 9;
+  // ERROR_CODE_PHASE_DRIFTED 表示客户端请求所附 PhaseToken 与服务端权威阶段不一致；
+  // 响应应附完整 PhaseUpdate，客户端据此刷新 UI 并按需提示「操作已被自动接管」。
+  ERROR_CODE_PHASE_DRIFTED = 10;
 }
 
 // Phase 表示局内权威阶段；客户端优先以该字段驱动交互状态。
@@ -33,6 +36,41 @@ enum Phase {
   PHASE_TSUMO = 7;
   PHASE_SETTLE = 8;
   PHASE_CLOSED = 9;
+}
+
+// WaitingReason 表示服务端当前等待的玩家动作类型；deadline 与之绑定。
+// 与 RoundState 等待标志严格一一对应：waitingExchange / waitingQueMen / claimWindowOpen /
+// waitingTsumo / waitingDiscard，以及托管缩短时长的 surrender 路径。
+enum WaitingReason {
+  WAITING_REASON_UNSPECIFIED = 0;
+  WAITING_REASON_NONE = 1;
+  WAITING_REASON_EXCHANGE_THREE = 2;
+  WAITING_REASON_QUE_MEN = 3;
+  WAITING_REASON_CLAIM_WINDOW = 4;
+  WAITING_REASON_TSUMO = 5;
+  WAITING_REASON_DISCARD = 6;
+  WAITING_REASON_SURRENDER = 7;
+}
+
+// PhaseUpdate 是服务端对客户端公布的局内进度+deadline 单一事实包。
+// 详见 ADR-0045：所有 *Notify 与 *Response（含拒绝）必须嵌入该消息；
+// deadline_unix_ms 由 RoundState.phaseStartUnixMs + duration(reason) 推导，
+// engine 是唯一写入者；server_now_unix_ms 用于客户端校时与倒计时抗时钟漂移。
+message PhaseUpdate {
+  Phase phase = 1;
+  int64 step = 2;
+  WaitingReason reason = 3;
+  int64 deadline_unix_ms = 4;
+  int64 server_now_unix_ms = 5;
+  repeated int32 acting_seats = 6;
+  repeated string available_actions = 7;
+}
+
+// PhaseToken 由客户端请求携带，声明发起请求时客户端所认知的 (step, reason)。
+// 服务端 actor 入口校验：若与 RoundState 当前阶段不一致，返回 ERROR_CODE_PHASE_DRIFTED。
+message PhaseToken {
+  int64 step = 1;
+  WaitingReason reason = 2;
 }
 
 // Envelope 为请求/响应通用外壳；body 使用 oneof 承载具体消息。
@@ -221,45 +259,59 @@ message ReadyRequest {}
 message ReadyResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
 message DiscardRequest {
   string tile = 1;
+  PhaseToken phase_token = 10;
 }
 
 message DiscardResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
-message PongRequest {}
+message PongRequest {
+  PhaseToken phase_token = 10;
+}
 
 message PongResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
 message GangRequest {
   string tile = 1;
+  PhaseToken phase_token = 10;
 }
 
 message GangResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
-message HuRequest {}
+message HuRequest {
+  PhaseToken phase_token = 10;
+}
 
 message HuResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
-message PassRequest {}
+message PassRequest {
+  PhaseToken phase_token = 10;
+}
 
 message PassResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
 message RenameRequest {
@@ -296,6 +348,7 @@ message StartGameNotify {
   int32 round_index = 7;
   int32 hand_index = 8;
   RuleMeta rule_meta = 9;
+  PhaseUpdate phase_update = 10;
 }
 
 // InitialDealNotify 表示开局发给当前座位的 13 张初始手牌。
@@ -306,6 +359,7 @@ message InitialDealNotify {
 }
 
 // DrawTileNotify 表示某座位摸牌。
+// deadline_unix_ms 字段保留兼容窗，新客户端应改读 phase_update.deadline_unix_ms。
 message DrawTileNotify {
   int32 seat_index = 1;
   string tile = 2;
@@ -314,6 +368,7 @@ message DrawTileNotify {
   repeated int32 acting_seats = 5;
   int32 wall_remaining = 6;
   int64 deadline_unix_ms = 7;
+  PhaseUpdate phase_update = 8;
 }
 
 // ActionNotify 表示他人可见动作（吃碰杠胡等，Phase 1 简化为文本描述）。
@@ -331,6 +386,7 @@ message ActionNotify {
   ActionDetail detail = 7;
   int32 wall_remaining = 8;
   int64 deadline_unix_ms = 9;
+  PhaseUpdate phase_update = 10;
 }
 
 // ActionDetail 是可重连恢复的结构化最近动作。
@@ -386,6 +442,7 @@ message SettlementNotify {
   int32 round_index = 8;
   int32 hand_index = 9;
   repeated SeatScore total_scores = 10;
+  PhaseUpdate phase_update = 11;
 }
 
 // SeatScore 表示某玩家在本局结算中的番数/胜负摘要。
@@ -443,11 +500,13 @@ message ExchangeThreeRequest {
   repeated string tiles = 1;
   // 1=顺时针 2=对家 3=逆时针；服务端以首个有效 hint 解析为本局权威方向。
   int32 direction = 2;
+  PhaseToken phase_token = 10;
 }
 
 message ExchangeThreeResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
 // ExchangeThreeDoneNotify 服务器广播换三张完成、即将进入定缺。
@@ -460,6 +519,7 @@ message ExchangeThreeDoneNotify {
   repeated int32 acting_seats = 5;
   // 当前连接所属座位实际交出的三张牌；用于客户端在广播完成时校正本地手牌。
   repeated string your_exchanged_away = 6;
+  PhaseUpdate phase_update = 7;
 }
 
 message SeatTiles {
@@ -471,11 +531,13 @@ message SeatTiles {
 message QueMenRequest {
   // 0=万 1=筒 2=条（与服务器 tile 包 SuitCharacters/SuitDots/SuitBamboo 约定一致）
   int32 suit = 1;
+  PhaseToken phase_token = 10;
 }
 
 message QueMenResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
+  PhaseUpdate phase_update = 3;
 }
 
 // QueMenDoneNotify 广播四人已定缺，进入开局打牌。
@@ -485,6 +547,7 @@ message QueMenDoneNotify {
   Phase phase = 2;
   int64 step = 3;
   repeated int32 acting_seats = 4;
+  PhaseUpdate phase_update = 5;
 }
 
 // SnapshotNotify 为重连恢复下发的房间视图摘要；cursor 为快照游标，格式见 ADR-0013。
@@ -519,6 +582,7 @@ message SnapshotNotify {
   int32 hand_index = 23;
   repeated SeatScore total_scores = 24;
   RuleMeta rule_meta = 25;
+  PhaseUpdate phase_update = 26;
 }
 
 // ClaimCandidate 表示快照中仍然有效的抢答候选。
