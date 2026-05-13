@@ -237,77 +237,77 @@ func (g *LocalRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID s
 }
 
 // Discard 触发本地房间推进一轮，并返回在响应之后执行的广播回调。
-func (g *LocalRoomGateway) Discard(ctx context.Context, roomID, userID, tile string) (func(), error) {
+func (g *LocalRoomGateway) Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile)
+	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) Pong(ctx context.Context, roomID, userID string) (func(), error) {
+func (g *LocalRoomGateway) Pong(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Pong(ctx, roomID, userID)
+	notifications, err := g.rooms.Pong(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) Gang(ctx context.Context, roomID, userID, tile string) (func(), error) {
+func (g *LocalRoomGateway) Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile)
+	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) Hu(ctx context.Context, roomID, userID string) (func(), error) {
+func (g *LocalRoomGateway) Hu(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Hu(ctx, roomID, userID)
+	notifications, err := g.rooms.Hu(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) Pass(ctx context.Context, roomID, userID string) (func(), error) {
+func (g *LocalRoomGateway) Pass(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Pass(ctx, roomID, userID)
+	notifications, err := g.rooms.Pass(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error) {
+func (g *LocalRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.ExchangeThree(ctx, roomID, userID, tiles, direction)
+	notifications, err := g.rooms.ExchangeThree(ctx, roomID, userID, tiles, direction, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32) (func(), error) {
+func (g *LocalRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.QueMen(ctx, roomID, userID, suit)
+	notifications, err := g.rooms.QueMen(ctx, roomID, userID, suit, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}

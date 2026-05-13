@@ -50,25 +50,25 @@ func (g *actionStubGateway) Leave(_ context.Context, _, _ string) (func(), error
 	return g.makeAfter(), g.actionErr
 }
 func (g *actionStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
-func (g *actionStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
+func (g *actionStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
-func (g *actionStubGateway) QueMen(_ context.Context, _, _ string, _ int32) (func(), error) {
+func (g *actionStubGateway) QueMen(_ context.Context, _, _ string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
-func (g *actionStubGateway) Discard(_ context.Context, _, _, _ string) (func(), error) {
+func (g *actionStubGateway) Discard(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
-func (g *actionStubGateway) Pong(_ context.Context, _, _ string) (func(), error) {
+func (g *actionStubGateway) Pong(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
-func (g *actionStubGateway) Gang(_ context.Context, _, _, _ string) (func(), error) {
+func (g *actionStubGateway) Gang(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
-func (g *actionStubGateway) Hu(_ context.Context, _, _ string) (func(), error) {
+func (g *actionStubGateway) Hu(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
-func (g *actionStubGateway) Pass(_ context.Context, _, _ string) (func(), error) {
+func (g *actionStubGateway) Pass(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
 func (g *actionStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {

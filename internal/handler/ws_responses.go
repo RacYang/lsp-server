@@ -84,6 +84,10 @@ func actionErrorCode(err error) clientv1.ErrorCode {
 		rateLimitedTotal.WithLabelValues("room").Inc()
 		return clientv1.ErrorCode_ERROR_CODE_RATE_LIMITED
 	}
+	var drift *roomsvc.PhaseDriftError
+	if errors.As(err, &drift) {
+		return clientv1.ErrorCode_ERROR_CODE_PHASE_DRIFTED
+	}
 	return clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 }
 

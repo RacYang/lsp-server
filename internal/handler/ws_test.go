@@ -39,25 +39,25 @@ func (f *fakeResumeGateway) Leave(_ context.Context, _, _ string) (func(), error
 	return nil, nil
 }
 func (f *fakeResumeGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
-func (f *fakeResumeGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
+func (f *fakeResumeGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (f *fakeResumeGateway) QueMen(_ context.Context, _, _ string, _ int32) (func(), error) {
+func (f *fakeResumeGateway) QueMen(_ context.Context, _, _ string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (f *fakeResumeGateway) Discard(_ context.Context, _, _, _ string) (func(), error) {
+func (f *fakeResumeGateway) Discard(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (f *fakeResumeGateway) Pong(_ context.Context, _, _ string) (func(), error) {
+func (f *fakeResumeGateway) Pong(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (f *fakeResumeGateway) Gang(_ context.Context, _, _, _ string) (func(), error) {
+func (f *fakeResumeGateway) Gang(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (f *fakeResumeGateway) Hu(_ context.Context, _, _ string) (func(), error) {
+func (f *fakeResumeGateway) Hu(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (f *fakeResumeGateway) Pass(_ context.Context, _, _ string) (func(), error) {
+func (f *fakeResumeGateway) Pass(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
 func (f *fakeResumeGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {
@@ -104,25 +104,25 @@ func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) 
 }
 func (g *joinStubGateway) Leave(_ context.Context, _, _ string) (func(), error) { return nil, nil }
 func (g *joinStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
-func (g *joinStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32) (func(), error) {
+func (g *joinStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (g *joinStubGateway) QueMen(_ context.Context, _, _ string, _ int32) (func(), error) {
+func (g *joinStubGateway) QueMen(_ context.Context, _, _ string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (g *joinStubGateway) Discard(_ context.Context, _, _, _ string) (func(), error) {
+func (g *joinStubGateway) Discard(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (g *joinStubGateway) Pong(_ context.Context, _, _ string) (func(), error) {
+func (g *joinStubGateway) Pong(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (g *joinStubGateway) Gang(_ context.Context, _, _, _ string) (func(), error) {
+func (g *joinStubGateway) Gang(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (g *joinStubGateway) Hu(_ context.Context, _, _ string) (func(), error) {
+func (g *joinStubGateway) Hu(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
-func (g *joinStubGateway) Pass(_ context.Context, _, _ string) (func(), error) {
+func (g *joinStubGateway) Pass(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
 func (g *joinStubGateway) ListRooms(_ context.Context, _ int32, _ string) ([]*clientv1.RoomMeta, string, error) {

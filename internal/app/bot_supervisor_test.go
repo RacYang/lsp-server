@@ -111,14 +111,14 @@ func TestBotSupervisorMixedHumanWaitsAfterExchange(t *testing.T) {
 		switch view.WaitingAction {
 		case "exchange_three":
 			if !humanExchanged && len(view.HandsBySeat) > 0 && len(view.HandsBySeat[0]) >= 3 {
-				_, err := svc.ExchangeThree(ctx, roomID, humanID, view.HandsBySeat[0][:3], 3)
+				_, err := svc.ExchangeThree(ctx, roomID, humanID, view.HandsBySeat[0][:3], 3, nil)
 				if err == nil {
 					humanExchanged = true
 				}
 			}
 		case "que_men":
 			if !humanQueDone {
-				_, err := svc.QueMen(ctx, roomID, humanID, 0)
+				_, err := svc.QueMen(ctx, roomID, humanID, 0, nil)
 				if err == nil {
 					humanQueDone = true
 				}

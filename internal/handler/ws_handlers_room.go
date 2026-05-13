@@ -156,7 +156,7 @@ func handleExchangeThree(
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.ExchangeThree(ctx, state.roomID, state.userID, req.GetTiles(), req.GetDirection())
+	after, err := deps.Rooms.ExchangeThree(ctx, state.roomID, state.userID, req.GetTiles(), req.GetDirection(), req.GetPhaseToken())
 	resp, after := exchangeThreeErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.ExchangeThreeResp, resp, after)
 }
@@ -180,7 +180,7 @@ func handleQueMen(
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.QueMen(ctx, state.roomID, state.userID, req.GetSuit())
+	after, err := deps.Rooms.QueMen(ctx, state.roomID, state.userID, req.GetSuit(), req.GetPhaseToken())
 	resp, after := queMenErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.QueMenResp, resp, after)
 }
@@ -204,7 +204,7 @@ func handleDiscard(
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.Discard(ctx, state.roomID, state.userID, req.GetTile())
+	after, err := deps.Rooms.Discard(ctx, state.roomID, state.userID, req.GetTile(), req.GetPhaseToken())
 	resp, after := discardErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.DiscardResp, resp, after)
 }
@@ -227,7 +227,7 @@ func handlePong(
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.Pong(ctx, state.roomID, state.userID)
+	after, err := deps.Rooms.Pong(ctx, state.roomID, state.userID, env.GetPongReq().GetPhaseToken())
 	resp, after := pongErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.PongResp, resp, after)
 }
@@ -251,7 +251,7 @@ func handleGang(
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.Gang(ctx, state.roomID, state.userID, req.GetTile())
+	after, err := deps.Rooms.Gang(ctx, state.roomID, state.userID, req.GetTile(), req.GetPhaseToken())
 	resp, after := gangErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.GangResp, resp, after)
 }
@@ -274,7 +274,7 @@ func handleHu(
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.Hu(ctx, state.roomID, state.userID)
+	after, err := deps.Rooms.Hu(ctx, state.roomID, state.userID, env.GetHuReq().GetPhaseToken())
 	resp, after := huErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.HuResp, resp, after)
 }
@@ -297,7 +297,7 @@ func handlePass(
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.Pass(ctx, state.roomID, state.userID)
+	after, err := deps.Rooms.Pass(ctx, state.roomID, state.userID, env.GetPassReq().GetPhaseToken())
 	resp, after := passErrEnvelope(env.ReqId, after, err)
 	respondAction(conn, env.ReqId, msgid.PassResp, resp, after)
 }

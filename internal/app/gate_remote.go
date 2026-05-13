@@ -462,53 +462,59 @@ func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID 
 }
 
 // Discard 将当前轮次出牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
-func (g *remoteRoomGateway) Discard(ctx context.Context, roomID, userID, tile string) (func(), error) {
+func (g *remoteRoomGateway) Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId: roomID,
-		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Discard{Discard: &clusterv1.DiscardEvent{Tile: tile}},
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
+		Body:       &clusterv1.ApplyEventRequest_Discard{Discard: &clusterv1.DiscardEvent{Tile: tile}},
 	})
 }
 
 // Pong 将碰牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
-func (g *remoteRoomGateway) Pong(ctx context.Context, roomID, userID string) (func(), error) {
+func (g *remoteRoomGateway) Pong(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId: roomID,
-		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Pong{Pong: &clusterv1.PongEvent{}},
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
+		Body:       &clusterv1.ApplyEventRequest_Pong{Pong: &clusterv1.PongEvent{}},
 	})
 }
 
 // Gang 将杠牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
-func (g *remoteRoomGateway) Gang(ctx context.Context, roomID, userID, tile string) (func(), error) {
+func (g *remoteRoomGateway) Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId: roomID,
-		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Gang{Gang: &clusterv1.GangEvent{Tile: tile}},
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
+		Body:       &clusterv1.ApplyEventRequest_Gang{Gang: &clusterv1.GangEvent{Tile: tile}},
 	})
 }
 
 // Hu 将胡牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
-func (g *remoteRoomGateway) Hu(ctx context.Context, roomID, userID string) (func(), error) {
+func (g *remoteRoomGateway) Hu(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId: roomID,
-		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Hu{Hu: &clusterv1.HuEvent{}},
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
+		Body:       &clusterv1.ApplyEventRequest_Hu{Hu: &clusterv1.HuEvent{}},
 	})
 }
 
-func (g *remoteRoomGateway) Pass(ctx context.Context, roomID, userID string) (func(), error) {
+func (g *remoteRoomGateway) Pass(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId: roomID,
-		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Pass{Pass: &clusterv1.PassEvent{}},
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
+		Body:       &clusterv1.ApplyEventRequest_Pass{Pass: &clusterv1.PassEvent{}},
 	})
 }
 
-func (g *remoteRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) (func(), error) {
+func (g *remoteRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId: roomID,
-		UserId: userID,
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
 		Body: &clusterv1.ApplyEventRequest_ExchangeThree{ExchangeThree: &clusterv1.ExchangeThreeEvent{
 			Tiles:     append([]string(nil), tiles...),
 			Direction: direction,
@@ -516,12 +522,39 @@ func (g *remoteRoomGateway) ExchangeThree(ctx context.Context, roomID, userID st
 	})
 }
 
-func (g *remoteRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32) (func(), error) {
+func (g *remoteRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId: roomID,
-		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_QueMen{QueMen: &clusterv1.QueMenEvent{Suit: suit}},
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
+		Body:       &clusterv1.ApplyEventRequest_QueMen{QueMen: &clusterv1.QueMenEvent{Suit: suit}},
 	})
+}
+
+// clientPhaseTokToCluster 把客户端透传过来的 PhaseToken 镜像到集群层；nil 时透传 nil。
+// 两侧 WaitingReason 枚举数值不一致，需逐项映射；详见 ADR-0045。
+func clientPhaseTokToCluster(tok *clientv1.PhaseToken) *clusterv1.PhaseToken {
+	if tok == nil {
+		return nil
+	}
+	var reason clusterv1.WaitingReason
+	switch tok.GetReason() {
+	case clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
+		reason = clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
+	case clientv1.WaitingReason_WAITING_REASON_QUE_MEN:
+		reason = clusterv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
+		reason = clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
+	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
+		reason = clusterv1.WaitingReason_WAITING_REASON_TSUMO
+	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
+		reason = clusterv1.WaitingReason_WAITING_REASON_DISCARD
+	case clientv1.WaitingReason_WAITING_REASON_SURRENDER:
+		reason = clusterv1.WaitingReason_WAITING_REASON_SURRENDER
+	default:
+		reason = clusterv1.WaitingReason_WAITING_REASON_NONE
+	}
+	return &clusterv1.PhaseToken{Step: tok.GetStep(), Reason: reason}
 }
 
 func (g *remoteRoomGateway) applyRoomEvent(ctx context.Context, req *clusterv1.ApplyEventRequest) (func(), error) {

@@ -56,25 +56,25 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 		}
 		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
 	case *clusterv1.ApplyEventRequest_Discard:
-		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile())
+		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_Pong:
-		notifications, err := s.rooms.Pong(ctx, roomID, userID)
+		notifications, err := s.rooms.Pong(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_Gang:
-		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile())
+		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_Hu:
-		notifications, err := s.rooms.Hu(ctx, roomID, userID)
+		notifications, err := s.rooms.Hu(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_Pass:
-		notifications, err := s.rooms.Pass(ctx, roomID, userID)
+		notifications, err := s.rooms.Pass(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_ExchangeThree:
-		notifications, err := s.rooms.ExchangeThree(ctx, roomID, userID, req.GetExchangeThree().GetTiles(), req.GetExchangeThree().GetDirection())
+		notifications, err := s.rooms.ExchangeThree(ctx, roomID, userID, req.GetExchangeThree().GetTiles(), req.GetExchangeThree().GetDirection(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_QueMen:
-		notifications, err := s.rooms.QueMen(ctx, roomID, userID, req.GetQueMen().GetSuit())
+		notifications, err := s.rooms.QueMen(ctx, roomID, userID, req.GetQueMen().GetSuit(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_Leave:
 		if err := s.rooms.Leave(ctx, roomID, userID); err != nil {
@@ -85,6 +85,32 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 	default:
 		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
 	}
+}
+
+// clusterPhaseTokToRoom 把集群层 PhaseToken 映射到 room.PhaseToken；nil 时透传 nil。
+// 集群与客户端两份枚举/消息按 ADR-0045 设计为 wire 同构镜像，这里只做值翻译。
+func clusterPhaseTokToRoom(tok *clusterv1.PhaseToken) *roomsvc.PhaseToken {
+	if tok == nil {
+		return nil
+	}
+	var reason roomsvc.WaitingReason
+	switch tok.GetReason() {
+	case clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
+		reason = roomsvc.ReasonExchangeThree
+	case clusterv1.WaitingReason_WAITING_REASON_QUE_MEN:
+		reason = roomsvc.ReasonQueMen
+	case clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
+		reason = roomsvc.ReasonClaimWindow
+	case clusterv1.WaitingReason_WAITING_REASON_TSUMO:
+		reason = roomsvc.ReasonTsumo
+	case clusterv1.WaitingReason_WAITING_REASON_DISCARD:
+		reason = roomsvc.ReasonDiscard
+	case clusterv1.WaitingReason_WAITING_REASON_SURRENDER:
+		reason = roomsvc.ReasonSurrender
+	default:
+		reason = roomsvc.ReasonNone
+	}
+	return &roomsvc.PhaseToken{Step: tok.GetStep(), Reason: reason}
 }
 
 func (s *roomGRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*clusterv1.ApplyEventResponse, error) {

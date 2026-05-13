@@ -343,19 +343,19 @@ func botAvailableForSeat(seat int32, view roomsvc.RoundView) []string {
 func (b *BotSupervisor) submit(ctx context.Context, roomID, userID string, action bot.Action) ([]roomsvc.Notification, error) {
 	switch action.Kind {
 	case bot.ActionExchangeThree:
-		return b.svc.ExchangeThree(ctx, roomID, userID, action.Tiles, action.Suit)
+		return b.svc.ExchangeThree(ctx, roomID, userID, action.Tiles, action.Suit, nil)
 	case bot.ActionQueMen:
-		return b.svc.QueMen(ctx, roomID, userID, action.Suit)
+		return b.svc.QueMen(ctx, roomID, userID, action.Suit, nil)
 	case bot.ActionDiscard:
-		return b.svc.Discard(ctx, roomID, userID, action.Tile)
+		return b.svc.Discard(ctx, roomID, userID, action.Tile, nil)
 	case bot.ActionPong:
-		return b.svc.Pong(ctx, roomID, userID)
+		return b.svc.Pong(ctx, roomID, userID, nil)
 	case bot.ActionGang:
-		return b.svc.Gang(ctx, roomID, userID, action.Tile)
+		return b.svc.Gang(ctx, roomID, userID, action.Tile, nil)
 	case bot.ActionHu:
-		return b.svc.Hu(ctx, roomID, userID)
+		return b.svc.Hu(ctx, roomID, userID, nil)
 	case bot.ActionPass:
-		return b.svc.Pass(ctx, roomID, userID)
+		return b.svc.Pass(ctx, roomID, userID, nil)
 	case bot.ActionReady:
 		return b.svc.Ready(ctx, roomID, userID)
 	default:
