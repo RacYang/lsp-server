@@ -1,0 +1,10 @@
+id: proto-message
+purpose: Protobuf 消息骨架
+applies_to_glob: "api/proto/**/*.proto"
+coverage_cell: build/api
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "syntax = \"proto3\";"
+related_rules: [proto-standards, proto-baseline]
+related_commands: [add-pb-message]

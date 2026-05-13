@@ -1,0 +1,17 @@
+---
+description: 被跟踪文件须满足体积、禁用名与二进制策略
+alwaysApply: true
+---
+
+# Git 仓库卫生
+
+- 被跟踪文件大小不得超过 `git.repo_hygiene.max_tracked_file_bytes`。
+- `git.repo_hygiene.forbidden_basenames` 不得出现在跟踪路径中。
+- `binary_blocked` 为真时，非白名单路径不得跟踪疑似二进制内容；白名单见 `allow_binary_globs` / `allow_large_file_globs`。
+- 工作树中 macOS Finder 副本路径的专项规则见 `git-workspace-hygiene.md`；两者复用同一 enforcer，但负例分开维护。
+
+---
+
+- **ADR**：`docs/adr/0007-git-workflow-policy.md`
+- **Enforcer**：`scripts/verify-repo-hygiene.py`
+- **负例**：`.build/negatives/git_repo_hygiene_dsstore.txt.neg`

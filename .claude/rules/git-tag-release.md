@@ -1,0 +1,16 @@
+---
+description: 推送的 release tag 须符合命名，特殊 tag 在白名单
+alwaysApply: true
+---
+
+# Git 标签
+
+- 仅校验本次 push 涉及的 `refs/tags/*`（见 `git.tags.check_pushed_tags_only`）。
+- 发布标签须匹配 `git.tags.release_pattern`（如 `v1.2.3`）。
+- `git.tags.allow_special` 中的名称（如 `proto-baseline`）可豁免 release 模式。
+
+---
+
+- **ADR**：`docs/adr/0007-git-workflow-policy.md`
+- **Enforcer**：`scripts/verify-git-tags.py`
+- **负例**：`.build/negatives/git_tag_bad_name.txt.neg`

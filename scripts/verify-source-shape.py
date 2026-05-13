@@ -56,8 +56,11 @@ def check_file_header(path: pathlib.Path) -> list[str]:
 
 def check_rule_shape(path: pathlib.Path) -> list[str]:
     text = read(path)
-    required = ("kind: constraint", "adr:", "enforcer:", "negative_test:")
-    return [f"{path}: missing {token}" for token in required if token not in text]
+    required = ("**ADR**", "**Enforcer**", "**负例**")
+    errors = [f"{path}: missing {token}" for token in required if token not in text]
+    if "description:" not in text:
+        errors.append(f"{path}: missing description in frontmatter")
+    return errors
 
 
 CHECKS = {
@@ -80,7 +83,7 @@ def candidate_files(check: str) -> list[pathlib.Path]:
     if check == "file-header":
         return sorted(ROOT.glob("scripts/*.sh")) + sorted(ROOT.glob("scripts/*.py"))
     if check == "rule-shape":
-        return sorted((ROOT / ".cursor" / "rules").glob("*.mdc"))
+        return sorted((ROOT / ".claude" / "rules").glob("*.md"))
     return [p for p in ROOT.glob("**/*.go") if "gen" not in p.parts and ".build" not in p.parts]
 
 

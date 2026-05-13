@@ -1,9 +1,0 @@
-id: template
-purpose: 新增模板目录骨架
-applies_to_glob: ".cursor/templates/**/manifest.yaml"
-coverage_cell: evolve/template
-verify:
-  - kind: presence
-    path: "{target}"
-related_rules: [template-shape]
-related_skills: [add-template]

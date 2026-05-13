@@ -1,0 +1,10 @@
+id: command
+purpose: 新增 Claude Code 命令骨架
+applies_to_glob: ".claude/commands/*.md"
+coverage_cell: evolve/command
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "## When to use[\\s\\S]+## Inputs[\\s\\S]+## Steps[\\s\\S]+## Verify"
+related_rules: [command-shape]
+related_commands: [add-command]

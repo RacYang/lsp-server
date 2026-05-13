@@ -68,3 +68,4 @@
 - [ADR-0043 根因优先的问题处理策略](0043-root-cause-fix-policy.md)：已采纳；定义查问题与修问题必须先解释根因、拒绝补丁式修复。
 - [ADR-0044 房间状态与前后端交互契约](0044-room-state-and-client-contract.md)：已采纳；统一 RoomLifecycle、RoundProgress、SeatRoster、RoundFacts 与 UXTransient 的命名、投影和传输边界。
 - [ADR-0045 房间 deadline 单一所有权与 PhaseUpdate/PhaseToken 契约](0045-phase-deadline-single-owner-and-phase-token.md)：已采纳；deadline 派生自 phaseStart+phaseReason，engine 经 enterPhase 写入，scheduler 退化为定时器对齐，协议层强制嵌入 PhaseUpdate 并以 PhaseToken 校验请求。
+- [ADR-0046 治理体系迁移至 .claude/ 唯一事实源](0046-unified-claude-code-governance.md)：已采纳；以 `.claude/` 为唯一 SSOT，统一路径、术语、格式与 harness，完成 Cursor→Claude Code 迁移闭环。

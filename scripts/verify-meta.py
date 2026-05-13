@@ -2,20 +2,20 @@
 from __future__ import annotations
 
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Iterable
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RULES_DIR = ROOT / ".cursor" / "rules"
+RULES_DIR = ROOT / ".claude" / "rules"
 CONFIG_FILE = ROOT / ".build" / "config.yaml"
 RULE_SCHEMA_FILE = ROOT / ".build" / "schema" / "rules.schema.json"
-AGENTS_FILE = ROOT / "AGENTS.md"
-SKILLS_DIR = ROOT / ".cursor" / "skills"
-TEMPLATES_DIR = ROOT / ".cursor" / "templates"
-ALLOWED_FIELDS = ("kind", "description", "alwaysApply", "globs", "adr", "enforcer", "negative_test")
+CLAUDE_FILE = ROOT / "CLAUDE.md"
+COMMANDS_DIR = ROOT / ".claude" / "commands"
+TEMPLATES_DIR = ROOT / ".claude" / "templates"
+ALLOWED_FIELDS = ("description", "alwaysApply", "globs")
 ENFORCER_CONFIGS = {".commitlintrc.json", ".go-arch-lint.yml", ".golangci.yml", "buf.yaml"}
 
 
@@ -47,14 +47,17 @@ def require_file(path_str: str, owner: pathlib.Path) -> None:
         raise ValueError(f"{owner}: referenced file does not exist: {path_str}")
 
 
-def require_order(order: Iterable[str], owner: pathlib.Path) -> None:
-    seen_positions = []
-    for key in order:
-        if key not in ALLOWED_FIELDS:
-            raise ValueError(f"{owner}: unsupported frontmatter field: {key}")
-        seen_positions.append(ALLOWED_FIELDS.index(key))
-    if seen_positions != sorted(seen_positions):
-        raise ValueError(f"{owner}: frontmatter fields must follow order: {', '.join(ALLOWED_FIELDS)}")
+def extract_body_ref(text: str, label: str) -> str | None:
+    """从规则正文的参考节中提取引用路径。
+
+    .claude/rules/*.md 格式：
+    - **ADR**：`docs/adr/0000-example.md`
+    - **Enforcer**：`scripts/verify-example.py`
+    - **负例**：`.build/negatives/example.go.neg`
+    """
+    pattern = rf"\*\*{re.escape(label)}\*\*[：:]\s*`([^`]+)`"
+    m = re.search(pattern, text)
+    return m.group(1) if m else None
 
 
 def validate_enforcer(enforcer: str, owner: pathlib.Path) -> None:
@@ -71,25 +74,31 @@ def validate_enforcer(enforcer: str, owner: pathlib.Path) -> None:
 
 
 def validate_rules() -> None:
-    for rule_file in sorted(RULES_DIR.glob("*.mdc")):
+    for rule_file in sorted(RULES_DIR.glob("*.md")):
         data, order = parse_frontmatter(rule_file)
-        require_order(order, rule_file)
-        kind = data.get("kind")
-        if kind != "constraint":
-            raise ValueError(f"{rule_file}: rules must be kind: constraint")
         if not data.get("description"):
             raise ValueError(f"{rule_file}: missing description")
         if "alwaysApply" in data and "globs" in data:
             raise ValueError(f"{rule_file}: alwaysApply and globs are mutually exclusive")
         if "alwaysApply" in data and data["alwaysApply"] != "true":
             raise ValueError(f"{rule_file}: alwaysApply must be true")
-        for key in ("adr", "enforcer", "negative_test"):
-            if not data.get(key):
-                raise ValueError(f"{rule_file}: missing {key}")
-        require_file(data["adr"], rule_file)
-        validate_enforcer(data["enforcer"], rule_file)
-        require_file(data["negative_test"], rule_file)
-        if not data["negative_test"].endswith(".neg"):
+
+        body = rule_file.read_text()
+        adr_ref = extract_body_ref(body, "ADR")
+        enforcer_ref = extract_body_ref(body, "Enforcer")
+        neg_ref = extract_body_ref(body, "负例")
+
+        if not adr_ref:
+            raise ValueError(f"{rule_file}: missing ADR reference in body")
+        if not enforcer_ref:
+            raise ValueError(f"{rule_file}: missing Enforcer reference in body")
+        if not neg_ref:
+            raise ValueError(f"{rule_file}: missing 负例 reference in body")
+
+        require_file(adr_ref, rule_file)
+        validate_enforcer(enforcer_ref, rule_file)
+        require_file(neg_ref, rule_file)
+        if not neg_ref.endswith(".neg"):
             raise ValueError(f"{rule_file}: negative_test must end with .neg")
 
 
@@ -111,25 +120,25 @@ def yq_value(expr: str) -> str:
     ).stdout.strip()
 
 
-def validate_agents_file() -> None:
-    text = AGENTS_FILE.read_text()
-    max_lines = int(yq_value(".governance.agents_md_max_lines"))
+def validate_entry_file() -> None:
+    text = CLAUDE_FILE.read_text()
+    max_lines = int(yq_value(".governance.entry_md_max_lines"))
     line_count = len(text.splitlines())
     if line_count > max_lines:
-        raise ValueError(f"{AGENTS_FILE}: line count {line_count} exceeds {max_lines}")
-    anchors = yq_value(".governance.agents_md_required_anchors[]").splitlines()
+        raise ValueError(f"{CLAUDE_FILE}: line count {line_count} exceeds {max_lines}")
+    anchors = yq_value(".governance.entry_md_required_anchors[]").splitlines()
     for anchor in anchors:
         if anchor not in text:
-            raise ValueError(f"{AGENTS_FILE}: missing required anchor {anchor}")
+            raise ValueError(f"{CLAUDE_FILE}: missing required anchor {anchor}")
 
 
 def validate_governance_counts() -> None:
-    rules_count = len(list(RULES_DIR.glob("*.mdc")))
-    skills_count = len(list(SKILLS_DIR.glob("*/SKILL.md")))
+    rules_count = len(list(RULES_DIR.glob("*.md")))
+    commands_count = len(list(COMMANDS_DIR.glob("*.md")))
     templates_count = len(list(TEMPLATES_DIR.glob("**/manifest.yaml"))) if TEMPLATES_DIR.exists() else 0
     limits = {
         "rules": (rules_count, int(yq_value(".governance.rules_max_count"))),
-        "skills": (skills_count, int(yq_value(".governance.skills_max_count"))),
+        "commands": (commands_count, int(yq_value(".governance.commands_max_count"))),
         "templates": (templates_count, int(yq_value(".governance.templates_max_count"))),
     }
     for name, (actual, limit) in limits.items():
@@ -148,7 +157,7 @@ def main() -> int:
     try:
         validate_config_exists()
         validate_rules()
-        validate_agents_file()
+        validate_entry_file()
         validate_governance_counts()
     except (ValueError, subprocess.CalledProcessError) as exc:
         print(str(exc), file=sys.stderr)

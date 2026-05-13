@@ -1,9 +1,0 @@
-id: go-service
-purpose: Service 层 Go 包骨架
-applies_to_glob: "internal/service/**"
-coverage_cell: build/service
-verify:
-  - kind: presence
-    path: "{target}/doc.go"
-related_rules: [architecture-boundaries, package-doc]
-related_skills: [scaffold-package]

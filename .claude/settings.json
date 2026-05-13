@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=\"${CLAUDE_TOOL_INPUT_FILE_PATH:-}\"; if [[ -n \"$FILE\" && -f \"$FILE\" ]]; then make fix-file FILE=\"$FILE\" || echo \"[claude-hook] make fix-file failed for $FILE\" >&2; fi"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(go *)",
+      "Bash(git *)",
+      "Bash(buf *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(ls *)",
+      "Bash(python3 *)",
+      "Bash(bash scripts/verify-*)"
+    ]
+  }
+}

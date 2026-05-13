@@ -12,7 +12,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG_FILE = ROOT / ".build" / "config.yaml"
-EXCLUDED_DIRS = {".git", ".cursor", "api/gen", ".build/negatives"}
+EXCLUDED_DIRS = {".git", ".claude", "api/gen", ".build/negatives"}
 FORBIDDEN_LEGACY_TOKENS = ("sichuan_" + "xzdd", "sichuan" + "xzdd")
 
 

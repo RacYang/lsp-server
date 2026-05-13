@@ -39,7 +39,10 @@ fix:
 	if [[ -n "$$files" ]]; then gofmt -w $$files; goimports -w $$files; fi
 
 fix-file:
-	@if [[ -n "$(FILE)" && -f "$(FILE)" && "$(FILE)" == *.go ]]; then gofmt -w "$(FILE)"; goimports -w "$(FILE)"; fi
+	@case "$(FILE)" in 
+	  *.go) gofmt -w "$(FILE)" && goimports -w "$(FILE)" ;; 
+	  *.proto) buf format -w "$(FILE)" ;; 
+	esac
 
 build-cli:
 	@mkdir -p dist

@@ -8,13 +8,13 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOC_PATHS = [
-    ROOT / "AGENTS.md",
+    ROOT / "CLAUDE.md",
     ROOT / "docs" / "agent-governance" / "coverage-matrix.md",
-    *sorted((ROOT / ".cursor" / "skills").glob("*/SKILL.md")),
-    *sorted((ROOT / ".cursor" / "rules").glob("*.mdc")),
+    *sorted((ROOT / ".claude" / "commands").glob("*.md")),
+    *sorted((ROOT / ".claude" / "rules").glob("*.md")),
 ]
 PATH_PATTERN = re.compile(
-    r"(?<![\w./-])(?P<path>(?:AGENTS\.md|Makefile|docs/[\w./-]+|\.cursor/[\w./-]+|\.build/[\w./-]+|scripts/[\w./-]+)(?:\.(?:md|mdc|yaml|yml|json|py|sh|tmpl|neg))?)"
+    r"(?<![\w./-])(?P<path>(?:CLAUDE\.md|Makefile|docs/[\w./-]+|\.claude/[\w./-]+|\.build/[\w./-]+|scripts/[\w./-]+)(?:\.(?:md|mdc|yaml|yml|json|py|sh|tmpl|neg))?)"
 )
 IGNORED_PREFIXES = ("https://", "http://")
 

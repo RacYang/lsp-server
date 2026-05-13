@@ -12,11 +12,11 @@ from typing import Any
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SKILLS_DIR = ROOT / ".cursor" / "skills"
-RULES_DIR = ROOT / ".cursor" / "rules"
-TEMPLATES_DIR = ROOT / ".cursor" / "templates"
+COMMANDS_DIR = ROOT / ".claude" / "commands"
+RULES_DIR = ROOT / ".claude" / "rules"
+TEMPLATES_DIR = ROOT / ".claude" / "templates"
 MANIFEST_SCHEMA = ROOT / ".build" / "schema" / "manifest.schema.json"
-SKILL_ANCHORS = ("## When to use", "## Inputs", "## Steps", "## Verify")
+COMMAND_ANCHORS = ("## When to use", "## Inputs", "## Steps", "## Verify")
 
 
 def load_yaml_json(path: pathlib.Path) -> Any:
@@ -51,33 +51,42 @@ def validate_manifest(manifest: pathlib.Path) -> list[str]:
     return errors
 
 
-def validate_skills() -> list[str]:
+def validate_commands() -> list[str]:
     errors: list[str] = []
-    for skill in sorted(SKILLS_DIR.glob("*/SKILL.md")):
-        text = skill.read_text()
-        for anchor in SKILL_ANCHORS:
+    for cmd in sorted(COMMANDS_DIR.glob("*.md")):
+        text = cmd.read_text()
+        for anchor in COMMAND_ANCHORS:
             if anchor not in text:
-                errors.append(f"{skill}: missing anchor {anchor}")
+                errors.append(f"{cmd}: missing anchor {anchor}")
         forbidden = (".build/negatives/", "negative_test:")
-        if skill.parent.name != "add-constraint" and any(token in text for token in forbidden):
-            errors.append(f"{skill}: skill must not repeat rule negative-test details")
+        if cmd.name != "add-constraint.md" and any(token in text for token in forbidden):
+            errors.append(f"{cmd}: command must not repeat rule negative-test details")
     return errors
 
 
-def validate_skill_file(skill: pathlib.Path) -> list[str]:
-    text = skill.read_text()
-    return [f"{skill}: missing anchor {anchor}" for anchor in SKILL_ANCHORS if anchor not in text]
+def validate_command_file(cmd: pathlib.Path) -> list[str]:
+    text = cmd.read_text()
+    return [f"{cmd}: missing anchor {anchor}" for anchor in COMMAND_ANCHORS if anchor not in text]
 
 
 def validate_rules() -> list[str]:
     errors: list[str] = []
-    for rule in sorted(RULES_DIR.glob("*.mdc")):
+    for rule in sorted(RULES_DIR.glob("*.md")):
         text = rule.read_text()
-        if "kind: constraint" not in text:
-            errors.append(f"{rule}: rules must be kind: constraint")
-        for token in ("adr:", "enforcer:", "negative_test:"):
-            if token not in text:
-                errors.append(f"{rule}: missing {token}")
+        if not text.startswith("---\n"):
+            errors.append(f"{rule}: missing frontmatter start")
+            continue
+        parts = text.split("\n---\n", 1)
+        if len(parts) != 2:
+            errors.append(f"{rule}: missing frontmatter end")
+            continue
+        frontmatter = parts[0]
+        body = parts[1] if len(parts) > 1 else ""
+        if "description:" not in frontmatter:
+            errors.append(f"{rule}: missing description in frontmatter")
+        for token in ("**ADR**", "**Enforcer**", "**负例**"):
+            if token not in body:
+                errors.append(f"{rule}: missing {token} reference")
     return errors
 
 
@@ -106,11 +115,11 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.skill_file:
-        errors = validate_skill_file(pathlib.Path(args.skill_file))
+        errors = validate_command_file(pathlib.Path(args.skill_file))
     elif args.manifest_file:
         errors = validate_manifest(pathlib.Path(args.manifest_file))
     else:
-        errors = validate_skills() + validate_rules() + validate_templates()
+        errors = validate_commands() + validate_rules() + validate_templates()
     if errors:
         for error in errors:
             print(error, file=sys.stderr)

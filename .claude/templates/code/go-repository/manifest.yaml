@@ -1,0 +1,9 @@
+id: go-repository
+purpose: 持久化访问包骨架
+applies_to_glob: "internal/store/**"
+coverage_cell: build/persistence
+verify:
+  - kind: presence
+    path: "{target}/doc.go"
+related_rules: [architecture-boundaries, package-doc]
+related_commands: [scaffold-package]

@@ -1,13 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CursorRuleFrontmatter",
+  "title": "ClaudeCodeRuleFrontmatter",
   "type": "object",
-  "required": ["kind", "description", "adr"],
+  "required": ["description"],
   "properties": {
-    "kind": {
-      "type": "string",
-      "const": "constraint"
-    },
     "description": {
       "type": "string",
       "minLength": 1
@@ -17,36 +13,13 @@
       "const": true
     },
     "globs": {
-      "type": "string",
-      "minLength": 1
-    },
-    "adr": {
-      "type": "string",
-      "pattern": "^docs/adr/[0-9]{4}-[a-z0-9-]+\\.md$"
-    },
-    "enforcer": {
-      "type": "string",
-      "minLength": 1
-    },
-    "negative_test": {
-      "type": "string",
-      "pattern": "^\\.build/negatives/.+\\.neg$"
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
     }
   },
   "additionalProperties": false,
-  "allOf": [
-    {
-      "if": {
-        "properties": { "kind": { "const": "constraint" } }
-      },
-      "then": {
-        "required": ["enforcer", "negative_test"]
-      }
-    },
-    {
-      "not": {
-        "required": ["alwaysApply", "globs"]
-      }
-    }
-  ]
+  "not": {
+    "required": ["alwaysApply", "globs"]
+  }
 }

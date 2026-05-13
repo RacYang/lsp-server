@@ -1,9 +1,0 @@
-id: go-actor
-purpose: Room actor 或 FSM 包骨架
-applies_to_glob: "internal/service/room/**"
-coverage_cell: build/actor
-verify:
-  - kind: presence
-    path: "{target}/doc.go"
-related_rules: [architecture-boundaries, package-doc]
-related_skills: [scaffold-package]

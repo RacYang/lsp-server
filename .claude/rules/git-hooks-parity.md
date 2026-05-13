@@ -1,0 +1,17 @@
+---
+description: pre-commit、pre-push 与 CI 的 make 目标须与 SSOT 一致
+alwaysApply: true
+---
+
+# Git hooks 与 CI 映射
+
+- `git.ci_parity.pre_commit_target`：当前为 `verify-pre-commit`（内含 `verify-git-local` 与 `verify-fast`）。
+- `git.ci_parity.pre_push_target`：当前为 `verify`，且 `pre-push` 须先执行 `verify-git-push`。
+- `git.ci_parity.ci_target`：当前为 `verify`。
+- GitHub Actions 的 `integration` 作业须显式执行 `RUN_INTEGRATION=1 make verify-test-integration-nodocker`，覆盖不依赖外部 Docker 容器的重连、幂等、限流与托管超时链路。
+
+---
+
+- **ADR**：`docs/adr/0007-git-workflow-policy.md`
+- **Enforcer**：`scripts/verify-hooks-parity.py`
+- **负例**：`.build/negatives/git_hooks_parity_missing.yml.neg`

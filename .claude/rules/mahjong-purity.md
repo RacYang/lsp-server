@@ -1,0 +1,16 @@
+---
+description: 麻将规则实现不得依赖会话、传输、存储或集群副作用
+globs: ["internal/mahjong/**/*.go"]
+---
+
+# 麻将规则纯净性
+
+- `internal/mahjong` 只承载确定性玩法、牌理、计分与规则能力。
+- 规则实现不得 import 会话、传输、存储、集群、app、bot 或命令入口。
+- 跨进程恢复只通过 `rule_id`、通用局面字段和规则运行态 JSON。
+
+---
+
+- **ADR**：`docs/adr/0040-composable-mahjong-rule-capabilities.md`
+- **Enforcer**：`.go-arch-lint.yml`
+- **负例**：`.build/negatives/mahjong_sideeffect_imports_session.go.neg`

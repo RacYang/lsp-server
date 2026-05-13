@@ -66,7 +66,7 @@ def collect_by_patterns(patterns: list[str], excludes: list[str]) -> list[Path]:
 
 
 def _glob_from_root(pattern: str) -> list[Path]:
-    """支持 docs/**/*.md、*.md、.cursor/rules/*.mdc 等形式。"""
+    """支持 docs/**/*.md、*.md、.claude/rules/*.md 等形式。"""
     if any(ch in pattern for ch in "*?["):
         return list(ROOT.glob(pattern))
     p = ROOT / pattern

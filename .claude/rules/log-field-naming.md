@@ -1,0 +1,14 @@
+---
+description: 日志结构化字段使用 snake_case 且长度受限
+globs: ["**/*.go"]
+---
+
+# 日志字段命名
+
+日志结构化字段须符合 SSOT `logging.field_naming`，跨服务核心字段须沿用 `logging.field_schema_core` 中的统一命名。
+
+---
+
+- **ADR**：`docs/adr/0006-logging-system-and-facade.md`
+- **Enforcer**：`scripts/verify-log-calls.py`
+- **负例**：`.build/negatives/lang_log_unknown_field_key.go.neg`

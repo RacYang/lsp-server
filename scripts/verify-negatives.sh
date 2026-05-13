@@ -2,17 +2,20 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RULES_DIR="${ROOT_DIR}/.cursor/rules"
+RULES_DIR="${ROOT_DIR}/.claude/rules"
 
 extract_field() {
   local file="$1"
   local field="$2"
-  awk '
-    BEGIN { in_fm = 0 }
-    NR == 1 && $0 == "---" { in_fm = 1; next }
-    in_fm && $0 == "---" { exit }
-    in_fm { print }
-  ' "${file}" | yq -r ".${field} // \"\"" -
+  # .claude/rules/*.md 格式：参考节中 - **Enforcer**：`value` 或 - **负例**：`value`
+  python3 -c "
+import sys, re
+text = open(sys.argv[1]).read()
+# 匹配正文中的 - **Field**：\`value\`
+m = re.search(rf'\*\*{sys.argv[2]}\*\*[：:]\s*\x60([^\x60]+)\x60', text)
+if m:
+    print(m.group(1))
+" "${file}" "${field}"
 }
 
 fail_unexpected_pass() {
@@ -308,12 +311,10 @@ run_room_phase_owner_negative() {
   cd "${ROOT_DIR}"
 }
 
-for rule in "${RULES_DIR}"/*.mdc; do
+for rule in "${RULES_DIR}"/*.md; do
   [[ -f "${rule}" ]] || continue
-  kind="$(extract_field "${rule}" "kind")"
-  [[ "${kind}" == "constraint" ]] || continue
-  enforcer="$(extract_field "${rule}" "enforcer")"
-  negative_rel="$(extract_field "${rule}" "negative_test")"
+  enforcer="$(extract_field "${rule}" "Enforcer")"
+  negative_rel="$(extract_field "${rule}" "负例")"
   negative_file="${ROOT_DIR}/${negative_rel}"
 
   if [[ ! -f "${negative_file}" ]]; then
