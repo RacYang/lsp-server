@@ -115,11 +115,15 @@ func actionCountdown(view RoomView, now time.Time) (int, bool) {
 		return 0, false
 	}
 	if view.DeadlineUnixMS > 0 {
-		left := time.Until(time.UnixMilli(view.DeadlineUnixMS))
-		if left < 0 {
-			left = 0
+		// 倒计时按服务端时间计算（详见 ADR-0045）：
+		// 客户端可能笔记本休眠、跨时区、容器与宿主时钟偏移，本地 time.Now 不可信；
+		// PhaseUpdate.server_now_unix_ms 维护的 ServerClockOffsetMS 是唯一权威修正。
+		serverNowMS := now.UnixMilli() + view.ServerClockOffsetMS
+		leftMS := view.DeadlineUnixMS - serverNowMS
+		if leftMS < 0 {
+			leftMS = 0
 		}
-		return int(math.Ceil(left.Seconds())), true
+		return int(math.Ceil(float64(leftMS) / 1000.0)), true
 	}
 	if view.ActionStartedAt.IsZero() {
 		return 0, false

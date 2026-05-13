@@ -262,6 +262,13 @@ run_source_shape_negative() {
   fi
 }
 
+run_claude_command_shape_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-claude-shape.py" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
 run_skill_shape_negative() {
   local negative_file="$1"
   if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --skill-file "${negative_file}" >/dev/null 2>&1; then
@@ -284,6 +291,21 @@ run_nolint_policy_negatives() {
       fail_unexpected_pass "${negative_file}"
     fi
   done
+}
+
+run_room_phase_owner_negative() {
+  local negative_file="$1"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' RETURN
+  mkdir -p "${tmp_dir}/internal/service/room"
+  cp "${negative_file}" "${tmp_dir}/internal/service/room/sample.go"
+  cd "${tmp_dir}"
+  if python3 "${ROOT_DIR}/scripts/verify-room-phase-owner.py" >/dev/null 2>&1; then
+    cd "${ROOT_DIR}"
+    fail_unexpected_pass "${negative_file}"
+  fi
+  cd "${ROOT_DIR}"
 }
 
 for rule in "${RULES_DIR}"/*.mdc; do
@@ -389,6 +411,12 @@ for rule in "${RULES_DIR}"/*.mdc; do
       ;;
     *nolint_policy*.go.neg)
       run_nolint_policy_negatives
+      ;;
+    *room_phase_owner*.go.neg)
+      run_room_phase_owner_negative "${negative_file}"
+      ;;
+    *claude_command_missing_desc*.md.neg)
+      run_claude_command_shape_negative "${negative_file}"
       ;;
     *.go.neg)
       run_golangci_negative "${negative_file}" "${enforcer}"

@@ -1,0 +1,8 @@
+// 负例：直接对 rs.phaseReason 赋值，未经 rs.enterPhase 入口；
+// 违反 ADR-0045，应由 verify-room-phase-owner 拦截。
+package room
+
+func badDirectPhaseAssignment(rs *RoundState) {
+	rs.phaseReason = ReasonDiscard
+	rs.phaseStartUnixMs = 0
+}

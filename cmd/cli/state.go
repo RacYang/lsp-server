@@ -48,11 +48,16 @@ type RoomView struct {
 	AppliedDiscardTile string
 	ActionStartedAt    time.Time
 	DeadlineUnixMS     int64
-	WallRemaining      int32
-	RoundIndex         int32
-	HandIndex          int32
-	TotalScores        []*clientv1.SeatScore
-	LastAction         *clientv1.LastActionInfo
+	// PhaseReason 是服务端 ADR-0045 PhaseUpdate.reason 的客户端镜像，供 UI 与 PhaseToken 取值。
+	PhaseReason clientv1.WaitingReason
+	// ServerClockOffsetMS 是 PhaseUpdate.server_now_unix_ms - 客户端 wall clock 的指数滑动平均值，
+	// 用于倒计时按服务端时间计算（详见 ADR-0045）。零值表示尚未估计偏移。
+	ServerClockOffsetMS int64
+	WallRemaining       int32
+	RoundIndex          int32
+	HandIndex           int32
+	TotalScores         []*clientv1.SeatScore
+	LastAction          *clientv1.LastActionInfo
 
 	DealerSeat          int32
 	ActingSeat          int32
@@ -118,6 +123,24 @@ func NewAppState(name string) *AppState {
 	}
 	st.addLogLocked("客户端已启动")
 	return st
+}
+
+// PhaseToken 返回供 TableGateway 注入到每个请求的 (step, reason) 令牌；
+// 服务端 actor 入口据此判断请求是否针对仍然有效的阶段（详见 ADR-0045）。
+func (s *AppState) PhaseToken() *clientv1.PhaseToken {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.view.PhaseReason == clientv1.WaitingReason_WAITING_REASON_UNSPECIFIED &&
+		s.view.LastStep == 0 {
+		return nil
+	}
+	return &clientv1.PhaseToken{
+		Step:   s.view.LastStep,
+		Reason: s.view.PhaseReason,
+	}
 }
 
 func (s *AppState) Snapshot() RoomView {

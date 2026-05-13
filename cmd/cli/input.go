@@ -51,11 +51,11 @@ func (h *CommandHandler) Handle(ctx context.Context, line string) bool {
 	case "d", "discard":
 		err = h.discard(ctx, fields)
 	case "p", "pong":
-		err = h.client.Send(ctx, msgid.PongReq, &clientv1.Envelope{ReqId: newReqID("pong"), IdempotencyKey: newReqID("idem-pong"), Body: &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{}}})
+		err = h.client.Send(ctx, msgid.PongReq, &clientv1.Envelope{ReqId: newReqID("pong"), IdempotencyKey: newReqID("idem-pong"), Body: &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{PhaseToken: h.state.PhaseToken()}}})
 	case "g", "gang":
 		err = h.gang(ctx, fields)
 	case "h", "hu":
-		err = h.client.Send(ctx, msgid.HuReq, &clientv1.Envelope{ReqId: newReqID("hu"), IdempotencyKey: newReqID("idem-hu"), Body: &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{}}})
+		err = h.client.Send(ctx, msgid.HuReq, &clientv1.Envelope{ReqId: newReqID("hu"), IdempotencyKey: newReqID("idem-hu"), Body: &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{PhaseToken: h.state.PhaseToken()}}})
 	case "ex":
 		err = h.exchange(ctx, fields)
 	case "que":
@@ -143,7 +143,7 @@ func (h *CommandHandler) discard(ctx context.Context, fields []string) error {
 	return h.client.Send(ctx, msgid.DiscardReq, &clientv1.Envelope{
 		ReqId:          newReqID("discard"),
 		IdempotencyKey: newReqID("idem-discard"),
-		Body:           &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: tile}},
+		Body:           &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: tile, PhaseToken: h.state.PhaseToken()}},
 	})
 }
 
@@ -156,7 +156,7 @@ func (h *CommandHandler) gang(ctx context.Context, fields []string) error {
 	return h.client.Send(ctx, msgid.GangReq, &clientv1.Envelope{
 		ReqId:          newReqID("gang"),
 		IdempotencyKey: newReqID("idem-gang"),
-		Body:           &clientv1.Envelope_GangReq{GangReq: &clientv1.GangRequest{Tile: tile}},
+		Body:           &clientv1.Envelope_GangReq{GangReq: &clientv1.GangRequest{Tile: tile, PhaseToken: h.state.PhaseToken()}},
 	})
 }
 
@@ -188,7 +188,7 @@ func (h *CommandHandler) exchange(ctx context.Context, fields []string) error {
 	return h.client.Send(ctx, msgid.ExchangeThreeReq, &clientv1.Envelope{
 		ReqId:          newReqID("exchange"),
 		IdempotencyKey: newReqID("idem-exchange"),
-		Body:           &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles, Direction: direction}},
+		Body:           &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles, Direction: direction, PhaseToken: h.state.PhaseToken()}},
 	})
 }
 
@@ -203,7 +203,7 @@ func (h *CommandHandler) que(ctx context.Context, fields []string) error {
 	return h.client.Send(ctx, msgid.QueMenReq, &clientv1.Envelope{
 		ReqId:          newReqID("que"),
 		IdempotencyKey: newReqID("idem-que"),
-		Body:           &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: suit}},
+		Body:           &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: suit, PhaseToken: h.state.PhaseToken()}},
 	})
 }
 

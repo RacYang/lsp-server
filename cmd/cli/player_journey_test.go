@@ -63,7 +63,7 @@ func TestPlayerJourneyAgainstRealBackend(t *testing.T) {
 	require.NoError(t, waitForSession(ctx, state, 5*time.Second))
 
 	lobbyGW := NewWSLobbyGateway(client, bus, state)
-	tableGW := NewWSTableGateway(client, bus)
+	tableGW := NewWSTableGateway(client, bus, state.PhaseToken)
 	router := NewSceneRouter(state, lobbyGW, tableGW, cfg)
 
 	framePath := filepath.Join(t.TempDir(), "frames.jsonl")

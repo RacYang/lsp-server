@@ -11,14 +11,24 @@ import (
 
 // wsTableGateway 是 TableGateway 的生产实现，复用 EventBus 等待响应。
 type wsTableGateway struct {
-	client *WSClient
-	bus    *EventBus
-	rpc    *RPCCaller
+	client   *WSClient
+	bus      *EventBus
+	rpc      *RPCCaller
+	phaseTok func() *clientv1.PhaseToken
 }
 
 // NewWSTableGateway 用 WSClient + EventBus 构造 TableGateway。
-func NewWSTableGateway(client *WSClient, bus *EventBus) TableGateway {
-	return &wsTableGateway{client: client, bus: bus, rpc: NewRPCCaller(client, bus)}
+// phaseTok 回调返回当前客户端认知的 (step, reason)，调用方通常注入 AppState.PhaseToken。
+// 为空时回退到 nil token，向后兼容老服务端（无 PHASE_DRIFTED 检查）。
+func NewWSTableGateway(client *WSClient, bus *EventBus, phaseTok func() *clientv1.PhaseToken) TableGateway {
+	return &wsTableGateway{client: client, bus: bus, rpc: NewRPCCaller(client, bus), phaseTok: phaseTok}
+}
+
+func (g *wsTableGateway) currentPhaseToken() *clientv1.PhaseToken {
+	if g == nil || g.phaseTok == nil {
+		return nil
+	}
+	return g.phaseTok()
 }
 
 // Ready 把准备请求发给服务端,然后阻塞等待 ReadyResp。错误码非空时返回错误。
@@ -44,7 +54,7 @@ func (g *wsTableGateway) Discard(ctx context.Context, tile string) error {
 	env, err := g.rpc.Call(ctx, msgid.DiscardReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-discard"),
-		Body:           &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: tile}},
+		Body:           &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: tile, PhaseToken: g.currentPhaseToken()}},
 	}, func(e *clientv1.Envelope) bool { return e.GetDiscardResp() != nil })
 	if err != nil {
 		return err
@@ -64,7 +74,7 @@ func (g *wsTableGateway) ExchangeThree(ctx context.Context, tiles []string, dire
 	env, err := g.rpc.Call(ctx, msgid.ExchangeThreeReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-exchange"),
-		Body:           &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles, Direction: direction}},
+		Body:           &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles, Direction: direction, PhaseToken: g.currentPhaseToken()}},
 	}, func(e *clientv1.Envelope) bool { return e.GetExchangeThreeResp() != nil })
 	if err != nil {
 		return err
@@ -80,7 +90,7 @@ func (g *wsTableGateway) QueMen(ctx context.Context, suit int32) error {
 	env, err := g.rpc.Call(ctx, msgid.QueMenReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-que"),
-		Body:           &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: suit}},
+		Body:           &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: suit, PhaseToken: g.currentPhaseToken()}},
 	}, func(e *clientv1.Envelope) bool { return e.GetQueMenResp() != nil })
 	if err != nil {
 		return err
@@ -96,7 +106,7 @@ func (g *wsTableGateway) Pong(ctx context.Context) error {
 	env, err := g.rpc.Call(ctx, msgid.PongReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-pong"),
-		Body:           &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{}},
+		Body:           &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{PhaseToken: g.currentPhaseToken()}},
 	}, func(e *clientv1.Envelope) bool { return e.GetPongResp() != nil })
 	if err != nil {
 		return err
@@ -112,7 +122,7 @@ func (g *wsTableGateway) Gang(ctx context.Context, tile string) error {
 	env, err := g.rpc.Call(ctx, msgid.GangReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-gang"),
-		Body:           &clientv1.Envelope_GangReq{GangReq: &clientv1.GangRequest{Tile: tile}},
+		Body:           &clientv1.Envelope_GangReq{GangReq: &clientv1.GangRequest{Tile: tile, PhaseToken: g.currentPhaseToken()}},
 	}, func(e *clientv1.Envelope) bool { return e.GetGangResp() != nil })
 	if err != nil {
 		return err
@@ -128,7 +138,7 @@ func (g *wsTableGateway) Hu(ctx context.Context) error {
 	env, err := g.rpc.Call(ctx, msgid.HuReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-hu"),
-		Body:           &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{}},
+		Body:           &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{PhaseToken: g.currentPhaseToken()}},
 	}, func(e *clientv1.Envelope) bool { return e.GetHuResp() != nil })
 	if err != nil {
 		return err
@@ -144,7 +154,7 @@ func (g *wsTableGateway) Pass(ctx context.Context) error {
 	env, err := g.rpc.Call(ctx, msgid.PassReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-pass"),
-		Body:           &clientv1.Envelope_PassReq{PassReq: &clientv1.PassRequest{}},
+		Body:           &clientv1.Envelope_PassReq{PassReq: &clientv1.PassRequest{PhaseToken: g.currentPhaseToken()}},
 	}, func(e *clientv1.Envelope) bool { return e.GetPassResp() != nil })
 	if err != nil {
 		return err

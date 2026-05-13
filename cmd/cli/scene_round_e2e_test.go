@@ -47,7 +47,7 @@ func TestSceneRouterPlaysOneRoundWithBots(t *testing.T) {
 	require.NoError(t, waitForSession(ctx, state, 5*time.Second))
 
 	lobbyGW := NewWSLobbyGateway(client, bus, state)
-	tableGW := NewWSTableGateway(client, bus)
+	tableGW := NewWSTableGateway(client, bus, state.PhaseToken)
 	router := NewSceneRouter(state, lobbyGW, tableGW, cfg)
 	screen := tcell.NewSimulationScreen("UTF-8")
 	require.NoError(t, screen.Init())

@@ -28,6 +28,9 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		appendLog(v, "已忽略快照之前的陈旧局内事件")
 		return
 	}
+	if pu := extractPhaseUpdate(env); pu != nil {
+		applyPhaseUpdate(v, pu)
+	}
 	switch body := env.GetBody().(type) {
 	case *clientv1.Envelope_LoginResp:
 		applyLogin(v, body.LoginResp)
@@ -274,7 +277,11 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	v.ActingSeat = seat
 	v.PendingTile = t
 	v.WallRemaining = draw.GetWallRemaining()
-	v.DeadlineUnixMS = draw.GetDeadlineUnixMs()
+	if pu := draw.GetPhaseUpdate(); pu != nil {
+		applyPhaseUpdate(v, pu)
+	} else {
+		v.DeadlineUnixMS = draw.GetDeadlineUnixMs()
+	}
 	applyRoundProgressFromPhase(v, draw.GetPhase(), draw.GetStep(), draw.GetActingSeats())
 	if draw.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
 		applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, draw.GetStep(), []int32{seat}, "discard", []string{"discard"})
@@ -307,7 +314,11 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 	seat := action.GetSeatIndex()
 	v.RoomState = "playing"
 	v.WallRemaining = action.GetWallRemaining()
-	v.DeadlineUnixMS = action.GetDeadlineUnixMs()
+	if pu := action.GetPhaseUpdate(); pu != nil {
+		applyPhaseUpdate(v, pu)
+	} else {
+		v.DeadlineUnixMS = action.GetDeadlineUnixMs()
+	}
 	if detail := action.GetDetail(); detail != nil {
 		v.LastAction = &clientv1.LastActionInfo{
 			Step:        detail.GetStep(),
@@ -511,6 +522,74 @@ func setWaitingAction(v *RoomView, action string, available []string) {
 	v.AvailableActions = append([]string(nil), available...)
 }
 
+// extractPhaseUpdate 抽取任意 envelope body 携带的 PhaseUpdate（若有）。
+// 这是 ADR-0045 客户端 reducer 单一入口的前置：进 reducer 第一步即调用 applyPhaseUpdate。
+func extractPhaseUpdate(env *clientv1.Envelope) *clientv1.PhaseUpdate {
+	if env == nil {
+		return nil
+	}
+	switch body := env.GetBody().(type) {
+	case *clientv1.Envelope_StartGame:
+		return body.StartGame.GetPhaseUpdate()
+	case *clientv1.Envelope_DrawTile:
+		return body.DrawTile.GetPhaseUpdate()
+	case *clientv1.Envelope_Action:
+		return body.Action.GetPhaseUpdate()
+	case *clientv1.Envelope_ExchangeThreeDone:
+		return body.ExchangeThreeDone.GetPhaseUpdate()
+	case *clientv1.Envelope_QueMenDone:
+		return body.QueMenDone.GetPhaseUpdate()
+	case *clientv1.Envelope_Settlement:
+		return body.Settlement.GetPhaseUpdate()
+	case *clientv1.Envelope_Snapshot:
+		return body.Snapshot.GetPhaseUpdate()
+	case *clientv1.Envelope_DiscardResp:
+		return body.DiscardResp.GetPhaseUpdate()
+	case *clientv1.Envelope_ExchangeThreeResp:
+		return body.ExchangeThreeResp.GetPhaseUpdate()
+	case *clientv1.Envelope_QueMenResp:
+		return body.QueMenResp.GetPhaseUpdate()
+	case *clientv1.Envelope_PongResp:
+		return body.PongResp.GetPhaseUpdate()
+	case *clientv1.Envelope_GangResp:
+		return body.GangResp.GetPhaseUpdate()
+	case *clientv1.Envelope_HuResp:
+		return body.HuResp.GetPhaseUpdate()
+	case *clientv1.Envelope_PassResp:
+		return body.PassResp.GetPhaseUpdate()
+	case *clientv1.Envelope_ReadyResp:
+		return body.ReadyResp.GetPhaseUpdate()
+	}
+	return nil
+}
+
+// applyPhaseUpdate 落地 ADR-0045：所有 *Notify / *Response 携带的 PhaseUpdate 进 reducer 第一步即调它，
+// 客户端 DeadlineUnixMS 仅由该函数写入，并按 server_now_unix_ms 估计时钟偏移用于倒计时。
+func applyPhaseUpdate(v *RoomView, pu *clientv1.PhaseUpdate) {
+	if v == nil || pu == nil {
+		return
+	}
+	v.DeadlineUnixMS = pu.GetDeadlineUnixMs()
+	v.PhaseReason = pu.GetReason()
+	if serverNow := pu.GetServerNowUnixMs(); serverNow > 0 {
+		clientNow := time.Now().UnixMilli()
+		offset := serverNow - clientNow
+		// 首次直接采纳；之后用 α=0.2 的指数滑动平均，避免抖动。
+		if v.ServerClockOffsetMS == 0 {
+			v.ServerClockOffsetMS = offset
+		} else {
+			v.ServerClockOffsetMS = (v.ServerClockOffsetMS*4 + offset) / 5
+		}
+	}
+}
+
+// ServerNowUnixMS 返回客户端估计的服务端"现在"时间戳（毫秒）。
+// UI 倒计时应使用 (DeadlineUnixMS - ServerNowUnixMS) 而非 DeadlineUnixMS - time.Now()，
+// 以抵抗本机时钟漂移、笔记本休眠、容器与宿主时钟偏移。
+func (v *RoomView) ServerNowUnixMS() int64 {
+	return time.Now().UnixMilli() + v.ServerClockOffsetMS
+}
+
 func applyRoundProgressFromPhase(v *RoomView, phase clientv1.Phase, step int64, actingSeats []int32) {
 	if phase == clientv1.Phase_PHASE_UNSPECIFIED {
 		if step > v.LastStep {
@@ -610,7 +689,11 @@ func applySnapshot(v *RoomView, snap *clientv1.SnapshotNotify) {
 	v.PendingTile = snap.GetPendingTile()
 	v.LastAction = snap.GetLastAction()
 	v.WallRemaining = snap.GetWallRemaining()
-	v.DeadlineUnixMS = snap.GetDeadlineUnixMs()
+	if pu := snap.GetPhaseUpdate(); pu != nil {
+		applyPhaseUpdate(v, pu)
+	} else {
+		v.DeadlineUnixMS = snap.GetDeadlineUnixMs()
+	}
 	v.RoundIndex = snap.GetRoundIndex()
 	v.HandIndex = snap.GetHandIndex()
 	v.TotalScores = cloneSeatScores(snap.GetTotalScores())

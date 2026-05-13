@@ -126,7 +126,7 @@ func run() int {
 	prompter := NewIOPrompter(os.Stdin, os.Stdout)
 	switcher := NewTerminalSwitch()
 	lobbyGW := NewWSLobbyGateway(client, bus, state)
-	tableGW := NewWSTableGateway(client, bus)
+	tableGW := NewWSTableGateway(client, bus, state.PhaseToken)
 
 	_ = prompter // 旧行式 lobby 已被全屏 SceneRouter 替代，保留构造避免配置读写路径漂移。
 	if err := RunSceneApp(ctx, switcher, state, lobbyGW, tableGW, &cfg); err != nil {

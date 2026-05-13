@@ -260,7 +260,10 @@ verify-lang:
 verify-nolint-policy:
 	@python3 scripts/verify-nolint-policy.py
 
-verify-domain: verify-redis-keys verify-metrics-naming verify-gate-session-routing verify-mahjong-rule-ids
+verify-domain: verify-redis-keys verify-metrics-naming verify-gate-session-routing verify-mahjong-rule-ids verify-room-phase-owner
+
+verify-room-phase-owner:
+	@python3 scripts/verify-room-phase-owner.py
 
 verify-redis-keys:
 	@python3 scripts/verify-redis-keys.py
