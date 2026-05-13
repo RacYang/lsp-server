@@ -203,6 +203,7 @@ verify-secrets:
 	@gitleaks detect --no-banner --no-git --source . --redact
 
 verify-meta: verify-observability verify-postgres-migrations
+	@python3 scripts/verify-ssot-coverage.py
 	@markdownlint-cli2 "docs/**/*.md" "*.md"
 	@shellcheck scripts/*.sh .build/derive.sh .githooks/*
 	@python3 -m yamllint -c .yamllint.yml .build buf.yaml .github/workflows
