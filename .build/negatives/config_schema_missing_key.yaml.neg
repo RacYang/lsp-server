@@ -1,0 +1,5 @@
+# 故意缺少 governance 节以触发 schema 校验失败
+stage: alpha
+paths:
+  generated_marker: gen
+  negatives: .build/negatives

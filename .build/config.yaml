@@ -389,7 +389,7 @@ release:
 
 governance:
   entry_md_max_lines: 80
-  rules_max_count: 45
+  rules_max_count: 55
   commands_max_count: 28
   templates_max_count: 25
   entry_md_required_anchors:

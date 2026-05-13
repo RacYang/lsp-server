@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 
+import argparse
+
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "internal" / "store" / "postgres" / "migrations"
 NAME = re.compile(r"^\d{3}_[a-z0-9_]+\.sql$")
@@ -24,10 +26,15 @@ def strip_comments(sql: str) -> str:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dir", type=Path, help="负例模式：校验指定的迁移目录")
+    args = ap.parse_args()
+
+    mig_dir = args.dir if args.dir else MIGRATIONS
     errors: list[str] = []
-    files = sorted(MIGRATIONS.glob("*.sql"))
+    files = sorted(mig_dir.glob("*.sql"))
     if not files:
-        errors.append("internal/store/postgres/migrations: 缺少 PostgreSQL 迁移文件")
+        errors.append(f"{mig_dir}: 缺少 PostgreSQL 迁移文件")
     expected = 1
     for path in files:
         rel = path.relative_to(ROOT).as_posix()

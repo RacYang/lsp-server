@@ -40,6 +40,16 @@
 | 指标 | `/add-metric` | `.claude/templates/doc/runbook/manifest.yaml` | `.claude/rules/metrics-naming.md` | `docs/adr/0019-observability-metrics.md` |
 | Proto | `/add-pb-message` | `.claude/templates/code/proto-message/manifest.yaml` | `.claude/rules/proto-baseline.md` | `docs/adr/0012-proto-baseline-and-versioning.md` |
 | Git | `/update-ssot` | `.claude/templates/doc/runbook/manifest.yaml` | `.claude/rules/git-hooks-parity.md` | `docs/adr/0007-git-workflow-policy.md` |
+| Git 合并 | — | — | `.claude/rules/git-merge-policy.md` | `docs/adr/0007-git-workflow-policy.md` |
+| Git 强推 | — | — | `.claude/rules/git-force-push-policy.md` | `docs/adr/0007-git-workflow-policy.md` |
+| 提交签名 | — | — | `.claude/rules/git-commit-signing.md` | `docs/adr/0007-git-workflow-policy.md` |
+| 阶段门控 | — | — | `.claude/rules/stage-gates.md` | `docs/adr/0000-engineering-charter.md` |
+| 工具版本 | — | — | `.claude/rules/tool-versions.md` | `docs/adr/0000-engineering-charter.md` |
+| 数据库迁移 | — | — | `.claude/rules/db-migration-policy.md` | `docs/adr/0000-engineering-charter.md` |
+| 可观测规则 | — | — | `.claude/rules/observability-rules.md` | `docs/adr/0019-observability-metrics.md` |
+| 治理元约束 | — | — | `.claude/rules/governance-meta.md` | `docs/adr/0042-agent-governance.md` |
+| 配置完整性 | — | — | `.claude/rules/config-integrity.md` | `docs/adr/0000-engineering-charter.md` |
+| 文档链接 | — | — | `.claude/rules/doc-link-integrity.md` | `docs/adr/0042-agent-governance.md` |
 
 ## 覆盖规则
 

@@ -1,0 +1,2 @@
+-- 迁移文件名不含数字前缀，应失败
+CREATE TABLE IF NOT EXISTS bad_migration (id SERIAL PRIMARY KEY);

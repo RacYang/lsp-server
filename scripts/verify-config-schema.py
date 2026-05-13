@@ -10,6 +10,8 @@ import sys
 from typing import Any
 
 
+import argparse
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG_FILE = ROOT / ".build" / "config.yaml"
 CONFIG_SCHEMA_FILE = ROOT / ".build" / "schema" / "config.schema.json"
@@ -94,8 +96,12 @@ def validate(instance: Any, schema: dict[str, Any], path: str = "$") -> None:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--file", type=pathlib.Path, help="负例模式：校验指定的 YAML 文件")
+    args = ap.parse_args()
+
     try:
-        config = load_yaml_json(CONFIG_FILE)
+        config = load_yaml_json(args.file if args.file else CONFIG_FILE)
         schema = json.loads(CONFIG_SCHEMA_FILE.read_text())
         validate(config, schema)
     except (ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:

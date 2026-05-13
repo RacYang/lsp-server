@@ -267,7 +267,43 @@ run_source_shape_negative() {
 
 run_claude_command_shape_negative() {
   local negative_file="$1"
-  if python3 "${ROOT_DIR}/scripts/verify-claude-shape.py" --file "${negative_file}" >/dev/null 2>&1; then
+  if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --skill-file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
+run_config_schema_negative() {
+  local negative_file="$1"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' RETURN
+  mkdir -p "${tmp_dir}/.build/schema"
+  cp "${ROOT_DIR}/.build/schema/config.schema.json" "${tmp_dir}/.build/schema/config.schema.json"
+  cp "${negative_file}" "${tmp_dir}/.build/config.yaml"
+  if (cd "${tmp_dir}" && python3 "${ROOT_DIR}/scripts/verify-config-schema.py" --file "${tmp_dir}/.build/config.yaml") >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
+run_doc_link_negative() {
+  local negative_file="$1"
+  if python3 "${ROOT_DIR}/scripts/verify-doc-links.py" --file "${negative_file}" >/dev/null 2>&1; then
+    fail_unexpected_pass "${negative_file}"
+  fi
+}
+
+run_db_migration_negative() {
+  local negative_file="$1"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' RETURN
+  mkdir -p "${tmp_dir}/migrations"
+  cp "${negative_file}" "${tmp_dir}/migrations/bad_migration.sql"
+  # 需要提供一个会触发命名错误的文件名，直接复制到以原始名命名的文件
+  local base_name
+  base_name="$(basename "${negative_file}" .neg)"
+  cp "${negative_file}" "${tmp_dir}/migrations/${base_name}"
+  if python3 "${ROOT_DIR}/scripts/verify-postgres-migrations.py" --dir "${tmp_dir}/migrations" >/dev/null 2>&1; then
     fail_unexpected_pass "${negative_file}"
   fi
 }
@@ -415,6 +451,15 @@ for rule in "${RULES_DIR}"/*.md; do
       ;;
     *room_phase_owner*.go.neg)
       run_room_phase_owner_negative "${negative_file}"
+      ;;
+    *config_schema*.yaml.neg)
+      run_config_schema_negative "${negative_file}"
+      ;;
+    *doc_link*.md.neg)
+      run_doc_link_negative "${negative_file}"
+      ;;
+    *db_migration*.sql.neg)
+      run_db_migration_negative "${negative_file}"
       ;;
     *claude_command_missing_desc*.md.neg)
       run_claude_command_shape_negative "${negative_file}"

@@ -29,8 +29,14 @@ def referenced_paths(text: str) -> set[str]:
 
 
 def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--file", type=pathlib.Path, help="负例模式：校验指定的 Markdown 文件")
+    args = ap.parse_args()
+
     errors: list[str] = []
-    for owner in DOC_PATHS:
+    sources = [args.file] if args.file else DOC_PATHS
+    for owner in sources:
         if not owner.exists():
             continue
         for rel_path in sorted(referenced_paths(owner.read_text())):

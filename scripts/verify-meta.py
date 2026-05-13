@@ -16,7 +16,7 @@ CLAUDE_FILE = ROOT / "CLAUDE.md"
 COMMANDS_DIR = ROOT / ".claude" / "commands"
 TEMPLATES_DIR = ROOT / ".claude" / "templates"
 ALLOWED_FIELDS = ("description", "alwaysApply", "globs")
-ENFORCER_CONFIGS = {".commitlintrc.json", ".go-arch-lint.yml", ".golangci.yml", "buf.yaml"}
+ENFORCER_CONFIGS = {".commitlintrc.json", ".go-arch-lint.yml", ".golangci.yml", "buf.yaml", "Makefile"}
 
 
 def parse_frontmatter(path: pathlib.Path) -> tuple[dict[str, str], list[str]]:
