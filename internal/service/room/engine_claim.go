@@ -45,12 +45,11 @@ func (e *Engine) ApplyPongByPlayer(_ context.Context, rs *RoundState, seat Seat)
 	rs.removeLastDiscard(claimedFromSeat, claimedTile)
 	rs.recordMeld(seat, "pong:"+claimedTile.String())
 	rs.turn = seat
-	rs.waitingDiscard = true
-	rs.waitingTsumo = false
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
 	rs.lastDiscard = 0
 	rs.lastDiscardSeat = SeatInvalid
+	rs.enterPhase(ReasonDiscard)
 	seatIndex := seat.Proto()
 	detail := rs.actionDetail(seat, "pong", claimedTile, seat, claimedFromSeat)
 	rs.rememberLastAction(detail)
@@ -141,7 +140,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 		rs.qiangGangWindow = true
 		rs.claimCandidates = rs.buildClaimCandidates()
 		if len(rs.claimCandidates) > 0 {
-			rs.claimWindowOpen = true
+			rs.enterPhase(ReasonClaimWindow)
 			return rs.claimPromptNotifications(gangTile)
 		}
 		rs.clearClaimWindow()
@@ -154,10 +153,9 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 		appendGangEntries(rs, seat, gangTile, rules.GangKindAn, SeatInvalid)
 	}
 	rs.turn = seat
-	rs.waitingDiscard = false
-	rs.waitingTsumo = false
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
+	rs.enterPhase(ReasonNone)
 	seatIndex := seat.Proto()
 	detail := rs.actionDetail(seat, "gang", gangTile, seat, SeatInvalid)
 	if claimGang {
@@ -221,8 +219,7 @@ func (e *Engine) ApplyPass(_ context.Context, rs *RoundState, seat Seat) ([]Noti
 		metrics.ClaimWindowTotal.WithLabelValues("pass").Inc()
 		rs.hands[seat].Add(rs.pendingDraw)
 		rs.pendingDraw = 0
-		rs.waitingTsumo = false
-		rs.waitingDiscard = true
+		rs.enterPhase(ReasonDiscard)
 		return nil, nil
 	default:
 		return nil, fmt.Errorf("pass not allowed")
@@ -254,18 +251,20 @@ func (rs *RoundState) canSelfGang(seat Seat, tileText string) bool {
 	return count >= 4
 }
 
+// rewindInterruptedTurn 把 rs.turn 那家尚未完成的摸牌回滚到牌墙。
+// 不再依赖 waitingDiscard / waitingTsumo 标志（这些已被 enterPhase 在
+// 上一步 clearClaimWindow / openClaimWindow 时清空）；
+// 改为以 pendingDraw 区分自摸窗口（仅清 pendingDraw）和正常摸牌（从手牌移除）。
 func (rs *RoundState) rewindInterruptedTurn() error {
 	if rs == nil || rs.currentDraw == 0 {
 		return nil
 	}
-	if rs.waitingTsumo {
+	if rs.pendingDraw != 0 {
 		rs.pendingDraw = 0
-		rs.waitingTsumo = false
-	} else if rs.waitingDiscard {
+	} else {
 		if err := rs.hands[rs.turn].Remove(rs.currentDraw); err != nil {
 			return fmt.Errorf("rewind current draw: %w", err)
 		}
-		rs.waitingDiscard = false
 	}
 	if err := rs.wall.PushFront(rs.currentDraw); err != nil {
 		return fmt.Errorf("restore draw to wall: %w", err)
@@ -286,17 +285,17 @@ func (rs *RoundState) openClaimWindow() {
 	if rs == nil {
 		return
 	}
-	rs.claimWindowOpen = true
 	rs.claimCandidates = rs.buildClaimCandidates()
+	rs.enterPhase(ReasonClaimWindow)
 }
 
 func (rs *RoundState) clearClaimWindow() {
 	if rs == nil {
 		return
 	}
-	rs.claimWindowOpen = false
 	rs.claimCandidates = nil
 	rs.qiangGangWindow = false
+	rs.enterPhase(ReasonNone)
 }
 
 func (rs *RoundState) buildClaimCandidates() []claimCandidate {

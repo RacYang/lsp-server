@@ -66,6 +66,7 @@ func (rs *RoundState) drawTransitionProgress() RoundProgress {
 		progress.Step = int64(rs.step)
 		progress.WallRemaining = rs.wallRemaining()
 		progress.DeadlineUnixMs = rs.deadlineUnixMs
+		progress.Reason = rs.phaseReason
 	}
 	progress.AvailableActions = nil
 	progress.ClaimCandidates = nil
@@ -82,6 +83,7 @@ func (p RoundProgress) applyToAction(action *clientv1.ActionNotify) {
 	action.ActingSeats = append([]int32(nil), p.ActingSeats...)
 	action.WallRemaining = p.WallRemaining
 	action.DeadlineUnixMs = p.DeadlineUnixMs
+	action.PhaseUpdate = p.toPhaseUpdate()
 }
 
 func (p RoundProgress) applyToDraw(draw *clientv1.DrawTileNotify) {
@@ -93,6 +95,7 @@ func (p RoundProgress) applyToDraw(draw *clientv1.DrawTileNotify) {
 	draw.ActingSeats = append([]int32(nil), p.ActingSeats...)
 	draw.WallRemaining = p.WallRemaining
 	draw.DeadlineUnixMs = p.DeadlineUnixMs
+	draw.PhaseUpdate = p.toPhaseUpdate()
 }
 
 func (p RoundProgress) applyToStart(start *clientv1.StartGameNotify) {
@@ -103,6 +106,7 @@ func (p RoundProgress) applyToStart(start *clientv1.StartGameNotify) {
 	start.Step = p.Step
 	start.ActingSeats = append([]int32(nil), p.ActingSeats...)
 	start.WallRemaining = p.WallRemaining
+	start.PhaseUpdate = p.toPhaseUpdate()
 }
 
 func (p RoundProgress) applyToExchangeDone(done *clientv1.ExchangeThreeDoneNotify) {
@@ -112,6 +116,7 @@ func (p RoundProgress) applyToExchangeDone(done *clientv1.ExchangeThreeDoneNotif
 	done.Phase = p.Phase
 	done.Step = p.Step
 	done.ActingSeats = append([]int32(nil), p.ActingSeats...)
+	done.PhaseUpdate = p.toPhaseUpdate()
 }
 
 func (p RoundProgress) applyToQueMenDone(done *clientv1.QueMenDoneNotify) {
@@ -121,6 +126,7 @@ func (p RoundProgress) applyToQueMenDone(done *clientv1.QueMenDoneNotify) {
 	done.Phase = p.Phase
 	done.Step = p.Step
 	done.ActingSeats = append([]int32(nil), p.ActingSeats...)
+	done.PhaseUpdate = p.toPhaseUpdate()
 }
 
 func (rs *RoundState) actionDetail(actor Seat, action string, t tile.Tile, target Seat, source Seat) *clientv1.ActionDetail {

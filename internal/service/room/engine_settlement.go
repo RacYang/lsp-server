@@ -16,8 +16,6 @@ func (rs *RoundState) finishRound() (Notification, error) {
 		return Notification{}, err
 	}
 	rs.closed = true
-	rs.waitingDiscard = false
-	rs.waitingTsumo = false
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
 	rs.lastDiscard = 0

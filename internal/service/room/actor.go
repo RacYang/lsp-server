@@ -9,6 +9,7 @@ import (
 
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/metrics"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // ErrRateLimited 表示入口或房间队列限流。
@@ -61,33 +62,44 @@ type cmdLeave struct {
 }
 
 type cmdDiscard struct {
-	userID string
-	tile   string
-	res    chan actionResult
+	userID   string
+	tile     string
+	phaseTok *PhaseToken
+	ctx      context.Context
+	res      chan actionResult
 }
 
 type cmdPong struct {
-	userID string
-	res    chan actionResult
+	userID   string
+	phaseTok *PhaseToken
+	ctx      context.Context
+	res      chan actionResult
 }
 
 type cmdGang struct {
-	userID string
-	tile   string
-	res    chan actionResult
+	userID   string
+	tile     string
+	phaseTok *PhaseToken
+	ctx      context.Context
+	res      chan actionResult
 }
 
 type cmdHu struct {
-	userID string
-	res    chan actionResult
+	userID   string
+	phaseTok *PhaseToken
+	ctx      context.Context
+	res      chan actionResult
 }
 
 type cmdPass struct {
-	userID string
-	res    chan actionResult
+	userID   string
+	phaseTok *PhaseToken
+	ctx      context.Context
+	res      chan actionResult
 }
 
 type cmdAutoTimeout struct {
+	ctx context.Context
 	res chan actionResult
 }
 
@@ -95,13 +107,17 @@ type cmdExchangeThree struct {
 	userID    string
 	tiles     []string
 	direction int32
+	phaseTok  *PhaseToken
+	ctx       context.Context
 	res       chan actionResult
 }
 
 type cmdQueMen struct {
-	userID string
-	suit   int32
-	res    chan actionResult
+	userID   string
+	suit     int32
+	phaseTok *PhaseToken
+	ctx      context.Context
+	res      chan actionResult
 }
 
 type actionResult struct {
@@ -182,23 +198,63 @@ func (a *roomActor) run() {
 			m.res <- a.doLeave(m.userID)
 			a.resetScheduler()
 		case cmdDiscard:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "discard", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
 			notifications, err := a.doDiscard(m.userID, m.tile)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "discard", m.phaseTok, err)
+			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdPong:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "pong", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
 			notifications, err := a.doPong(m.userID)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "pong", m.phaseTok, err)
+			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdGang:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "gang", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
 			notifications, err := a.doGang(m.userID, m.tile)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "gang", m.phaseTok, err)
+			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdHu:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "hu", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
 			notifications, err := a.doHu(m.userID)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "hu", m.phaseTok, err)
+			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdPass:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "pass", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
 			notifications, err := a.doPass(m.userID)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "pass", m.phaseTok, err)
+			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdAutoTimeout:
@@ -213,11 +269,27 @@ func (a *roomActor) run() {
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdExchangeThree:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "exchange_three", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
 			notifications, err := a.doExchangeThree(m.userID, m.tiles, m.direction)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "exchange_three", m.phaseTok, err)
+			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdQueMen:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "que_men", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
 			notifications, err := a.doQueMen(m.userID, m.suit)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "que_men", m.phaseTok, err)
+			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdRoundSnap:
@@ -346,36 +418,88 @@ func (a *roomActor) submitLeave(ctx context.Context, userID string) error {
 	}
 }
 
-func (a *roomActor) submitDiscard(ctx context.Context, userID, tile string) ([]Notification, error) {
-	return a.submitAction(ctx, cmdDiscard{userID: userID, tile: tile, res: make(chan actionResult, 1)})
+func (a *roomActor) submitDiscard(ctx context.Context, userID, tile string, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdDiscard{userID: userID, tile: tile, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
 }
 
-func (a *roomActor) submitPong(ctx context.Context, userID string) ([]Notification, error) {
-	return a.submitAction(ctx, cmdPong{userID: userID, res: make(chan actionResult, 1)})
+func (a *roomActor) submitPong(ctx context.Context, userID string, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdPong{userID: userID, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
 }
 
-func (a *roomActor) submitGang(ctx context.Context, userID, tile string) ([]Notification, error) {
-	return a.submitAction(ctx, cmdGang{userID: userID, tile: tile, res: make(chan actionResult, 1)})
+func (a *roomActor) submitGang(ctx context.Context, userID, tile string, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdGang{userID: userID, tile: tile, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
 }
 
-func (a *roomActor) submitHu(ctx context.Context, userID string) ([]Notification, error) {
-	return a.submitAction(ctx, cmdHu{userID: userID, res: make(chan actionResult, 1)})
+func (a *roomActor) submitHu(ctx context.Context, userID string, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdHu{userID: userID, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
 }
 
-func (a *roomActor) submitPass(ctx context.Context, userID string) ([]Notification, error) {
-	return a.submitAction(ctx, cmdPass{userID: userID, res: make(chan actionResult, 1)})
+func (a *roomActor) submitPass(ctx context.Context, userID string, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdPass{userID: userID, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
+}
+
+// checkPhaseToken 是 actor 状态变更动作的统一前置校验；详见 ADR-0045。
+// 调用时必须已位于 actor 单 goroutine 内（即在 run() 的 switch 中），
+// 以保证 (rs.step, rs.phaseReason) 读取与后续 do* 写入是同一时刻的原子组合。
+func (a *roomActor) checkPhaseToken(tok *PhaseToken) error {
+	if a == nil || a.round == nil {
+		return nil
+	}
+	return a.round.validatePhaseToken(tok)
 }
 
 func (a *roomActor) submitAutoTimeout(ctx context.Context) ([]Notification, error) {
-	return a.submitAction(ctx, cmdAutoTimeout{res: make(chan actionResult, 1)})
+	return a.submitAction(ctx, cmdAutoTimeout{ctx: ctx, res: make(chan actionResult, 1)})
 }
 
-func (a *roomActor) submitExchangeThree(ctx context.Context, userID string, tiles []string, direction int32) ([]Notification, error) {
-	return a.submitAction(ctx, cmdExchangeThree{userID: userID, tiles: append([]string(nil), tiles...), direction: direction, res: make(chan actionResult, 1)})
+func (a *roomActor) submitExchangeThree(ctx context.Context, userID string, tiles []string, direction int32, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdExchangeThree{userID: userID, tiles: append([]string(nil), tiles...), direction: direction, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
 }
 
-func (a *roomActor) submitQueMen(ctx context.Context, userID string, suit int32) ([]Notification, error) {
-	return a.submitAction(ctx, cmdQueMen{userID: userID, suit: suit, res: make(chan actionResult, 1)})
+func (a *roomActor) submitQueMen(ctx context.Context, userID string, suit int32, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdQueMen{userID: userID, suit: suit, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
+}
+
+// logActionRejected 在 actor 单协程内统一记录动作拒绝日志，覆盖 token 漂移与状态不满足。
+func (a *roomActor) logActionRejected(ctx context.Context, userID, action string, tok *PhaseToken, err error) {
+	if err == nil {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if a != nil && a.room != nil {
+		ctx = logx.WithRoomID(ctx, a.room.ID)
+	}
+	if userID != "" {
+		ctx = logx.WithUserID(ctx, userID)
+	}
+	phaseStep := int64(0)
+	phaseReason := "none"
+	if a != nil && a.round != nil {
+		phaseStep = int64(a.round.step)
+		phaseReason = a.round.phaseReason.String()
+	}
+	drift := false
+	tokenStep := int64(0)
+	tokenReason := "none"
+	if tok != nil {
+		tokenStep = tok.Step
+		tokenReason = tok.Reason.String()
+	}
+	var driftErr *PhaseDriftError
+	if errors.As(err, &driftErr) {
+		drift = true
+	}
+	logx.Warn(ctx, "房间动作被拒绝",
+		"action", action,
+		"phase_step", phaseStep,
+		"phase_reason", phaseReason,
+		"token_step", tokenStep,
+		"token_reason", tokenReason,
+		"phase_drifted", drift,
+		"err", err.Error(),
+	)
 }
 
 func (a *roomActor) submitRoundSnapJSON(ctx context.Context) ([]byte, error) {

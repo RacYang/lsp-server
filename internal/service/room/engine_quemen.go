@@ -40,7 +40,7 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat Seat, sui
 			return nil, nil
 		}
 	}
-	rs.waitingQueMen = false
+	rs.enterPhase(ReasonNone)
 	progress := rs.drawTransitionProgress()
 	queDone := &clientv1.QueMenDoneNotify{QueSuitBySeat: rs.queBySeat}
 	progress.applyToQueMenDone(queDone)

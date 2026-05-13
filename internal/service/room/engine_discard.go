@@ -35,8 +35,7 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	if rs.waitingTsumo {
 		rs.hands[seat].Add(rs.pendingDraw)
 		rs.pendingDraw = 0
-		rs.waitingTsumo = false
-		rs.waitingDiscard = true
+		rs.enterPhase(ReasonDiscard)
 	}
 	if !rs.waitingDiscard {
 		return nil, fmt.Errorf("round not waiting discard")
@@ -44,7 +43,6 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	if err := rs.hands[seat].Remove(discard); err != nil {
 		return nil, fmt.Errorf("discard tile from hand: %w", err)
 	}
-	rs.waitingDiscard = false
 	rs.currentDraw = 0
 	if seat == rs.dealerSeat && rs.openingDrawSeat == seat {
 		rs.dealerFirstDiscardOpen = true
@@ -196,8 +194,6 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	rs.lastGangFollowUp = false
 	rs.lastDiscardAfterGang = false
 	rs.closeOpeningHuWindow(source)
-	rs.waitingTsumo = false
-	rs.waitingDiscard = false
 	rs.clearClaimWindow()
 	if source != rules.HuSourceTsumo {
 		metrics.ClaimWindowTotal.WithLabelValues("hu").Inc()
@@ -292,8 +288,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	rs.currentDraw = drawn
 	if _, ok := rs.rule.CheckHu(rs.hands[turn], drawn, rules.HuContext{}); ok {
 		rs.pendingDraw = drawn
-		rs.waitingTsumo = true
-		rs.waitingDiscard = false
+		rs.enterPhase(ReasonTsumo)
 		progress := rs.roundProgress()
 		drawPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, true)
 		if err != nil {
@@ -329,7 +324,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		return append(out, Notification{Kind: KindAction, Payload: choicePayload, TargetSeat: BroadcastSeat}), nil
 	}
 	rs.hands[turn].Add(drawn)
-	rs.waitingDiscard = true
+	rs.enterPhase(ReasonDiscard)
 	progress := rs.roundProgress()
 	drawPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, true)
 	if err != nil {

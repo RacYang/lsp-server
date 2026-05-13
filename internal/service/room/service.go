@@ -100,12 +100,18 @@ func (s *Service) SetClock(c clock.Clock) {
 		return
 	}
 	s.clock = c
+	if s.engine != nil {
+		s.engine.SetClock(c)
+	}
 }
 
 // SetTimeoutConfig 覆盖房间托管时长。
 func (s *Service) SetTimeoutConfig(cfg TimeoutConfig) {
 	if s == nil {
 		return
+	}
+	if s.engine != nil {
+		s.engine.SetTimeoutConfig(cfg)
 	}
 	s.tmo = cfg.withDefaults()
 }
@@ -204,10 +210,27 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	if _, ok := s.actors[roomID]; ok {
 		return
 	}
+	if initialRound != nil {
+		// 恢复路径注入 clk/tmo，并按当前时刻重锚定 phaseStart：
+		// 若 deadline 已过期，scheduler.armUntil 会立即触发 cmdAutoTimeout，
+		// 与 ADR-0045 的"重启后超时立即托管"约束一致。
+		initialRound.clk = s.clock
+		initialRound.tmo = s.tmo
+		if initialRound.phaseStartUnixMs == 0 && initialRound.phaseReason != ReasonNone {
+			initialRound.phaseStartUnixMs = s.clock.Now().UnixMilli()
+			if dur := s.tmo.DurationFor(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
+				initialRound.deadlineUnixMs = initialRound.phaseStartUnixMs + dur.Milliseconds()
+			}
+		} else if initialRound.phaseReason != ReasonNone {
+			if dur := s.tmo.DurationFor(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
+				initialRound.deadlineUnixMs = initialRound.phaseStartUnixMs + dur.Milliseconds()
+			}
+		}
+	}
 	a := newRoomActorWithCapacity(r, initialRound, s.mailboxCapacity)
 	a.engine = s.engine
 	a.onExit = s.removeActor
-	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
+	a.scheduler = newRoomScheduler(roomID, s.clock, a)
 	a.onAuto = s.onAuto
 	a.onAfterCmd = s.onAfterCmd
 	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
@@ -235,7 +258,7 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 	a := newRoomActorWithCapacity(r, nil, s.mailboxCapacity)
 	a.engine = s.engine
 	a.onExit = s.removeActor
-	a.scheduler = newRoomScheduler(roomID, s.clock, s.tmo, a)
+	a.scheduler = newRoomScheduler(roomID, s.clock, a)
 	a.onAuto = s.onAuto
 	a.onAfterCmd = s.onAfterCmd
 	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
@@ -291,49 +314,49 @@ func (s *Service) Leave(ctx context.Context, roomID, userID string) error {
 	return a.submitLeave(ctx, userID)
 }
 
-// Discard 提交当前轮次出牌动作。
-func (s *Service) Discard(ctx context.Context, roomID, userID, tile string) ([]Notification, error) {
+// Discard 提交当前轮次出牌动作；tok 为客户端阶段令牌，nil 时跳过 drift 校验（旧客户端兼容）。
+func (s *Service) Discard(ctx context.Context, roomID, userID, tile string, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitDiscard(ctx, userID, tile)
+	return a.submitDiscard(ctx, userID, tile, tok)
 }
 
 // Pong 提交弃牌抢答窗口中的碰牌动作。
-func (s *Service) Pong(ctx context.Context, roomID, userID string) ([]Notification, error) {
+func (s *Service) Pong(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitPong(ctx, userID)
+	return a.submitPong(ctx, userID, tok)
 }
 
 // Gang 提交弃牌抢答窗口中的杠牌或当前座位自杠动作。
-func (s *Service) Gang(ctx context.Context, roomID, userID, tile string) ([]Notification, error) {
+func (s *Service) Gang(ctx context.Context, roomID, userID, tile string, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitGang(ctx, userID, tile)
+	return a.submitGang(ctx, userID, tile, tok)
 }
 
 // Hu 提交胡牌动作（当前为自摸待决窗口）。
-func (s *Service) Hu(ctx context.Context, roomID, userID string) ([]Notification, error) {
+func (s *Service) Hu(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitHu(ctx, userID)
+	return a.submitHu(ctx, userID, tok)
 }
 
 // Pass 放弃当前抢答或自摸选择，并由服务端推进下一等待态。
-func (s *Service) Pass(ctx context.Context, roomID, userID string) ([]Notification, error) {
+func (s *Service) Pass(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitPass(ctx, userID)
+	return a.submitPass(ctx, userID, tok)
 }
 
 // AutoTimeout 执行当前等待态的服务端托管动作，供上层定时器到期后调用。
@@ -346,21 +369,21 @@ func (s *Service) AutoTimeout(ctx context.Context, roomID string) ([]Notificatio
 }
 
 // ExchangeThree 提交换三张确认；最后一名提交后统一换牌并进入定缺阶段。
-func (s *Service) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32) ([]Notification, error) {
+func (s *Service) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitExchangeThree(ctx, userID, tiles, direction)
+	return a.submitExchangeThree(ctx, userID, tiles, direction, tok)
 }
 
 // QueMen 提交定缺确认；最后一名提交后开局并进入首轮摸牌。
-func (s *Service) QueMen(ctx context.Context, roomID, userID string, suit int32) ([]Notification, error) {
+func (s *Service) QueMen(ctx context.Context, roomID, userID string, suit int32, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitQueMen(ctx, userID, suit)
+	return a.submitQueMen(ctx, userID, suit, tok)
 }
 
 // RoundPersistSnapshot 返回当前进行中牌局的最小可恢复快照。

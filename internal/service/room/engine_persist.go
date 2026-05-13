@@ -20,6 +20,10 @@ func ProjectRoundState(rs *RoundState) RoundProjection {
 		return RoundProjection{}
 	}
 	actingSeat, waitingAction, pendingTile, available := rs.snapshotWaiting()
+	serverNow := int64(0)
+	if rs.clk != nil {
+		serverNow = rs.clk.Now().UnixMilli()
+	}
 	return RoundProjection{
 		Progress: RoundProgress{
 			ActingSeat:       actingSeat,
@@ -32,6 +36,8 @@ func ProjectRoundState(rs *RoundState) RoundProjection {
 			ClaimCandidates:  rs.roundClaimCandidates(),
 			WallRemaining:    rs.wallRemaining(),
 			DeadlineUnixMs:   rs.deadlineUnixMs,
+			Reason:           rs.phaseReason,
+			ServerNowUnixMs:  serverNow,
 		},
 		Facts: RoundFacts{
 			HandsBySeat:     rs.handStringsBySeat(),
@@ -254,6 +260,8 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		Discards:               make([][]string, 4),
 		Melds:                  make([][]string, 4),
 		ExchangeTiles:          make([][]string, 4),
+		PhaseReason:            int(rs.phaseReason),
+		PhaseStartUnixMs:       rs.phaseStartUnixMs,
 	}
 	if rs.claimWindowOpen {
 		rp.ClaimCandidates = make([]claimCandidatePersist, 0, len(rs.claimCandidates))
@@ -403,6 +411,8 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		gangRecords:            append([]rules.GangRecord(nil), rp.GangRecords...),
 		lastGangFollowUp:       rp.LastGangFollowUp,
 		lastDiscardAfterGang:   rp.LastDiscardAfterGang,
+		phaseReason:            WaitingReason(rp.PhaseReason),
+		phaseStartUnixMs:       rp.PhaseStartUnixMs,
 	}
 	return rs, nil
 }
@@ -528,6 +538,22 @@ func finalizeRoundInvariants(rs *RoundState) {
 	for _, seat := range rs.winnerSeats {
 		if seat >= 0 && seat < 4 {
 			rs.huedSeats[seat] = true
+		}
+	}
+	// 兼容老快照：未持久化 PhaseReason 时由 waiting 标志派生，保证 enterPhase 不变量与 Deadline()
+	// 在恢复后保持自洽（详见 ADR-0045）。
+	if rs.phaseReason == ReasonNone {
+		switch {
+		case rs.waitingExchange:
+			rs.phaseReason = ReasonExchangeThree
+		case rs.waitingQueMen:
+			rs.phaseReason = ReasonQueMen
+		case rs.claimWindowOpen:
+			rs.phaseReason = ReasonClaimWindow
+		case rs.waitingTsumo:
+			rs.phaseReason = ReasonTsumo
+		case rs.waitingDiscard:
+			rs.phaseReason = ReasonDiscard
 		}
 	}
 }

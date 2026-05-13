@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/clock"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
@@ -54,8 +55,14 @@ const (
 )
 
 // Engine 负责在单房上下文内生成确定性的血战流程通知。
+//
+// clk 与 tmo 被 engine 在 StartRound / RecoverRoom 时注入 RoundState，
+// 供 RoundState.enterPhase 派生 deadlineUnixMs（详见 ADR-0045）。零值时回退到 clock.NewReal()
+// 与 DefaultTimeoutConfig()，确保未通过 Service 装配的测试调用仍可工作。
 type Engine struct {
 	ruleID string
+	clk    clock.Clock
+	tmo    TimeoutConfig
 }
 
 // RoundState 保存交互式单局运行态，仅在 room actor 内被串行访问。
@@ -101,6 +108,14 @@ type RoundState struct {
 	lastDiscardAfterGang   bool
 	closed                 bool
 	deadlineUnixMs         int64
+	// phaseReason 与 phaseStartUnixMs 由 enterPhase 一并写入，是 deadlineUnixMs 的派生来源。
+	// 详见 ADR-0045 与 phase.go。
+	phaseReason      WaitingReason
+	phaseStartUnixMs int64
+	// clk / tmo 由 engine 在 StartRound / RecoverRoom 时注入，使 enterPhase 能直接计算 deadline；
+	// 不参与持久化（重启时由 service 重新注入）。
+	clk clock.Clock
+	tmo TimeoutConfig
 }
 
 type claimCandidate struct {
@@ -152,6 +167,11 @@ type roundPersist struct {
 	Discards               [][]string                `json:"discards,omitempty"`
 	Melds                  [][]string                `json:"melds,omitempty"`
 	WallRemaining          []string                  `json:"wall_remaining"`
+	// PhaseReason 与 PhaseStartUnixMs 由 ADR-0045 引入；为 schema v3 兼容增量字段。
+	// 老快照该两字段为零；恢复路径在 finalizeRoundInvariants 中由 waiting flags 派生 PhaseReason，
+	// PhaseStartUnixMs=0 表示无锚点，scheduler.armUntil 触发立即超时（cmdAutoTimeout）。
+	PhaseReason      int   `json:"phase_reason,omitempty"`
+	PhaseStartUnixMs int64 `json:"phase_start_unix_ms,omitempty"`
 }
 
 // RoundView 描述客户端恢复时所需的最小等待态摘要。
@@ -185,6 +205,8 @@ type RoundView struct {
 }
 
 // RoundProgress 是局内进度的权威投影，不承载房间生命周期或 UI 文案。
+// Reason 与 ServerNowUnixMs 是 ADR-0045 引入的派生字段，供 toPhaseUpdate 构建 PhaseUpdate；
+// 老调用方读取 DeadlineUnixMs 等字段不受影响。
 type RoundProgress struct {
 	ActingSeat       int32
 	ActingSeats      []int32
@@ -196,6 +218,21 @@ type RoundProgress struct {
 	ClaimCandidates  []RoundClaimCandidate
 	WallRemaining    int32
 	DeadlineUnixMs   int64
+	Reason           WaitingReason
+	ServerNowUnixMs  int64
+}
+
+// toPhaseUpdate 构造嵌入到 Notify / Response 的 PhaseUpdate；详见 ADR-0045。
+func (p RoundProgress) toPhaseUpdate() *clientv1.PhaseUpdate {
+	return &clientv1.PhaseUpdate{
+		Phase:            p.Phase,
+		Step:             p.Step,
+		Reason:           p.Reason.Proto(),
+		DeadlineUnixMs:   p.DeadlineUnixMs,
+		ServerNowUnixMs:  p.ServerNowUnixMs,
+		ActingSeats:      append([]int32(nil), p.ActingSeats...),
+		AvailableActions: append([]string(nil), p.AvailableActions...),
+	}
 }
 
 // RoundFacts 是局内可见事实投影；调用方不得从 UI 日志反推这些字段。
@@ -228,11 +265,29 @@ type RoundClaimCandidate struct {
 }
 
 // NewEngine 创建牌局引擎；ruleID 为空时回退到四川血战到底默认规则。
+// 时钟与 timeout 默认为真实时钟与 DefaultTimeoutConfig；Service 装配时会通过
+// SetClock / SetTimeoutConfig 注入正确值，再传入 RoundState。
 func NewEngine(ruleID string) *Engine {
 	if ruleID == "" {
 		ruleID = "sichuan_xuezhandaodi_huansanzhang"
 	}
-	return &Engine{ruleID: ruleID}
+	return &Engine{ruleID: ruleID, clk: clock.NewReal(), tmo: DefaultTimeoutConfig()}
+}
+
+// SetClock 注入引擎使用的时钟源，影响 enterPhase 写入的 phaseStartUnixMs。
+func (e *Engine) SetClock(clk clock.Clock) {
+	if e == nil || clk == nil {
+		return
+	}
+	e.clk = clk
+}
+
+// SetTimeoutConfig 注入引擎使用的等待时长配置，影响 enterPhase 派生的 deadlineUnixMs。
+func (e *Engine) SetTimeoutConfig(cfg TimeoutConfig) {
+	if e == nil {
+		return
+	}
+	e.tmo = cfg.withDefaults()
 }
 
 // StartRound 初始化交互式牌局，并推进到首个等待出牌的状态。
@@ -264,6 +319,9 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 		huedSeats:         make([]bool, 4),
 		winnerSeats:       make([]Seat, 0, 3),
 		ledger:            make([]xuezhandaodi.ScoreEntry, 0, 16),
+		clk:               e.clk,
+		tmo:               e.tmo,
+		phaseReason:       ReasonNone,
 	}
 	for i := range rs.hands {
 		rs.hands[i] = hand.New()

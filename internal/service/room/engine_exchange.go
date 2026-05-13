@@ -68,13 +68,12 @@ func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, d
 			return nil, nil
 		}
 	}
-	rs.waitingExchange = false
 	exchangedAwayBySeat := exchangeSelectionsToStrings(rs.exchangeSelection)
 	receivedTiles := exchangeThreeWithSelections(rs.hands, rs.exchangeSelection, rs.exchangeDirection)
 	for i := range rs.exchangeSelection {
 		rs.exchangeSelection[i] = nil
 	}
-	rs.waitingQueMen = true
+	rs.enterPhase(ReasonQueMen)
 	progress := rs.roundProgress()
 	exchangePayload, err := marshalExchangeThreeDoneEnvelope(
 		receivedTiles,
@@ -150,11 +149,11 @@ func exchangeSelectionsToStrings(selections [][]tile.Tile) [][]string {
 
 func (rs *RoundState) initRoundNotifications() ([]Notification, error) {
 	if rs.hasOpeningStep("exchange_three") {
-		rs.waitingExchange = true
+		rs.enterPhase(ReasonExchangeThree)
 		return rs.promptSeatActions("exchange_three"), nil
 	}
 	if rs.hasOpeningStep("que_men") {
-		rs.waitingQueMen = true
+		rs.enterPhase(ReasonQueMen)
 		return rs.promptSeatActions("que_men"), nil
 	}
 	return nil, fmt.Errorf("unsupported opening flow")

@@ -8,45 +8,46 @@ import (
 	"racoo.cn/lsp/internal/clock"
 )
 
+// roomScheduler 仅负责按 RoundState.Deadline() 对齐 OS 定时器；
+// 不再持有等待态推理或时长配置（参见 ADR-0045，时长来源是 RoundState.tmo.DurationFor）。
 type roomScheduler struct {
 	roomID string
 	clk    clock.Clock
-	cfg    TimeoutConfig
 	actor  *roomActor
 
 	mu    sync.Mutex
 	timer clock.Timer
 }
 
-func newRoomScheduler(roomID string, clk clock.Clock, cfg TimeoutConfig, actor *roomActor) *roomScheduler {
+func newRoomScheduler(roomID string, clk clock.Clock, actor *roomActor) *roomScheduler {
 	if clk == nil {
 		clk = clock.NewReal()
 	}
-	return &roomScheduler{
-		roomID: roomID,
-		clk:    clk,
-		cfg:    cfg.withDefaults(),
-		actor:  actor,
-	}
+	return &roomScheduler{roomID: roomID, clk: clk, actor: actor}
 }
 
-func (s *roomScheduler) reset(rs *RoundState) {
+// armUntil 把 OS 定时器对齐到 deadlineUnixMs；deadlineUnixMs<=0 表示停表。
+// 该方法是 scheduler 与 RoundState 之间唯一的耦合点：只读 deadlineUnixMs，不再写 RoundState。
+func (s *roomScheduler) armUntil(deadlineUnixMs int64) {
 	if s == nil {
 		return
 	}
-	d := s.durationFor(rs)
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.timer != nil {
 		s.timer.Stop()
 		s.timer = nil
 	}
-	if d > 0 {
-		rs.deadlineUnixMs = s.clk.Now().Add(d).UnixMilli()
-		s.timer = s.clk.AfterFunc(d, s.fire)
-	} else if rs != nil {
-		rs.deadlineUnixMs = 0
+	if deadlineUnixMs <= 0 {
+		return
 	}
-	s.mu.Unlock()
+	d := time.Duration(deadlineUnixMs-s.clk.Now().UnixMilli()) * time.Millisecond
+	if d <= 0 {
+		// 已过期：立即触发 fire，避免向客户端发出"已是过去时间"的 deadline。
+		go s.fire()
+		return
+	}
+	s.timer = s.clk.AfterFunc(d, s.fire)
 }
 
 func (s *roomScheduler) stop() {
@@ -59,55 +60,6 @@ func (s *roomScheduler) stop() {
 		s.timer.Stop()
 		s.timer = nil
 	}
-}
-
-func (s *roomScheduler) durationFor(rs *RoundState) time.Duration {
-	if rs == nil || rs.closed {
-		return 0
-	}
-	if s.surrenderedSeatWaiting(rs) {
-		return s.cfg.SurrenderAction
-	}
-	switch {
-	case rs.waitingExchange:
-		return s.cfg.ExchangeThree
-	case rs.waitingQueMen:
-		return s.cfg.QueMen
-	case rs.claimWindowOpen:
-		return s.cfg.ClaimWindow
-	case rs.waitingTsumo:
-		return s.cfg.TsumoWindow
-	case rs.waitingDiscard:
-		return s.cfg.Discard
-	default:
-		return 0
-	}
-}
-
-func (s *roomScheduler) surrenderedSeatWaiting(rs *RoundState) bool {
-	if rs == nil {
-		return false
-	}
-	switch {
-	case rs.waitingExchange:
-		for seat, done := range rs.exchangeSubmitted {
-			if !done && rs.isSurrendered(Seat(seat)) {
-				return true
-			}
-		}
-	case rs.waitingQueMen:
-		for seat, done := range rs.queSubmitted {
-			if !done && rs.isSurrendered(Seat(seat)) {
-				return true
-			}
-		}
-	case rs.claimWindowOpen:
-		candidate, ok := rs.bestClaimCandidate()
-		return ok && rs.isSurrendered(candidate.seat)
-	case rs.waitingTsumo, rs.waitingDiscard:
-		return rs.isSurrendered(rs.turn)
-	}
-	return false
 }
 
 func (s *roomScheduler) fire() {
@@ -123,9 +75,15 @@ func (s *roomScheduler) fire() {
 	}
 }
 
+// resetScheduler 读取 RoundState 当前派生 deadline 对齐 OS 定时器。
+// engine 在 enterPhase 时已写入 deadlineUnixMs，actor 仅需 arm。
 func (a *roomActor) resetScheduler() {
 	if a == nil || a.scheduler == nil {
 		return
 	}
-	a.scheduler.reset(a.round)
+	deadline := int64(0)
+	if a.round != nil && !a.round.closed {
+		deadline = a.round.Deadline()
+	}
+	a.scheduler.armUntil(deadline)
 }

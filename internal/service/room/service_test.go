@@ -1001,7 +1001,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 			for seat, done := range a.round.exchangeSubmitted {
 				if !done {
 					tiles := tilesToStrings(a.round.hands[seat].Tiles()[:3])
-					if _, err := svc.ExchangeThree(ctx, roomID, a.room.PlayerIDs[seat], tiles, 0); err != nil {
+					if _, err := svc.ExchangeThree(ctx, roomID, a.room.PlayerIDs[seat], tiles, 0, nil); err != nil {
 						return err
 					}
 				}
@@ -1011,7 +1011,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		if a.round.waitingQueMen {
 			for seat, done := range a.round.queSubmitted {
 				if !done {
-					if _, err := svc.QueMen(ctx, roomID, a.room.PlayerIDs[seat], 0); err != nil {
+					if _, err := svc.QueMen(ctx, roomID, a.room.PlayerIDs[seat], 0, nil); err != nil {
 						return err
 					}
 				}
@@ -1021,14 +1021,14 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		if claimSeat := a.round.claimSeat(); claimSeat >= 0 {
 			userID := a.room.PlayerIDs[claimSeat]
 			if a.round.rawCanClaimGang(claimSeat) {
-				if _, err := svc.Gang(ctx, roomID, userID, a.round.lastDiscard.String()); err != nil {
+				if _, err := svc.Gang(ctx, roomID, userID, a.round.lastDiscard.String(), nil); err != nil {
 					if bytes.Contains([]byte(err.Error()), []byte("round closed")) {
 						return nil
 					}
 					return err
 				}
 			} else {
-				if _, err := svc.Pong(ctx, roomID, userID); err != nil {
+				if _, err := svc.Pong(ctx, roomID, userID, nil); err != nil {
 					if bytes.Contains([]byte(err.Error()), []byte("round closed")) {
 						return nil
 					}
@@ -1040,7 +1040,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		seat := a.round.turn
 		userID := a.room.PlayerIDs[seat]
 		if a.round.waitingTsumo {
-			notifs, err := svc.Hu(ctx, roomID, userID)
+			notifs, err := svc.Hu(ctx, roomID, userID, nil)
 			if err == nil && containsSettlement(notifs) {
 				return nil
 			}
@@ -1050,7 +1050,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		}
 		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
 		discard := chooseDiscard(a.round.hands[seat], tile.Suit(a.round.queBySeat[seat]))
-		notifs, err := svc.Discard(ctx, roomID, userID, discard.String())
+		notifs, err := svc.Discard(ctx, roomID, userID, discard.String(), nil)
 		if err != nil {
 			if bytes.Contains([]byte(err.Error()), []byte("round closed")) {
 				return nil
