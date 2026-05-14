@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -30,6 +31,7 @@ type LobbyScene struct {
 
 	mode       lobbyMode
 	selected   int
+	mu         sync.RWMutex // 保护 message 与 pending（runAsync 后台写，Render ticker 读）
 	message    string
 	rules      []LobbyRuleMeta
 	rooms      []LobbyRoomMeta
@@ -73,14 +75,20 @@ func (s *LobbyScene) Render(scr tcell.Screen, now time.Time) {
 	default:
 		s.renderHome(scr, w, h)
 	}
-	if s.message != "" {
-		drawClippedText(scr, 2, h-2, defaultStyle().Reverse(true), s.message, w-4)
+	s.mu.RLock()
+	msg := s.message
+	s.mu.RUnlock()
+	if msg != "" {
+		drawClippedText(scr, 2, h-2, defaultStyle().Reverse(true), msg, w-4)
 	}
 	drawBandLine(scr, Region{X: 0, Y: h - 1, Width: w, Height: 1}, s.keybar(), "", false, false)
 }
 
 func (s *LobbyScene) HandleKey(ctx context.Context, ev *tcell.EventKey) {
-	if s.pending {
+	s.mu.RLock()
+	isPending := s.pending
+	s.mu.RUnlock()
+	if isPending {
 		return
 	}
 	switch s.mode {
@@ -254,7 +262,9 @@ func (s *LobbyScene) handleHomeKey(ctx context.Context, ev *tcell.EventKey) {
 			s.mode = lobbyModeHelp
 		case 'n', 'N':
 			s.mode = lobbyModeJoinCode
+			s.mu.Lock()
 			s.message = "改名暂沿用配置，下个版本进入独立输入框"
+			s.mu.Unlock()
 		}
 	}
 }
@@ -323,7 +333,9 @@ func (s *LobbyScene) handleJoinCodeKey(ctx context.Context, ev *tcell.EventKey) 
 	case tcell.KeyEnter, tcell.KeyCtrlJ:
 		code := strings.TrimSpace(s.input)
 		if len(code) < 4 || len(code) > 16 {
+			s.mu.Lock()
 			s.message = "房间码长度不正确"
+			s.mu.Unlock()
 			return
 		}
 		s.runAsync(ctx, "正在加入房间...", func() error {
@@ -369,7 +381,9 @@ func (s *LobbyScene) handleSettingsKey(ev *tcell.EventKey) {
 		} else {
 			s.cfg.TileTheme = TileThemeUnicode.String()
 		}
+		s.mu.Lock()
 		s.message = "牌面主题已切换为 " + s.cfg.TileTheme
+		s.mu.Unlock()
 	}
 }
 
@@ -411,16 +425,20 @@ func (s *LobbyScene) enterRooms(ctx context.Context) {
 }
 
 func (s *LobbyScene) runAsync(ctx context.Context, pending string, fn func() error) {
+	s.mu.Lock()
 	s.pending = true
 	s.message = pending
+	s.mu.Unlock()
 	go func() {
 		err := fn()
+		s.mu.Lock()
 		s.pending = false
 		if err != nil {
 			s.message = err.Error()
-			return
+		} else {
+			s.message = ""
 		}
-		s.message = ""
+		s.mu.Unlock()
 	}()
 	_ = ctx
 }
@@ -434,7 +452,10 @@ func (s *LobbyScene) move(delta, n int) {
 }
 
 func (s *LobbyScene) keybar() string {
-	if s.pending {
+	s.mu.RLock()
+	isPending := s.pending
+	s.mu.RUnlock()
+	if isPending {
 		return "请稍候..."
 	}
 	switch s.mode {
