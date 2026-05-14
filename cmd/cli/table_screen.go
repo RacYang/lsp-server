@@ -528,6 +528,7 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 			if err := gateway.ExchangeThree(ctx, tiles, 0); err != nil {
 				cursor.RollbackPending()
 				clearPendingExchange(state, view.SeatIndex)
+				noticeAsyncFailure(state, "换三张失败", err)
 			}
 		}()
 	}

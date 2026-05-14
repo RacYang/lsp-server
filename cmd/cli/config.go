@@ -28,7 +28,7 @@ const (
 	tileThemeEmoji   = "emoji"
 
 	defaultServerURL    = "wss://racoo.cn/ws"
-	defaultClaimTimeout = 4500
+	defaultClaimTimeout = 14000
 )
 
 // NewDefaultConfig 返回内置默认值；未来如果需要在多处复用，统一从此处取。

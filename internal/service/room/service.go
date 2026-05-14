@@ -46,7 +46,7 @@ func DefaultTimeoutConfig() TimeoutConfig {
 		ExchangeThree:   15 * time.Second,
 		QueMen:          15 * time.Second,
 		ClaimWindow:     5 * time.Second,
-		TsumoWindow:     5 * time.Second,
+		TsumoWindow:     15 * time.Second,
 		Discard:         15 * time.Second,
 		SurrenderAction: time.Second,
 	}
