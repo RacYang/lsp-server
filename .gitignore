@@ -3,5 +3,6 @@ dist/
 .DS_Store
 bench/runs/
 deploy/compose/.env
+.claude/settings.local.json
 /cli
 tmp/

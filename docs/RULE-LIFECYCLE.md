@@ -14,7 +14,7 @@ flowchart LR
     sot --> gen["运行 make generate"]
     gen --> neg["新增 .build/negatives 负例"]
     neg --> verify["运行 make verify"]
-    verify --> rule["创建 .cursor/rules/*.mdc"]
+    verify --> rule["创建 .claude/rules/*.md"]
     rule --> merge["评审后合并"]
 ```
 

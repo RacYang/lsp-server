@@ -285,7 +285,7 @@
 - ADR-0044 决策 7（cli 不本地写 ready / bot）被 A1（cli 渲染托管）间接挑战，但根因是 cli 渲染，**不是**本地写状态；不需改 ADR。
 - ADR-0014 决策 5、ADR-0018 已明确 `surrender_after_offline` 在 gate 层调度，A5 不需要改 ADR，只需收口 room engine 超时分支。
 - ADR-0039 决策 2/3/4 与 A4、A7、A8 联动；任何 proto 演进（特别是 A4 tenpai 字段）须按 `add-pb-message` skill 走完整流程并更新 ADR-0044 五类事实表。
-- 计划文件 [real-player-journey-loop_d8720969.plan.md](../.cursor/plans/real-player-journey-loop_d8720969.plan.md) 中的 `lobby_segment` / `prep_segment` 等子段任务直接消费本文档：每个段的"修"动作需绑定到这里的某个 AID。
+- `lobby_segment` / `prep_segment` 等子段任务直接消费本文档：每个段的"修"动作需绑定到对应的 AID。
 
 ---
 
