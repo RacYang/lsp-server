@@ -67,6 +67,7 @@ message ApplyEventRequest {
     QueMenEvent que_men = 8;
     PassEvent pass = 11;
     LeaveEvent leave = 12;
+    JoinEvent join = 14;
   }
   string idempotency_key = 9;
   string user_id = 10;
@@ -83,6 +84,9 @@ message ApplyEventResponse {
 }
 
 message LeaveEvent {}
+
+// JoinEvent 仅让玩家占座，不标记就绪；用于远程网关在 AutoMatch/CreateRoom 时对齐本地 rooms.Join 语义。
+message JoinEvent {}
 
 message StreamEventsRequest {
   string room_id = 1;

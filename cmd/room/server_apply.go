@@ -82,6 +82,10 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 		}
 		s.markIdempotency(ctx, roomID, idemKey)
 		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+	case *clusterv1.ApplyEventRequest_Join:
+		// Join 仅占座：s.rooms.Join 已在 switch 之前（第 44 行）隐式执行。
+		s.markIdempotency(ctx, roomID, idemKey)
+		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
 	default:
 		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
 	}

@@ -234,6 +234,10 @@ func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string
 			logx.Warn(logCtx, "自动匹配后订阅房间事件流失败稍后重试", "err", err.Error())
 		}
 		g.rememberRoomSeat(roomID, int32(seat), userID) //nolint:gosec // 座位号由 lobby 限制为 0..3。
+		if err := g.joinRoomService(ctx, roomID, userID); err != nil {
+			logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+			logx.Warn(logCtx, "自动匹配后加入房间服务失败稍后重试", "err", err.Error())
+		}
 		return roomID, seat, nil
 	}
 	return g.CreateRoom(ctx, ruleID, "", false, userID)
@@ -355,7 +359,36 @@ func (g *remoteRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName 
 		logx.Warn(logCtx, "创建房间后订阅房间事件流失败稍后重试", "err", err.Error())
 	}
 	g.rememberRoomSeat(roomID, resp.GetSeatIndex(), userID)
+	if err := g.joinRoomService(ctx, roomID, userID); err != nil {
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "创建房间后加入房间服务失败稍后重试", "err", err.Error())
+	}
 	return roomID, int(resp.GetSeatIndex()), nil
+}
+
+// joinRoomService 向 RoomService 发送 JoinEvent，仅让玩家占座，不标记就绪。
+// 对应 LocalRoomGateway 中的 rooms.Join() 调用，用于在 AutoMatch/CreateRoom 时确保
+// 人类玩家先于机器人 Ready 事件占住正确座位，避免大厅与房间服务座位错位。
+func (g *remoteRoomGateway) joinRoomService(ctx context.Context, roomID, userID string) error {
+	roomClient, _, err := g.roomClientForRoom(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &clusterv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &clusterv1.ApplyEventRequest_Join{Join: &clusterv1.JoinEvent{}},
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetError() != "" {
+		return errors.New(resp.GetError())
+	}
+	if !resp.GetAccepted() {
+		return fmt.Errorf("room join rejected")
+	}
+	return nil
 }
 
 // Ready 将准备命令发给 RoomService；实际推送由后台事件流转发到客户端。
