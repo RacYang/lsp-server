@@ -12,4 +12,4 @@ globs: [".claude/commands/*.md"]
 
 - **ADR**：`docs/adr/0042-agent-governance.md`
 - **Enforcer**：`scripts/verify-skeleton.py`
-- **负例**：`.build/negatives/skill_shape_missing_anchor.md.neg`
+- **负例**：`.build/negatives/command_shape_missing_anchor.md.neg`

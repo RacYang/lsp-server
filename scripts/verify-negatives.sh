@@ -267,7 +267,7 @@ run_source_shape_negative() {
 
 run_claude_command_shape_negative() {
   local negative_file="$1"
-  if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --skill-file "${negative_file}" >/dev/null 2>&1; then
+  if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --command-file "${negative_file}" >/dev/null 2>&1; then
     fail_unexpected_pass "${negative_file}"
   fi
 }
@@ -308,9 +308,9 @@ run_db_migration_negative() {
   fi
 }
 
-run_skill_shape_negative() {
+run_command_shape_negative() {
   local negative_file="$1"
-  if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --skill-file "${negative_file}" >/dev/null 2>&1; then
+  if python3 "${ROOT_DIR}/scripts/verify-skeleton.py" --command-file "${negative_file}" >/dev/null 2>&1; then
     fail_unexpected_pass "${negative_file}"
   fi
 }
@@ -440,8 +440,8 @@ for rule in "${RULES_DIR}"/*.md; do
     *rule_shape*.mdc.neg)
       run_source_shape_negative "${negative_file}" "rule-shape"
       ;;
-    *skill_shape*.md.neg)
-      run_skill_shape_negative "${negative_file}"
+    *command_shape*.md.neg)
+      run_command_shape_negative "${negative_file}"
       ;;
     *template_shape*.yaml.neg|*template_shape*.yml.neg)
       run_template_shape_negative "${negative_file}"

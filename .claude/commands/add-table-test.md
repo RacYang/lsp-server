@@ -12,7 +12,7 @@ description: 新增表驱动单元测试。用于为 Go 包补充可读、可扩
 
 - 被测包与函数。
 - 用例名称、输入、期望输出与错误语义。
-- 是否需要复用 `.cursor/templates/code/go-table-test/manifest.yaml`。
+- 是否需要复用 `.claude/templates/code/go-table-test/manifest.yaml`。
 
 ## Steps
 

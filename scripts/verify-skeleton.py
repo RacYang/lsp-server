@@ -110,12 +110,12 @@ def validate_templates() -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--skill-file")
+    parser.add_argument("--command-file")
     parser.add_argument("--manifest-file")
     args = parser.parse_args()
 
-    if args.skill_file:
-        errors = validate_command_file(pathlib.Path(args.skill_file))
+    if args.command_file:
+        errors = validate_command_file(pathlib.Path(args.command_file))
     elif args.manifest_file:
         errors = validate_manifest(pathlib.Path(args.manifest_file))
     else:

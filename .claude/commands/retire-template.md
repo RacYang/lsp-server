@@ -1,5 +1,5 @@
 ---
-description: 退役模板。用于删除、合并或替换 .cursor/templates 下的骨架资产。
+description: 退役模板。用于删除、合并或替换 .claude/templates 下的骨架资产。
 ---
 
 # 退役模板

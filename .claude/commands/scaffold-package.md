@@ -12,7 +12,7 @@ description: 新增标准 Go 包骨架。用于按 gate/lobby/room/mahjong/api/p
 
 - 层：`handler`、`service`、`domain`、`repository`、`actor`、`cli`。
 - 包路径：必须位于既有架构层允许的目录下。
-- 模板：优先复用 `.cursor/templates/code/*/manifest.yaml`。
+- 模板：优先复用 `.claude/templates/code/*/manifest.yaml`。
 
 ## Steps
 
