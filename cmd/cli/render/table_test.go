@@ -116,10 +116,9 @@ func TestRenderTableFramePlayingFull(t *testing.T) {
 	require.Contains(t, dump, "racoo", "must show self name")
 	require.Contains(t, dump, "alice", "must show west player")
 	require.Contains(t, dump, "bob", "must show north player")
-	require.Contains(t, dump, "┌", "must have table frame")
-	require.Contains(t, dump, "┐", "must have table frame")
-	require.Contains(t, dump, "└", "must have table frame")
-	require.Contains(t, dump, "┘", "must have table frame")
+	require.Contains(t, dump, "牌局", "must show lightweight table boundary")
+	require.NotContains(t, dump, "┌", "playing table should not use box corners")
+	require.NotContains(t, dump, "┐", "playing table should not use box corners")
 	require.Contains(t, dump, "轮到你：选择一张牌打出", "center must show prompt")
 	require.Contains(t, dump, "12s", "center must show countdown")
 }
@@ -140,7 +139,7 @@ func TestRenderTableFrameRoomPrep(t *testing.T) {
 	scr.Show()
 
 	dump := dumpScreen(scr)
-	require.Contains(t, dump, "┌", "table frame must be visible in room prep")
+	require.Contains(t, dump, "牌局", "table boundary must be visible in room prep")
 	require.Contains(t, dump, "牌", "tile backs must be visible")
 }
 
@@ -159,7 +158,7 @@ func TestRenderTableFrameSettlement(t *testing.T) {
 	scr.Show()
 
 	dump := dumpScreen(scr)
-	require.Contains(t, dump, "┌", "table frame must be visible in settlement")
+	require.Contains(t, dump, "牌局", "table boundary must be visible in settlement")
 }
 
 func TestRenderTableFrameStandard(t *testing.T) {

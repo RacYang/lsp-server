@@ -52,7 +52,7 @@ type TableData struct {
 
 // ─── 主入口 ──────────────────────────────────────────
 
-// DrawTableFrame 绘制四向对称牌桌：框 = 牌桌，框内只有牌和中央信息。
+// DrawTableFrame 绘制文字牌局：轻边界 + 四家文字关系 + 中央行动句。
 func DrawTableFrame(scr tcell.Screen, layout TableLayout, data TableData) {
 	DrawTableEdge(scr, layout.Frame)
 	DrawPlayerLabels(scr, layout, data)
@@ -61,24 +61,21 @@ func DrawTableFrame(scr tcell.Screen, layout TableLayout, data TableData) {
 	DrawCenterDial(scr, layout.Center, data.PhasePrompt, data.Countdown)
 }
 
-// DrawTableEdge 绘制牌桌方框（硬编码 Unicode 框线）。
+// DrawTableEdge 绘制轻量牌局边界。
+//
+// “文字牌局”不再把完整盒子当成主视觉；上下两条边界只负责给牌局定场，
+// 左右空间留给文字、牌背和牌河关系。
 func DrawTableEdge(scr tcell.Screen, r Region) {
 	if r.Width < 4 || r.Height < 4 {
 		return
 	}
-	style := DefaultStyle()
-	scr.SetContent(r.X, r.Y, '┌', nil, style)
-	scr.SetContent(r.X+r.Width-1, r.Y, '┐', nil, style)
-	for y := r.Y + 1; y < r.Y+r.Height-1; y++ {
-		scr.SetContent(r.X, y, '│', nil, style)
-		scr.SetContent(r.X+r.Width-1, y, '│', nil, style)
-	}
-	for x := r.X + 1; x < r.X+r.Width-1; x++ {
+	style := Style(SemDim)
+	for x := r.X; x < r.X+r.Width; x++ {
 		scr.SetContent(x, r.Y, '─', nil, style)
 		scr.SetContent(x, r.Y+r.Height-1, '─', nil, style)
 	}
-	scr.SetContent(r.X, r.Y+r.Height-1, '└', nil, style)
-	scr.SetContent(r.X+r.Width-1, r.Y+r.Height-1, '┘', nil, style)
+	label := " 牌局 "
+	DrawText(scr, r.X+(r.Width-VisualWidth(label))/2, r.Y, style, label)
 }
 
 // DrawPlayerLabels 在框外四向绘制玩家名字、状态与分数。
