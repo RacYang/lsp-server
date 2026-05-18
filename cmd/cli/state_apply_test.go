@@ -92,6 +92,21 @@ func TestApplyDiscardPreservesNextDrawFocus(t *testing.T) {
 	require.Equal(t, []string{"p9"}, view.Players[1].Discards)
 }
 
+func TestApplyPhaseUpdateRefreshesPhaseTokenStep(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DiscardResp{DiscardResp: &clientv1.DiscardResponse{
+		PhaseUpdate: &clientv1.PhaseUpdate{
+			Step:   12,
+			Reason: clientv1.WaitingReason_WAITING_REASON_DISCARD,
+		},
+	}}})
+
+	token := st.PhaseToken()
+	require.NotNil(t, token)
+	require.EqualValues(t, 12, token.GetStep())
+	require.Equal(t, clientv1.WaitingReason_WAITING_REASON_DISCARD, token.GetReason())
+}
+
 func TestApplyDuplicateDrawDoesNotGrowSelfHand(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})

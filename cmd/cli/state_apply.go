@@ -569,6 +569,9 @@ func applyPhaseUpdate(v *RoomView, pu *clientv1.PhaseUpdate) {
 	if v == nil || pu == nil {
 		return
 	}
+	if step := pu.GetStep(); step > v.LastStep {
+		v.LastStep = step
+	}
 	v.DeadlineUnixMS = pu.GetDeadlineUnixMs()
 	v.PhaseReason = pu.GetReason()
 	if serverNow := pu.GetServerNowUnixMs(); serverNow > 0 {
