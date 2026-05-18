@@ -618,6 +618,7 @@ func applyRoundProgress(v *RoomView, phase clientv1.Phase, step int64, actingSea
 		v.ActingSeat = -1
 	}
 	setWaitingAction(v, waitingAction, available)
+	v.PhaseReason = waitingReasonForRoundState(phase, waitingAction)
 }
 
 func waitKindForRoundPhase(phase clientv1.Phase) (string, []string) {
@@ -638,6 +639,23 @@ func waitKindForRoundPhase(phase clientv1.Phase) (string, []string) {
 		return "none", nil
 	default:
 		return "none", nil
+	}
+}
+
+func waitingReasonForRoundState(phase clientv1.Phase, waitingAction string) clientv1.WaitingReason {
+	switch {
+	case phase == clientv1.Phase_PHASE_EXCHANGE || waitingAction == "exchange_three":
+		return clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
+	case phase == clientv1.Phase_PHASE_QUE_MEN || waitingAction == "que_men":
+		return clientv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case phase == clientv1.Phase_PHASE_CLAIM || waitingAction == "claim_window":
+		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
+	case phase == clientv1.Phase_PHASE_TSUMO || waitingAction == "tsumo_window":
+		return clientv1.WaitingReason_WAITING_REASON_TSUMO
+	case phase == clientv1.Phase_PHASE_DISCARD || waitingAction == "discard":
+		return clientv1.WaitingReason_WAITING_REASON_DISCARD
+	default:
+		return clientv1.WaitingReason_WAITING_REASON_NONE
 	}
 }
 

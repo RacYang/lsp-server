@@ -107,6 +107,20 @@ func TestApplyPhaseUpdateRefreshesPhaseTokenStep(t *testing.T) {
 	require.Equal(t, clientv1.WaitingReason_WAITING_REASON_DISCARD, token.GetReason())
 }
 
+func TestFallbackRoundProgressRefreshesPhaseTokenReason(t *testing.T) {
+	st := NewAppState("我")
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
+		Phase:       clientv1.Phase_PHASE_DISCARD,
+		Step:        13,
+		ActingSeats: []int32{0},
+	}}})
+
+	token := st.PhaseToken()
+	require.NotNil(t, token)
+	require.EqualValues(t, 13, token.GetStep())
+	require.Equal(t, clientv1.WaitingReason_WAITING_REASON_DISCARD, token.GetReason())
+}
+
 func TestApplyDuplicateDrawDoesNotGrowSelfHand(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
