@@ -330,7 +330,9 @@ func (ts *TableScene) HandleKey(ctx context.Context, ev *tcell.EventKey) {
 	result := handleTableKey(ctx, ev, ts.state, ts.tableGW, ts.cursor, &ts.overlay, ts.netOverlay, ts.cfg, ts.claimDialog)
 	if result.exit != nil {
 		switch result.exit.Reason {
-		case TableExitLeaveRoom, TableExitGameOver:
+		case TableExitLeaveRoom:
+			ts.overlay.Close()
+		case TableExitGameOver:
 			ts.quit = true
 		case TableExitRestart:
 			ts.quit = true

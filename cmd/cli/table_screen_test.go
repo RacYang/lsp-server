@@ -59,6 +59,26 @@ func TestRoomPrepEnterDoesNothingWhenSeatsEmpty(t *testing.T) {
 	}
 }
 
+func TestTableSceneLeaveRoomReturnsToLobbyWithoutQuittingApp(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.RoomID = "room-1"
+		v.SeatIndex = 0
+		v.RoomState = "playing"
+		v.Players[0] = PlayerView{UserID: "u0", Nickname: "racoo", Online: true}
+	})
+	scene := NewTableScene(state, nil, &fakeTableGateway{}, nil)
+
+	scene.HandleKey(context.Background(), tcell.NewEventKey(tcell.KeyRune, 'q', 0))
+
+	require.False(t, scene.ShouldQuit())
+	view := state.Snapshot()
+	require.Equal(t, phaseLobby, view.Phase)
+	require.Empty(t, view.RoomID)
+	require.Equal(t, "room-1", view.PendingLeaveRoomID)
+}
+
 type fakeTableGateway struct {
 	ready chan struct{}
 }
