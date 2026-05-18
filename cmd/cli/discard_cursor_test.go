@@ -22,8 +22,12 @@ func TestDeriveCursorMode(t *testing.T) {
 	v.WaitingAction = "exchange_three"
 	require.Equal(t, CursorModeMulti3, DeriveCursorMode(v))
 
+	v.WaitingAction = "que_men"
+	require.Equal(t, CursorModeQueMen, DeriveCursorMode(v))
+
 	// 川麻血战换三张是 4 家并发；本地 SeatIndex=1 即便 ActingSeat=0 也应能选牌，
 	// 否则非 dealer 玩家在换三张阶段会陷入死锁（按任何键都没反应）。
+	v.WaitingAction = "exchange_three"
 	v.ActingSeat = 0
 	require.Equal(t, CursorModeMulti3, DeriveCursorMode(v))
 
@@ -113,6 +117,11 @@ func TestHandCursorCanSubmit(t *testing.T) {
 	require.False(t, multi.CanSubmit())
 	multi.Marked = []int{0, 1, 2}
 	require.True(t, multi.CanSubmit())
+
+	que := &HandCursor{Mode: CursorModeQueMen, Index: -1}
+	require.False(t, que.CanSubmit())
+	que.Index = 1
+	require.True(t, que.CanSubmit())
 }
 
 func TestHandCursorSubmitTransitions(t *testing.T) {
@@ -174,6 +183,29 @@ func TestHandCursorSyncModeIntoMulti3PreselectsFirstTile(t *testing.T) {
 	require.Equal(t, 0, c.Index, "Multi3 切入应让光标落在第一张,Space 立刻可用")
 	require.Empty(t, c.Marked, "切入 Multi3 时不应自动标记任何牌")
 	require.False(t, c.CanSubmit(), "未标记 3 张时不能提交")
+}
+
+func TestHandCursorSyncModeIntoQueMenPreselectsWeakestSuit(t *testing.T) {
+	c := &HandCursor{}
+	v := makeMyTurnDiscardView()
+	v.WaitingAction = "que_men"
+	v.Players[v.SeatIndex].Hand = []string{"m1", "m2", "p1", "p2", "s9"}
+	c.SyncMode(v)
+	require.Equal(t, CursorModeQueMen, c.Mode)
+	require.Equal(t, 2, c.Index, "定缺切入应默认落到当前数量最少的花色")
+	require.True(t, c.CanSubmit())
+}
+
+func TestHandCursorQueMenMovesAcrossThreeSuits(t *testing.T) {
+	c := &HandCursor{Mode: CursorModeQueMen, Index: -1}
+	c.Move(1, 0)
+	require.Equal(t, 0, c.Index)
+	c.Move(1, 0)
+	require.Equal(t, 1, c.Index)
+	c.Move(1, 0)
+	require.Equal(t, 2, c.Index)
+	c.Move(1, 0)
+	require.Equal(t, 2, c.Index)
 }
 
 func TestHandCursorSyncModeClampsIndexWhenHandShrinks(t *testing.T) {

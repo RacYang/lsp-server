@@ -58,7 +58,8 @@ func DrawTableFrame(scr tcell.Screen, layout TableLayout, data TableData) {
 	DrawPlayerLabels(scr, layout, data)
 	DrawSeatTiles(scr, layout, data)
 	DrawPonds(scr, layout, data)
-	DrawCenterDial(scr, layout.Center, data.PhasePrompt, data.Countdown)
+	DrawMelds(scr, layout, data)
+	DrawCenterDial(scr, layout.Center, data.PhasePrompt, data.Countdown, data.Cursor)
 }
 
 // DrawTableEdge 绘制轻量牌局边界。
@@ -83,7 +84,7 @@ func DrawPlayerLabels(scr tcell.Screen, layout TableLayout, data TableData) {
 	// 南（框外下）
 	south := data.Players[0]
 	if south.Name != "" {
-		label := fmt.Sprintf("你：%s %s 分：%s", south.Name, south.Status, south.Score)
+		label := fmt.Sprintf("你：%s %s 缺：%s 分：%s", south.Name, south.Status, south.Que, south.Score)
 		if data.WallRemain > 0 {
 			label += fmt.Sprintf("  剩%d张", data.WallRemain)
 		}
@@ -93,21 +94,22 @@ func DrawPlayerLabels(scr tcell.Screen, layout TableLayout, data TableData) {
 	// 北（框外上）
 	north := data.Players[2]
 	if north.Name != "" {
-		label := fmt.Sprintf("对家：%s %s 分：%s", north.Name, north.Status, north.Score)
+		label := fmt.Sprintf("对家：%s %s 缺：%s 分：%s", north.Name, north.Status, north.Que, north.Score)
 		DrawClippedText(scr, layout.NorthLabel.X, layout.NorthLabel.Y,
 			DefaultStyle(), CenterVisual(label, layout.NorthLabel.Width), layout.NorthLabel.Width)
 	}
 	// 西（框外左）
 	west := data.Players[1]
 	if west.Name != "" {
-		label := fmt.Sprintf("%s %s", west.Name, west.Status)
-		DrawText(scr, layout.WestLabel.X, layout.WestLabel.Y, DefaultStyle(), label)
+		label := fmt.Sprintf("%s %s 缺:%s", west.Name, west.Status, west.Que)
+		DrawClippedText(scr, layout.WestLabel.X, layout.WestLabel.Y, DefaultStyle(),
+			RightVisual(label, layout.WestLabel.Width), layout.WestLabel.Width)
 	}
 	// 东（框外右）
 	east := data.Players[3]
 	if east.Name != "" {
-		label := fmt.Sprintf("%s %s", east.Name, east.Status)
-		DrawText(scr, layout.EastLabel.X, layout.EastLabel.Y, DefaultStyle(), label)
+		label := fmt.Sprintf("%s %s 缺:%s", east.Name, east.Status, east.Que)
+		DrawClippedText(scr, layout.EastLabel.X, layout.EastLabel.Y, DefaultStyle(), label, layout.EastLabel.Width)
 	}
 }
 
@@ -190,6 +192,24 @@ func DrawPonds(scr tcell.Screen, layout TableLayout, data TableData) {
 	drawPondCol(scr, layout.EastPond, data.Discards[3])
 }
 
+func DrawMelds(scr tcell.Screen, layout TableLayout, data TableData) {
+	drawMeldText(scr, Region{X: layout.NorthPond.X, Y: layout.NorthPond.Y + layout.NorthPond.Height, Width: layout.NorthPond.Width, Height: 1}, data.Players[2].Melds, true)
+	drawMeldText(scr, Region{X: layout.SouthPond.X, Y: layout.SouthHand.Y - 1, Width: layout.SouthPond.Width, Height: 1}, data.Players[0].Melds, true)
+	drawMeldText(scr, Region{X: layout.WestPond.X, Y: layout.WestPond.Y + layout.WestPond.Height - 1, Width: layout.WestPond.Width, Height: 1}, data.Players[1].Melds, false)
+	drawMeldText(scr, Region{X: layout.EastPond.X, Y: layout.EastPond.Y + layout.EastPond.Height - 1, Width: layout.EastPond.Width, Height: 1}, data.Players[3].Melds, false)
+}
+
+func drawMeldText(scr tcell.Screen, r Region, melds string, center bool) {
+	if r.Empty() || melds == "" {
+		return
+	}
+	label := "副露：" + melds
+	if center {
+		label = CenterVisual(label, r.Width)
+	}
+	DrawClippedText(scr, r.X, r.Y, DefaultStyle(), label, r.Width)
+}
+
 func drawPondRow(scr tcell.Screen, r Region, tiles []TileFace) {
 	if r.Empty() || len(tiles) == 0 {
 		return
@@ -237,12 +257,12 @@ func drawPondCol(scr tcell.Screen, r Region, tiles []TileFace) {
 // ─── 中央信息 ────────────────────────────────────────
 
 // DrawCenterDial 绘制中央区域：阶段提示 + 倒计时。
-func DrawCenterDial(scr tcell.Screen, r Region, prompt string, countdown int) {
+func DrawCenterDial(scr tcell.Screen, r Region, prompt string, countdown int, cursor CursorState) {
 	if r.Empty() {
 		return
 	}
 	if prompt != "" && r.Height >= 1 {
-		DrawClippedText(scr, r.X, r.Y, Style(SemEmphasis),
+		DrawClippedText(scr, r.X, r.Y, DefaultStyle(),
 			CenterVisual(prompt, r.Width), r.Width)
 	}
 	if countdown > 0 && r.Height >= 2 {
@@ -253,6 +273,29 @@ func DrawCenterDial(scr tcell.Screen, r Region, prompt string, countdown int) {
 		}
 		DrawClippedText(scr, r.X, r.Y+1, cdSt,
 			CenterVisual(cdLabel, r.Width), r.Width)
+	}
+	if cursor.Mode == "quemen" && r.Height >= 4 {
+		DrawQueMenSelector(scr, Region{X: r.X, Y: r.Y + 3, Width: r.Width, Height: 1}, cursor.Index)
+	}
+}
+
+func DrawQueMenSelector(scr tcell.Screen, r Region, selected int) {
+	labels := []string{"缺万", "缺筒", "缺条"}
+	const step = 8
+	total := len(labels)*step - 2
+	x := r.X + (r.Width-total)/2
+	if x < r.X {
+		x = r.X
+	}
+	for i, label := range labels {
+		st := DefaultStyle()
+		if i == selected {
+			st = Style(SemEmphasis)
+			label = ">" + label + "<"
+		} else {
+			label = " " + label + " "
+		}
+		DrawText(scr, x+i*step, r.Y, st, label)
 	}
 }
 

@@ -18,7 +18,7 @@ const BotUserIDPrefix = "bot:"
 
 const (
 	defaultBotTickTimeout    = 4 * time.Second
-	defaultHumanRoomBotDelay = 1200 * time.Millisecond
+	defaultHumanRoomBotDelay = 2200 * time.Millisecond
 )
 
 // IsBotUserID 判断 user_id 是否为 lobby 分配的机器人座位。
@@ -221,13 +221,16 @@ func (b *BotSupervisor) tickBotSeat(ctx context.Context, roomID, userID string, 
 	if action.Kind == bot.ActionNone || action.Kind == "" {
 		return false, nil
 	}
-	if humanRoom && shouldDelayBotAction(view.WaitingAction) && b.humanRoomDelay > 0 {
-		timer := time.NewTimer(b.humanRoomDelay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return false, ctx.Err()
-		case <-timer.C:
+	if humanRoom {
+		delay := b.delayForBotAction(view.WaitingAction)
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return false, ctx.Err()
+			case <-timer.C:
+			}
 		}
 	}
 	notifications, err := b.submit(ctx, roomID, userID, action)
@@ -243,6 +246,29 @@ func (b *BotSupervisor) tickBotSeat(ctx context.Context, roomID, userID string, 
 	return true, nil
 }
 
+func (b *BotSupervisor) delayForBotAction(waitingAction string) time.Duration {
+	if b == nil || b.humanRoomDelay <= 0 {
+		return 0
+	}
+	switch waitingAction {
+	case "claim_window":
+		return minDuration(900*time.Millisecond, b.humanRoomDelay)
+	case "exchange_three", "que_men":
+		return minDuration(900*time.Millisecond, b.humanRoomDelay)
+	case "discard", "tsumo_window":
+		return b.humanRoomDelay
+	default:
+		return 0
+	}
+}
+
+func minDuration(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func roomHasHuman(playerIDs [4]string) bool {
 	for _, userID := range playerIDs {
 		if userID != "" && !IsBotUserID(userID) {
@@ -250,15 +276,6 @@ func roomHasHuman(playerIDs [4]string) bool {
 		}
 	}
 	return false
-}
-
-func shouldDelayBotAction(waitingAction string) bool {
-	switch waitingAction {
-	case "discard", "claim_window", "tsumo_window":
-		return true
-	default:
-		return false
-	}
 }
 
 // botShouldAct 在不构造 BotView 的前提下快速过滤"轮不到我"的状态。

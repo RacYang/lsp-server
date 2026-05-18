@@ -245,11 +245,11 @@ func (r *Runner) idempotencyKey(id uint16) string {
 func (r *Runner) sleepForWaiting(ctx context.Context, waiting string) {
 	switch waiting {
 	case "claim_window", "tsumo_window":
-		r.sleepThink(ctx, 200*time.Millisecond, 800*time.Millisecond)
+		r.sleepThink(ctx, 700*time.Millisecond, 1600*time.Millisecond)
 	case "discard":
-		r.sleepThink(ctx, 400*time.Millisecond, 1500*time.Millisecond)
+		r.sleepThink(ctx, 900*time.Millisecond, 2400*time.Millisecond)
 	case "exchange_three", "que_men":
-		r.sleepThink(ctx, 300*time.Millisecond, time.Second)
+		r.sleepThink(ctx, time.Second, 2500*time.Millisecond)
 	}
 }
 

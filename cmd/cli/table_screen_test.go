@@ -79,8 +79,43 @@ func TestTableSceneLeaveRoomReturnsToLobbyWithoutQuittingApp(t *testing.T) {
 	require.Equal(t, "room-1", view.PendingLeaveRoomID)
 }
 
+func TestQueMenUsesSelectionCursorAndEnter(t *testing.T) {
+	state := NewAppState("racoo")
+	state.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.SeatIndex = 0
+		v.ActingSeat = 0
+		v.RoomState = "playing"
+		v.WaitingAction = "que_men"
+		v.Players[0] = PlayerView{UserID: "u0", Nickname: "racoo", Online: true}
+		v.Players[0].Hand = []string{"m1", "p1", "p2", "s1", "s2"}
+		for i := range v.QueBySeat {
+			v.QueBySeat[i] = -1
+		}
+	})
+	gateway := &fakeTableGateway{queMen: make(chan int32, 1)}
+	cursor := &HandCursor{}
+
+	result := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyRight, 0, 0),
+		state, gateway, cursor, &OverlayState{}, nil, nil, nil)
+	require.Nil(t, result.exit)
+	require.Equal(t, CursorModeQueMen, cursor.Mode)
+	require.Equal(t, 1, cursor.Index)
+
+	result = handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyEnter, 0, 0),
+		state, gateway, cursor, &OverlayState{}, nil, nil, nil)
+	require.Nil(t, result.exit)
+	select {
+	case suit := <-gateway.queMen:
+		require.EqualValues(t, 1, suit)
+	case <-time.After(time.Second):
+		t.Fatal("Enter should submit selected que men suit")
+	}
+}
+
 type fakeTableGateway struct {
-	ready chan struct{}
+	ready  chan struct{}
+	queMen chan int32
 }
 
 func (g *fakeTableGateway) Ready(context.Context) error {
@@ -94,7 +129,12 @@ func (g *fakeTableGateway) Discard(context.Context, string) error { return nil }
 
 func (g *fakeTableGateway) ExchangeThree(context.Context, []string, int32) error { return nil }
 
-func (g *fakeTableGateway) QueMen(context.Context, int32) error { return nil }
+func (g *fakeTableGateway) QueMen(_ context.Context, suit int32) error {
+	if g.queMen != nil {
+		g.queMen <- suit
+	}
+	return nil
+}
 
 func (g *fakeTableGateway) Pong(context.Context) error { return nil }
 

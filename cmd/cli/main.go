@@ -289,13 +289,38 @@ func snapshotSettlementSummary(view RoomView) *SettlementSummary {
 	// [S4.1] 流局或查叫罚分必须独立显示 reason / from / to / amount。
 	for _, p := range notify.GetPenalties() {
 		sum.Penalties = append(sum.Penalties, SettlementPenalty{
-			Reason:   p.GetReason(),
+			Reason:   settlementReasonLabel(p.GetReason()),
 			FromNick: nicknameForSeat(view, p.GetFromSeat()),
 			ToNick:   nicknameForSeat(view, p.GetToSeat()),
 			Amount:   int(p.GetAmount()),
 		})
 	}
 	return sum
+}
+
+func settlementReasonLabel(reason string) string {
+	switch reason {
+	case "gang_ming":
+		return "明杠得分"
+	case "gang_bu":
+		return "补杠得分"
+	case "gang_an":
+		return "暗杠得分"
+	case "refund_ming_gang":
+		return "退明杠分"
+	case "refund_bu_gang":
+		return "退补杠分"
+	case "refund_an_gang":
+		return "退暗杠分"
+	case "hu_tsumo":
+		return "自摸"
+	case "hu_discard":
+		return "点炮"
+	case "hu_qiang_gang":
+		return "抢杠胡"
+	default:
+		return reason
+	}
 }
 
 func containsString(list []string, target string) bool {

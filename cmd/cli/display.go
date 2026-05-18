@@ -64,21 +64,6 @@ func sideLabel(view RoomView, seat int32) string {
 	}
 }
 
-func windLabel(seat int) string {
-	switch seat {
-	case 0:
-		return "南"
-	case 1:
-		return "西"
-	case 2:
-		return "北"
-	case 3:
-		return "东"
-	default:
-		return "?"
-	}
-}
-
 // ─── 玩家状态 ────────────────────────────────────────
 
 // [G12] 局内座位状态值域：● 在线 / √ 已准备 / ○ 离线 / ▲ 弃局 / ✓ 已胡 / ▣ 机器人 / □ 空座。

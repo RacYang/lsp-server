@@ -121,6 +121,9 @@ func TestRenderTableFramePlayingFull(t *testing.T) {
 	require.NotContains(t, dump, "┐", "playing table should not use box corners")
 	require.Contains(t, dump, "轮到你：选择一张牌打出", "center must show prompt")
 	require.Contains(t, dump, "12s", "center must show countdown")
+	require.Contains(t, dump, "副露：碰三筒", "west melds must be visible")
+	require.Contains(t, dump, "副露：杠七条", "east melds must be visible")
+	require.NotContains(t, dump, "┄", "table should not use long dotted separator rules")
 }
 
 func TestRenderTableFrameRoomPrep(t *testing.T) {
@@ -214,6 +217,25 @@ func TestRenderTableFrameSupportsDrawnFourteenthTile(t *testing.T) {
 	dump := dumpScreen(scr)
 	require.Contains(t, dump, "九", "drawn tile rank must be visible")
 	require.Contains(t, dump, "筒", "drawn tile suit must be visible")
+}
+
+func TestRenderTableFrameShowsQueMenSelector(t *testing.T) {
+	scr := makeSimScreen(100, 30)
+	defer scr.Fini()
+
+	data := sampleTableData("playing")
+	data.PhasePrompt = "定缺：已选缺筒，Enter 确认（选定后不可更改）"
+	data.Cursor = CursorState{Mode: "quemen", Index: 1}
+	layout, ok := CalcTable(100, 30)
+	require.True(t, ok)
+
+	DrawTableFrame(scr, layout, data)
+	scr.Show()
+
+	dump := dumpScreen(scr)
+	require.Contains(t, dump, "缺万")
+	require.Contains(t, dump, ">缺筒<")
+	require.Contains(t, dump, "缺条")
 }
 
 func TestCalcTableMinSize(t *testing.T) {

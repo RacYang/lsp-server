@@ -263,6 +263,9 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 		}
 		return "换三张：已选 3/3，按 Enter 交换"
 	}
+	if ux.Phase == PhaseQueMen && cursor != nil && cursor.Mode == CursorModeQueMen {
+		return fmt.Sprintf("定缺：已选缺%s，Enter 确认（选定后不可更改）", queChoiceLabel(cursor.Index))
+	}
 	if ux.Phase == PhaseMyTurnSelected && cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
 		hand := view.Players[view.SeatIndex].Hand
 		if cursor.Index < len(hand) {
@@ -273,7 +276,6 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 	case PhaseExchange:
 		return "换三张：选 3 张同花色"
 	case PhaseQueMen:
-		// [Q1.1]/[Q2.1] 键位 m/p/s 且必须告知不可更改。
 		return "定缺：选一门不要，选定后不可更改"
 	case PhaseDiscard:
 		if containsAction(model.Allowed, ActionDiscard) {
@@ -312,8 +314,11 @@ func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 		}
 		return fmt.Sprintf("换三张：已选 %d/3　←→ 选牌　Space 标记　Enter 确认", marked)
 	case PhaseQueMen:
-		return "定缺：m 缺万　p 缺筒　s 缺条"
+		return "定缺：←→ 选择缺门　Enter 确认　m/p/s 快捷"
 	case PhaseMyTurnIdle, PhaseMyTurnSelected:
+		if containsAction(ux.AllowedActions, ActionGang) {
+			return "轮到你：←→ 选牌　Enter 打出　g 杠"
+		}
 		return "轮到你：←→ 选牌　Enter 打出"
 	case PhaseClaim:
 		return claimKeyHint(ux)
@@ -326,6 +331,19 @@ func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 		return "准备开局：Enter 确认　? 帮助"
 	}
 	return "等待：? 帮助　i 房间信息　Tab 玩家"
+}
+
+func queChoiceLabel(idx int) string {
+	switch idx {
+	case 0:
+		return "万"
+	case 1:
+		return "筒"
+	case 2:
+		return "条"
+	default:
+		return "万"
+	}
 }
 
 func disabledReason(view RoomView, cursor *HandCursor, model InteractionModel) string {

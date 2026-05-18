@@ -162,7 +162,7 @@ func (d *SettlementDialogState) allLines(innerWidth int) []string {
 	}
 	// [S4.1] 流局罚分 / 查叫 / 退税独立显示。
 	for _, p := range d.Summary.Penalties {
-		lines = append(lines, centerVisual(fmt.Sprintf("罚分：%s  %s 给 %s  %d", p.Reason, p.FromNick, p.ToNick, p.Amount), innerWidth))
+		lines = append(lines, centerVisual(fmt.Sprintf("明细：%s  %s → %s  %d", p.Reason, p.FromNick, p.ToNick, p.Amount), innerWidth))
 	}
 	lines = append(lines, centerVisual(fmt.Sprintf("共 %d 番", d.Summary.TotalFan), innerWidth))
 	for _, s := range d.Summary.Scores {
@@ -230,7 +230,7 @@ func WriteStdoutSummary(w io.Writer, sum SettlementSummary) {
 	}
 	// [S4.1] 流局/查叫罚分独立列出。
 	for _, p := range sum.Penalties {
-		_, _ = fmt.Fprintf(w, "罚: %s  %s→%s  %d\n", p.Reason, p.FromNick, p.ToNick, p.Amount)
+		_, _ = fmt.Fprintf(w, "明细: %s  %s→%s  %d\n", p.Reason, p.FromNick, p.ToNick, p.Amount)
 	}
 	for _, s := range sum.Scores {
 		label := s.Nickname

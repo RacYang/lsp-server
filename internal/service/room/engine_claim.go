@@ -242,6 +242,9 @@ func (rs *RoundState) canSelfGang(seat Seat, tileText string) bool {
 	if err != nil {
 		return false
 	}
+	if rs.tileIsQueSuit(seat, target) {
+		return false
+	}
 	count := 0
 	for _, t := range rs.hands[seat].Tiles() {
 		if t == target {
@@ -320,11 +323,47 @@ func (rs *RoundState) buildClaimCandidates() []claimCandidate {
 			CheckHu:         rs.rule.CheckHu,
 		})
 		actions, priority, choiceAction := normalizeClaimActions(claimActions)
+		if rs.tileIsQueSuit(seat, rs.lastDiscard) {
+			actions, priority, choiceAction = filterQueSuitClaimActions(actions, priority, choiceAction)
+		}
 		if len(actions) > 0 {
 			out = append(out, claimCandidate{seat: seat, actions: actions, priority: priority, choiceAction: choiceAction})
 		}
 	}
 	return out
+}
+
+func (rs *RoundState) tileIsQueSuit(seat Seat, t tile.Tile) bool {
+	if rs == nil || seat < 0 || int(seat) >= len(rs.queBySeat) || t == 0 {
+		return false
+	}
+	if int(seat) >= len(rs.queSubmitted) || !rs.queSubmitted[seat] {
+		return false
+	}
+	que := rs.queBySeat[seat]
+	if que < 0 || que > 2 {
+		return false
+	}
+	return int32(t.Suit()) == que
+}
+
+func filterQueSuitClaimActions(actions []string, priority int, choiceAction string) ([]string, int, string) {
+	out := actions[:0]
+	for _, action := range actions {
+		switch action {
+		case string(rules.ActionPong), string(rules.ActionGang):
+			continue
+		default:
+			out = append(out, action)
+		}
+	}
+	if len(out) == len(actions) {
+		return actions, priority, choiceAction
+	}
+	if len(out) == 0 {
+		return nil, 0, ""
+	}
+	return out, legacyClaimPriority(out), ""
 }
 
 func (rs *RoundState) bestClaimCandidate() (claimCandidate, bool) {

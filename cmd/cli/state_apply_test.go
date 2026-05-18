@@ -640,6 +640,51 @@ func TestPlayerJourney_T2_2_TsumoDialogDefaultsToHu(t *testing.T) {
 	require.Equal(t, ClaimActionHu, dialog.Selected(), "[T2.2] tsumo 弹窗 Enter 默认走「胡」")
 }
 
+func TestTsumoDrawStaysPendingUntilPass(t *testing.T) {
+	st := NewAppState("racoo")
+	st.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.SeatIndex = 0
+		v.Players[0].Hand = []string{"m1", "m1", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "p1", "p2", "p3", "s1"}
+		v.Players[0].HandCnt = len(v.Players[0].Hand)
+	})
+
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
+		SeatIndex: 0,
+		Tile:      "s1",
+		Phase:     clientv1.Phase_PHASE_TSUMO,
+		Step:      10,
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, "tsumo_window", view.WaitingAction)
+	require.Equal(t, "s1", view.PendingTile)
+	require.Len(t, view.Players[0].Hand, 13, "自摸待选牌不应在胡/过之前并入手牌显示")
+}
+
+func TestGangActionConsumesSelfHandTiles(t *testing.T) {
+	st := NewAppState("racoo")
+	st.Mutate(func(v *RoomView) {
+		v.Phase = phaseTable
+		v.SeatIndex = 0
+		v.WaitingAction = "discard"
+		v.Players[0].Hand = []string{"m1", "m1", "m1", "m1", "p2"}
+		v.Players[0].HandCnt = len(v.Players[0].Hand)
+	})
+
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
+		SeatIndex: 0,
+		Action:    "gang",
+		Tile:      "m1",
+		Phase:     clientv1.Phase_PHASE_DRAW,
+		Step:      11,
+	}}})
+
+	view := st.Snapshot()
+	require.Equal(t, []string{"p2"}, view.Players[0].Hand)
+	require.Equal(t, []string{"gang:m1"}, view.Players[0].Melds)
+}
+
 // TestPlayerJourney_S3_1_MultiWinnerExpandsEachHuSeat 锁定 [S3.1] 多家胡每家独立显示。
 //
 // 一炮多响 / 血战连续胡场景下，per_winner_breakdown 会带多个胡家；cli 必须把每位胡家

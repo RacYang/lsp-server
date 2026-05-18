@@ -112,6 +112,15 @@ func PadRightVisual(s string, width int) string {
 	return s + strings.Repeat(" ", width-w)
 }
 
+// RightVisual 把 s 左补空格到指定 cell 宽度。
+func RightVisual(s string, width int) string {
+	w := VisualWidth(s)
+	if w >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-w) + s
+}
+
 // ─── 组件 ────────────────────────────────────────────
 
 // DrawBox 绘制带标题的边框。

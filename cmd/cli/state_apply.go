@@ -286,6 +286,7 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	if draw.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
 		applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, draw.GetStep(), []int32{seat}, "discard", []string{"discard"})
 	}
+	tsumoPending := v.WaitingAction == "tsumo_window"
 	if duplicate {
 		appendLog(v, "已忽略重复摸牌事件")
 		return
@@ -295,11 +296,14 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 	v.AppliedDrawTile = t
 	p := &v.Players[seat]
 	if seat == v.SeatIndex {
-		if t != "" {
+		if t != "" && !tsumoPending {
 			p.Hand = sortedTiles(append(p.Hand, t))
 		}
 		p.HandCnt = len(p.Hand)
-	} else {
+		if t != "" && tsumoPending {
+			v.PendingTile = t
+		}
+	} else if !tsumoPending {
 		// 对家摸牌只维护计数；服务端按座位投影后不会下发实际牌面。
 		p.HandCnt++
 	}
@@ -312,6 +316,7 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 
 func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 	seat := action.GetSeatIndex()
+	beforeWaiting := v.WaitingAction
 	v.RoomState = "playing"
 	v.WallRemaining = action.GetWallRemaining()
 	if pu := action.GetPhaseUpdate(); pu != nil {
@@ -351,10 +356,7 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 			applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, action.GetStep(), []int32{seat}, "discard", []string{"discard"})
 		}
 	case "gang":
-		recordMeld(v, seat, "gang:"+action.GetTile())
-		if seat >= 0 && seat < 4 {
-			v.ActingSeat = seat
-		}
+		applyGangAction(v, seat, action.GetTile(), beforeWaiting)
 	case "hu", "tsumo":
 		if seat >= 0 && seat < 4 {
 			v.Players[seat].Hued = true
@@ -390,6 +392,33 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 	if msg := formatActionLog(*v, seat, action.GetAction(), action.GetTile()); msg != "" {
 		appendLog(v, msg)
 	}
+}
+
+func applyGangAction(v *RoomView, seat int32, tile, beforeWaiting string) {
+	if seat < 0 || seat > 3 || tile == "" {
+		return
+	}
+	removeClaimedDiscard(v, seat, tile)
+	recordMeld(v, seat, "gang:"+tile)
+	p := &v.Players[seat]
+	removeCount := 4
+	if beforeWaiting == "claim_window" {
+		removeCount = 3
+	}
+	if seat == v.SeatIndex {
+		for i := 0; i < removeCount; i++ {
+			p.Hand = removeOneTile(p.Hand, tile)
+		}
+		p.HandCnt = len(p.Hand)
+	} else {
+		p.HandCnt -= removeCount
+		if p.HandCnt < 0 {
+			p.HandCnt = 0
+		}
+	}
+	v.ActingSeat = seat
+	v.PendingTile = ""
+	v.ClaimCandidates = map[int32][]string{}
 }
 
 // formatActionLog 把协议侧的 action 字符串翻译成对玩家可读的中文描述。

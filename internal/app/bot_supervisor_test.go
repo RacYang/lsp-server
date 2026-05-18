@@ -175,9 +175,10 @@ func TestBotSupervisorHumanRoomDelayIsVisible(t *testing.T) {
 
 	require.GreaterOrEqual(t, sup.humanRoomDelay, time.Second)
 	require.Greater(t, sup.tickTimeout, sup.humanRoomDelay)
-	require.True(t, shouldDelayBotAction("discard"))
-	require.True(t, shouldDelayBotAction("claim_window"))
-	require.True(t, shouldDelayBotAction("tsumo_window"))
-	require.False(t, shouldDelayBotAction("exchange_three"))
-	require.False(t, shouldDelayBotAction("que_men"))
+	require.Equal(t, sup.humanRoomDelay, sup.delayForBotAction("discard"))
+	require.Equal(t, sup.humanRoomDelay, sup.delayForBotAction("tsumo_window"))
+	require.GreaterOrEqual(t, sup.delayForBotAction("claim_window"), 500*time.Millisecond)
+	require.GreaterOrEqual(t, sup.delayForBotAction("exchange_three"), 500*time.Millisecond)
+	require.GreaterOrEqual(t, sup.delayForBotAction("que_men"), 500*time.Millisecond)
+	require.Zero(t, sup.delayForBotAction("none"))
 }

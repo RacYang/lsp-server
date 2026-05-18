@@ -4,7 +4,8 @@ package main
 //
 // 当玩家轮到出牌时是 CursorModeSingle（选 1 张 Enter 提交）；
 // 川麻换三张阶段是 CursorModeMulti3（Space 标记 3 张，Enter 提交）；
-// 其他场景（等待别家、定缺、claim、结算）是 CursorModeNone，禁用所有手牌操作。
+// 定缺阶段是 CursorModeQueMen（选一门 Enter 提交）；
+// 其他场景（等待别家、claim、结算）是 CursorModeNone，禁用所有手牌操作。
 type CursorMode int
 
 const (
@@ -14,6 +15,8 @@ const (
 	CursorModeSingle
 	// CursorModeMulti3 三选模式：Space 标记/取消，凑齐 3 张 Enter 提交。
 	CursorModeMulti3
+	// CursorModeQueMen 定缺模式：方向键在万/筒/条之间移动，Enter 提交。
+	CursorModeQueMen
 )
 
 // HandCursor 是手牌区光标的有限状态机。
@@ -52,6 +55,10 @@ func DeriveCursorMode(view RoomView) CursorMode {
 		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 			return CursorModeMulti3
 		}
+	case PhaseQueMen:
+		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
+			return CursorModeQueMen
+		}
 	}
 	return CursorModeNone
 }
@@ -61,6 +68,9 @@ func DeriveCursorMode(view RoomView) CursorMode {
 // Pending 状态下移动会被忽略，避免在等服务器 ack 期间产生本地状态漂移。
 // 当 Index 还是初始的 -1 时，第一次移动会落到 0（最左侧）。
 func (c *HandCursor) Move(delta int, handLen int) {
+	if c.Mode == CursorModeQueMen {
+		handLen = 3
+	}
 	if c.Mode == CursorModeNone || c.Pending || handLen <= 0 {
 		return
 	}
@@ -84,6 +94,9 @@ func (c *HandCursor) Move(delta int, handLen int) {
 
 // SetIndex 直接跳到目标索引，多用于鼠标点击或数字键直选。
 func (c *HandCursor) SetIndex(idx int, handLen int) {
+	if c.Mode == CursorModeQueMen {
+		handLen = 3
+	}
 	if c.Pending {
 		return
 	}
@@ -127,6 +140,8 @@ func (c *HandCursor) CanSubmit() bool {
 		return c.Index >= 0
 	case CursorModeMulti3:
 		return len(c.Marked) == 3
+	case CursorModeQueMen:
+		return c.Index >= 0 && c.Index < 3
 	}
 	return false
 }
@@ -192,6 +207,9 @@ func (c *HandCursor) SyncMode(view RoomView) {
 	if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 		handLen = len(view.Players[view.SeatIndex].Hand)
 	}
+	if mode == CursorModeQueMen {
+		handLen = 3
+	}
 	if c.Pending && c.PendingSinceStep > 0 && view.LastStep > c.PendingSinceStep {
 		c.Pending = false
 		c.PendingSinceStep = 0
@@ -211,11 +229,13 @@ func (c *HandCursor) SyncMode(view RoomView) {
 				}
 			case CursorModeMulti3:
 				c.Index = 0
+			case CursorModeQueMen:
+				c.Index = defaultQueChoice(view)
 			}
 		}
 		return
 	}
-	if mode == CursorModeSingle || mode == CursorModeMulti3 {
+	if mode == CursorModeSingle || mode == CursorModeMulti3 || mode == CursorModeQueMen {
 		switch {
 		case handLen <= 0:
 			c.Index = -1
@@ -223,13 +243,37 @@ func (c *HandCursor) SyncMode(view RoomView) {
 			switch mode {
 			case CursorModeSingle:
 				c.Index = handLen - 1
-			case CursorModeMulti3:
+			case CursorModeMulti3, CursorModeQueMen:
 				c.Index = 0
 			}
 		case c.Index >= handLen:
 			c.Index = handLen - 1
 		}
 	}
+}
+
+func defaultQueChoice(view RoomView) int {
+	if view.SeatIndex < 0 || view.SeatIndex > 3 {
+		return 0
+	}
+	counts := [3]int{}
+	for _, raw := range view.Players[view.SeatIndex].Hand {
+		switch {
+		case len(raw) > 0 && raw[0] == 'm':
+			counts[0]++
+		case len(raw) > 0 && raw[0] == 'p':
+			counts[1]++
+		case len(raw) > 0 && raw[0] == 's':
+			counts[2]++
+		}
+	}
+	best := 0
+	for i := 1; i < len(counts); i++ {
+		if counts[i] < counts[best] {
+			best = i
+		}
+	}
+	return best
 }
 
 // indexOfPendingDrawTile 在自家排序后手牌里找 view.PendingTile 的索引；

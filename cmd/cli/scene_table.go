@@ -209,6 +209,8 @@ func cursorModeString(m CursorMode) string {
 		return "single"
 	case CursorModeMulti3:
 		return "multi3"
+	case CursorModeQueMen:
+		return "quemen"
 	default:
 		return "none"
 	}
@@ -217,31 +219,16 @@ func cursorModeString(m CursorMode) string {
 // ─── 覆盖层 ──────────────────────────────────────────
 
 func (ts *TableScene) drawRoomPrepOverlay(scr tcell.Screen, layout render.TableLayout, view RoomView) {
-	relToAbs := [4]int32{
-		view.SeatIndex,
-		(view.SeatIndex + 1) % 4,
-		(view.SeatIndex + 2) % 4,
-		(view.SeatIndex + 3) % 4,
+	status := "等待入座"
+	if emptySeatCount(view) == 0 {
+		status = "人已坐齐，按 Enter 准备"
 	}
-	prepPlayers := [4]render.PlayerInfo{}
-	for rel := 0; rel < 4; rel++ {
-		seat := relToAbs[rel]
-		p := view.Players[seat]
-		name := playerDisplayName(view, seat)
-		wind := windLabel(int(seat))
-		prepPlayers[rel] = render.PlayerInfo{
-			Name:      name,
-			SeatLabel: wind,
-			Status:    seatStatusMark(p),
-		}
-	}
-	lines := render.BuildSeatPrepLines(prepPlayers)
-	render.DrawDialog(scr, layout.Frame, "座位", lines, render.BorderSingle)
-
+	render.DrawClippedText(scr, layout.Center.X, layout.Center.Y, render.DefaultStyle(),
+		render.CenterVisual(status, layout.Center.Width), layout.Center.Width)
 	if view.RoomID != "" && view.Private {
 		codeLine := "房间码：" + view.RoomID
-		render.DrawClippedText(scr, layout.Frame.X+2, layout.Frame.Y+layout.Frame.Height-2,
-			render.Style(render.SemEmphasis), render.CenterVisual(codeLine, layout.Frame.Width-4), layout.Frame.Width-4)
+		render.DrawClippedText(scr, layout.Center.X, layout.Center.Y+2,
+			render.DefaultStyle(), render.CenterVisual(codeLine, layout.Center.Width), layout.Center.Width)
 	}
 }
 

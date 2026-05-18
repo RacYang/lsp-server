@@ -557,6 +557,45 @@ func TestApplyDiscardPromptsClaimInsteadOfNextDraw(t *testing.T) {
 	require.True(t, sawClaim)
 }
 
+func TestQueSuitDiscardDoesNotOfferPongOrGang(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-que-claim-filter",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3)}), hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
+		queBySeat:       []int32{int32(tile.SuitDots), int32(tile.SuitDots), int32(tile.SuitCharacters), int32(tile.SuitDots)},
+		queSubmitted:    []bool{true, true, true, true},
+		waitingDiscard:  true,
+		turn:            0,
+		lastDiscardSeat: -1,
+	}
+
+	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
+	_, err := e.ApplyDiscard(context.Background(), rs, 0, "m3")
+	require.NoError(t, err)
+	require.False(t, rs.claimWindowOpen)
+	require.Empty(t, rs.claimCandidates)
+}
+
+func TestQueSuitCannotSelfGang(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		ruleID:         "sichuan_xuezhandaodi_huansanzhang",
+		rule:           rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		hands:          []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 9), tile.Must(tile.SuitDots, 9), tile.Must(tile.SuitDots, 9), tile.Must(tile.SuitDots, 9)}), hand.New(), hand.New(), hand.New()},
+		queBySeat:      []int32{int32(tile.SuitDots), -1, -1, -1},
+		queSubmitted:   []bool{true, false, false, false},
+		waitingDiscard: true,
+		turn:           0,
+	}
+	require.False(t, rs.canSelfGang(0, "p9"))
+}
+
 func TestDrawTileNotificationProjectsTileOnlyToActor(t *testing.T) {
 	t.Parallel()
 

@@ -108,6 +108,7 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			if !containsAction(ux.AllowedActions, ActionQueMen) {
 				return tableEventResult{}
 			}
+			cursor.SetIndex(0, 3)
 			return submitQueMen(ctx, gateway, model, 0)
 		case 'p', 'P':
 			// 抢答弹窗下 p 优先解释为碰，避免与定缺冲突；[G2] 对局动作级键的层级。
@@ -117,11 +118,13 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			if !containsAction(ux.AllowedActions, ActionQueMen) {
 				return tableEventResult{}
 			}
+			cursor.SetIndex(1, 3)
 			return submitQueMen(ctx, gateway, model, 1)
 		case 's', 'S':
 			if !containsAction(ux.AllowedActions, ActionQueMen) {
 				return tableEventResult{}
 			}
+			cursor.SetIndex(2, 3)
 			return submitQueMen(ctx, gateway, model, 2)
 		case 'h', 'H':
 			if claimDialog == nil {
@@ -130,11 +133,14 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			}
 			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionHu)
 		case 'g', 'G':
-			if claimDialog == nil {
-				noticeInputRejected(state, ux, "当前不能杠")
-				return tableEventResult{}
+			if claimDialog != nil {
+				return submitClaimAction(ctx, gateway, claimDialog, ClaimActionGang)
 			}
-			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionGang)
+			if containsAction(ux.AllowedActions, ActionGang) && cursor.Mode == CursorModeSingle {
+				return submitSelfGang(ctx, state, cursor, hand, gateway, view)
+			}
+			noticeInputRejected(state, ux, "当前不能杠")
+			return tableEventResult{}
 		case 'n', 'N':
 			if claimDialog == nil {
 				noticeInputRejected(state, ux, "当前不能过")
@@ -147,13 +153,13 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 			claimDialog.Move(-1)
 			return tableEventResult{}
 		}
-		cursor.Move(-1, len(hand))
+		cursor.Move(-1, cursorMoveSpan(cursor, len(hand)))
 	case tcell.KeyRight:
 		if claimDialog != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
 			claimDialog.Move(1)
 			return tableEventResult{}
 		}
-		cursor.Move(1, len(hand))
+		cursor.Move(1, cursorMoveSpan(cursor, len(hand)))
 	// KeyEnter (KeyCR=\r) 与 KeyCtrlJ (\n) 都视为提交,
 	// 兼容部分终端将回车映射为换行符的情况（如 stty icrnl 关闭、tmux 配置等）。
 	case tcell.KeyEnter, tcell.KeyCtrlJ:
@@ -326,6 +332,13 @@ func submitQueMen(ctx context.Context, gateway TableGateway, model InteractionMo
 	return tableEventResult{}
 }
 
+func cursorMoveSpan(cursor *HandCursor, handLen int) int {
+	if cursor != nil && cursor.Mode == CursorModeQueMen {
+		return 3
+	}
+	return handLen
+}
+
 func submitClaimAction(ctx context.Context, gateway TableGateway, dialog *ClaimDialogState, action ClaimAction) tableEventResult {
 	if dialog == nil || dialog.Pending {
 		return tableEventResult{}
@@ -348,6 +361,35 @@ func submitClaimAction(ctx context.Context, gateway TableGateway, dialog *ClaimD
 		}
 	}()
 	return tableEventResult{}
+}
+
+func submitSelfGang(ctx context.Context, state *AppState, cursor *HandCursor, hand []string, gateway TableGateway, view RoomView) tableEventResult {
+	if cursor == nil || cursor.Pending || cursor.Index < 0 || cursor.Index >= len(hand) {
+		return tableEventResult{}
+	}
+	tile := hand[cursor.Index]
+	if countTile(hand, tile) < 4 {
+		noticeInputRejected(state, DeriveTableUXModel(view, cursor, time.Now()), "选中的牌不能杠")
+		return tableEventResult{}
+	}
+	cursor.SubmitAt(view.LastStep)
+	go func() {
+		if err := gateway.Gang(ctx, tile); err != nil {
+			cursor.RollbackPending()
+			noticeAsyncFailure(state, "杠失败", err)
+		}
+	}()
+	return tableEventResult{}
+}
+
+func countTile(hand []string, tile string) int {
+	n := 0
+	for _, current := range hand {
+		if current == tile {
+			n++
+		}
+	}
+	return n
 }
 
 // submitCursorAction 处理 Enter 提交：单选模式直接 Discard，多选模式打 ExchangeThree。
@@ -398,6 +440,19 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 				cursor.RollbackPending()
 				clearPendingExchange(state, view.SeatIndex)
 				noticeAsyncFailure(state, "换三张失败", err)
+			}
+		}()
+	case CursorModeQueMen:
+		model := DeriveInteractionModel(view)
+		if model.Phase != PhaseQueMen || cursor.Index < 0 || cursor.Index > 2 {
+			return tableEventResult{}
+		}
+		suit := int32(cursor.Index)
+		cursor.SubmitAt(view.LastStep)
+		go func() {
+			if err := gateway.QueMen(ctx, suit); err != nil {
+				cursor.RollbackPending()
+				noticeAsyncFailure(state, "定缺失败", err)
 			}
 		}()
 	}
