@@ -147,8 +147,13 @@ func (s *LobbyScene) renderHome(scr tcell.Screen, content render.Region) {
 }
 
 func (s *LobbyScene) renderRules(scr tcell.Screen, content render.Region) {
-	render.DrawClippedText(scr, content.X+2, content.Y+2, render.Style(render.SemEmphasis), "创建房间 · 选择玩法", content.Width-4)
-	items := make([]render.ListItem, len(s.rules))
+	y := drawLobbyHeading(scr, content, "创建房间", "先选一种玩法")
+	if len(s.rules) == 0 {
+		render.DrawClippedText(scr, content.X, y+3, render.DefaultStyle(),
+			render.CenterVisual("正在加载玩法...", content.Width), content.Width)
+		return
+	}
+	x, width := lobbyTextColumn(content, 72)
 	for i, rule := range s.rules {
 		desc := rule.ShortDesc
 		if desc == "" {
@@ -157,23 +162,26 @@ func (s *LobbyScene) renderRules(scr tcell.Screen, content render.Region) {
 		if desc == "" {
 			desc = "经典玩法"
 		}
-		items[i] = render.ListItem{
-			Text:     displayRuleName(rule) + "  ——  " + desc,
-			Selected: i == s.selected,
+		rowY := y + 3 + i*3
+		if rowY+1 >= content.Y+content.Height {
+			break
 		}
-	}
-	listRegion := render.Region{X: content.X + 6, Y: content.Y + 5, Width: render.MaxInt(30, content.Width-12), Height: content.Height - 6}
-	render.DrawList(scr, listRegion, items, s.selected)
-	if len(s.rules) == 0 {
-		render.DrawClippedText(scr, content.X+4, content.Y+content.Height/2, render.DefaultStyle(), "正在加载玩法...", content.Width-8)
+		st := render.DefaultStyle()
+		name := displayRuleName(rule)
+		if i == s.selected {
+			st = render.Style(render.SemEmphasis)
+			name = " " + name + " "
+		}
+		render.DrawClippedText(scr, x, rowY, st, name, width)
+		render.DrawClippedText(scr, x+2, rowY+1, render.Style(render.SemDim), desc, width-2)
 	}
 }
 
 func (s *LobbyScene) renderPrivacy(scr tcell.Screen, content render.Region) {
-	render.DrawPanel(scr, content.Width, content.Height, "创建房间 · 公开性", []string{
-		selectLabel(!s.private, "公开房间：出现在公开房列表"),
-		selectLabel(s.private, "私密房间：创建后分享房间码"),
-	})
+	y := drawLobbyHeading(scr, content, "创建房间", "这桌让谁看见")
+	x, width := lobbyTextColumn(content, 64)
+	drawLobbyOption(scr, x, y+3, width, "公开房间", "出现在公开房列表，适合等人加入", !s.private)
+	drawLobbyOption(scr, x, y+6, width, "私密房间", "创建后分享房间码，只给朋友加入", s.private)
 }
 
 func (s *LobbyScene) renderName(scr tcell.Screen, content render.Region) {
@@ -181,41 +189,94 @@ func (s *LobbyScene) renderName(scr tcell.Screen, content render.Region) {
 	if name == "" {
 		name = s.roomName
 	}
-	render.DrawPanel(scr, content.Width, content.Height, "创建房间 · 房间名", []string{
-		"默认按 Enter 直接创建",
-		"房间名：" + name,
-	})
+	y := drawLobbyHeading(scr, content, "创建房间", "给这桌起个名字")
+	x, width := lobbyTextColumn(content, 64)
+	render.DrawClippedText(scr, x, y+3, render.Style(render.SemDim), "默认名字可以直接 Enter 接受", width)
+	render.DrawClippedText(scr, x, y+5, render.DefaultStyle(), "房间名", width)
+	render.DrawClippedText(scr, x, y+7, render.Style(render.SemEmphasis), " "+name+" ", width)
 }
 
 func (s *LobbyScene) renderJoinCode(scr tcell.Screen, content render.Region) {
-	render.DrawPanel(scr, content.Width, content.Height, "加入房间码", []string{
-		"请输入好友给你的房间码",
-		"房间码：" + s.input,
-	})
+	y := drawLobbyHeading(scr, content, "加入房间", "输入好友给你的房间码")
+	x, width := lobbyTextColumn(content, 64)
+	value := s.input
+	if value == "" {
+		value = "等待输入"
+	}
+	render.DrawClippedText(scr, x, y+4, render.DefaultStyle(), "房间码", width)
+	render.DrawClippedText(scr, x, y+6, render.Style(render.SemEmphasis), " "+value+" ", width)
 }
 
 func (s *LobbyScene) renderRooms(scr tcell.Screen, content render.Region) {
-	render.DrawClippedText(scr, content.X+2, content.Y+2, render.Style(render.SemEmphasis), "公开房间", content.Width-4)
+	y := drawLobbyHeading(scr, content, "公开房", "选择一桌正在等人的牌局")
+	x, width := lobbyTextColumn(content, 84)
 	if len(s.rooms) == 0 {
-		render.DrawClippedText(scr, content.X+4, content.Y+5, render.DefaultStyle(), "暂无公开房", content.Width-8)
+		render.DrawClippedText(scr, x, y+4, render.Style(render.SemDim), "暂无公开房", width)
 		return
 	}
-	items := make([]render.ListItem, len(s.rooms))
 	for i, room := range s.rooms {
-		items[i] = render.ListItem{
-			Text:     fmt.Sprintf("%-20s %-20s %d/%d", displayRoomName(room), room.DisplayName, room.Players, room.Capacity),
-			Selected: i == s.selected,
+		rowY := y + 3 + i*2
+		if rowY >= content.Y+content.Height {
+			break
 		}
+		line := fmt.Sprintf("%-20s %-20s %d/%d", displayRoomName(room), room.DisplayName, room.Players, room.Capacity)
+		st := render.DefaultStyle()
+		if i == s.selected {
+			st = render.Style(render.SemEmphasis)
+			line = " " + strings.TrimSpace(line) + " "
+		}
+		render.DrawClippedText(scr, x, rowY, st, line, width)
 	}
-	render.DrawList(scr, render.Region{X: content.X + 4, Y: content.Y + 6, Width: content.Width - 8, Height: content.Height - 7}, items, s.selected)
 }
 
 func (s *LobbyScene) renderHelp(scr tcell.Screen, content render.Region) {
-	render.DrawPanel(scr, content.Width, content.Height, "帮助", []string{
-		"大厅用方向键选择入口，Enter 确认",
-		"创建房间先选玩法，再选公开性，最后确认房间名",
-		"牌桌中 ←→ 选牌，Enter 出牌，? 查看帮助",
-	})
+	y := drawLobbyHeading(scr, content, "帮助", "当前只显示玩家需要的动作")
+	x, width := lobbyTextColumn(content, 72)
+	lines := []string{
+		"大厅：方向键选择入口，Enter 确认",
+		"创建房间：选玩法，选公开性，确认房间名",
+		"牌局：看底部动作句，按当前状态操作",
+	}
+	for i, line := range lines {
+		render.DrawClippedText(scr, x, y+3+i*2, render.DefaultStyle(), line, width)
+	}
+}
+
+func drawLobbyHeading(scr tcell.Screen, content render.Region, title, subtitle string) int {
+	y := render.MaxInt(content.Y+2, content.Y+content.Height/2-8)
+	render.DrawClippedText(scr, content.X, y, render.Style(render.SemEmphasis),
+		render.CenterVisual(title, content.Width), content.Width)
+	if subtitle != "" {
+		render.DrawClippedText(scr, content.X, y+2, render.Style(render.SemDim),
+			render.CenterVisual(subtitle, content.Width), content.Width)
+	}
+	return y
+}
+
+func lobbyTextColumn(content render.Region, maxWidth int) (int, int) {
+	width := maxWidth
+	if width > content.Width-8 {
+		width = content.Width - 8
+	}
+	if width < 24 {
+		width = render.MaxInt(1, content.Width-2)
+	}
+	x := content.X + (content.Width-width)/2
+	if x < content.X+1 {
+		x = content.X + 1
+	}
+	return x, width
+}
+
+func drawLobbyOption(scr tcell.Screen, x, y, width int, title, desc string, selected bool) {
+	st := render.DefaultStyle()
+	label := title
+	if selected {
+		st = render.Style(render.SemEmphasis)
+		label = " " + title + " "
+	}
+	render.DrawClippedText(scr, x, y, st, label, width)
+	render.DrawClippedText(scr, x+2, y+1, render.Style(render.SemDim), desc, width-2)
 }
 
 // ─── 按键处理 ────────────────────────────────────────
@@ -466,13 +527,6 @@ func (s *LobbyScene) keybar() string {
 	default:
 		return "大厅：←→/↑↓ 选择入口　Enter 确认　? 帮助　q 退出"
 	}
-}
-
-func selectLabel(selected bool, text string) string {
-	if selected {
-		return "> " + text
-	}
-	return "  " + text
 }
 
 func trimLastRune(s string) string {
