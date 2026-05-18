@@ -60,7 +60,7 @@
 - [ADR-0035 OTel Logs Bridge 评估](0035-otel-logs-bridge.md)：已采纳；默认关闭 OTel 日志桥接，以 build tag 预留 trace/span 注入路径。
 - [ADR-0036 静态分析与 nolint 治理策略](0036-static-analysis-and-lint-policy.md)：已采纳；定义 golangci-lint SSOT、全局排除与行级 nolint 豁免边界。
 - [ADR-0037 Bot Supervisor 与 AddBot RPC](0037-bot-supervisor-and-add-bot-rpc.md)：已采纳；定义一键补位机器人、AddBot RPC 与 supervisor 后续边界。
-- [ADR-0038 lsp-cli 黑白四方对称 TUI 布局](0038-cli-symmetric-tui-layout.md)：已采纳；定义桌面终端牌桌布局、黑白视觉语言与三主题牌面。
+- [ADR-0038 lsp-cli 黑白四方对称 TUI 布局](0038-cli-symmetric-tui-layout.md)：已采纳 → **被 ADR-0047 取代**；定义桌面终端牌桌布局、黑白视觉语言与三主题牌面。
 - [ADR-0039 四川血战权威局内契约](0039-sichuan-xuezhandaodi-authoritative-round-contract.md)：已采纳；定义玩家/托管命令分流、权威阶段、局共识、每座位投影与客户端 req_id 关联。
 - [ADR-0040 组合式麻将规则能力](0040-composable-mahjong-rule-capabilities.md)：已采纳；定义换三张、定缺、吃碰杠胡、轮转、计分与结算的规则能力组合边界。
 - [ADR-0041 麻将规则 ID 命名规范](0041-mahjong-rule-id-naming.md)：已采纳；统一 `<region>_<variant>_<option>` 全拼音规则 ID，并禁止缩写与混合语言。
@@ -69,3 +69,4 @@
 - [ADR-0044 房间状态与前后端交互契约](0044-room-state-and-client-contract.md)：已采纳；统一 RoomLifecycle、RoundProgress、SeatRoster、RoundFacts 与 UXTransient 的命名、投影和传输边界。
 - [ADR-0045 房间 deadline 单一所有权与 PhaseUpdate/PhaseToken 契约](0045-phase-deadline-single-owner-and-phase-token.md)：已采纳；deadline 派生自 phaseStart+phaseReason，engine 经 enterPhase 写入，scheduler 退化为定时器对齐，协议层强制嵌入 PhaseUpdate 并以 PhaseToken 校验请求。
 - [ADR-0046 治理体系迁移至 .claude/ 唯一事实源](0046-unified-claude-code-governance.md)：已采纳；以 `.claude/` 为唯一 SSOT，统一路径、术语、格式与 harness，完成 Cursor→Claude Code 迁移闭环。
+- [ADR-0047 CLI 纯中文 TUI 重构](0047-cli-pure-chinese-redesign.md)：已采纳；去掉三主题牌面与黑白美学，用纯中文宽字符、竖排手牌、四向对称牌桌与 Unicode 框线统一 CLI 前端。

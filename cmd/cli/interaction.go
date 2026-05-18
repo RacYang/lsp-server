@@ -302,28 +302,25 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 
 func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 	if ux.DisabledReason != "" && len(ux.AllowedActions) == 0 {
-		return ux.DisabledReason + "    Tab 玩家    i 房间信息    Esc 菜单"
+		return ux.DisabledReason + "    Tab 玩家    i 房间信息    Esc    q 返回    ? 帮助"
 	}
 	switch ux.Phase {
 	case PhaseExchange:
-		return "←→ 选牌    回车 标记/提交    空格 标记/取消    Esc 菜单    i 房间信息"
+		return "←→ 选牌    Space 标记    Enter 提交    q 返回    ? 帮助    Esc"
 	case PhaseQueMen:
-		return "1 缺万    2 缺筒    3 缺条    i 房间信息    Esc 菜单"
+		return "m 缺万    p 缺筒    s 缺条    q 返回    ? 帮助    Esc"
 	case PhaseMyTurnIdle, PhaseMyTurnSelected:
-		if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 {
-			return "←→ 选牌    回车 出牌    Esc 菜单    i 房间信息"
-		}
-		return "←→ 选牌    回车 出牌    i 房间信息    Esc 菜单"
+		return "←→ 选牌    Enter 出牌    q 返回    ? 帮助    Esc"
 	case PhaseClaim:
 		return claimKeyHint(ux)
 	case PhaseSettlement:
-		return "-- 结算 --  R 再开一桌    L 离桌    回车 停留"
+		return "r 再开一桌    l 离桌    Enter 停留    q 返回    ? 帮助"
 	case PhaseWaiting:
 		if emptySeatCount(view) > 0 {
-			return "b 补 1 个机器人    B 补满    回车 等真人    Esc 菜单"
+			return "b 补 1 个机器人    B 补满    Enter 等真人    q 返回    Esc"
 		}
 	}
-	return "Tab 查看玩家    i 房间信息    ? 帮助    Esc 菜单"
+	return "Tab 玩家    i 房间信息    ? 帮助    Esc    q 返回"
 }
 
 func disabledReason(view RoomView, cursor *HandCursor, model InteractionModel) string {
@@ -393,7 +390,7 @@ func claimKeyHint(ux TableUXModel) string {
 	if len(shortcuts) == 0 {
 		shortcuts = append(shortcuts, "n 过")
 	}
-	return "-- 鸣牌 --  ←→ 选项    回车确认    " + strings.Join(shortcuts, "    ")
+	return "-- 鸣牌 --  ←→ 选项    Enter 确认    " + strings.Join(shortcuts, "    ") + "    q 返回    ? 帮助"
 }
 
 func pendingFeedback(view RoomView, cursor *HandCursor) string {

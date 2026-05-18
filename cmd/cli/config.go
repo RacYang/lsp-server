@@ -11,39 +11,22 @@ import (
 )
 
 // Config 持久化玩家在终端客户端的本地偏好与会话状态。
-//
-// 字段命名与 TOML key 一一对应（go-toml 默认下划线小写转换）。
-// 任何字段都允许缺省，缺省值由 NewDefaultConfig 提供。
 type Config struct {
-	Nickname       string `toml:"nickname"`
-	ServerURL      string `toml:"server_url"`
-	SessionToken   string `toml:"session_token"`
-	TileTheme      string `toml:"tile_theme"`
-	ClaimTimeoutMS int    `toml:"claim_timeout_ms"`
+	Nickname     string `toml:"nickname"`
+	ServerURL    string `toml:"server_url"`
+	SessionToken string `toml:"session_token"`
 }
 
-const (
-	tileThemeUnicode = "unicode"
-	tileThemeASCII   = "ascii"
-	tileThemeEmoji   = "emoji"
+const defaultServerURL = "wss://racoo.cn/ws"
 
-	defaultServerURL    = "wss://racoo.cn/ws"
-	defaultClaimTimeout = 14000
-)
-
-// NewDefaultConfig 返回内置默认值；未来如果需要在多处复用，统一从此处取。
+// NewDefaultConfig 返回内置默认值。
 func NewDefaultConfig() Config {
 	return Config{
-		ServerURL:      defaultServerURL,
-		TileTheme:      tileThemeEmoji,
-		ClaimTimeoutMS: defaultClaimTimeout,
+		ServerURL: defaultServerURL,
 	}
 }
 
 // DefaultConfigPath 给出推荐的本地配置路径 `~/.lsp/config.toml`。
-//
-// 当 HOME 不可用（如某些 CI/容器场景）时退化到 `./.lsp/config.toml`，
-// 让 CLI 仍能在受限环境下正常落盘。
 func DefaultConfigPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
@@ -53,12 +36,9 @@ func DefaultConfigPath() string {
 }
 
 // LoadConfig 从指定路径读取配置；文件不存在时返回默认值且不报错。
-//
-// 解析失败、磁盘 IO 错误等才会返回 error，便于上层决定是否提示用户。
-// 返回值在缺失字段处会被默认值填补，避免下游再次判空。
 func LoadConfig(path string) (Config, error) {
 	cfg := NewDefaultConfig()
-	data, err := os.ReadFile(path) // #nosec G304：路径由调用方传入。
+	data, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return cfg, nil
@@ -72,9 +52,7 @@ func LoadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
-// SaveConfig 原子地把配置落盘到 path：先写临时文件再 rename，避免半截文件。
-//
-// 目录不存在时自动 mkdir -p；文件权限 0600，因为里面会包含 session_token。
+// SaveConfig 原子地把配置落盘到 path。
 func SaveConfig(path string, cfg Config) error {
 	if path == "" {
 		return errors.New("配置路径为空")
@@ -102,11 +80,5 @@ func (c *Config) fillDefaults() {
 	def := NewDefaultConfig()
 	if c.ServerURL == "" {
 		c.ServerURL = def.ServerURL
-	}
-	if c.TileTheme != tileThemeUnicode && c.TileTheme != tileThemeASCII && c.TileTheme != tileThemeEmoji {
-		c.TileTheme = def.TileTheme
-	}
-	if c.ClaimTimeoutMS <= 0 {
-		c.ClaimTimeoutMS = def.ClaimTimeoutMS
 	}
 }

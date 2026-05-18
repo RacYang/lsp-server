@@ -13,7 +13,7 @@ func TestLoadConfigReturnsDefaultsWhenMissing(t *testing.T) {
 	cfg, err := LoadConfig(path)
 	require.NoError(t, err)
 	require.Equal(t, NewDefaultConfig(), cfg)
-	require.Equal(t, tileThemeEmoji, cfg.TileTheme)
+	require.Equal(t, defaultServerURL, cfg.ServerURL)
 }
 
 func TestLoadConfigParsesPartialFileAndFillsDefaults(t *testing.T) {
@@ -24,8 +24,6 @@ func TestLoadConfigParsesPartialFileAndFillsDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "racoo", cfg.Nickname)
 	require.Equal(t, defaultServerURL, cfg.ServerURL)
-	require.Equal(t, tileThemeEmoji, cfg.TileTheme)
-	require.Equal(t, defaultClaimTimeout, cfg.ClaimTimeoutMS)
 }
 
 func TestLoadConfigRejectsMalformedFile(t *testing.T) {
@@ -40,25 +38,14 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "lsp", "config.toml")
 	want := Config{
-		Nickname:       "alice",
-		ServerURL:      "wss://example.com/ws",
-		SessionToken:   "tok-123",
-		TileTheme:      tileThemeASCII,
-		ClaimTimeoutMS: 3000,
+		Nickname:     "alice",
+		ServerURL:    "wss://example.com/ws",
+		SessionToken: "tok-123",
 	}
 	require.NoError(t, SaveConfig(path, want))
 	got, err := LoadConfig(path)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
-}
-
-func TestSaveConfigNormalizesInvalidTheme(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-	require.NoError(t, SaveConfig(path, Config{Nickname: "bob", TileTheme: "weird"}))
-	got, err := LoadConfig(path)
-	require.NoError(t, err)
-	require.Equal(t, tileThemeEmoji, got.TileTheme)
 }
 
 func TestSaveConfigUsesAtomicRename(t *testing.T) {

@@ -1,29 +1,17 @@
 package main
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/gdamore/tcell/v2"
-)
-
-// OverlayKind 标识当前打开的叠加层；同时只有一个叠加层处于打开态。
+// OverlayKind 标识当前打开的叠加层。
 type OverlayKind int
 
 const (
-	// OverlayNone 没有叠加层，玩家直接看到牌桌主帧。
-	OverlayNone OverlayKind = iota
-	// OverlayRoomInfo 房间元数据叠加层（i 键）：房号、规则、人数、规则要点。
-	OverlayRoomInfo
-	// OverlayPlayers 玩家详情叠加层（Tab 键）：每家昵称、积分、状态。
-	OverlayPlayers
-	// OverlayMenu 局内菜单（Esc 键）：返回大厅或继续游戏。
-	OverlayMenu
-	// OverlayHelp 快速参考叠加层（? 键）：展示牌桌核心键位。
-	OverlayHelp
+	OverlayNone     OverlayKind = iota
+	OverlayRoomInfo             // i 键：房间信息
+	OverlayPlayers              // Tab 键：玩家详情
+	OverlayMenu                 // Esc 键：局内菜单
+	OverlayHelp                 // ? 键：快速参考
 )
 
-// OverlayMenuAction 是局内菜单项可触发的高层动作。
+// OverlayMenuAction 是局内菜单项的触发动作。
 type OverlayMenuAction string
 
 const (
@@ -32,16 +20,14 @@ const (
 	OverlayMenuActionResume    OverlayMenuAction = "resume"
 )
 
-// OverlayState 维护当前叠加层种类与菜单选中项；非菜单类叠加层仅依赖 Kind。
+// OverlayState 维护当前叠加层种类与菜单选中项。
 type OverlayState struct {
 	Kind          OverlayKind
 	SelectedIndex int
 }
 
-// IsOpen 是否有叠加层处于打开态；调用方据此决定是否拦截普通牌桌按键。
 func (o *OverlayState) IsOpen() bool { return o.Kind != OverlayNone }
 
-// Toggle 在「打开/关闭」之间切换；如果当前是别的叠加层则切换到新种类。
 func (o *OverlayState) Toggle(kind OverlayKind) {
 	if o.Kind == kind {
 		o.Close()
@@ -51,13 +37,11 @@ func (o *OverlayState) Toggle(kind OverlayKind) {
 	o.SelectedIndex = 0
 }
 
-// Close 关闭当前叠加层。
 func (o *OverlayState) Close() {
 	o.Kind = OverlayNone
 	o.SelectedIndex = 0
 }
 
-// MenuMove 在局内菜单中移动选中项；非菜单类叠加层忽略。
 func (o *OverlayState) MenuMove(delta int) {
 	if o.Kind != OverlayMenu {
 		return
@@ -70,7 +54,6 @@ func (o *OverlayState) MenuMove(delta int) {
 	o.SelectedIndex = (o.SelectedIndex + delta + n) % n
 }
 
-// MenuSelect 返回当前选中菜单项对应的动作。
 func (o *OverlayState) MenuSelect() OverlayMenuAction {
 	if o.Kind != OverlayMenu {
 		return OverlayMenuActionNone
@@ -95,35 +78,14 @@ func overlayMenuItems() []overlayMenuItem {
 }
 
 // OverlayContext 给叠加层提供 RoomView 之外的辅助上下文。
-//
-// RuleID 不在 RoomView 中（协议层用 RoomMeta 单独承载），由调用方根据当前 JoinResp 注入。
 type OverlayContext struct {
 	RuleID string
-	Theme  TileTheme
 }
 
-// DrawOverlay 把当前叠加层画到屏幕上。
-//
-// 调用方应在 RenderFrame 之后调用本函数；OverlayNone 时直接返回。
-func DrawOverlay(scr tcell.Screen, layout TableLayout, view RoomView, ctx OverlayContext, o OverlayState) {
-	if !o.IsOpen() {
-		return
-	}
-	switch o.Kind {
-	case OverlayRoomInfo:
-		drawOverlayBox(scr, layout, "房 间 信 息", overlayRoomInfoLines(view, ctx))
-	case OverlayPlayers:
-		drawOverlayBox(scr, layout, "玩 家 详 情", overlayPlayersLines(view))
-	case OverlayMenu:
-		drawOverlayMenu(scr, layout, o.SelectedIndex)
-	case OverlayHelp:
-		drawOverlayBox(scr, layout, "快 速 参 考", overlayHelpLines(view))
-	}
-}
+// ─── 叠加层内容行 ────────────────────────────────────
 
-// overlayRoomInfoLines 返回房间信息叠加层的内容行。
-func overlayRoomInfoLines(view RoomView, ctx OverlayContext) []string {
-	rule := ctx.RuleID
+func overlayRoomInfoLines(view RoomView) []string {
+	rule := view.RuleID
 	if rule == "" {
 		rule = "未知规则"
 	}
@@ -138,16 +100,14 @@ func overlayRoomInfoLines(view RoomView, ctx OverlayContext) []string {
 		}
 	}
 	return []string{
-		"房号:    " + roomID,
-		"规则:    " + rule,
-		fmt.Sprintf("人数:    %d / 4", count),
-		"主题:    " + ctx.Theme.String(),
+		"房号: " + roomID,
+		"规则: " + rule,
+		"人数: " + itoa(count) + " / 4",
 		"",
 		"按 i 关闭",
 	}
 }
 
-// overlayPlayersLines 返回玩家详情叠加层的内容行。
 func overlayPlayersLines(view RoomView) []string {
 	lines := make([]string, 0, len(view.Players)+2)
 	for i, p := range view.Players {
@@ -174,7 +134,7 @@ func overlayPlayersLines(view RoomView) []string {
 		if p.Hued {
 			ready += "  ✓ 已胡"
 		}
-		lines = append(lines, fmt.Sprintf(" %s %d 号位  %-12s 手:%2d%s", mark, i+1, nickname, p.HandCnt, ready))
+		lines = append(lines, " "+mark+" "+itoa(i+1)+" 号位  "+nickname+"  手:"+itoa(p.HandCnt)+ready)
 	}
 	lines = append(lines, "")
 	lines = append(lines, "按 Tab 关闭")
@@ -184,76 +144,45 @@ func overlayPlayersLines(view RoomView) []string {
 func overlayHelpLines(view RoomView) []string {
 	phase := DerivePhase(view, nil)
 	lines := []string{
-		"←→ 选牌    回车 出牌 / 确认",
-		"换三张: 回车标记三张,再按回车提交",
-		"定缺: 1 缺万 / 2 缺筒 / 3 缺条",
+		"←→ 选牌    Enter 出牌 / 确认",
+		"换三张: Space 标记三张，Enter 提交换牌",
+		"定缺: m 缺万 / p 缺筒 / s 缺条",
 		"碰杠胡: p 碰 / g 杠 / h 胡 / n 过",
 		"机器人: waiting 阶段 b 补一个 / B 补满",
 		"信息: i 房间信息 / Tab 玩家详情",
 		"离桌: q 返回大厅 / Esc 菜单",
 		"",
-		"按 ? 或回车关闭",
+		"按 ? 或Enter关闭",
 	}
 	switch phase {
 	case PhaseClaim:
-		lines = append([]string{"当前模式: -- 鸣牌 --", "h 胡 / g 杠 / p 碰 / n 过 / 回车确认", ""}, lines...)
+		lines = append([]string{"当前模式: -- 鸣牌 --", "h 胡 / g 杠 / p 碰 / n 过 / Enter确认", ""}, lines...)
 	case PhaseExchange:
-		lines = append([]string{"当前模式: -- 换三张 --", "回车标记三张 / 回车提交", ""}, lines...)
+		lines = append([]string{"当前模式: -- 换三张 --", "Enter标记三张 / Enter提交", ""}, lines...)
 	case PhaseSettlement:
-		lines = append([]string{"当前模式: -- 结算 --", "R 再来一局 / L 离桌 / 回车停留", ""}, lines...)
+		lines = append([]string{"当前模式: -- 结算 --", "R 再来一局 / L 离桌 / Enter停留", ""}, lines...)
 	}
 	return lines
 }
 
-func drawOverlayMenu(scr tcell.Screen, layout TableLayout, selectedIdx int) {
-	items := overlayMenuItems()
-	lines := make([]string, len(items)+2)
-	for i, item := range items {
-		prefix := "   "
-		if i == selectedIdx {
-			prefix = " ▶ "
-		}
-		lines[i] = prefix + item.Label
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
 	}
-	lines[len(items)] = ""
-	lines[len(items)+1] = " ↑↓ 选项    Enter 确认    Esc 关闭"
-	drawOverlayBox(scr, layout, "局 内 菜 单", lines)
-}
-
-// drawOverlayBox 是三种叠加层共用的"居中带框"绘制工具。
-func drawOverlayBox(scr tcell.Screen, layout TableLayout, title string, lines []string) {
-	innerWidth := minInt(48, layout.Width-6)
-	for _, line := range lines {
-		if w := visualWidth(line); w > innerWidth {
-			innerWidth = w
-		}
+	neg := n < 0
+	if neg {
+		n = -n
 	}
-	if innerWidth > layout.Width-4 {
-		innerWidth = layout.Width - 4
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
 	}
-	if innerWidth < 24 {
-		innerWidth = 24
+	if neg {
+		i--
+		buf[i] = '-'
 	}
-	width := innerWidth + 2
-	height := len(lines) + 4 // top + title + sep + body + bottom
-	x := layout.CenterArea.X + (layout.CenterArea.Width-width)/2
-	y := layout.CenterArea.Y + (layout.CenterArea.Height-height)/2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	style := defaultStyle()
-	drawText(scr, x, y, style, "┌"+strings.Repeat("─", width-2)+"┐")
-	drawText(scr, x, y+1, style, "│")
-	drawText(scr, x+1, y+1, style, padRightVisual(centerVisual(title, innerWidth), innerWidth))
-	drawText(scr, x+width-1, y+1, style, "│")
-	drawText(scr, x, y+2, style, "├"+strings.Repeat("─", width-2)+"┤")
-	for i, line := range lines {
-		drawText(scr, x, y+3+i, style, "│")
-		drawText(scr, x+1, y+3+i, style, padRightVisual(line, innerWidth))
-		drawText(scr, x+width-1, y+3+i, style, "│")
-	}
-	drawText(scr, x, y+3+len(lines), style, "└"+strings.Repeat("─", width-2)+"┘")
+	return string(buf[i:])
 }

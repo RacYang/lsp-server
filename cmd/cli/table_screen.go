@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -49,159 +48,14 @@ type TableExit struct {
 	Err    error
 }
 
-// RunTableScreen 是牌桌全屏阶段的主循环。
-//
-// 进入时切到 alternate screen，退出时通过 TerminalSwitch 恢复 lobby 行式输出；
-// state 由 EventBus 在外部持续更新；本函数读取 state 渲染并把按键转发到 gateway。
-//
-// 当前版本是"最小可行"：覆盖渲染、光标、主题切换、叠加层；具体动作（碰/杠/胡）
-// 等到 step 7-10 的浮窗状态机被实际 envelope 触发后再接入。
-func RunTableScreen(ctx context.Context, switcher *TerminalSwitch, state *AppState, gateway TableGateway, cfg *Config) TableExit {
-	scr, err := switcher.EnterFullscreen()
-	if err != nil {
-		return TableExit{Reason: TableExitContextDone, Err: fmt.Errorf("打开终端失败: %w", err)}
-	}
-	defer switcher.LeaveFullscreen()
-
-	w, h := scr.Size()
-	if w < MinTableWidth || h < MinTableHeight {
-		return TableExit{Reason: TableExitTerminalTooSmall, Err: fmt.Errorf("窗口太小,请放大终端到至少 %dx%d 后重试", MinTableWidth, MinTableHeight)}
-	}
-
-	overlay := OverlayState{}
-	cursor := &HandCursor{}
-	netOverlay := NewNetOverlay(0)
-	var claimDialog *ClaimDialogState
-	var settlementDialog *SettlementDialogState
-	theme := ParseTileTheme(cfg.TileTheme)
-	lastTier := LayoutTierStandard
-
-	go func() {
-		_ = gateway.Ready(ctx)
-	}()
-
-	eventCh := make(chan tcell.Event, 16)
-	tcellCtx, cancelTcell := context.WithCancel(ctx)
-	defer cancelTcell()
-	go func() {
-		for {
-			if tcellCtx.Err() != nil {
-				return
-			}
-			ev := scr.PollEvent()
-			if ev == nil {
-				return
-			}
-			select {
-			case eventCh <- ev:
-			case <-tcellCtx.Done():
-				return
-			}
-		}
-	}()
-
-	redraw := func() {
-		view := state.Snapshot()
-		model := DeriveInteractionModel(view)
-		cursor.SyncMode(view)
-		w, h := scr.Size()
-		layout, ok := CalcLayout(w, h, lastTier)
-		if !ok {
-			scr.Clear()
-			drawText(scr, 0, 0, defaultStyle(), fmt.Sprintf("窗口太小,请放大终端到至少 %dx%d", MinTableWidth, MinTableHeight))
-			scr.Show()
-			return
-		}
-		lastTier = layout.Tier
-		now := time.Now()
-		RenderFrame(scr, FrameInputs{
-			View:   view,
-			Layout: layout,
-			Theme:  theme,
-			Cursor: cursor,
-			Now:    now,
-		})
-		netOverlay.Update(view.Connected, time.Now())
-		ctxOverlay := OverlayContext{RuleID: view.RuleID, Theme: theme}
-		DrawOverlay(scr, layout, view, ctxOverlay, overlay)
-		DrawNetOverlay(scr, layout, netOverlay, time.Now())
-		if model.Claim != nil && model.Claim.Dialog != nil {
-			if claimDialog == nil || claimDialog.Tile != model.Claim.Dialog.Tile || claimDialog.Trigger != model.Claim.Dialog.Trigger {
-				claimDialog = model.Claim.Dialog
-				claimDialog.OpenedAt = now
-				claimDialog.Deadline = now.Add(time.Duration(cfg.ClaimTimeoutMS) * time.Millisecond)
-			}
-			DrawClaimDialog(scr, layout, claimDialog, now)
-		} else {
-			claimDialog = nil
-		}
-		if model.Settlement != nil {
-			if settlementDialog == nil || settlementDialog.Summary.RoomID != model.Settlement.RoomID {
-				settlementDialog = NewSettlementDialog(*model.Settlement, now, 120*time.Millisecond)
-			}
-			DrawSettlementDialog(scr, layout, settlementDialog, now)
-		} else {
-			settlementDialog = nil
-		}
-		scr.Show()
-	}
-
-	redraw()
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return TableExit{Reason: TableExitContextDone, Err: ctx.Err()}
-		case <-ticker.C:
-			// 观察房间状态：被服务端踢出 / 房间销毁 / 重定向重置等都会让 Phase 回到 lobby。
-			// 这里兜底退出，避免渲染层卡在已经无效的牌桌画面。
-			if view := state.Snapshot(); view.Phase != phaseTable || view.RoomID == "" {
-				return TableExit{Reason: TableExitLeaveRoom}
-			}
-			if !overlay.IsOpen() && claimDialog != nil && !claimDialog.Pending && claimDialog.Expired(time.Now()) {
-				claimDialog.Pending = true
-				go func() {
-					_ = gateway.Pass(ctx)
-				}()
-			}
-			redraw()
-		case ev, ok := <-eventCh:
-			if !ok {
-				return TableExit{Reason: TableExitContextDone, Err: errors.New("事件流已关闭")}
-			}
-			result := handleTableEvent(ctx, ev, scr, state, gateway, cursor, &overlay, netOverlay, &theme, cfg, claimDialog)
-			if result.exit != nil {
-				return *result.exit
-			}
-			if _, resized := ev.(*tcell.EventResize); !resized {
-				redraw()
-			}
-		}
-	}
-}
-
-// tableEventResult 是 handleTableEvent 的内部返回值；exit != nil 时主循环退出。
+// tableEventResult 是牌桌按键处理的内部返回值；exit != nil 时主循环退出。
 type tableEventResult struct {
 	exit *TableExit
 }
 
-// handleTableEvent 把 tcell 事件分派给具体动作；保持纯函数风格便于后续测试。
-func handleTableEvent(ctx context.Context, ev tcell.Event, scr tcell.Screen, state *AppState, gateway TableGateway, cursor *HandCursor, overlay *OverlayState, netOverlay *NetOverlayState, theme *TileTheme, cfg *Config, claimDialog *ClaimDialogState) tableEventResult {
-	switch e := ev.(type) {
-	case *tcell.EventResize:
-		scr.Sync()
-		return tableEventResult{}
-	case *tcell.EventKey:
-		return handleTableKey(ctx, e, state, gateway, cursor, overlay, netOverlay, theme, cfg, claimDialog)
-	}
-	return tableEventResult{}
-}
-
-func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, gateway TableGateway, cursor *HandCursor, overlay *OverlayState, netOverlay *NetOverlayState, theme *TileTheme, cfg *Config, claimDialog *ClaimDialogState) tableEventResult {
+func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, gateway TableGateway, cursor *HandCursor, overlay *OverlayState, netOverlay *NetOverlayState, cfg *Config, claimDialog *ClaimDialogState) tableEventResult {
 	if overlay.IsOpen() {
-		return handleOverlayKey(ctx, ev, state, gateway, overlay, theme, cfg)
+		return handleOverlayKey(ctx, ev, state, gateway, overlay, cfg)
 	}
 	view := state.Snapshot()
 	cursor.SyncMode(view)
@@ -348,17 +202,7 @@ func submitAddBot(ctx context.Context, state *AppState, gateway TableGateway, co
 	return tableEventResult{}
 }
 
-func emptySeatCount(view RoomView) int32 {
-	var n int32
-	for _, player := range view.Players {
-		if player.UserID == "" && player.Nickname == "" {
-			n++
-		}
-	}
-	return n
-}
-
-func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, state *AppState, gateway TableGateway, overlay *OverlayState, theme *TileTheme, cfg *Config) tableEventResult {
+func handleOverlayKey(ctx context.Context, ev *tcell.EventKey, state *AppState, gateway TableGateway, overlay *OverlayState, cfg *Config) tableEventResult {
 	switch ev.Key() {
 	case tcell.KeyEscape:
 		overlay.Close()

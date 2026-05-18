@@ -1,6 +1,7 @@
 ---
 title: lsp-cli 黑白四方对称 TUI 布局
-status: accepted
+status: superseded
+superseded_by: ADR-0047
 date: 2026-05-07
 ---
 

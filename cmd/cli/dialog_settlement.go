@@ -5,8 +5,6 @@ import (
 	"io"
 	"strings"
 	"time"
-
-	"github.com/gdamore/tcell/v2"
 )
 
 // SettlementOutcome 描述一局结束的整体结果。
@@ -91,9 +89,9 @@ func NewSettlementDialog(summary SettlementSummary, openedAt time.Time, revealIn
 }
 
 // totalRevealLines 是结算所有揭晓行的总数：
-// 标题 (1) + 番种 (n) + 多胡家 (w) + 流局罚分 (p) + 总番分隔 (1) + 每家分数 (m) + 提示 (1)。
+// 标题 (1) + 番种 (n) + 多胡家 (w) + 流局罚分 (p) + 总番分隔 (1) + 每家分数 (m)。
 func (d *SettlementDialogState) totalRevealLines() int {
-	return 1 + len(d.Summary.Fans) + len(d.Summary.Winners) + len(d.Summary.Penalties) + 1 + len(d.Summary.Scores) + 1
+	return 1 + len(d.Summary.Fans) + len(d.Summary.Winners) + len(d.Summary.Penalties) + 1 + len(d.Summary.Scores)
 }
 
 // VisibleLines 返回当前应该显示的行数；由 OpenedAt 与 RevealInterval 共同决定。
@@ -130,23 +128,6 @@ func (d *SettlementDialogState) title() string {
 	return "本 局 结 束"
 }
 
-// renderLines 输出浮窗内部内容（不含外部框线）。
-//
-// 行可见性按 VisibleLines 决定；尚未揭晓的行仍占位但显示空白，避免浮窗大小跳变。
-func (d *SettlementDialogState) renderLines(now time.Time, innerWidth int) []string {
-	visible := d.VisibleLines(now)
-	all := d.allLines(innerWidth)
-	out := make([]string, len(all))
-	for i := range all {
-		if i < visible {
-			out[i] = all[i]
-		} else {
-			out[i] = strings.Repeat(" ", innerWidth)
-		}
-	}
-	return out
-}
-
 // allLines 返回结算的全部行（不分可见性），让 VisibleLines 控制揭晓节奏。
 func (d *SettlementDialogState) allLines(innerWidth int) []string {
 	lines := []string{centerVisual(d.title(), innerWidth)}
@@ -181,36 +162,11 @@ func (d *SettlementDialogState) allLines(innerWidth int) []string {
 		}
 		lines = append(lines, centerVisual(fmt.Sprintf("%s   %s%d", label, sign, s.Delta), innerWidth))
 	}
-	// [S5.1] 底栏键位固定为 r 再开一桌 / l 离桌 / Enter 停留。
-	lines = append(lines, centerVisual("r 再开一桌  /  l 离桌  /  Enter 停留", innerWidth))
+	// [S5.1] 键位提示由场景层 key bar 统一渲染，不在此处重复。
 	return lines
 }
 
-// DrawSettlementDialog 在牌桌中央以无框文本绘制结算摘要。
-func DrawSettlementDialog(scr tcell.Screen, layout TableLayout, d *SettlementDialogState, now time.Time) {
-	if d == nil {
-		return
-	}
-	innerWidth := minInt(40, layout.TableFrame.Width-6)
-	if innerWidth < 28 {
-		innerWidth = 28
-	}
-	lines := d.renderLines(now, innerWidth)
-	height := len(lines)
-	width := innerWidth
-	x := layout.CenterArea.X + (layout.CenterArea.Width-width)/2
-	y := layout.CenterArea.Y + (layout.CenterArea.Height-height)/2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	style := defaultStyle().Reverse(true)
-	for i, line := range lines {
-		drawText(scr, x, y+i, style, padRightVisual(line, innerWidth))
-	}
-}
+// DrawSettlementDialog 已移除——结算绘制由 scene_table.go 通过 render.DrawDialog(BorderDouble) 处理。
 
 // WriteStdoutSummary 把结算摘要写到 io.Writer (生产里是 os.Stdout)。
 //

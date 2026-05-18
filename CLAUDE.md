@@ -48,5 +48,6 @@
 - **日志体系**：`docs/adr/0006-logging-system-and-facade.md`
 - **麻将规则引擎**：`docs/RULE-ENGINE.md`、`docs/ROOM-FSM.md`
 - **Agent 治理体系**：`docs/adr/0042-agent-governance.md`、`docs/agent-governance/coverage-matrix.md`
+- **CLI 纯中文 TUI 设计**：`docs/adr/0047-cli-pure-chinese-redesign.md`
 - **根因修复策略**：`docs/adr/0043-root-cause-fix-policy.md`
 - **ADR 索引**：`docs/adr/README.md`

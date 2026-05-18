@@ -5,24 +5,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
+	"racoo.cn/lsp/cmd/cli/render"
 )
 
-// ClaimTrigger 描述触发 claim 浮窗的事件类型，决定标题模板。
+// ClaimTrigger 描述触发 claim 浮窗的事件类型。
 type ClaimTrigger int
 
 const (
-	// ClaimTriggerSelfDraw 自摸：标题为「你 自 摸 了 !」，按钮 [胡] [不胡]。
 	ClaimTriggerSelfDraw ClaimTrigger = iota
-	// ClaimTriggerRon 别家打出可胡的牌：标题为「胡 X 打出的 牌」，按钮 [胡] [过]。
 	ClaimTriggerRon
-	// ClaimTriggerPong 别家打出可碰的牌：标题为「碰 X 打出的 牌」，按钮 [碰] [过]。
 	ClaimTriggerPong
-	// ClaimTriggerGang 可杠：标题为「杠 X 打出的 牌」，按钮 [杠] [过]。
 	ClaimTriggerGang
-	// ClaimTriggerChow 可吃：标题为「吃 X 打出的 牌」，按钮 [吃] [过]。
 	ClaimTriggerChow
-	// ClaimTriggerPongOrHu 同时可胡可碰：按钮 [胡] [碰] [过]。
 	ClaimTriggerPongOrHu
 )
 
@@ -38,9 +32,6 @@ const (
 )
 
 // ClaimDialogState 是 claim 浮窗的有限状态机。
-//
-// OpenedAt 与 Deadline 由调用方注入，便于在测试中用确定时间驱动进度条。
-// SelectedIndex 在 [0, len(Actions)-1] 之间循环；进入 Pending 后忽略输入。
 type ClaimDialogState struct {
 	Trigger       ClaimTrigger
 	TriggerSeat   int32
@@ -50,12 +41,9 @@ type ClaimDialogState struct {
 	SelectedIndex int
 	OpenedAt      time.Time
 	Deadline      time.Time
-	Pending       bool // 已发送选择,等待服务端 ack
+	Pending       bool
 }
 
-// NewClaimDialog 构造一个新的 claim 浮窗状态。
-//
-// triggerName 用于荣胡场景下显示"胡 alice 打出的 4 万"，自摸场景忽略。
 func NewClaimDialog(trigger ClaimTrigger, triggerSeat int32, triggerName, tile string, actions []ClaimAction, openedAt time.Time, timeout time.Duration) *ClaimDialogState {
 	if len(actions) == 0 {
 		actions = []ClaimAction{ClaimActionPass}
@@ -71,7 +59,6 @@ func NewClaimDialog(trigger ClaimTrigger, triggerSeat int32, triggerName, tile s
 	}
 }
 
-// Move 在按钮列表中环绕移动；Pending 时忽略。
 func (d *ClaimDialogState) Move(delta int) {
 	if d.Pending || len(d.Actions) == 0 {
 		return
@@ -80,7 +67,6 @@ func (d *ClaimDialogState) Move(delta int) {
 	d.SelectedIndex = (d.SelectedIndex + delta + n) % n
 }
 
-// Selected 返回当前高亮按钮对应的动作。
 func (d *ClaimDialogState) Selected() ClaimAction {
 	if d.SelectedIndex < 0 || d.SelectedIndex >= len(d.Actions) {
 		return ClaimActionPass
@@ -88,9 +74,6 @@ func (d *ClaimDialogState) Selected() ClaimAction {
 	return d.Actions[d.SelectedIndex]
 }
 
-// Progress 返回 [0, 1] 之间的剩余比例，1 表示尚未开始消耗，0 表示已用尽。
-//
-// 拆成纯函数便于测试不同 now 值下的进度条渲染。
 func (d *ClaimDialogState) Progress(now time.Time) float64 {
 	total := d.Deadline.Sub(d.OpenedAt)
 	if total <= 0 {
@@ -106,12 +89,10 @@ func (d *ClaimDialogState) Progress(now time.Time) float64 {
 	return float64(left) / float64(total)
 }
 
-// Expired 是否已超过 Deadline；调用方据此自动选择 ClaimActionPass。
 func (d *ClaimDialogState) Expired(now time.Time) bool {
 	return !now.Before(d.Deadline)
 }
 
-// title 返回浮窗标题，根据 trigger 选不同模板。
 func (d *ClaimDialogState) title() string {
 	switch d.Trigger {
 	case ClaimTriggerSelfDraw:
@@ -140,7 +121,6 @@ func displayTrigger(d *ClaimDialogState) string {
 	return "对家"
 }
 
-// claimActionLabel 把 ClaimAction 翻译成浮窗按钮上的中文文案。
 func claimActionLabel(a ClaimAction, trigger ClaimTrigger) string {
 	switch a {
 	case ClaimActionHu:
@@ -152,7 +132,6 @@ func claimActionLabel(a ClaimAction, trigger ClaimTrigger) string {
 	case ClaimActionChow:
 		return "吃"
 	case ClaimActionPass:
-		// 自摸场景 Pass 表达更友好的"不胡"，其它场景统一用"过"。
 		if trigger == ClaimTriggerSelfDraw {
 			return "不胡"
 		}
@@ -161,9 +140,7 @@ func claimActionLabel(a ClaimAction, trigger ClaimTrigger) string {
 	return string(a)
 }
 
-// claimDialogLines 渲染浮窗的多行文本（不含外部框线）。
-//
-// 拆成纯函数让 golden 测试只关心字符串，不依赖 SimulationScreen。
+// claimDialogLines 返回浮窗内容行（不含外部框线）。
 func claimDialogLines(d *ClaimDialogState, now time.Time, innerWidth int) []string {
 	if innerWidth < 20 {
 		innerWidth = 20
@@ -178,7 +155,7 @@ func claimDialogLines(d *ClaimDialogState, now time.Time, innerWidth int) []stri
 		} else {
 			buttons[i] = "  " + label + "  "
 		}
-		totalLen += visualWidth(buttons[i])
+		totalLen += render.VisualWidth(buttons[i])
 	}
 	gap := 2
 	totalLen += gap * (len(buttons) - 1)
@@ -189,7 +166,7 @@ func claimDialogLines(d *ClaimDialogState, now time.Time, innerWidth int) []stri
 	buttonLine := strings.Repeat(" ", pad) + strings.Join(buttons, strings.Repeat(" ", gap))
 
 	progressLine := claimProgressBar(d, now, innerWidth)
-	hint := "快捷键: h胡  g杠  p碰  n过  ←→切换  回车确认"
+	hint := "快捷键: h胡  g杠  p碰  n过  ←→切换  Enter 确认"
 	if d.Pending {
 		hint = "已提交，等待服务端确认..."
 	}
@@ -203,7 +180,6 @@ func claimDialogLines(d *ClaimDialogState, now time.Time, innerWidth int) []stri
 	}
 }
 
-// claimProgressBar 把 Progress 比例转成 ████░░░  3.2s 形式的字符串。
 func claimProgressBar(d *ClaimDialogState, now time.Time, innerWidth int) string {
 	barWidth := innerWidth - 8
 	if barWidth < 6 {
@@ -225,50 +201,11 @@ func claimProgressBar(d *ClaimDialogState, now time.Time, innerWidth int) string
 	return fmt.Sprintf("%s  %.1fs", bar, left.Seconds())
 }
 
-// DrawClaimDialog 把 claim 浮窗叠加渲染到屏幕中央区域。
-//
-// 调用方应在 RenderFrame 之后调用本函数，让浮窗覆盖底层内容。
-func DrawClaimDialog(scr tcell.Screen, layout TableLayout, d *ClaimDialogState, now time.Time) {
-	if d == nil {
-		return
-	}
-	innerWidth := minInt(50, layout.Width-6)
-	if innerWidth < 30 {
-		innerWidth = 30
-	}
-	lines := claimDialogLines(d, now, innerWidth)
-	height := len(lines) + 2
-	width := innerWidth + 2
-	x := layout.CenterArea.X + (layout.CenterArea.Width-width)/2
-	y := layout.CenterArea.Y + (layout.CenterArea.Height-height)/2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	style := defaultStyle()
-	drawText(scr, x, y, style, "┌"+strings.Repeat("─", width-2)+"┐")
-	for i, line := range lines {
-		drawText(scr, x, y+1+i, style, "│")
-		drawText(scr, x+1, y+1+i, style, padRightVisual(line, innerWidth))
-		drawText(scr, x+width-1, y+1+i, style, "│")
-	}
-	drawText(scr, x, y+1+len(lines), style, "└"+strings.Repeat("─", width-2)+"┘")
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// padRightVisual 把 s 右补空格到指定 cell 宽度，CJK 算 2 cell。
-func padRightVisual(s string, width int) string {
-	w := visualWidth(s)
+func centerVisual(s string, width int) string {
+	w := render.VisualWidth(s)
 	if w >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-w)
+	pad := (width - w) / 2
+	return strings.Repeat(" ", pad) + s
 }

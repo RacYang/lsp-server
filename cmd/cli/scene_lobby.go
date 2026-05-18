@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+
+	"racoo.cn/lsp/cmd/cli/render"
 )
 
 type lobbyMode int
@@ -19,19 +21,17 @@ const (
 	lobbyModeName
 	lobbyModeJoinCode
 	lobbyModeRooms
-	lobbyModeSettings
 	lobbyModeHelp
 )
 
-// LobbyScene 是全屏大厅。它用卡片和向导替代旧的 stdin/stdout 菜单。
+// LobbyScene 是全屏大厅。
 type LobbyScene struct {
 	state *AppState
 	gw    LobbyGateway
-	cfg   *Config
 
 	mode       lobbyMode
 	selected   int
-	mu         sync.RWMutex // 保护 message 与 pending（runAsync 后台写，Render ticker 读）
+	mu         sync.RWMutex
 	message    string
 	rules      []LobbyRuleMeta
 	rooms      []LobbyRoomMeta
@@ -43,46 +43,148 @@ type LobbyScene struct {
 	shouldQuit bool
 }
 
-func NewLobbyScene(state *AppState, gw LobbyGateway, cfg *Config) *LobbyScene {
-	return &LobbyScene{state: state, gw: gw, cfg: cfg}
+func NewLobbyScene(state *AppState, gw LobbyGateway) *LobbyScene {
+	return &LobbyScene{state: state, gw: gw}
 }
 
-func (s *LobbyScene) ID() SceneID { return SceneLobby }
-
+func (s *LobbyScene) ID() SceneID      { return SceneLobby }
 func (s *LobbyScene) ShouldQuit() bool { return s.shouldQuit }
 
 func (s *LobbyScene) Render(scr tcell.Screen, now time.Time) {
 	_ = now
-	scr.Clear()
 	w, h := scr.Size()
+	scr.Clear()
+	page := render.CalcPage(w, h)
+
 	view := s.state.Snapshot()
-	drawBandLine(scr, Region{X: 0, Y: 0, Width: w, Height: 1}, "lsp · 大厅 · "+view.Nickname, networkLabel(view), false, false)
+	render.DrawBandLine(scr, page.TitleBar, "lsp · 大厅 · "+view.Nickname, networkLabel(view), false, false)
+
 	switch s.mode {
 	case lobbyModeRules:
-		s.renderRules(scr, w, h)
+		s.renderRules(scr, page.Content)
 	case lobbyModePrivacy:
-		s.renderPrivacy(scr, w, h)
+		s.renderPrivacy(scr, page.Content)
 	case lobbyModeName:
-		s.renderName(scr, w, h)
+		s.renderName(scr, page.Content)
 	case lobbyModeJoinCode:
-		s.renderJoinCode(scr, w, h)
+		s.renderJoinCode(scr, page.Content)
 	case lobbyModeRooms:
-		s.renderRooms(scr, w, h)
-	case lobbyModeSettings:
-		s.renderSettings(scr, w, h)
+		s.renderRooms(scr, page.Content)
 	case lobbyModeHelp:
-		s.renderHelp(scr, w, h)
+		s.renderHelp(scr, page.Content)
 	default:
-		s.renderHome(scr, w, h)
+		s.renderHome(scr, page.Content)
 	}
+
 	s.mu.RLock()
 	msg := s.message
 	s.mu.RUnlock()
 	if msg != "" {
-		drawClippedText(scr, 2, h-2, defaultStyle().Reverse(true), msg, w-4)
+		render.DrawToast(scr, page.Toast, msg)
 	}
-	drawBandLine(scr, Region{X: 0, Y: h - 1, Width: w, Height: 1}, s.keybar(), "", false, false)
+	render.DrawBandLine(scr, page.KeyBar, s.keybar(), "", false, false)
 }
+
+func (s *LobbyScene) renderHome(scr tcell.Screen, content render.Region) {
+	cards := []render.Card{
+		{Title: "快速开始", Desc: "自动补齐机器人", Hint: "Enter"},
+		{Title: "创建房间", Desc: "选择玩法开局", Hint: "Enter"},
+		{Title: "加入房间码", Desc: "好友邀请进入", Hint: "Enter"},
+		{Title: "公开房间", Desc: "挑选等候房", Hint: "Enter"},
+	}
+	cardW := 18
+	total := len(cards)*cardW + (len(cards)-1)*2
+	x := render.MaxInt(2, (content.Width-total)/2+content.X)
+	y := render.MaxInt(3, content.Y+content.Height/2-5)
+	render.DrawCardGrid(scr, x, y, cards, cardW, 6, s.selected)
+
+	listY := y + 8
+	render.DrawClippedText(scr, content.X+2, listY, render.Style(render.SemEmphasis), "公开房间", content.Width-4)
+	for i, room := range s.rooms {
+		if i >= 5 {
+			break
+		}
+		line := fmt.Sprintf("%-18s  %-18s  %d/%d", displayRoomName(room), room.DisplayName, room.Players, room.Capacity)
+		render.DrawClippedText(scr, content.X+4, listY+2+i, render.DefaultStyle(), line, content.Width-8)
+	}
+	if len(s.rooms) == 0 {
+		render.DrawClippedText(scr, content.X+4, listY+2, render.DefaultStyle(), "暂无公开房，按 Enter 快速开始或创建房间", content.Width-8)
+	}
+}
+
+func (s *LobbyScene) renderRules(scr tcell.Screen, content render.Region) {
+	render.DrawClippedText(scr, content.X+2, content.Y+2, render.Style(render.SemEmphasis), "创建房间 · 选择玩法", content.Width-4)
+	items := make([]render.ListItem, len(s.rules))
+	for i, rule := range s.rules {
+		desc := rule.ShortDesc
+		if desc == "" {
+			desc = strings.Join(rule.EnabledFeatures, " / ")
+		}
+		if desc == "" {
+			desc = "经典玩法"
+		}
+		items[i] = render.ListItem{
+			Text:     displayRuleName(rule) + "  ——  " + desc,
+			Selected: i == s.selected,
+		}
+	}
+	listRegion := render.Region{X: content.X + 6, Y: content.Y + 5, Width: render.MaxInt(30, content.Width-12), Height: content.Height - 6}
+	render.DrawList(scr, listRegion, items, s.selected)
+	if len(s.rules) == 0 {
+		render.DrawClippedText(scr, content.X+4, content.Y+content.Height/2, render.DefaultStyle(), "正在加载玩法...", content.Width-8)
+	}
+}
+
+func (s *LobbyScene) renderPrivacy(scr tcell.Screen, content render.Region) {
+	render.DrawPanel(scr, content.Width, content.Height, "创建房间 · 公开性", []string{
+		selectLabel(!s.private, "公开房间：出现在公开房列表"),
+		selectLabel(s.private, "私密房间：创建后分享房间码"),
+	})
+}
+
+func (s *LobbyScene) renderName(scr tcell.Screen, content render.Region) {
+	name := s.input
+	if name == "" {
+		name = s.roomName
+	}
+	render.DrawPanel(scr, content.Width, content.Height, "创建房间 · 房间名", []string{
+		"默认按 Enter 直接创建",
+		"房间名：" + name,
+	})
+}
+
+func (s *LobbyScene) renderJoinCode(scr tcell.Screen, content render.Region) {
+	render.DrawPanel(scr, content.Width, content.Height, "加入房间码", []string{
+		"请输入好友给你的房间码",
+		"房间码：" + s.input,
+	})
+}
+
+func (s *LobbyScene) renderRooms(scr tcell.Screen, content render.Region) {
+	render.DrawClippedText(scr, content.X+2, content.Y+2, render.Style(render.SemEmphasis), "公开房间", content.Width-4)
+	if len(s.rooms) == 0 {
+		render.DrawClippedText(scr, content.X+4, content.Y+5, render.DefaultStyle(), "暂无公开房", content.Width-8)
+		return
+	}
+	items := make([]render.ListItem, len(s.rooms))
+	for i, room := range s.rooms {
+		items[i] = render.ListItem{
+			Text:     fmt.Sprintf("%-20s %-20s %d/%d", displayRoomName(room), room.DisplayName, room.Players, room.Capacity),
+			Selected: i == s.selected,
+		}
+	}
+	render.DrawList(scr, render.Region{X: content.X + 4, Y: content.Y + 6, Width: content.Width - 8, Height: content.Height - 7}, items, s.selected)
+}
+
+func (s *LobbyScene) renderHelp(scr tcell.Screen, content render.Region) {
+	render.DrawPanel(scr, content.Width, content.Height, "帮助", []string{
+		"大厅用方向键选择入口，Enter 确认",
+		"创建房间先选玩法，再选公开性，最后确认房间名",
+		"牌桌中 ←→ 选牌，Enter 出牌，? 查看帮助",
+	})
+}
+
+// ─── 按键处理 ────────────────────────────────────────
 
 func (s *LobbyScene) HandleKey(ctx context.Context, ev *tcell.EventKey) {
 	s.mu.RLock()
@@ -102,8 +204,6 @@ func (s *LobbyScene) HandleKey(ctx context.Context, ev *tcell.EventKey) {
 		s.handleJoinCodeKey(ctx, ev)
 	case lobbyModeRooms:
 		s.handleRoomsKey(ctx, ev)
-	case lobbyModeSettings:
-		s.handleSettingsKey(ev)
 	case lobbyModeHelp:
 		s.handleHelpKey(ev)
 	default:
@@ -114,121 +214,6 @@ func (s *LobbyScene) HandleKey(ctx context.Context, ev *tcell.EventKey) {
 func (s *LobbyScene) Tick(ctx context.Context, now time.Time) {
 	_ = ctx
 	_ = now
-}
-
-func (s *LobbyScene) renderHome(scr tcell.Screen, w, h int) {
-	cards := []string{"快速开始", "创建房间", "加入房间码", "公开房间"}
-	desc := []string{"自动补齐机器人", "选择玩法开局", "好友邀请进入", "挑选等待房"}
-	cardW := 18
-	total := len(cards)*cardW + (len(cards)-1)*2
-	x := renderMaxInt(2, (w-total)/2)
-	y := renderMaxInt(3, h/2-5)
-	for i, title := range cards {
-		r := Region{X: x + i*(cardW+2), Y: y, Width: cardW, Height: 6}
-		style := defaultStyle()
-		if s.selected == i {
-			style = style.Reverse(true)
-		}
-		drawSimpleBox(scr, r, title)
-		drawClippedText(scr, r.X+2, r.Y+2, style, centerVisual(desc[i], r.Width-4), r.Width-4)
-		drawClippedText(scr, r.X+2, r.Y+4, style, centerVisual("Enter", r.Width-4), r.Width-4)
-	}
-	drawClippedText(scr, 2, y+8, defaultStyle(), "公开房间", w-4)
-	for i, room := range s.rooms {
-		if i >= 5 {
-			break
-		}
-		line := fmt.Sprintf("%-18s  %-18s  %d/%d", displayRoomName(room), room.DisplayName, room.Players, room.Capacity)
-		drawClippedText(scr, 4, y+10+i, defaultStyle(), line, w-8)
-	}
-	if len(s.rooms) == 0 {
-		drawClippedText(scr, 4, y+10, defaultStyle(), "暂无公开房，按 Enter 快速开始或创建房间。", w-8)
-	}
-}
-
-func (s *LobbyScene) renderRules(scr tcell.Screen, w, h int) {
-	drawClippedText(scr, 2, 2, defaultStyle().Bold(true), "创建房间 · 选择玩法", w-4)
-	y := 5
-	for i, rule := range s.rules {
-		box := Region{X: 6, Y: y + i*5, Width: renderMaxInt(30, w-12), Height: 4}
-		drawSimpleBox(scr, box, displayRuleName(rule))
-		style := defaultStyle()
-		if s.selected == i {
-			style = style.Reverse(true)
-		}
-		desc := rule.ShortDesc
-		if desc == "" {
-			desc = strings.Join(rule.EnabledFeatures, " / ")
-		}
-		if desc == "" {
-			desc = "经典玩法"
-		}
-		drawClippedText(scr, box.X+2, box.Y+2, style, desc, box.Width-4)
-	}
-	if len(s.rules) == 0 {
-		drawClippedText(scr, 4, h/2, defaultStyle(), "正在加载玩法...", w-8)
-	}
-}
-
-func (s *LobbyScene) renderPrivacy(scr tcell.Screen, w, h int) {
-	drawCenteredPanel(scr, w, h, "创建房间 · 公开性", []string{
-		selectLabel(!s.private, "公开房间: 出现在公开房列表"),
-		selectLabel(s.private, "私密房间: 创建后分享房间码"),
-	})
-}
-
-func (s *LobbyScene) renderName(scr tcell.Screen, w, h int) {
-	name := s.input
-	if name == "" {
-		name = s.roomName
-	}
-	drawCenteredPanel(scr, w, h, "创建房间 · 房间名", []string{
-		"默认按 Enter 直接创建。",
-		"房间名: " + name,
-	})
-}
-
-func (s *LobbyScene) renderJoinCode(scr tcell.Screen, w, h int) {
-	drawCenteredPanel(scr, w, h, "加入房间码", []string{
-		"请输入好友给你的房间码。",
-		"房间码: " + s.input,
-	})
-}
-
-func (s *LobbyScene) renderRooms(scr tcell.Screen, w, h int) {
-	drawClippedText(scr, 2, 2, defaultStyle().Bold(true), "公开房间", w-4)
-	if len(s.rooms) == 0 {
-		drawClippedText(scr, 4, 5, defaultStyle(), "暂无公开房。", w-8)
-		return
-	}
-	drawClippedText(scr, 4, 4, defaultStyle().Bold(true), "房间名                 玩法                 人数", w-8)
-	for i, room := range s.rooms {
-		style := defaultStyle()
-		if i == s.selected {
-			style = style.Reverse(true)
-		}
-		line := fmt.Sprintf("%-20s %-20s %d/%d", displayRoomName(room), room.DisplayName, room.Players, room.Capacity)
-		drawClippedText(scr, 4, 6+i, style, line, w-8)
-	}
-}
-
-func (s *LobbyScene) renderSettings(scr tcell.Screen, w, h int) {
-	theme := ""
-	if s.cfg != nil {
-		theme = ParseTileTheme(s.cfg.TileTheme).String()
-	}
-	drawCenteredPanel(scr, w, h, "设置", []string{
-		"牌面主题: " + theme,
-		"按 Enter 在 unicode / ascii 间切换。",
-	})
-}
-
-func (s *LobbyScene) renderHelp(scr tcell.Screen, w, h int) {
-	drawCenteredPanel(scr, w, h, "帮助", []string{
-		"大厅用方向键选择入口，Enter 确认。",
-		"创建房间先选玩法，再选公开性，最后确认房间名。",
-		"牌桌中 ←→ 选牌，Enter 出牌，? 查看帮助。",
-	})
 }
 
 func (s *LobbyScene) handleHomeKey(ctx context.Context, ev *tcell.EventKey) {
@@ -256,15 +241,8 @@ func (s *LobbyScene) handleHomeKey(ctx context.Context, ev *tcell.EventKey) {
 		switch ev.Rune() {
 		case 'q', 'Q':
 			s.shouldQuit = true
-		case 's', 'S':
-			s.mode = lobbyModeSettings
 		case '?':
 			s.mode = lobbyModeHelp
-		case 'n', 'N':
-			s.mode = lobbyModeJoinCode
-			s.mu.Lock()
-			s.message = "改名暂沿用配置，下个版本进入独立输入框"
-			s.mu.Unlock()
 		}
 	}
 }
@@ -367,26 +345,6 @@ func (s *LobbyScene) handleRoomsKey(ctx context.Context, ev *tcell.EventKey) {
 	}
 }
 
-func (s *LobbyScene) handleSettingsKey(ev *tcell.EventKey) {
-	switch ev.Key() {
-	case tcell.KeyEscape:
-		s.mode = lobbyModeHome
-	case tcell.KeyEnter, tcell.KeyCtrlJ:
-		if s.cfg == nil {
-			return
-		}
-		theme := ParseTileTheme(s.cfg.TileTheme)
-		if theme == TileThemeUnicode {
-			s.cfg.TileTheme = TileThemeASCII.String()
-		} else {
-			s.cfg.TileTheme = TileThemeUnicode.String()
-		}
-		s.mu.Lock()
-		s.message = "牌面主题已切换为 " + s.cfg.TileTheme
-		s.mu.Unlock()
-	}
-}
-
 func (s *LobbyScene) handleHelpKey(ev *tcell.EventKey) {
 	if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyEnter || ev.Key() == tcell.KeyCtrlJ {
 		s.mode = lobbyModeHome
@@ -469,25 +427,10 @@ func (s *LobbyScene) keybar() string {
 		return "输入房间码    Enter 加入    Esc 返回"
 	case lobbyModeRooms:
 		return "↑↓ 选择房间    Enter 加入    Esc 返回"
-	case lobbyModeSettings:
-		return "Enter 切换主题    Esc 返回"
 	case lobbyModeHelp:
-		return "Enter/Esc 返回"
+		return "Enter / Esc 返回"
 	default:
-		return "←→/↑↓ 选择    Enter 确认    s 设置    ? 帮助    q 退出"
-	}
-}
-
-func drawCenteredPanel(scr tcell.Screen, w, h int, title string, lines []string) {
-	width := renderMaxInt(40, w/2)
-	if width > w-4 {
-		width = w - 4
-	}
-	height := len(lines) + 4
-	box := Region{X: renderMaxInt(0, (w-width)/2), Y: renderMaxInt(2, (h-height)/2), Width: width, Height: height}
-	drawSimpleBox(scr, box, title)
-	for i, line := range lines {
-		drawClippedText(scr, box.X+2, box.Y+2+i, defaultStyle(), line, box.Width-4)
+		return "←→ ↑↓ 选择    Enter 确认    ? 帮助    q 退出"
 	}
 }
 
