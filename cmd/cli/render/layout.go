@@ -36,7 +36,10 @@ func CalcPage(w, h int) Page {
 	}
 }
 
-const defaultHandSize = 13
+const (
+	wallTileCount = 13
+	maxHandTiles  = 14
+)
 
 // TableLayout 描述四向对称牌桌的全部区域。
 // 框 = 牌桌，框内只有牌和中央信息；玩家信息在框外紧贴。
@@ -85,30 +88,56 @@ func CalcTable(w, h int) (TableLayout, bool) {
 		TileStep: tileStep,
 	}
 
-	// 手牌尺寸
-	l.HandWidth = defaultHandSize*2 + (defaultHandSize-1)*spacing // 38 宽松 / 26 紧凑
-	l.HandHeight = 2                                              // 竖排牌：数字行 + 花色行
+	// 手牌尺寸以 14 张为上限，避免摸牌后第 14 张被布局裁掉。
+	l.HandWidth = maxHandTiles*2 + (maxHandTiles-1)*spacing // 41 宽松 / 28 紧凑
+	l.HandHeight = 2                                        // 竖排牌：数字行 + 花色行
 
-	// 牌桌框宽：手牌宽 + 两侧墙 + 牌河 + 中心最小宽度 + 边距
+	// 牌桌框是主视觉对象。宽度优先给中央信息和四家牌河留呼吸空间，
+	// 再确保 14 张南家手牌可以完整渲染。
 	sideWallW := 2
-	sidePondW := 10
-	centerW := 16
-	frameW := sideWallW + sidePondW + centerW + sidePondW + sideWallW
-	if l.HandWidth+4 > frameW {
-		frameW = l.HandWidth + 4
+	sidePondW := 12
+	frameW := 84
+	if compact {
+		sidePondW = 10
+		frameW = 72
+	}
+	maxFrameW := w - 24 // 左右玩家标签各预留 10 列和间距。
+	if maxFrameW < l.HandWidth+8 {
+		maxFrameW = w - 4
+	}
+	if frameW > maxFrameW {
+		frameW = maxFrameW
+	}
+	if minW := l.HandWidth + 8; frameW < minW {
+		frameW = minW
 	}
 
-	// 牌桌框高
+	// 牌桌框高。最小终端 100x30 时仍能完整容纳东西 13 张牌背。
 	northPondH := 3
 	southPondH := 3
-	middleH := defaultHandSize                                         // 与西/东墙高度匹配
-	frameH := 1 + northPondH + middleH + southPondH + l.HandHeight + 4 // 手牌 + 牌河 + 中间 + 间距
+	frameH := 30
+	if h < 36 {
+		frameH = 24
+	}
+	maxFrameH := h - 6 // 标题、toast、键位栏与上下玩家标签。
+	if frameH > maxFrameH {
+		frameH = maxFrameH
+	}
+	minFrameH := 1 + 1 + northPondH + wallTileCount + southPondH + l.HandHeight + 1
+	if frameH < minFrameH {
+		frameH = minFrameH
+	}
+	middleH := frameH - 2 - 1 - northPondH - southPondH - l.HandHeight
+	if middleH < wallTileCount {
+		middleH = wallTileCount
+		frameH = 2 + 1 + northPondH + middleH + southPondH + l.HandHeight
+	}
 
 	// 框定位
 	frameX := (w - frameW) / 2
 	frameY := (h - frameH) / 2
-	if frameY < 3 {
-		frameY = 3
+	if frameY < 2 {
+		frameY = 2
 	}
 	if frameY+frameH+3 > h {
 		frameY = h - frameH - 3
@@ -129,22 +158,26 @@ func CalcTable(w, h int) (TableLayout, bool) {
 	southPondY := southHandY - southPondH
 
 	l.NorthHand = Region{X: northHandX, Y: northHandY, Width: l.HandWidth, Height: 1}
-	l.NorthPond = Region{X: northHandX, Y: northPondY, Width: l.HandWidth, Height: northPondH}
+	l.NorthPond = Region{X: l.Inner.X + 2, Y: northPondY, Width: l.Inner.Width - 4, Height: northPondH}
 	l.SouthHand = Region{X: southHandX, Y: southHandY, Width: l.HandWidth, Height: l.HandHeight}
-	l.SouthPond = Region{X: southHandX, Y: southPondY, Width: l.HandWidth, Height: southPondH}
+	l.SouthPond = Region{X: l.Inner.X + 2, Y: southPondY, Width: l.Inner.Width - 4, Height: southPondH}
 
 	// 西/东墙
-	l.WestWall = Region{X: l.Inner.X, Y: middleY, Width: sideWallW, Height: defaultHandSize}
-	l.EastWall = Region{X: l.Inner.X + l.Inner.Width - sideWallW, Y: middleY, Width: sideWallW, Height: defaultHandSize}
+	l.WestWall = Region{X: l.Inner.X, Y: middleY, Width: sideWallW, Height: middleH}
+	l.EastWall = Region{X: l.Inner.X + l.Inner.Width - sideWallW, Y: middleY, Width: sideWallW, Height: middleH}
 
 	// 西/东牌河
-	l.WestPond = Region{X: l.Inner.X + sideWallW + 1, Y: middleY, Width: sidePondW, Height: defaultHandSize}
-	l.EastPond = Region{X: l.Inner.X + l.Inner.Width - sideWallW - sidePondW - 1, Y: middleY, Width: sidePondW, Height: defaultHandSize}
+	l.WestPond = Region{X: l.Inner.X + sideWallW + 2, Y: middleY, Width: sidePondW, Height: middleH}
+	l.EastPond = Region{X: l.Inner.X + l.Inner.Width - sideWallW - sidePondW - 2, Y: middleY, Width: sidePondW, Height: middleH}
 
 	// 中央区域
-	centerX := l.WestPond.X + l.WestPond.Width + 1
-	centerEndX := l.EastPond.X - 1
-	l.Center = Region{X: centerX, Y: middleY, Width: centerEndX - centerX, Height: 3}
+	centerX := l.WestPond.X + l.WestPond.Width + 2
+	centerEndX := l.EastPond.X - 2
+	centerH := 5
+	if middleH < centerH {
+		centerH = middleH
+	}
+	l.Center = Region{X: centerX, Y: middleY + (middleH-centerH)/2, Width: centerEndX - centerX, Height: centerH}
 
 	// 框外玩家标签
 	l.NorthLabel = Region{X: frameX, Y: frameY - 1, Width: frameW, Height: 1}

@@ -184,6 +184,39 @@ func TestRenderTableFrameStandard(t *testing.T) {
 	require.Greater(t, nonEmpty, 15, "must render meaningful content")
 }
 
+func TestRenderTableFrameStandardShowsFourSeatWalls(t *testing.T) {
+	scr := makeSimScreen(100, 30)
+	defer scr.Fini()
+
+	data := sampleTableData("playing")
+	layout, ok := CalcTable(100, 30)
+	require.True(t, ok)
+
+	DrawTableFrame(scr, layout, data)
+	scr.Show()
+
+	dump := dumpScreen(scr)
+	require.GreaterOrEqual(t, strings.Count(dump, "牌"), 39, "north, west and east concealed hands must all be visible")
+}
+
+func TestRenderTableFrameSupportsDrawnFourteenthTile(t *testing.T) {
+	scr := makeSimScreen(100, 30)
+	defer scr.Fini()
+
+	data := sampleTableData("playing")
+	f := decodeTile("p9")
+	data.Hands[0] = append(data.Hands[0], TileFace{Glyph: TileGlyph("p9"), Rank: f.rank, Suit: f.suit})
+	layout, ok := CalcTable(100, 30)
+	require.True(t, ok)
+
+	DrawTableFrame(scr, layout, data)
+	scr.Show()
+
+	dump := dumpScreen(scr)
+	require.Contains(t, dump, "九", "drawn tile rank must be visible")
+	require.Contains(t, dump, "筒", "drawn tile suit must be visible")
+}
+
 func TestCalcTableMinSize(t *testing.T) {
 	_, ok := CalcTable(90, 25)
 	require.False(t, ok, "below minimum size should fail")

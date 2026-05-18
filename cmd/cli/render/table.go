@@ -119,21 +119,24 @@ func DrawPlayerLabels(scr tcell.Screen, layout TableLayout, data TableData) {
 // DrawSeatTiles 绘制四家手牌。
 func DrawSeatTiles(scr tcell.Screen, layout TableLayout, data TableData) {
 	// 北家（对家）——一横排牌背
-	drawHorizontalBacks(scr, layout.NorthHand, len(data.Hands[2]))
+	drawHorizontalBacks(scr, layout.NorthHand, len(data.Hands[2]), layout.TileStep-2)
 	// 西家——一竖排牌背
 	drawVerticalBacks(scr, layout.WestWall, len(data.Hands[1]))
 	// 东家——一竖排牌背
 	drawVerticalBacks(scr, layout.EastWall, len(data.Hands[3]))
 	// 南家（自己）——一横排竖排显示
-	drawSouthVerticalHand(scr, layout.SouthHand, data.Hands[0], data.Cursor)
+	drawSouthVerticalHand(scr, layout.SouthHand, data.Hands[0], data.Cursor, layout.TileStep)
 }
 
-func drawSouthVerticalHand(scr tcell.Screen, r Region, tiles []TileFace, cursor CursorState) {
+func drawSouthVerticalHand(scr tcell.Screen, r Region, tiles []TileFace, cursor CursorState, step int) {
 	if r.Empty() || len(tiles) == 0 {
 		return
 	}
+	if step < 2 {
+		step = 2
+	}
 	for i, tile := range tiles {
-		x := r.X + i*3
+		x := r.X + i*step
 		if x+2 > r.X+r.Width {
 			break
 		}
@@ -142,18 +145,18 @@ func drawSouthVerticalHand(scr tcell.Screen, r Region, tiles []TileFace, cursor 
 	}
 }
 
-func drawHorizontalBacks(scr tcell.Screen, r Region, count int) {
+func drawHorizontalBacks(scr tcell.Screen, r Region, count, spacing int) {
 	if r.Empty() || count <= 0 {
 		return
 	}
-	DrawTileBackRow(scr, r.X, r.Y, DefaultStyle(), count, 1)
+	DrawTileBackRow(scr, r.X, r.Y, DefaultStyle(), count, spacing)
 }
 
 func drawVerticalBacks(scr tcell.Screen, r Region, count int) {
 	if r.Empty() || count <= 0 {
 		return
 	}
-	DrawTileBackCol(scr, r.X, r.Y, DefaultStyle(), count, 1)
+	DrawTileBackCol(scr, r.X, r.Y, DefaultStyle(), count, 0)
 }
 
 func tileStyleForCursor(cursor CursorState, idx int) tcell.Style {
@@ -194,7 +197,8 @@ func drawPondRow(scr tcell.Screen, r Region, tiles []TileFace) {
 	if r.Empty() || len(tiles) == 0 {
 		return
 	}
-	cols := (r.Width + 1) / 4 // 每牌约 4 列（中文名 2 字 + 间距 1）
+	const step = 5 // 牌名 4 cell + 1 cell 间距，保证牌河可扫读。
+	cols := (r.Width + 1) / step
 	if cols < 1 {
 		cols = 1
 	}
@@ -204,7 +208,7 @@ func drawPondRow(scr tcell.Screen, r Region, tiles []TileFace) {
 		if row >= r.Height {
 			break
 		}
-		x := r.X + col*4
+		x := r.X + col*step
 		y := r.Y + row
 		DrawText(scr, x, y, DefaultStyle(), tile.Glyph)
 	}
@@ -214,6 +218,7 @@ func drawPondCol(scr tcell.Screen, r Region, tiles []TileFace) {
 	if r.Empty() || len(tiles) == 0 {
 		return
 	}
+	const step = 5
 	rows := r.Height
 	if rows < 1 {
 		rows = 1
@@ -221,10 +226,10 @@ func drawPondCol(scr tcell.Screen, r Region, tiles []TileFace) {
 	for i, tile := range tiles {
 		row := i % rows
 		col := i / rows
-		if col >= r.Width/4 {
+		if col >= r.Width/step {
 			break
 		}
-		x := r.X + col*4
+		x := r.X + col*step
 		y := r.Y + row
 		if x < r.X+r.Width && y < r.Y+r.Height {
 			DrawText(scr, x, y, DefaultStyle(), tile.Glyph)
