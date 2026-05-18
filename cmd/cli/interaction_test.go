@@ -127,6 +127,33 @@ func TestClaimUXShowsCorrectPassShortcut(t *testing.T) {
 	require.NotContains(t, ux.KeyHint, "P 跳过")
 }
 
+func TestClaimDialogUsesLastDiscardAsTrigger(t *testing.T) {
+	view := RoomView{
+		Phase:           phaseTable,
+		RoomState:       "playing",
+		SeatIndex:       0,
+		ActingSeat:      0,
+		WaitingAction:   "claim_window",
+		PendingTile:     "s1",
+		ClaimCandidates: map[int32][]string{0: {"pong", "pass"}},
+		LastAction: &clientv1.LastActionInfo{
+			ActorSeat: 2,
+			Action:    "discard",
+			Tile:      "s1",
+		},
+	}
+	view.Players[0].Nickname = "RaCoo"
+	view.Players[2].Nickname = "机器人"
+
+	model := DeriveInteractionModel(view)
+
+	require.NotNil(t, model.Claim)
+	require.EqualValues(t, 2, model.Claim.Dialog.TriggerSeat)
+	require.Equal(t, "机器人", model.Claim.Dialog.TriggerName)
+	require.Contains(t, model.Claim.Dialog.title(), "机器人 打出 一条")
+	require.NotContains(t, model.Claim.Dialog.title(), "RaCoo 打出")
+}
+
 func TestDisabledReasonExplainsNotYourTurn(t *testing.T) {
 	view := RoomView{
 		Phase:         phaseTable,

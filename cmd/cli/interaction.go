@@ -502,13 +502,26 @@ func buildClaimDialog(view RoomView, actions []PlayerAction) *ClaimDialogState {
 	if !containsClaimAction(claimActions, ClaimActionPass) {
 		claimActions = append(claimActions, ClaimActionPass)
 	}
+	triggerSeat := claimTriggerSeat(view)
 	return &ClaimDialogState{
 		Trigger:     trigger,
-		TriggerSeat: view.ActingSeat,
-		TriggerName: nicknameForSeat(view, view.ActingSeat),
+		TriggerSeat: triggerSeat,
+		TriggerName: nicknameForSeat(view, triggerSeat),
 		Tile:        view.PendingTile,
 		Actions:     claimActions,
 	}
+}
+
+func claimTriggerSeat(view RoomView) int32 {
+	if view.WaitingAction == "tsumo_window" {
+		return view.SeatIndex
+	}
+	if action := view.LastAction; action != nil && action.GetAction() == "discard" {
+		if view.PendingTile == "" || action.GetTile() == "" || action.GetTile() == view.PendingTile {
+			return action.GetActorSeat()
+		}
+	}
+	return -1
 }
 
 func containsAction(actions []PlayerAction, target PlayerAction) bool {

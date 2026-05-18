@@ -94,21 +94,33 @@ func (d *ClaimDialogState) Expired(now time.Time) bool {
 }
 
 func (d *ClaimDialogState) title() string {
+	tile := claimTileName(d.Tile)
 	switch d.Trigger {
 	case ClaimTriggerSelfDraw:
-		return fmt.Sprintf("你摸到 %s", d.Tile)
+		return fmt.Sprintf("你摸到 %s", tile)
 	case ClaimTriggerRon:
-		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), tile)
 	case ClaimTriggerPong:
-		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), tile)
 	case ClaimTriggerGang:
-		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), tile)
 	case ClaimTriggerChow:
-		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), tile)
 	case ClaimTriggerPongOrHu:
-		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), tile)
 	}
 	return "请决定这一手"
+}
+
+func claimTileName(tile string) string {
+	if tile == "" {
+		return "这张牌"
+	}
+	name := TileName(tile)
+	if name == "??" {
+		return tile
+	}
+	return name
 }
 
 func displayTrigger(d *ClaimDialogState) string {
