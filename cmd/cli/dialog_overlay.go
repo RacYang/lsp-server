@@ -85,10 +85,6 @@ type OverlayContext struct {
 // ─── 叠加层内容行 ────────────────────────────────────
 
 func overlayRoomInfoLines(view RoomView) []string {
-	rule := view.RuleID
-	if rule == "" {
-		rule = "未知规则"
-	}
 	roomID := view.RoomID
 	if roomID == "" {
 		roomID = "(未进房)"
@@ -101,7 +97,7 @@ func overlayRoomInfoLines(view RoomView) []string {
 	}
 	return []string{
 		"房号: " + roomID,
-		"规则: " + rule,
+		"规则: " + ruleLabel(view),
 		"人数: " + itoa(count) + " / 4",
 		"",
 		"按 i 关闭",

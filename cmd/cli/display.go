@@ -239,11 +239,12 @@ var ruleDisplayNames = map[string]string{
 }
 
 func ruleLabel(view RoomView) string {
-	if name, ok := ruleDisplayNames[view.RuleID]; ok {
+	return ruleNameFromID(view.RuleID)
+}
+
+func ruleNameFromID(ruleID string) string {
+	if name, ok := ruleDisplayNames[ruleID]; ok {
 		return name
-	}
-	if view.RuleID != "" {
-		return view.RuleID
 	}
 	return "麻将"
 }

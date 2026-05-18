@@ -12,7 +12,7 @@ func TestRuleLabelTranslatesKnownIDsAndFallsBackGracefully(t *testing.T) {
 	// 防回归：DisplayName 是房间名，绝不能顶替规则名（旧实现 bug 会让 HUD 显示 "VMMEZ6 ▸ VMMEZ6 ▸ ..."）
 	require.Equal(t, "川麻血战", ruleLabel(RoomView{DisplayName: "我的房间", RuleID: "blood"}))
 	require.Equal(t, "麻将", ruleLabel(RoomView{}))
-	require.Equal(t, "future_rule", ruleLabel(RoomView{RuleID: "future_rule"}))
+	require.Equal(t, "麻将", ruleLabel(RoomView{RuleID: "future_rule"}))
 }
 
 func TestRoomLabelPrefersDisplayNameThenRoomID(t *testing.T) {

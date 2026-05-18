@@ -88,10 +88,8 @@ func NewSettlementDialog(summary SettlementSummary, openedAt time.Time, revealIn
 	return &SettlementDialogState{Summary: summary, OpenedAt: openedAt, RevealInterval: revealInterval}
 }
 
-// totalRevealLines 是结算所有揭晓行的总数：
-// 标题 (1) + 番种 (n) + 多胡家 (w) + 流局罚分 (p) + 总番分隔 (1) + 每家分数 (m)。
 func (d *SettlementDialogState) totalRevealLines() int {
-	return 1 + len(d.Summary.Fans) + len(d.Summary.Winners) + len(d.Summary.Penalties) + 1 + len(d.Summary.Scores)
+	return len(d.allLines(48))
 }
 
 // VisibleLines 返回当前应该显示的行数；由 OpenedAt 与 RevealInterval 共同决定。
@@ -119,20 +117,29 @@ func (d *SettlementDialogState) AllRevealed(now time.Time) bool {
 func (d *SettlementDialogState) title() string {
 	switch d.Summary.Outcome {
 	case SettlementOutcomeWin:
-		return "胡 了 !"
+		return "胡了，你赢了"
 	case SettlementOutcomeLose:
-		return "输 了"
+		if d.Summary.WinnerNick != "" {
+			return d.Summary.WinnerNick + " 胡了"
+		}
+		return "这一局输了"
 	case SettlementOutcomeDraw:
-		return "流 局"
+		return "流局，无人胡牌"
 	}
-	return "本 局 结 束"
+	return "本局结束"
 }
 
 // allLines 返回结算的全部行（不分可见性），让 VisibleLines 控制揭晓节奏。
 func (d *SettlementDialogState) allLines(innerWidth int) []string {
 	lines := []string{centerVisual(d.title(), innerWidth)}
-	for _, fan := range d.Summary.Fans {
-		lines = append(lines, centerVisual(fmt.Sprintf("%s   + %d", fan.Name, fan.Multiplier), innerWidth))
+	if self, ok := d.selfScore(); ok {
+		sign := ""
+		if self > 0 {
+			sign = "+"
+		}
+		lines = append(lines, centerVisual(fmt.Sprintf("你本局 %s%d", sign, self), innerWidth))
+	} else {
+		lines = append(lines, centerVisual(fmt.Sprintf("本局共 %d 番", d.Summary.TotalFan), innerWidth))
 	}
 	// [S3.1] 多家胡：每位胡家独立展示，避免和「Fans 总集合」混在一起辨认不出归属。
 	for _, w := range d.Summary.Winners {
@@ -144,13 +151,20 @@ func (d *SettlementDialogState) allLines(innerWidth int) []string {
 		if names == "" {
 			names = "—"
 		}
-		lines = append(lines, centerVisual(fmt.Sprintf("胡 · %s   %d 番 · %s", label, w.Fan, names), innerWidth))
+		lines = append(lines, centerVisual(fmt.Sprintf("胡家：%s  %d 番（%s）", label, w.Fan, names), innerWidth))
+	}
+	if len(d.Summary.Fans) > 0 {
+		fanTexts := make([]string, 0, len(d.Summary.Fans))
+		for _, fan := range d.Summary.Fans {
+			fanTexts = append(fanTexts, fmt.Sprintf("%s +%d", fan.Name, fan.Multiplier))
+		}
+		lines = append(lines, centerVisual("番种："+strings.Join(fanTexts, "、"), innerWidth))
 	}
 	// [S4.1] 流局罚分 / 查叫 / 退税独立显示。
 	for _, p := range d.Summary.Penalties {
-		lines = append(lines, centerVisual(fmt.Sprintf("罚 · %s  %s→%s  %d", p.Reason, p.FromNick, p.ToNick, p.Amount), innerWidth))
+		lines = append(lines, centerVisual(fmt.Sprintf("罚分：%s  %s 给 %s  %d", p.Reason, p.FromNick, p.ToNick, p.Amount), innerWidth))
 	}
-	lines = append(lines, centerVisual(fmt.Sprintf("──── 共 %d 番 ────", d.Summary.TotalFan), innerWidth))
+	lines = append(lines, centerVisual(fmt.Sprintf("共 %d 番", d.Summary.TotalFan), innerWidth))
 	for _, s := range d.Summary.Scores {
 		sign := ""
 		if s.Delta > 0 {
@@ -160,10 +174,19 @@ func (d *SettlementDialogState) allLines(innerWidth int) []string {
 		if s.IsSelf {
 			label = "你"
 		}
-		lines = append(lines, centerVisual(fmt.Sprintf("%s   %s%d", label, sign, s.Delta), innerWidth))
+		lines = append(lines, centerVisual(fmt.Sprintf("%s：%s%d", label, sign, s.Delta), innerWidth))
 	}
 	// [S5.1] 键位提示由场景层 key bar 统一渲染，不在此处重复。
 	return lines
+}
+
+func (d *SettlementDialogState) selfScore() (int, bool) {
+	for _, s := range d.Summary.Scores {
+		if s.IsSelf {
+			return s.Delta, true
+		}
+	}
+	return 0, false
 }
 
 // DrawSettlementDialog 已移除——结算绘制由 scene_table.go 通过 render.DrawDialog(BorderDouble) 处理。
@@ -177,7 +200,7 @@ func WriteStdoutSummary(w io.Writer, sum SettlementSummary) {
 	}
 	_, _ = fmt.Fprintln(w, "== 本局摘要 ==")
 	if sum.RoomID != "" {
-		_, _ = fmt.Fprintf(w, "房间: %s  规则: %s\n", sum.RoomID, sum.RuleID)
+		_, _ = fmt.Fprintf(w, "房间: %s  规则: %s\n", sum.RoomID, ruleNameFromID(sum.RuleID))
 	}
 	switch sum.Outcome {
 	case SettlementOutcomeWin:

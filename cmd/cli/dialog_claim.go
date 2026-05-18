@@ -96,19 +96,19 @@ func (d *ClaimDialogState) Expired(now time.Time) bool {
 func (d *ClaimDialogState) title() string {
 	switch d.Trigger {
 	case ClaimTriggerSelfDraw:
-		return "你 自 摸 了 !"
+		return fmt.Sprintf("你摸到 %s", d.Tile)
 	case ClaimTriggerRon:
-		return fmt.Sprintf("胡 %s 打出的 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
 	case ClaimTriggerPong:
-		return fmt.Sprintf("碰 %s 打出的 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
 	case ClaimTriggerGang:
-		return fmt.Sprintf("杠 %s 打出的 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
 	case ClaimTriggerChow:
-		return fmt.Sprintf("吃 %s 打出的 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
 	case ClaimTriggerPongOrHu:
-		return fmt.Sprintf("胡/碰 %s 打出的 %s", displayTrigger(d), d.Tile)
+		return fmt.Sprintf("%s 打出 %s", displayTrigger(d), d.Tile)
 	}
-	return "请 决 定"
+	return "请决定这一手"
 }
 
 func displayTrigger(d *ClaimDialogState) string {
@@ -145,43 +145,48 @@ func claimDialogLines(d *ClaimDialogState, now time.Time, innerWidth int) []stri
 	if innerWidth < 20 {
 		innerWidth = 20
 	}
-	title := d.title()
-	buttons := make([]string, len(d.Actions))
-	totalLen := 0
+	lines := []string{centerVisual(d.title(), innerWidth), ""}
 	for i, a := range d.Actions {
-		label := claimActionLabel(a, d.Trigger)
+		prefix := "  "
 		if i == d.SelectedIndex {
-			buttons[i] = "[ " + label + " ]"
-		} else {
-			buttons[i] = "  " + label + "  "
+			prefix = "▶ "
 		}
-		totalLen += render.VisualWidth(buttons[i])
+		lines = append(lines, centerVisual(prefix+claimActionSentence(a, d.Trigger), innerWidth))
 	}
-	gap := 2
-	totalLen += gap * (len(buttons) - 1)
-	pad := (innerWidth - totalLen) / 2
-	if pad < 0 {
-		pad = 0
-	}
-	buttonLine := strings.Repeat(" ", pad) + strings.Join(buttons, strings.Repeat(" ", gap))
-
-	progressLine := claimProgressBar(d, now, innerWidth)
-	hint := "快捷键: h胡  g杠  p碰  n过  ←→切换  Enter 确认"
+	lines = append(lines, "", centerVisual(claimProgressBar(d, now, innerWidth), innerWidth))
+	hint := "现在：←→ 选择　Enter 确认"
 	if d.Pending {
-		hint = "已提交，等待服务端确认..."
+		hint = "已经递出决定，等牌桌回应"
 	}
-	return []string{
-		centerVisual(title, innerWidth),
-		"",
-		buttonLine,
-		"",
-		centerVisual(progressLine, innerWidth),
-		centerVisual(hint, innerWidth),
+	lines = append(lines, centerVisual(hint, innerWidth))
+	return lines
+}
+
+func claimActionSentence(a ClaimAction, trigger ClaimTrigger) string {
+	label := claimActionLabel(a, trigger)
+	switch a {
+	case ClaimActionHu:
+		if trigger == ClaimTriggerSelfDraw {
+			return label + "：宣告自摸"
+		}
+		return label + "：就这张牌和牌"
+	case ClaimActionPong:
+		return label + "：拿下这张牌"
+	case ClaimActionGang:
+		return label + "：开杠"
+	case ClaimActionChow:
+		return label + "：吃进这张牌"
+	case ClaimActionPass:
+		if trigger == ClaimTriggerSelfDraw {
+			return label + "：留在手里继续打"
+		}
+		return label + "：放过这次机会"
 	}
+	return label
 }
 
 func claimProgressBar(d *ClaimDialogState, now time.Time, innerWidth int) string {
-	barWidth := innerWidth - 8
+	barWidth := innerWidth - 12
 	if barWidth < 6 {
 		barWidth = 6
 	}
@@ -198,7 +203,7 @@ func claimProgressBar(d *ClaimDialogState, now time.Time, innerWidth int) string
 		left = 0
 	}
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	return fmt.Sprintf("%s  %.1fs", bar, left.Seconds())
+	return fmt.Sprintf("还剩 %.1f 秒  %s", left.Seconds(), bar)
 }
 
 func centerVisual(s string, width int) string {
