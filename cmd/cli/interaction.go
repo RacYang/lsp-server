@@ -291,7 +291,7 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 		if emptySeatCount(view) > 0 {
 			return "座位未满 - b 补一个 / B 补满"
 		}
-		return "已自动准备,等待其他玩家就位"
+		return "人已坐齐：按 Enter 准备开局"
 	default:
 		if model.Hint != "" {
 			return model.Hint
@@ -323,6 +323,7 @@ func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 		if emptySeatCount(view) > 0 {
 			return "等人入座：b 补一个机器人　B 补满"
 		}
+		return "准备开局：Enter 确认　? 帮助"
 	}
 	return "等待：? 帮助　i 房间信息　Tab 玩家"
 }

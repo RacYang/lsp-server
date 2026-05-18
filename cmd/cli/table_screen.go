@@ -164,6 +164,9 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		if model.Phase == PhaseSettlement {
 			return tableEventResult{}
 		}
+		if model.Phase == PhaseWaiting && emptySeatCount(view) == 0 {
+			return submitReady(ctx, state, gateway, view)
+		}
 		if claimDialog != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
 			return submitClaimAction(ctx, gateway, claimDialog, claimDialog.Selected())
 		}
@@ -175,6 +178,28 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		}
 		return submitCursorAction(ctx, state, cursor, hand, gateway, view)
 	}
+	return tableEventResult{}
+}
+
+func submitReady(ctx context.Context, state *AppState, gateway TableGateway, view RoomView) tableEventResult {
+	if view.SeatIndex < 0 || view.SeatIndex > 3 {
+		return tableEventResult{}
+	}
+	go func() {
+		if err := gateway.Ready(ctx); err != nil {
+			noticeAsyncFailure(state, "准备开局失败", err)
+			return
+		}
+		if state == nil {
+			return
+		}
+		state.Mutate(func(v *RoomView) {
+			if v.SeatIndex >= 0 && v.SeatIndex < 4 {
+				v.Players[v.SeatIndex].Ready = true
+				v.Players[v.SeatIndex].Status = "ready"
+			}
+		})
+	}()
 	return tableEventResult{}
 }
 
