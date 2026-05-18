@@ -6,3 +6,4 @@ deploy/compose/.env
 .claude/settings.local.json
 /cli
 tmp/
+.cache/
