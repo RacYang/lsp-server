@@ -86,19 +86,53 @@ func (s *LobbyScene) Render(scr tcell.Screen, now time.Time) {
 }
 
 func (s *LobbyScene) renderHome(scr tcell.Screen, content render.Region) {
-	cards := []render.Card{
-		{Title: "快速开始", Desc: "自动补齐机器人", Hint: "Enter"},
-		{Title: "创建房间", Desc: "选择玩法开局", Hint: "Enter"},
-		{Title: "加入房间码", Desc: "好友邀请进入", Hint: "Enter"},
-		{Title: "公开房间", Desc: "挑选等候房", Hint: "Enter"},
+	entries := []struct {
+		title string
+		desc  string
+	}{
+		{title: "快速开始", desc: "自动找一桌能开的牌局"},
+		{title: "创建房间", desc: "选玩法，等朋友或机器人入座"},
+		{title: "加入房间", desc: "输入好友给你的房间码"},
+		{title: "公开房", desc: "看看正在等人的牌局"},
 	}
-	cardW := 18
-	total := len(cards)*cardW + (len(cards)-1)*2
-	x := render.MaxInt(2, (content.Width-total)/2+content.X)
-	y := render.MaxInt(3, content.Y+content.Height/2-5)
-	render.DrawCardGrid(scr, x, y, cards, cardW, 6, s.selected)
 
-	listY := y + 8
+	titleY := render.MaxInt(content.Y+2, content.Y+content.Height/2-8)
+	render.DrawClippedText(scr, content.X, titleY, render.DefaultStyle(),
+		render.CenterVisual("文字牌局", content.Width), content.Width)
+	render.DrawClippedText(scr, content.X, titleY+2, render.Style(render.SemDim),
+		render.CenterVisual("选一个入口，开始一桌川麻", content.Width), content.Width)
+
+	menuY := titleY + 5
+	total := 0
+	labels := make([]string, len(entries))
+	for i, entry := range entries {
+		label := entry.title
+		if i == s.selected {
+			label = " " + entry.title + " "
+		}
+		labels[i] = label
+		total += render.VisualWidth(label)
+	}
+	gap := 8
+	total += gap * (len(entries) - 1)
+	x := content.X + (content.Width-total)/2
+	if x < content.X+2 {
+		x = content.X + 2
+	}
+	for i, label := range labels {
+		st := render.DefaultStyle()
+		if i == s.selected {
+			st = render.Style(render.SemEmphasis)
+		}
+		x = render.DrawText(scr, x, menuY, st, label)
+		x += gap
+	}
+	if s.selected >= 0 && s.selected < len(entries) {
+		render.DrawClippedText(scr, content.X, menuY+2, render.DefaultStyle(),
+			render.CenterVisual(entries[s.selected].desc, content.Width), content.Width)
+	}
+
+	listY := menuY + 5
 	render.DrawClippedText(scr, content.X+2, listY, render.Style(render.SemEmphasis), "公开房间", content.Width-4)
 	for i, room := range s.rooms {
 		if i >= 5 {
@@ -108,7 +142,7 @@ func (s *LobbyScene) renderHome(scr tcell.Screen, content render.Region) {
 		render.DrawClippedText(scr, content.X+4, listY+2+i, render.DefaultStyle(), line, content.Width-8)
 	}
 	if len(s.rooms) == 0 {
-		render.DrawClippedText(scr, content.X+4, listY+2, render.DefaultStyle(), "暂无公开房，按 Enter 快速开始或创建房间", content.Width-8)
+		render.DrawClippedText(scr, content.X+4, listY+2, render.Style(render.SemDim), "暂无公开房", content.Width-8)
 	}
 }
 
@@ -418,19 +452,19 @@ func (s *LobbyScene) keybar() string {
 	}
 	switch s.mode {
 	case lobbyModeRules:
-		return "↑↓ 选择玩法    Enter 下一步    Esc 返回"
+		return "选玩法：↑↓ 移动　Enter 下一步　Esc 返回"
 	case lobbyModePrivacy:
-		return "←→ 切换公开性    Enter 下一步    Esc 返回"
+		return "选公开性：←→ 切换　Enter 下一步　Esc 返回"
 	case lobbyModeName:
-		return "输入房间名    Enter 创建    Esc 返回"
+		return "房间名：输入文字　Enter 创建　Esc 返回"
 	case lobbyModeJoinCode:
-		return "输入房间码    Enter 加入    Esc 返回"
+		return "加入房间：输入房间码　Enter 加入　Esc 返回"
 	case lobbyModeRooms:
-		return "↑↓ 选择房间    Enter 加入    Esc 返回"
+		return "公开房：↑↓ 选择　Enter 加入　Esc 返回"
 	case lobbyModeHelp:
-		return "Enter / Esc 返回"
+		return "帮助：Enter 返回　Esc 返回"
 	default:
-		return "←→ ↑↓ 选择    Enter 确认    ? 帮助    q 退出"
+		return "大厅：←→/↑↓ 选择入口　Enter 确认　? 帮助　q 退出"
 	}
 }
 

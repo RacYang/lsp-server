@@ -100,7 +100,7 @@ func (ts *TableScene) Render(scr tcell.Screen, now time.Time) {
 
 	keyHint := ux.KeyHint
 	if ph == tablePhaseRoomPrep {
-		keyHint = "b 补1个机器人  B 补满  q 返回  ? 帮助  Esc"
+		keyHint = "等人入座：b 补一个机器人　B 补满　? 帮助"
 	}
 	render.DrawBandLine(scr, page.KeyBar, keyHint, "", false, false)
 }

@@ -54,7 +54,7 @@ func sampleTableData(phase string) TableData {
 		RuleLabel:   "川麻血战",
 		WallRemain:  12,
 		RoundHand:   "第3局 第5手",
-		PhasePrompt: "◆ 该你出牌 ◆",
+		PhasePrompt: "轮到你：选择一张牌打出",
 		Countdown:   12,
 	}
 
@@ -120,7 +120,7 @@ func TestRenderTableFramePlayingFull(t *testing.T) {
 	require.Contains(t, dump, "┐", "must have table frame")
 	require.Contains(t, dump, "└", "must have table frame")
 	require.Contains(t, dump, "┘", "must have table frame")
-	require.Contains(t, dump, "◆ 该你出牌 ◆", "center must show prompt")
+	require.Contains(t, dump, "轮到你：选择一张牌打出", "center must show prompt")
 	require.Contains(t, dump, "12s", "center must show countdown")
 }
 

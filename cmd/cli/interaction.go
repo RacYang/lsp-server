@@ -259,25 +259,25 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 		// [E2.1] 底栏必须实时显示「已选 N/3」字面格式；满 3 张时切到提交提示。
 		marked := len(cursor.Marked)
 		if marked < 3 {
-			return fmt.Sprintf("换三张 · 已选 %d/3 · ←/→ 移动，Space 标记，Enter 提交（须同花色）", marked)
+			return fmt.Sprintf("换三张：已选 %d/3，须同花色", marked)
 		}
-		return "换三张 · 已选 3/3 · 按 Enter 提交换牌"
+		return "换三张：已选 3/3，按 Enter 交换"
 	}
 	if ux.Phase == PhaseMyTurnSelected && cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
 		hand := view.Players[view.SeatIndex].Hand
 		if cursor.Index < len(hand) {
-			return fmt.Sprintf("已选 %s，按回车出牌", TileName(hand[cursor.Index]))
+			return fmt.Sprintf("轮到你：已选 %s，Enter 打出", TileName(hand[cursor.Index]))
 		}
 	}
 	switch model.Phase {
 	case PhaseExchange:
-		return "换三张 · 已选 0/3 · 选 3 张同花色后按 Enter 提交"
+		return "换三张：选 3 张同花色"
 	case PhaseQueMen:
 		// [Q1.1]/[Q2.1] 键位 m/p/s 且必须告知不可更改。
-		return "定缺：m 缺万 / p 缺筒 / s 缺条（选定后不可更改）"
+		return "定缺：选一门不要，选定后不可更改"
 	case PhaseDiscard:
 		if containsAction(model.Allowed, ActionDiscard) {
-			return "◆ 该你出牌 ◆"
+			return "轮到你：选择一张牌打出"
 		}
 		return waitingUXHint(view)
 	case PhaseClaim, PhaseTsumo:
@@ -302,25 +302,29 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 
 func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 	if ux.DisabledReason != "" && len(ux.AllowedActions) == 0 {
-		return ux.DisabledReason + "    Tab 玩家    i 房间信息    Esc    q 返回    ? 帮助"
+		return ux.DisabledReason + "　? 帮助"
 	}
 	switch ux.Phase {
 	case PhaseExchange:
-		return "←→ 选牌    Space 标记    Enter 提交    q 返回    ? 帮助    Esc"
+		marked := 0
+		if cursor != nil {
+			marked = len(cursor.Marked)
+		}
+		return fmt.Sprintf("换三张：已选 %d/3　←→ 选牌　Space 标记　Enter 确认", marked)
 	case PhaseQueMen:
-		return "m 缺万    p 缺筒    s 缺条    q 返回    ? 帮助    Esc"
+		return "定缺：m 缺万　p 缺筒　s 缺条"
 	case PhaseMyTurnIdle, PhaseMyTurnSelected:
-		return "←→ 选牌    Enter 出牌    q 返回    ? 帮助    Esc"
+		return "轮到你：←→ 选牌　Enter 打出"
 	case PhaseClaim:
 		return claimKeyHint(ux)
 	case PhaseSettlement:
-		return "r 再开一桌    l 离桌    Enter 停留    q 返回    ? 帮助"
+		return "本局结束：r 再开一桌　l 离桌　Enter 停留"
 	case PhaseWaiting:
 		if emptySeatCount(view) > 0 {
-			return "b 补 1 个机器人    B 补满    Enter 等真人    q 返回    Esc"
+			return "等人入座：b 补一个机器人　B 补满"
 		}
 	}
-	return "Tab 玩家    i 房间信息    ? 帮助    Esc    q 返回"
+	return "等待：? 帮助　i 房间信息　Tab 玩家"
 }
 
 func disabledReason(view RoomView, cursor *HandCursor, model InteractionModel) string {
@@ -390,7 +394,7 @@ func claimKeyHint(ux TableUXModel) string {
 	if len(shortcuts) == 0 {
 		shortcuts = append(shortcuts, "n 过")
 	}
-	return "-- 鸣牌 --  ←→ 选项    Enter 确认    " + strings.Join(shortcuts, "    ") + "    q 返回    ? 帮助"
+	return "请决定：←→ 选择　Enter 确认　" + strings.Join(shortcuts, "　")
 }
 
 func pendingFeedback(view RoomView, cursor *HandCursor) string {

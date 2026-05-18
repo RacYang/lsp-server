@@ -49,7 +49,7 @@ Esc 一旦绑定了"退出 cli / 返回 / 打开局内菜单"等多重职责，�
   - [ADR-0039 四川血战权威局内契约](../adr/0039-sichuan-xuezhandaodi-authoritative-round-contract.md)
   - [ADR-0040 组合式麻将规则能力](../adr/0040-composable-mahjong-rule-capabilities.md)
   - [ADR-0044 房间状态与前后端交互契约](../adr/0044-room-state-and-client-contract.md)
-  - [ROOM-FSM](../ROOM-FSM.md)、[RULE-ENGINE](../RULE-ENGINE.md)、[cli-table-redesign](../cli-table-redesign.md)、[cli-tui-backend-gaps](../cli-tui-backend-gaps.md)
+  - [ROOM-FSM](../ROOM-FSM.md)、[RULE-ENGINE](../RULE-ENGINE.md)、[FRONTEND-DESIGN](../FRONTEND-DESIGN.md)、[cli-tui-backend-gaps](../cli-tui-backend-gaps.md)
 - runtime 参数（dev.yaml 当前值）：`runtime.room.surrender_action_timeout=1s`、`runtime.room.surrender_after_offline=30s`、`runtime.room.allow_leave_during_play=true`、`runtime.lobby.bot_supervisor_enabled=true`、`runtime.lobby.max_bots_per_room=3`。spec 中提到"长离线阈值"等参数均以 runtime 配置为权威，不在 spec 中重写数值。
 
 ## 0.2 全局不变量

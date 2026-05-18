@@ -19,7 +19,7 @@ func TestDumpAllPhases(t *testing.T) {
 		countdown int
 	}{
 		{"room_prep", "room_prep", "", 0},
-		{"playing", "playing", "◆ 该你出牌 ◆", 12},
+		{"playing", "playing", "轮到你：选择一张牌打出", 12},
 		{"settlement", "settlement", "", 0},
 	}
 
