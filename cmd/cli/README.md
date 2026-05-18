@@ -7,20 +7,14 @@
 
 ## 启动
 
-```bash
-make build-cli
-./dist/lsp-cli
-```
+唯一启动说明见 [前端启动方式](../../docs/FRONTEND.md)。本文件只说明 `lsp-cli` 的交互和参数，不复制启动命令。
 
 首次启动会询问昵称并把它连同会话令牌一起写到 `~/.lsp/config.toml`，
 后续启动直接静默登录；服务端令牌失效或下发路由重定向时会自动清 token、跟随新地址重连。
 
-发布包中也可以用 `scripts/lsp-cli.sh` / `scripts/lsp-cli.ps1` 启动；
-默认连接 `wss://racoo.cn/ws`，可通过 `--ws` 覆盖。
-
 ## 命令行参数
 
-```
+```text
 --config           本地配置文件路径 (默认 ~/.lsp/config.toml)
 --name             覆盖配置中的昵称
 --ws               覆盖配置中的服务器 WebSocket 地址
@@ -32,7 +26,7 @@ make build-cli
 
 ## 大厅交互
 
-```
+```text
 lsp · 大厅 · racoo                                      ● 23ms
 
         ┌ 快速开始 ┐   ┌ 创建房间 ┐   ┌ 加入房间码 ┐   ┌ 公开房间 ┐

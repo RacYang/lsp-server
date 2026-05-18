@@ -23,14 +23,7 @@
 
 ### 玩家终端客户端
 
-服务端启动后，可用 release 二进制或本地构建的 `lsp-cli` 连接 `gate` 的 WebSocket 地址：
-
-```bash
-make build-cli
-./dist/lsp-cli --ws wss://racoo.cn/ws --name "我自己"
-```
-
-`lsp-cli` 先进入登录页，再进入大厅页，可刷新房间列表、自动匹配、创建公开/私密房，入座后使用俯视牌桌 TUI。默认 ASCII 牌面保证 SSH 与常见终端对齐，中文牌面可通过 `--cjk-tiles` 开启。更多参数见 [`cmd/cli/README.md`](cmd/cli/README.md)。
+`lsp-cli` 是玩家终端前端。唯一启动说明见 [docs/FRONTEND.md](docs/FRONTEND.md)；不要在其他文档复制启动命令。
 
 ### 本地三进程基线
 

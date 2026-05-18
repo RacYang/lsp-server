@@ -17,7 +17,8 @@
 ## 工具链
 
 - 后端：`scripts/drills-dev.sh start`（起 `cmd/all`，日志重定向到 `tmp/drills/<ts>/backend.log`）。
-- 客户端：`LSP_FRAME_LOG=tmp/drills/<ts>/frames.jsonl go run ./cmd/cli --ws ws://127.0.0.1:8080/ws`。也可用 `scripts/drills-dev.sh start --cli`。
+- 普通前端启动统一见 [前端启动方式](../../FRONTEND.md)；本演练文档不复制启动命令。
+- 演练调试才使用 `scripts/drills-dev.sh start --cli`；它会写 `tmp/drills/<ts>/frames.jsonl`。`tmp/drills` 是帧 dump 目录，不是前端启动目录。
 - 帧 dump 只在 view 摘要变化时写一行，因此可直接 `jq` 过滤场景或字段：
 
   ```bash
