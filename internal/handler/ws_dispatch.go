@@ -53,6 +53,8 @@ func dispatchFrame(
 		handleDiscard(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.PongReq:
 		handlePong(ctx, deps, conn, state, h.MsgID, h.Payload)
+	case msgid.ChiReq:
+		handleChi(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.GangReq:
 		handleGang(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.HuReq:

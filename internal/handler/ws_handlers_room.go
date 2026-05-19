@@ -232,6 +232,30 @@ func handlePong(
 	respondAction(conn, env.ReqId, msgid.PongResp, resp, after)
 }
 
+func handleChi(
+	ctx context.Context,
+	deps Deps,
+	conn *websocket.Conn,
+	state *wsConnState,
+	msgID uint16,
+	payload []byte,
+) {
+	var env clientv1.Envelope
+	if err := proto.Unmarshal(payload, &env); err != nil {
+		return
+	}
+	req := env.GetChiReq()
+	if req == nil || state.roomID == "" || state.userID == "" {
+		return
+	}
+	if shouldDropRequest(&env, msgID, state.userID) {
+		return
+	}
+	after, err := deps.Rooms.Chi(ctx, state.roomID, state.userID, req.GetTiles(), req.GetPhaseToken())
+	resp, after := chiErrEnvelope(env.ReqId, after, err)
+	respondAction(conn, env.ReqId, msgid.ChiResp, resp, after)
+}
+
 func handleGang(
 	ctx context.Context,
 	deps Deps,

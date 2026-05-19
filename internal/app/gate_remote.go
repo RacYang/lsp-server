@@ -514,6 +514,16 @@ func (g *remoteRoomGateway) Pong(ctx context.Context, roomID, userID string, tok
 	})
 }
 
+// Chi 将吃牌命令发给 RoomService；四川血战默认规则不会开放该动作。
+func (g *remoteRoomGateway) Chi(ctx context.Context, roomID, userID string, tiles []string, tok *clientv1.PhaseToken) (func(), error) {
+	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+		RoomId:     roomID,
+		UserId:     userID,
+		PhaseToken: clientPhaseTokToCluster(tok),
+		Body:       &clusterv1.ApplyEventRequest_Chi{Chi: &clusterv1.ChiEvent{Tiles: append([]string(nil), tiles...)}},
+	})
+}
+
 // Gang 将杠牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
 func (g *remoteRoomGateway) Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
@@ -751,6 +761,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		Phase:            clusterPhaseToClient(snapResp.GetPhase()),
 		ActingSeats:      append([]int32(nil), snapResp.GetActingSeats()...),
 		LastStep:         snapResp.GetLastStep(),
+		PhaseUpdate:      clusterPhaseUpdateToClient(snapResp.GetPhaseUpdate()),
 	}
 	if len(snapResp.GetSeats()) > 0 {
 		g.rememberRoomSeatInfos(srec.RoomID, snapResp.GetSeats())
@@ -886,6 +897,40 @@ func clusterSeatsToClient(items []*clusterv1.SeatInfo) []*clientv1.SeatInfo {
 
 func clusterPhaseToClient(phase clusterv1.Phase) clientv1.Phase {
 	return clientv1.Phase(phase.Number())
+}
+
+func clusterPhaseUpdateToClient(pu *clusterv1.PhaseUpdate) *clientv1.PhaseUpdate {
+	if pu == nil {
+		return nil
+	}
+	return &clientv1.PhaseUpdate{
+		Phase:            clusterPhaseToClient(pu.GetPhase()),
+		Step:             pu.GetStep(),
+		Reason:           clusterWaitingReasonToClient(pu.GetReason()),
+		DeadlineUnixMs:   pu.GetDeadlineUnixMs(),
+		ServerNowUnixMs:  pu.GetServerNowUnixMs(),
+		ActingSeats:      append([]int32(nil), pu.GetActingSeats()...),
+		AvailableActions: append([]string(nil), pu.GetAvailableActions()...),
+	}
+}
+
+func clusterWaitingReasonToClient(reason clusterv1.WaitingReason) clientv1.WaitingReason {
+	switch reason {
+	case clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
+		return clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
+	case clusterv1.WaitingReason_WAITING_REASON_QUE_MEN:
+		return clientv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
+		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
+	case clusterv1.WaitingReason_WAITING_REASON_TSUMO:
+		return clientv1.WaitingReason_WAITING_REASON_TSUMO
+	case clusterv1.WaitingReason_WAITING_REASON_DISCARD:
+		return clientv1.WaitingReason_WAITING_REASON_DISCARD
+	case clusterv1.WaitingReason_WAITING_REASON_SURRENDER:
+		return clientv1.WaitingReason_WAITING_REASON_SURRENDER
+	default:
+		return clientv1.WaitingReason_WAITING_REASON_NONE
+	}
 }
 
 func clusterRoomMetasToClient(rooms []*clusterv1.RoomMeta) []*clientv1.RoomMeta {
@@ -1214,6 +1259,7 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				RoundIndex:    body.StartGame.GetRoundIndex(),
 				HandIndex:     body.StartGame.GetHandIndex(),
 				RuleMeta:      clusterRuleMetaToClient(body.StartGame.GetRuleMeta()),
+				PhaseUpdate:   clusterPhaseUpdateToClient(body.StartGame.GetPhaseUpdate()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_DrawTile:
@@ -1227,6 +1273,7 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				ActingSeats:    append([]int32(nil), body.DrawTile.GetActingSeats()...),
 				WallRemaining:  body.DrawTile.GetWallRemaining(),
 				DeadlineUnixMs: body.DrawTile.GetDeadlineUnixMs(),
+				PhaseUpdate:    clusterPhaseUpdateToClient(body.DrawTile.GetPhaseUpdate()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_Action:
@@ -1242,6 +1289,7 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				Detail:         clusterActionDetailToClient(body.Action.GetDetail()),
 				WallRemaining:  body.Action.GetWallRemaining(),
 				DeadlineUnixMs: body.Action.GetDeadlineUnixMs(),
+				PhaseUpdate:    clusterPhaseUpdateToClient(body.Action.GetPhaseUpdate()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_Settlement:
@@ -1258,6 +1306,7 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				RoundIndex:         body.Settlement.GetRoundIndex(),
 				HandIndex:          body.Settlement.GetHandIndex(),
 				TotalScores:        clusterSeatScoresToClient(body.Settlement.GetTotalScores()),
+				PhaseUpdate:        clusterPhaseUpdateToClient(body.Settlement.GetPhaseUpdate()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone:
@@ -1277,6 +1326,7 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				Phase:             clusterPhaseToClient(body.ExchangeThreeDone.GetPhase()),
 				Step:              body.ExchangeThreeDone.GetStep(),
 				ActingSeats:       append([]int32(nil), body.ExchangeThreeDone.GetActingSeats()...),
+				PhaseUpdate:       clusterPhaseUpdateToClient(body.ExchangeThreeDone.GetPhaseUpdate()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_QueMenDone:
@@ -1287,6 +1337,7 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				Phase:         clusterPhaseToClient(body.QueMenDone.GetPhase()),
 				Step:          body.QueMenDone.GetStep(),
 				ActingSeats:   append([]int32(nil), body.QueMenDone.GetActingSeats()...),
+				PhaseUpdate:   clusterPhaseUpdateToClient(body.QueMenDone.GetPhaseUpdate()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_RouteRedirect:

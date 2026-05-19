@@ -35,6 +35,7 @@ type RoomGateway interface {
 	QueMen(ctx context.Context, roomID, userID string, suit int32, tok *clientv1.PhaseToken) (func(), error)
 	Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error)
 	Pong(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
+	Chi(ctx context.Context, roomID, userID string, tiles []string, tok *clientv1.PhaseToken) (func(), error)
 	Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error)
 	Hu(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
 	Pass(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)

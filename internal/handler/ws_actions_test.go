@@ -62,6 +62,9 @@ func (g *actionStubGateway) Discard(_ context.Context, _, _, _ string, _ *client
 func (g *actionStubGateway) Pong(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
+func (g *actionStubGateway) Chi(_ context.Context, _, _ string, _ []string, _ *clientv1.PhaseToken) (func(), error) {
+	return g.makeAfter(), g.actionErr
+}
 func (g *actionStubGateway) Gang(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
@@ -141,6 +144,17 @@ func actionCases() []actionCase {
 			},
 			getError: func(e *clientv1.Envelope) (clientv1.ErrorCode, string) {
 				return e.GetPongResp().GetErrorCode(), e.GetPongResp().GetErrorMessage()
+			},
+		},
+		{
+			name:    "chi",
+			reqMsg:  msgid.ChiReq,
+			respMsg: msgid.ChiResp,
+			build: func(reqID string) proto.Message {
+				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ChiReq{ChiReq: &clientv1.ChiRequest{Tiles: []string{"m1", "m2", "m3"}}}}
+			},
+			getError: func(e *clientv1.Envelope) (clientv1.ErrorCode, string) {
+				return e.GetChiResp().GetErrorCode(), e.GetChiResp().GetErrorMessage()
 			},
 		},
 		{

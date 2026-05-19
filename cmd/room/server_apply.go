@@ -61,6 +61,9 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 	case *clusterv1.ApplyEventRequest_Pong:
 		notifications, err := s.rooms.Pong(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
+	case *clusterv1.ApplyEventRequest_Chi:
+		notifications, err := s.rooms.Chi(ctx, roomID, userID, req.GetChi().GetTiles(), clusterPhaseTokToRoom(req.GetPhaseToken()))
+		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_Gang:
 		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)

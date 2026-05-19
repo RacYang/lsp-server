@@ -68,6 +68,7 @@ message ApplyEventRequest {
     PassEvent pass = 11;
     LeaveEvent leave = 12;
     JoinEvent join = 14;
+    ChiEvent chi = 15;
   }
   string idempotency_key = 9;
   string user_id = 10;
@@ -168,6 +169,10 @@ message DiscardEvent {
 }
 
 message PongEvent {}
+
+message ChiEvent {
+  repeated string tiles = 1;
+}
 
 message GangEvent {
   string tile = 1;

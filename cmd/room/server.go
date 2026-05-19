@@ -267,6 +267,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					LastAction:       clientLastActionToCluster(view.LastAction),
 					WallRemaining:    view.WallRemaining,
 					DeadlineUnixMs:   view.DeadlineUnixMs,
+					PhaseUpdate:      phaseUpdateFromRoundView(view),
 					RoundIndex:       view.RoundIndex,
 					HandIndex:        view.HandIndex,
 					TotalScores:      clientSeatScoresToCluster(view.TotalScores),
@@ -312,6 +313,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 		LastAction:       clientLastActionToCluster(view.LastAction),
 		WallRemaining:    view.WallRemaining,
 		DeadlineUnixMs:   view.DeadlineUnixMs,
+		PhaseUpdate:      phaseUpdateFromRoundView(view),
 		RoundIndex:       view.RoundIndex,
 		HandIndex:        view.HandIndex,
 		TotalScores:      clientSeatScoresToCluster(view.TotalScores),
@@ -337,6 +339,69 @@ func handForSeat(hands [][]string, seat int) []string {
 
 func clientPhaseToCluster(phase clientv1.Phase) clusterv1.Phase {
 	return clusterv1.Phase(phase.Number())
+}
+
+func clientPhaseUpdateToCluster(pu *clientv1.PhaseUpdate) *clusterv1.PhaseUpdate {
+	if pu == nil {
+		return nil
+	}
+	return &clusterv1.PhaseUpdate{
+		Phase:            clientPhaseToCluster(pu.GetPhase()),
+		Step:             pu.GetStep(),
+		Reason:           clientWaitingReasonToCluster(pu.GetReason()),
+		DeadlineUnixMs:   pu.GetDeadlineUnixMs(),
+		ServerNowUnixMs:  pu.GetServerNowUnixMs(),
+		ActingSeats:      append([]int32(nil), pu.GetActingSeats()...),
+		AvailableActions: append([]string(nil), pu.GetAvailableActions()...),
+	}
+}
+
+func phaseUpdateFromRoundView(view roomsvc.RoundView) *clusterv1.PhaseUpdate {
+	return &clusterv1.PhaseUpdate{
+		Phase:            clientPhaseToCluster(view.Phase),
+		Step:             view.LastStep,
+		Reason:           clientWaitingReasonToCluster(waitingReasonFromAction(view.WaitingAction)),
+		DeadlineUnixMs:   view.DeadlineUnixMs,
+		ServerNowUnixMs:  time.Now().UnixMilli(),
+		ActingSeats:      append([]int32(nil), view.ActingSeats...),
+		AvailableActions: append([]string(nil), view.AvailableActions...),
+	}
+}
+
+func waitingReasonFromAction(action string) clientv1.WaitingReason {
+	switch action {
+	case "exchange_three":
+		return clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
+	case "que_men":
+		return clientv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case "claim_window":
+		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
+	case "tsumo_window":
+		return clientv1.WaitingReason_WAITING_REASON_TSUMO
+	case "discard":
+		return clientv1.WaitingReason_WAITING_REASON_DISCARD
+	default:
+		return clientv1.WaitingReason_WAITING_REASON_NONE
+	}
+}
+
+func clientWaitingReasonToCluster(reason clientv1.WaitingReason) clusterv1.WaitingReason {
+	switch reason {
+	case clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
+		return clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
+	case clientv1.WaitingReason_WAITING_REASON_QUE_MEN:
+		return clusterv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
+		return clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
+	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
+		return clusterv1.WaitingReason_WAITING_REASON_TSUMO
+	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
+		return clusterv1.WaitingReason_WAITING_REASON_DISCARD
+	case clientv1.WaitingReason_WAITING_REASON_SURRENDER:
+		return clusterv1.WaitingReason_WAITING_REASON_SURRENDER
+	default:
+		return clusterv1.WaitingReason_WAITING_REASON_NONE
+	}
 }
 
 func clusterSeatsFromPlayerIDs(players []string, ready [4]bool, fsmState string) []*clusterv1.SeatInfo {
@@ -569,6 +634,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				Step:              env.GetExchangeThreeDone().GetStep(),
 				ActingSeats:       append([]int32(nil), env.GetExchangeThreeDone().GetActingSeats()...),
 				Direction:         env.GetExchangeThreeDone().GetDirection(),
+				PhaseUpdate:       clientPhaseUpdateToCluster(env.GetExchangeThreeDone().GetPhaseUpdate()),
 			},
 		}
 	case roomsvc.KindQueMenDone:
@@ -578,6 +644,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				Phase:         clientPhaseToCluster(env.GetQueMenDone().GetPhase()),
 				Step:          env.GetQueMenDone().GetStep(),
 				ActingSeats:   append([]int32(nil), env.GetQueMenDone().GetActingSeats()...),
+				PhaseUpdate:   clientPhaseUpdateToCluster(env.GetQueMenDone().GetPhaseUpdate()),
 			},
 		}
 	case roomsvc.KindStartGame:
@@ -591,6 +658,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				RoundIndex:    env.GetStartGame().GetRoundIndex(),
 				HandIndex:     env.GetStartGame().GetHandIndex(),
 				RuleMeta:      clientRuleMetaToCluster(env.GetStartGame().GetRuleMeta()),
+				PhaseUpdate:   clientPhaseUpdateToCluster(env.GetStartGame().GetPhaseUpdate()),
 			},
 		}
 	case roomsvc.KindDrawTile:
@@ -603,6 +671,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				Phase:          clientPhaseToCluster(env.GetDrawTile().GetPhase()),
 				Step:           env.GetDrawTile().GetStep(),
 				ActingSeats:    append([]int32(nil), env.GetDrawTile().GetActingSeats()...),
+				PhaseUpdate:    clientPhaseUpdateToCluster(env.GetDrawTile().GetPhaseUpdate()),
 			},
 		}
 	case roomsvc.KindAction:
@@ -617,6 +686,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				Phase:          clientPhaseToCluster(env.GetAction().GetPhase()),
 				Step:           env.GetAction().GetStep(),
 				ActingSeats:    append([]int32(nil), env.GetAction().GetActingSeats()...),
+				PhaseUpdate:    clientPhaseUpdateToCluster(env.GetAction().GetPhaseUpdate()),
 			},
 		}
 	case roomsvc.KindSettlement:
@@ -632,6 +702,7 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				RoundIndex:         settlement.GetRoundIndex(),
 				HandIndex:          settlement.GetHandIndex(),
 				TotalScores:        clientSeatScoresToCluster(settlement.GetTotalScores()),
+				PhaseUpdate:        clientPhaseUpdateToCluster(settlement.GetPhaseUpdate()),
 			},
 		}
 	default:

@@ -19,7 +19,7 @@ enum ErrorCode {
   ERROR_CODE_RECONNECTING = 8;
   ERROR_CODE_FEATURE_DISABLED = 9;
   // ERROR_CODE_PHASE_DRIFTED 表示客户端请求所附 PhaseToken 与服务端权威阶段不一致；
-  // 响应应附完整 PhaseUpdate，客户端据此刷新 UI 并按需提示「操作已被自动接管」。
+  // 响应应附完整 PhaseUpdate，客户端据此刷新 UI 并按需提示「阶段已更新，请按当前提示操作」。
   ERROR_CODE_PHASE_DRIFTED = 10;
 }
 
@@ -130,6 +130,8 @@ message Envelope {
     AddBotResponse add_bot_resp = 45;
     ListRulesRequest list_rules_req = 46;
     ListRulesResponse list_rules_resp = 47;
+    ChiRequest chi_req = 48;
+    ChiResponse chi_resp = 49;
   }
 }
 
@@ -278,6 +280,17 @@ message PongRequest {
 }
 
 message PongResponse {
+  ErrorCode error_code = 1;
+  string error_message = 2;
+  PhaseUpdate phase_update = 3;
+}
+
+message ChiRequest {
+  repeated string tiles = 1;
+  PhaseToken phase_token = 10;
+}
+
+message ChiResponse {
   ErrorCode error_code = 1;
   string error_message = 2;
   PhaseUpdate phase_update = 3;

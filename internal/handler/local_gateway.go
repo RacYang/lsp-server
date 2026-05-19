@@ -259,6 +259,17 @@ func (g *LocalRoomGateway) Pong(ctx context.Context, roomID, userID string, tok 
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
+func (g *LocalRoomGateway) Chi(ctx context.Context, roomID, userID string, tiles []string, tok *clientv1.PhaseToken) (func(), error) {
+	if g == nil || g.rooms == nil {
+		return nil, fmt.Errorf("nil local room gateway")
+	}
+	notifications, err := g.rooms.Chi(ctx, roomID, userID, tiles, roomsvc.PhaseTokenFromProto(tok))
+	if err != nil {
+		return nil, err
+	}
+	return g.broadcastAfter(roomID, notifications), nil
+}
+
 func (g *LocalRoomGateway) Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")

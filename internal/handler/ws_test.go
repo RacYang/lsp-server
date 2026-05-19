@@ -51,6 +51,9 @@ func (f *fakeResumeGateway) Discard(_ context.Context, _, _, _ string, _ *client
 func (f *fakeResumeGateway) Pong(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
+func (f *fakeResumeGateway) Chi(_ context.Context, _, _ string, _ []string, _ *clientv1.PhaseToken) (func(), error) {
+	return nil, nil
+}
 func (f *fakeResumeGateway) Gang(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
@@ -114,6 +117,9 @@ func (g *joinStubGateway) Discard(_ context.Context, _, _, _ string, _ *clientv1
 	return nil, nil
 }
 func (g *joinStubGateway) Pong(_ context.Context, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
+	return nil, nil
+}
+func (g *joinStubGateway) Chi(_ context.Context, _, _ string, _ []string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
 func (g *joinStubGateway) Gang(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {

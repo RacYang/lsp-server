@@ -14,6 +14,7 @@ func discardErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelo
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_DiscardResp{DiscardResp: &clientv1.DiscardResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_DiscardResp{DiscardResp: &clientv1.DiscardResponse{}}}, after
@@ -24,9 +25,21 @@ func pongErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope,
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PongResp{PongResp: &clientv1.PongResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PongResp{PongResp: &clientv1.PongResponse{}}}, after
+}
+
+func chiErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+	if err != nil {
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ChiResp{ChiResp: &clientv1.ChiResponse{
+			ErrorCode:    actionErrorCode(err),
+			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
+		}}}, nil
+	}
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ChiResp{ChiResp: &clientv1.ChiResponse{}}}, after
 }
 
 func gangErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
@@ -34,6 +47,7 @@ func gangErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope,
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_GangResp{GangResp: &clientv1.GangResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_GangResp{GangResp: &clientv1.GangResponse{}}}, after
@@ -44,6 +58,7 @@ func huErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, f
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_HuResp{HuResp: &clientv1.HuResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_HuResp{HuResp: &clientv1.HuResponse{}}}, after
@@ -54,6 +69,7 @@ func passErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope,
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PassResp{PassResp: &clientv1.PassResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PassResp{PassResp: &clientv1.PassResponse{}}}, after
@@ -64,6 +80,7 @@ func exchangeThreeErrEnvelope(reqID string, after func(), err error) (*clientv1.
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{}}}, after
@@ -74,6 +91,7 @@ func queMenErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelop
 		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_QueMenResp{QueMenResp: &clientv1.QueMenResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
+			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_QueMenResp{QueMenResp: &clientv1.QueMenResponse{}}}, after
@@ -89,6 +107,14 @@ func actionErrorCode(err error) clientv1.ErrorCode {
 		return clientv1.ErrorCode_ERROR_CODE_PHASE_DRIFTED
 	}
 	return clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
+}
+
+func phaseUpdateFromActionError(err error) *clientv1.PhaseUpdate {
+	var drift *roomsvc.PhaseDriftError
+	if !errors.As(err, &drift) {
+		return nil
+	}
+	return drift.PhaseUpdate()
 }
 
 // joinRoomErrorCode 将进房失败映射为客户端 ErrorCode；未知错误使用 UNSPECIFIED，避免误报「房间已满」。

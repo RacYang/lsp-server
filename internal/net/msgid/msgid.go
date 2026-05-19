@@ -56,4 +56,6 @@ const (
 	AddBotResp     uint16 = 43
 	ListRulesReq   uint16 = 44
 	ListRulesResp  uint16 = 45
+	ChiReq         uint16 = 46
+	ChiResp        uint16 = 47
 )
