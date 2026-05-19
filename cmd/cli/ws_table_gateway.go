@@ -117,6 +117,22 @@ func (g *wsTableGateway) Pong(ctx context.Context) error {
 	return nil
 }
 
+func (g *wsTableGateway) Chi(ctx context.Context, tiles []string) error {
+	reqID := newReqID("chi")
+	env, err := g.rpc.Call(ctx, msgid.ChiReq, &clientv1.Envelope{
+		ReqId:          reqID,
+		IdempotencyKey: newReqID("idem-chi"),
+		Body:           &clientv1.Envelope_ChiReq{ChiReq: &clientv1.ChiRequest{Tiles: append([]string(nil), tiles...), PhaseToken: g.currentPhaseToken()}},
+	}, func(e *clientv1.Envelope) bool { return e.GetChiResp() != nil })
+	if err != nil {
+		return err
+	}
+	if errStr := envelopeError(env.GetChiResp().GetErrorCode(), env.GetChiResp().GetErrorMessage()); errStr != "" {
+		return errors.New(errStr)
+	}
+	return nil
+}
+
 func (g *wsTableGateway) Gang(ctx context.Context, tile string) error {
 	reqID := newReqID("gang")
 	env, err := g.rpc.Call(ctx, msgid.GangReq, &clientv1.Envelope{

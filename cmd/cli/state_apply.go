@@ -147,6 +147,8 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		applySnapshot(v, body.Snapshot)
 	case *clientv1.Envelope_PongResp:
 		appendResponseLog(v, "碰", body.PongResp.GetErrorCode(), body.PongResp.GetErrorMessage())
+	case *clientv1.Envelope_ChiResp:
+		appendResponseLog(v, "吃", body.ChiResp.GetErrorCode(), body.ChiResp.GetErrorMessage())
 	case *clientv1.Envelope_GangResp:
 		appendResponseLog(v, "杠", body.GangResp.GetErrorCode(), body.GangResp.GetErrorMessage())
 	case *clientv1.Envelope_HuResp:
@@ -355,13 +357,22 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
 			applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, action.GetStep(), []int32{seat}, "discard", []string{"discard"})
 		}
+	case "chi":
+		applyChiAction(v, seat, action.GetTile())
+		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
+			applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, action.GetStep(), []int32{seat}, "discard", []string{"discard"})
+		}
 	case "gang":
-		applyGangAction(v, seat, action.GetTile(), beforeWaiting)
+		meldKind := "gang"
+		if detail := action.GetDetail(); detail != nil && detail.GetAction() != "" {
+			meldKind = detail.GetAction()
+		}
+		applyGangAction(v, seat, action.GetTile(), beforeWaiting, meldKind)
 	case "hu", "tsumo":
 		if seat >= 0 && seat < 4 {
 			v.Players[seat].Hued = true
 		}
-	case "hu_choice", "qiang_gang_choice", "pong_choice", "gang_choice":
+	case "hu_choice", "qiang_gang_choice", "pong_choice", "gang_choice", "chi_choice":
 		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
 			applyRoundProgress(v, clientv1.Phase_PHASE_CLAIM, action.GetStep(), []int32{seat}, "claim_window", nil)
 		}
@@ -394,24 +405,59 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 	}
 }
 
-func applyGangAction(v *RoomView, seat int32, tile, beforeWaiting string) {
-	if seat < 0 || seat > 3 || tile == "" {
+func applyGangAction(v *RoomView, seat int32, tile, beforeWaiting, meldKind string) {
+	if seat < 0 || seat > 3 {
 		return
 	}
-	removeClaimedDiscard(v, seat, tile)
-	recordMeld(v, seat, "gang:"+tile)
+	if tile != "" {
+		removeClaimedDiscard(v, seat, tile)
+	}
+	if meldKind == "" || meldKind == "gang" {
+		if beforeWaiting == "claim_window" {
+			meldKind = "zhi_gang"
+		} else {
+			meldKind = "an_gang"
+		}
+	}
+	meldTile := tile
+	if meldTile == "" {
+		meldTile = "?"
+	}
+	recordMeld(v, seat, meldKind+":"+meldTile)
 	p := &v.Players[seat]
 	removeCount := 4
 	if beforeWaiting == "claim_window" {
 		removeCount = 3
+	} else if meldKind == "bu_gang" {
+		removeCount = 1
 	}
 	if seat == v.SeatIndex {
-		for i := 0; i < removeCount; i++ {
+		for i := 0; i < removeCount && tile != ""; i++ {
 			p.Hand = removeOneTile(p.Hand, tile)
 		}
 		p.HandCnt = len(p.Hand)
 	} else {
 		p.HandCnt -= removeCount
+		if p.HandCnt < 0 {
+			p.HandCnt = 0
+		}
+	}
+	v.ActingSeat = seat
+	v.PendingTile = ""
+	v.ClaimCandidates = map[int32][]string{}
+}
+
+func applyChiAction(v *RoomView, seat int32, tile string) {
+	if seat < 0 || seat > 3 || tile == "" {
+		return
+	}
+	removeClaimedDiscard(v, seat, tile)
+	recordMeld(v, seat, "chi:"+tile)
+	p := &v.Players[seat]
+	if seat == v.SeatIndex {
+		p.HandCnt = len(p.Hand)
+	} else {
+		p.HandCnt -= 2
 		if p.HandCnt < 0 {
 			p.HandCnt = 0
 		}
@@ -436,6 +482,8 @@ func formatActionLog(view RoomView, seat int32, action, tile string) string {
 		return name + " 出牌"
 	case "pong":
 		return fmt.Sprintf("%s 碰 %s", name, TileName(tile))
+	case "chi":
+		return fmt.Sprintf("%s 吃 %s", name, TileName(tile))
 	case "gang":
 		return fmt.Sprintf("%s 杠 %s", name, TileName(tile))
 	case "hu", "tsumo":
@@ -886,6 +934,8 @@ func actionsForChoice(action string) []string {
 		return []string{"gang", "pass"}
 	case "pong_choice":
 		return []string{"pong", "pass"}
+	case "chi_choice":
+		return []string{"chi", "pass"}
 	default:
 		return []string{"pass"}
 	}

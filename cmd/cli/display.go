@@ -186,27 +186,36 @@ func meldGlyph(raw string) string {
 		return raw
 	}
 	kind := raw[:i]
-	tile := strings.Fields(raw[i+1:])
-	if len(tile) == 0 {
+	tiles := strings.FieldsFunc(raw[i+1:], func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	})
+	if len(tiles) == 0 {
 		return raw
 	}
 	label := "副露"
 	switch kind {
 	case "pong":
 		label = "碰"
-	case "gang":
-		label = "杠"
-	case "chow":
+	case "gang", "zhi_gang":
+		label = "直杠"
+	case "an_gang":
+		label = "暗杠"
+	case "bu_gang":
+		label = "补杠"
+	case "chi", "chow":
 		label = "吃"
 	}
-	if kind == "chow" && len(tile) >= 3 {
+	if (kind == "chi" || kind == "chow") && len(tiles) >= 3 {
 		return strings.Join([]string{
-			render.TileGlyph(tile[0]),
-			render.TileGlyph(tile[1]),
-			render.TileGlyph(tile[2]),
+			render.TileGlyph(tiles[0]),
+			render.TileGlyph(tiles[1]),
+			render.TileGlyph(tiles[2]),
 		}, " ") + " " + label
 	}
-	return render.TileGlyph(tile[0]) + " " + label
+	if tiles[0] == "?" {
+		return "暗牌 " + label
+	}
+	return render.TileGlyph(tiles[0]) + " " + label
 }
 
 // ─── 标签映射 ────────────────────────────────────────

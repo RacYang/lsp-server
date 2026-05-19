@@ -682,7 +682,7 @@ func TestGangActionConsumesSelfHandTiles(t *testing.T) {
 
 	view := st.Snapshot()
 	require.Equal(t, []string{"p2"}, view.Players[0].Hand)
-	require.Equal(t, []string{"gang:m1"}, view.Players[0].Melds)
+	require.Equal(t, []string{"an_gang:m1"}, view.Players[0].Melds)
 }
 
 // TestPlayerJourney_S3_1_MultiWinnerExpandsEachHuSeat 锁定 [S3.1] 多家胡每家独立显示。

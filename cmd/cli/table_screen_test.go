@@ -59,7 +59,7 @@ func TestRoomPrepEnterDoesNothingWhenSeatsEmpty(t *testing.T) {
 	}
 }
 
-func TestTableSceneLeaveRoomReturnsToLobbyWithoutQuittingApp(t *testing.T) {
+func TestPlayerJourney_L9_1_QDoesNotLeaveRoom(t *testing.T) {
 	state := NewAppState("racoo")
 	state.Mutate(func(v *RoomView) {
 		v.Phase = phaseTable
@@ -74,9 +74,9 @@ func TestTableSceneLeaveRoomReturnsToLobbyWithoutQuittingApp(t *testing.T) {
 
 	require.False(t, scene.ShouldQuit())
 	view := state.Snapshot()
-	require.Equal(t, phaseLobby, view.Phase)
-	require.Empty(t, view.RoomID)
-	require.Equal(t, "room-1", view.PendingLeaveRoomID)
+	require.Equal(t, phaseTable, view.Phase)
+	require.Equal(t, "room-1", view.RoomID)
+	require.Empty(t, view.PendingLeaveRoomID)
 }
 
 func TestQueMenUsesSelectionCursorAndEnter(t *testing.T) {
@@ -137,6 +137,8 @@ func (g *fakeTableGateway) QueMen(_ context.Context, suit int32) error {
 }
 
 func (g *fakeTableGateway) Pong(context.Context) error { return nil }
+
+func (g *fakeTableGateway) Chi(context.Context, []string) error { return nil }
 
 func (g *fakeTableGateway) Gang(context.Context, string) error { return nil }
 

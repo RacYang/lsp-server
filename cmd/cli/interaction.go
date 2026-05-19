@@ -35,6 +35,7 @@ const (
 	ActionExchangeThree PlayerAction = "exchange_three"
 	ActionQueMen        PlayerAction = "que_men"
 	ActionPong          PlayerAction = "pong"
+	ActionChi           PlayerAction = "chi"
 	ActionGang          PlayerAction = "gang"
 	ActionHu            PlayerAction = "hu"
 	ActionPass          PlayerAction = "pass"
@@ -383,6 +384,8 @@ func playerActionList(actions []PlayerAction) string {
 			labels = append(labels, "杠")
 		case ActionPong:
 			labels = append(labels, "碰")
+		case ActionChi:
+			labels = append(labels, "吃")
 		case ActionPass:
 			labels = append(labels, "过")
 		case ActionDiscard:
@@ -406,6 +409,8 @@ func claimKeyHint(ux TableUXModel) string {
 			shortcuts = append(shortcuts, "g 杠")
 		case ActionPong:
 			shortcuts = append(shortcuts, "p 碰")
+		case ActionChi:
+			shortcuts = append(shortcuts, "c 吃")
 		case ActionPass:
 			shortcuts = append(shortcuts, "n 过")
 		}
@@ -468,6 +473,8 @@ func actionsFromStrings(actions []string) []PlayerAction {
 			out = append(out, ActionQueMen)
 		case "pong":
 			out = append(out, ActionPong)
+		case "chi":
+			out = append(out, ActionChi)
 		case "gang":
 			out = append(out, ActionGang)
 		case "hu":
@@ -511,6 +518,8 @@ func buildClaimDialog(view RoomView, actions []PlayerAction) *ClaimDialogState {
 			claimActions = append(claimActions, ClaimActionHu)
 		case ActionPong:
 			claimActions = append(claimActions, ClaimActionPong)
+		case ActionChi:
+			claimActions = append(claimActions, ClaimActionChow)
 		case ActionGang:
 			claimActions = append(claimActions, ClaimActionGang)
 		case ActionPass:

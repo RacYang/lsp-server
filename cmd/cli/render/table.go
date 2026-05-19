@@ -43,6 +43,7 @@ type TableData struct {
 	RoundHand   string
 	Players     [4]PlayerInfo
 	Hands       [4][]TileFace
+	HandCounts  [4]int
 	Discards    [4][]TileFace
 	Cursor      CursorState
 	PhasePrompt string
@@ -84,7 +85,7 @@ func DrawPlayerLabels(scr tcell.Screen, layout TableLayout, data TableData) {
 	// 南（框外下）
 	south := data.Players[0]
 	if south.Name != "" {
-		label := fmt.Sprintf("你：%s %s 缺：%s 分：%s", south.Name, south.Status, south.Que, south.Score)
+		label := fmt.Sprintf("%s：%s %s 缺：%s 分：%s 手牌：%d", south.SeatLabel, south.Name, south.Status, south.Que, south.Score, visibleHandCount(data, 0))
 		if data.WallRemain > 0 {
 			label += fmt.Sprintf("  剩%d张", data.WallRemain)
 		}
@@ -94,22 +95,34 @@ func DrawPlayerLabels(scr tcell.Screen, layout TableLayout, data TableData) {
 	// 北（框外上）
 	north := data.Players[2]
 	if north.Name != "" {
-		label := fmt.Sprintf("对家：%s %s 缺：%s 分：%s", north.Name, north.Status, north.Que, north.Score)
+		label := fmt.Sprintf("%s：%s %s 缺：%s 分：%s 手牌：%d", north.SeatLabel, north.Name, north.Status, north.Que, north.Score, visibleHandCount(data, 2))
 		DrawClippedText(scr, layout.NorthLabel.X, layout.NorthLabel.Y,
 			DefaultStyle(), CenterVisual(label, layout.NorthLabel.Width), layout.NorthLabel.Width)
 	}
 	// 西（框外左）
 	west := data.Players[1]
 	if west.Name != "" {
-		label := fmt.Sprintf("%s %s 缺:%s", west.Name, west.Status, west.Que)
-		DrawClippedText(scr, layout.WestLabel.X, layout.WestLabel.Y, DefaultStyle(),
-			RightVisual(label, layout.WestLabel.Width), layout.WestLabel.Width)
+		lines := []string{
+			fmt.Sprintf("%s：%s", west.SeatLabel, west.Name),
+			fmt.Sprintf("%s 缺:%s 分:%s", west.Status, west.Que, west.Score),
+			fmt.Sprintf("手牌:%d", visibleHandCount(data, 1)),
+		}
+		for i, label := range lines {
+			DrawClippedText(scr, layout.WestLabel.X, layout.WestLabel.Y+i, DefaultStyle(),
+				RightVisual(label, layout.WestLabel.Width), layout.WestLabel.Width)
+		}
 	}
 	// 东（框外右）
 	east := data.Players[3]
 	if east.Name != "" {
-		label := fmt.Sprintf("%s %s 缺:%s", east.Name, east.Status, east.Que)
-		DrawClippedText(scr, layout.EastLabel.X, layout.EastLabel.Y, DefaultStyle(), label, layout.EastLabel.Width)
+		lines := []string{
+			fmt.Sprintf("%s：%s", east.SeatLabel, east.Name),
+			fmt.Sprintf("%s 缺:%s 分:%s", east.Status, east.Que, east.Score),
+			fmt.Sprintf("手牌:%d", visibleHandCount(data, 3)),
+		}
+		for i, label := range lines {
+			DrawClippedText(scr, layout.EastLabel.X, layout.EastLabel.Y+i, DefaultStyle(), label, layout.EastLabel.Width)
+		}
 	}
 }
 
@@ -118,13 +131,23 @@ func DrawPlayerLabels(scr tcell.Screen, layout TableLayout, data TableData) {
 // DrawSeatTiles 绘制四家手牌。
 func DrawSeatTiles(scr tcell.Screen, layout TableLayout, data TableData) {
 	// 北家（对家）——一横排牌背
-	drawHorizontalBacks(scr, layout.NorthHand, len(data.Hands[2]), layout.TileStep-2)
+	drawHorizontalBacks(scr, layout.NorthHand, visibleHandCount(data, 2), layout.TileStep-2)
 	// 西家——一竖排牌背
-	drawVerticalBacks(scr, layout.WestWall, len(data.Hands[1]))
+	drawVerticalBacks(scr, layout.WestWall, visibleHandCount(data, 1))
 	// 东家——一竖排牌背
-	drawVerticalBacks(scr, layout.EastWall, len(data.Hands[3]))
+	drawVerticalBacks(scr, layout.EastWall, visibleHandCount(data, 3))
 	// 南家（自己）——一横排竖排显示
 	drawSouthVerticalHand(scr, layout.SouthHand, data.Hands[0], data.Cursor, layout.TileStep)
+}
+
+func visibleHandCount(data TableData, rel int) int {
+	if rel < 0 || rel >= len(data.HandCounts) {
+		return 0
+	}
+	if data.HandCounts[rel] > 0 {
+		return data.HandCounts[rel]
+	}
+	return len(data.Hands[rel])
 }
 
 func drawSouthVerticalHand(scr tcell.Screen, r Region, tiles []TileFace, cursor CursorState, step int) {

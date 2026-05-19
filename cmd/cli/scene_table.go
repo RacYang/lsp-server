@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -79,8 +78,9 @@ func (ts *TableScene) Render(scr tcell.Screen, now time.Time) {
 		return
 	}
 
-	ux := DeriveTableUXModel(view, ts.cursor, now)
-	data := ts.buildTableData(view, ux, now, ph)
+	local := ts.localUI(now)
+	model := BuildTableFrontendModel(view, local, now)
+	data := AdaptRenderTable(model)
 	render.DrawTableFrame(scr, layout, data)
 
 	switch ph {
@@ -89,7 +89,7 @@ func (ts *TableScene) Render(scr tcell.Screen, now time.Time) {
 	case tablePhaseSettlement:
 		ts.drawSettlementOverlay(scr, layout, view, now)
 	default:
-		ts.drawPlayingOverlays(scr, layout, view, ux, now)
+		ts.drawPlayingOverlays(scr, layout, view, model, now)
 	}
 
 	ts.drawNetworkOverlay(scr, layout.Frame)
@@ -98,7 +98,7 @@ func (ts *TableScene) Render(scr tcell.Screen, now time.Time) {
 		render.DrawToast(scr, page.Toast, view.UXNotice)
 	}
 
-	keyHint := ux.KeyHint
+	keyHint := model.KeyHint
 	if ph == tablePhaseRoomPrep {
 		if emptySeatCount(view) > 0 {
 			keyHint = "等人入座：b 补一个机器人　B 补满　? 帮助"
@@ -109,98 +109,19 @@ func (ts *TableScene) Render(scr tcell.Screen, now time.Time) {
 	render.DrawBandLine(scr, page.KeyBar, keyHint, "", false, false)
 }
 
-// buildTableData 把 RoomView 翻译为渲染层 TableData。
-// 按相对座位重排：[0]=南(自己), [1]=西(左), [2]=北(上), [3]=东(右)。
-func (ts *TableScene) buildTableData(view RoomView, ux TableUXModel, now time.Time, ph tablePhase) render.TableData {
-	data := render.TableData{
-		Phase:       "playing",
-		RoomLabel:   roomLabel(view),
-		RuleLabel:   ruleLabel(view),
-		WallRemain:  int(view.WallRemaining),
-		RoundHand:   fmt.Sprintf("第%d局 第%d手", view.RoundIndex+1, view.HandIndex+1),
-		PhasePrompt: ux.PrimaryPrompt,
+func (ts *TableScene) localUI(now time.Time) TableLocalUI {
+	local := TableLocalUI{}
+	if ts.cursor != nil {
+		local.Cursor = *ts.cursor
 	}
-	if ux.HasCountdown {
-		data.Countdown = ux.CountdownSeconds
+	if ts.claimDialog != nil {
+		local.ActionSelected = ts.claimDialog.SelectedIndex
+		local.ActionPending = ts.claimDialog.Pending
+		local.ActionOpenedAt = ts.claimDialog.OpenedAt
 	}
-	if ph == tablePhaseRoomPrep {
-		data.Phase = "room_prep"
-		data.PhasePrompt = ""
-		data.Countdown = 0
-	}
-	if ph == tablePhaseSettlement {
-		data.Phase = "settlement"
-		data.PhasePrompt = "本局结束"
-		data.Countdown = 0
-	}
-
-	// 相对→绝对座位映射
-	relToAbs := [4]int32{
-		view.SeatIndex,
-		(view.SeatIndex + 1) % 4,
-		(view.SeatIndex + 2) % 4,
-		(view.SeatIndex + 3) % 4,
-	}
-	for rel := 0; rel < 4; rel++ {
-		seat := relToAbs[rel]
-		p := view.Players[seat]
-		name := playerDisplayName(view, seat)
-		if len(name) >= 2 && name[:2] == "★ " {
-			name = name[2:]
-		}
-		data.Players[rel] = render.PlayerInfo{
-			Name:      name,
-			SeatLabel: ux.Seats[seat].RelativeLabel,
-			Status:    seatStatusMark(p),
-			IsFocus:   ux.Seats[seat].IsFocus,
-			Que:       queLabel(view.QueBySeat[seat]),
-			Melds:     formatMeldGlyphs(p.Melds),
-			Score:     fmt.Sprintf("%+d", p.TotalScore),
-		}
-	}
-
-	// 日志（最近 8 条）
-	for i := len(view.Log) - 1; i >= 0 && len(data.Events) < 8; i-- {
-		entry := view.Log[i]
-		data.Events = append(data.Events, entry.At.Format("15:04:05")+" "+entry.Text)
-	}
-
-	// 手牌与弃牌（按相对座位重排）
-	if ph == tablePhasePlaying || ph == tablePhaseSettlement {
-		absHands := [4][]render.TileFace{}
-		absDiscards := [4][]render.TileFace{}
-		for abs := int32(0); abs < 4; abs++ {
-			p := view.Players[abs]
-			for _, t := range p.Hand {
-				absHands[abs] = append(absHands[abs], render.TileFace{
-					Glyph: render.TileGlyph(t),
-					Rank:  render.TileRank(t),
-					Suit:  render.TileSuit(t),
-				})
-			}
-			for _, t := range p.Discards {
-				absDiscards[abs] = append(absDiscards[abs], render.TileFace{
-					Glyph: render.TileGlyph(t),
-					Rank:  render.TileRank(t),
-					Suit:  render.TileSuit(t),
-				})
-			}
-		}
-		for rel := 0; rel < 4; rel++ {
-			abs := relToAbs[rel]
-			data.Hands[rel] = absHands[abs]
-			data.Discards[rel] = absDiscards[abs]
-		}
-	}
-
-	data.Cursor = render.CursorState{
-		Mode:    cursorModeString(ts.cursor.Mode),
-		Index:   ts.cursor.Index,
-		Marked:  append([]int(nil), ts.cursor.Marked...),
-		Pending: ts.cursor.Pending,
-	}
-
-	return data
+	local.OverlayOpen = ts.overlay.IsOpen()
+	_ = now
+	return local
 }
 
 func cursorModeString(m CursorMode) string {
@@ -259,7 +180,7 @@ func (ts *TableScene) drawSettlementOverlay(scr tcell.Screen, layout render.Tabl
 	render.DrawDialog(scr, layout.Frame, "本局结算", all[:visible], render.BorderDouble)
 }
 
-func (ts *TableScene) drawPlayingOverlays(scr tcell.Screen, layout render.TableLayout, view RoomView, ux TableUXModel, now time.Time) {
+func (ts *TableScene) drawPlayingOverlays(scr tcell.Screen, layout render.TableLayout, view RoomView, model TableFrontendModel, now time.Time) {
 	if ts.overlay.IsOpen() {
 		switch ts.overlay.Kind {
 		case OverlayRoomInfo:
@@ -351,17 +272,51 @@ func (ts *TableScene) Tick(ctx context.Context, now time.Time) {
 	ts.netOverlay.Update(view.Connected, now)
 
 	// 非覆盖层状态下同步 claim 弹窗
-	if !ts.overlay.IsOpen() && ts.claimDialog == nil {
-		model := DeriveInteractionModel(view)
-		if model.Claim != nil && model.Claim.Dialog != nil {
-			ts.claimDialog = model.Claim.Dialog
-			ts.claimDialog.OpenedAt = now
-			if ts.claimDialog.Deadline.IsZero() {
-				ts.claimDialog.Deadline = now.Add(14000 * time.Millisecond)
-			}
+	if !ts.overlay.IsOpen() {
+		model := BuildTableFrontendModel(view, ts.localUI(now), now)
+		switch {
+		case model.ActionWindow == nil:
+			ts.claimDialog = nil
+		case ts.claimDialog == nil || claimDialogChanged(ts.claimDialog, model.ActionWindow):
+			ts.claimDialog = claimDialogFromActionWindow(model.ActionWindow)
 		}
 	}
 	if view.LastSettlement == nil {
 		ts.settlementDialog = nil
+	}
+}
+
+func claimDialogChanged(dialog *ClaimDialogState, window *ActionWindowModel) bool {
+	if dialog == nil || window == nil {
+		return dialog != nil || window != nil
+	}
+	if dialog.Tile != window.Tile || dialog.Trigger != window.Trigger {
+		return true
+	}
+	if len(dialog.Actions) != len(window.Actions) {
+		return true
+	}
+	for i := range dialog.Actions {
+		if dialog.Actions[i] != window.Actions[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func claimDialogFromActionWindow(window *ActionWindowModel) *ClaimDialogState {
+	if window == nil {
+		return nil
+	}
+	return &ClaimDialogState{
+		Trigger:       window.Trigger,
+		TriggerName:   "",
+		TriggerSeat:   window.ID.Seat,
+		Tile:          window.Tile,
+		Actions:       append([]ClaimAction(nil), window.Actions...),
+		SelectedIndex: window.Selected,
+		OpenedAt:      window.OpenedAt,
+		Deadline:      window.Deadline,
+		Pending:       window.Pending,
 	}
 }

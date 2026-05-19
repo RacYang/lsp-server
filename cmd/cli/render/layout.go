@@ -96,12 +96,14 @@ func CalcTable(w, h int) (TableLayout, bool) {
 	// 再确保 14 张南家手牌可以完整渲染。
 	sideWallW := 2
 	sidePondW := 12
+	sideLabelW := 13
 	frameW := 84
 	if compact {
 		sidePondW = 10
+		sideLabelW = 11
 		frameW = 72
 	}
-	maxFrameW := w - 24 // 左右玩家标签各预留 10 列和间距。
+	maxFrameW := w - 2*(sideLabelW+1) // 左右玩家标签与间距。
 	if maxFrameW < l.HandWidth+8 {
 		maxFrameW = w - 4
 	}
@@ -182,8 +184,12 @@ func CalcTable(w, h int) (TableLayout, bool) {
 	// 框外玩家标签
 	l.NorthLabel = Region{X: frameX, Y: frameY - 1, Width: frameW, Height: 1}
 	l.SouthLabel = Region{X: frameX, Y: frameY + frameH, Width: frameW, Height: 1}
-	l.WestLabel = Region{X: frameX - 10, Y: middleY, Width: 9, Height: 3}
-	l.EastLabel = Region{X: frameX + frameW + 1, Y: middleY, Width: 9, Height: 3}
+	sideLabelY := middleY
+	if middleH > 3 {
+		sideLabelY = middleY + (middleH-3)/2
+	}
+	l.WestLabel = Region{X: frameX - sideLabelW - 1, Y: sideLabelY, Width: sideLabelW, Height: 3}
+	l.EastLabel = Region{X: frameX + frameW + 1, Y: sideLabelY, Width: sideLabelW, Height: 3}
 
 	return l, true
 }

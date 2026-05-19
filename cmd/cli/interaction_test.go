@@ -75,6 +75,21 @@ func TestTableUXModelUsesRelativeSeatLabels(t *testing.T) {
 	require.NotContains(t, ux.PrimaryPrompt, "BOT")
 }
 
+func TestFormatMeldGlyphsDistinguishesMeldKinds(t *testing.T) {
+	got := formatMeldGlyphs([]string{
+		"pong:m3,m3,m3:1",
+		"chi:m1,m2,m3:0",
+		"zhi_gang:p5,p5,p5,p5:2",
+		"an_gang:?",
+		"bu_gang:s7,s7,s7,s7:1",
+	})
+	require.Contains(t, got, "碰")
+	require.Contains(t, got, "吃")
+	require.Contains(t, got, "直杠")
+	require.Contains(t, got, "暗牌 暗杠")
+	require.Contains(t, got, "补杠")
+}
+
 func TestDrawPhaseShowsNextSeatInsteadOfWaitingStart(t *testing.T) {
 	view := RoomView{
 		Phase:         phaseTable,

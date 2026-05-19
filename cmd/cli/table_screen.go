@@ -19,6 +19,7 @@ type TableGateway interface {
 	ExchangeThree(ctx context.Context, tiles []string, direction int32) error
 	QueMen(ctx context.Context, suit int32) error
 	Pong(ctx context.Context) error
+	Chi(ctx context.Context, tiles []string) error
 	Gang(ctx context.Context, tile string) error
 	Hu(ctx context.Context) error
 	Pass(ctx context.Context) error
@@ -61,6 +62,16 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 	cursor.SyncMode(view)
 	model := DeriveInteractionModel(view)
 	ux := DeriveTableUXModel(view, cursor, time.Now())
+	local := TableLocalUI{}
+	if cursor != nil {
+		local.Cursor = *cursor
+	}
+	if claimDialog != nil {
+		local.ActionSelected = claimDialog.SelectedIndex
+		local.ActionPending = claimDialog.Pending
+		local.ActionOpenedAt = claimDialog.OpenedAt
+	}
+	frontend := BuildTableFrontendModel(view, local, time.Now())
 	hand := []string{}
 	if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 		hand = view.Players[view.SeatIndex].Hand
@@ -89,7 +100,7 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 				noticeInputRejected(state, ux, "当前不能标记手牌")
 			}
 		case 'q', 'Q':
-			return leaveRoomFireAndForget(ctx, state, gateway, TableExitLeaveRoom)
+			return tableEventResult{}
 		case 'b':
 			return submitAddBot(ctx, state, gateway, 1)
 		case 'B':
@@ -105,7 +116,7 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		// [Q1.1] 仅 m/p/s 三键提交定缺；其它键（含 1/2/3）按"其它键忽略且无副作用"
 		// 收口，避免误触发"当前不能定缺"的提示成为副作用。
 		case 'm', 'M':
-			if !containsAction(ux.AllowedActions, ActionQueMen) {
+			if !containsAction(frontend.AllowedActions, ActionQueMen) {
 				return tableEventResult{}
 			}
 			cursor.SetIndex(0, 3)
@@ -113,36 +124,50 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		case 'p', 'P':
 			// 抢答弹窗下 p 优先解释为碰，避免与定缺冲突；[G2] 对局动作级键的层级。
 			if claimDialog != nil && model.Phase == PhaseClaim {
+				if !containsAction(frontend.AllowedActions, ActionPong) {
+					noticeInputRejected(state, ux, "当前不能碰")
+					return tableEventResult{}
+				}
 				return submitClaimAction(ctx, gateway, claimDialog, ClaimActionPong)
 			}
-			if !containsAction(ux.AllowedActions, ActionQueMen) {
+			if !containsAction(frontend.AllowedActions, ActionQueMen) {
 				return tableEventResult{}
 			}
 			cursor.SetIndex(1, 3)
 			return submitQueMen(ctx, gateway, model, 1)
+		case 'c', 'C':
+			if claimDialog == nil || frontend.ActionWindow == nil || !containsAction(frontend.AllowedActions, ActionChi) {
+				noticeInputRejected(state, ux, "当前不能吃")
+				return tableEventResult{}
+			}
+			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionChow)
 		case 's', 'S':
-			if !containsAction(ux.AllowedActions, ActionQueMen) {
+			if !containsAction(frontend.AllowedActions, ActionQueMen) {
 				return tableEventResult{}
 			}
 			cursor.SetIndex(2, 3)
 			return submitQueMen(ctx, gateway, model, 2)
 		case 'h', 'H':
-			if claimDialog == nil {
+			if claimDialog == nil || frontend.ActionWindow == nil || !containsAction(frontend.AllowedActions, ActionHu) {
 				noticeInputRejected(state, ux, "当前不能胡")
 				return tableEventResult{}
 			}
 			return submitClaimAction(ctx, gateway, claimDialog, ClaimActionHu)
 		case 'g', 'G':
 			if claimDialog != nil {
+				if !containsAction(frontend.AllowedActions, ActionGang) {
+					noticeInputRejected(state, ux, "当前不能杠")
+					return tableEventResult{}
+				}
 				return submitClaimAction(ctx, gateway, claimDialog, ClaimActionGang)
 			}
-			if containsAction(ux.AllowedActions, ActionGang) && cursor.Mode == CursorModeSingle {
+			if containsAction(frontend.AllowedActions, ActionGang) && cursor.Mode == CursorModeSingle {
 				return submitSelfGang(ctx, state, cursor, hand, gateway, view)
 			}
 			noticeInputRejected(state, ux, "当前不能杠")
 			return tableEventResult{}
 		case 'n', 'N':
-			if claimDialog == nil {
+			if claimDialog == nil || frontend.ActionWindow == nil || !containsAction(frontend.AllowedActions, ActionPass) {
 				noticeInputRejected(state, ux, "当前不能过")
 				return tableEventResult{}
 			}
@@ -173,7 +198,7 @@ func handleTableKey(ctx context.Context, ev *tcell.EventKey, state *AppState, ga
 		if model.Phase == PhaseWaiting && emptySeatCount(view) == 0 {
 			return submitReady(ctx, state, gateway, view)
 		}
-		if claimDialog != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
+		if claimDialog != nil && frontend.ActionWindow != nil && (model.Phase == PhaseClaim || model.Phase == PhaseTsumo) {
 			return submitClaimAction(ctx, gateway, claimDialog, claimDialog.Selected())
 		}
 		if cursor.Mode == CursorModeMulti3 && !cursor.CanSubmit() {
@@ -351,6 +376,8 @@ func submitClaimAction(ctx context.Context, gateway TableGateway, dialog *ClaimD
 			err = gateway.Hu(ctx)
 		case ClaimActionPong:
 			err = gateway.Pong(ctx)
+		case ClaimActionChow:
+			err = gateway.Chi(ctx, nil)
 		case ClaimActionGang:
 			err = gateway.Gang(ctx, dialog.Tile)
 		default:
@@ -401,6 +428,8 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 	if cursor == nil || cursor.Mode == CursorModeNone {
 		return tableEventResult{}
 	}
+	local := TableLocalUI{Cursor: *cursor}
+	frontend := BuildTableFrontendModel(view, local, time.Now())
 	if !cursor.CanSubmit() {
 		ux := DeriveTableUXModel(view, cursor, time.Now())
 		noticeInputRejected(state, ux, cursorSubmitDisabledReason(cursor))
@@ -408,6 +437,9 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 	}
 	switch cursor.Mode {
 	case CursorModeSingle:
+		if !containsAction(frontend.AllowedActions, ActionDiscard) {
+			return tableEventResult{}
+		}
 		idx := cursor.Index
 		if idx < 0 || idx >= len(hand) {
 			return tableEventResult{}
@@ -421,6 +453,9 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 			}
 		}()
 	case CursorModeMulti3:
+		if !containsAction(frontend.AllowedActions, ActionExchangeThree) {
+			return tableEventResult{}
+		}
 		if len(cursor.Marked) != 3 {
 			return tableEventResult{}
 		}
@@ -443,8 +478,7 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 			}
 		}()
 	case CursorModeQueMen:
-		model := DeriveInteractionModel(view)
-		if model.Phase != PhaseQueMen || cursor.Index < 0 || cursor.Index > 2 {
+		if !containsAction(frontend.AllowedActions, ActionQueMen) || cursor.Index < 0 || cursor.Index > 2 {
 			return tableEventResult{}
 		}
 		suit := int32(cursor.Index)
