@@ -24,7 +24,7 @@
 | A5  | P0   | `[D2.4]`/`[C2.2]`/`[C3.3]`/`[T1.2]`/`[G12]` | 服务端超时路径需明确"surrender / 显式 pass"语义，不得保留任何"代打具体牌"分支 |
 | A6  | P1   | `[G14]`/`[S7.1]`              | 结算零和无显式断言，仅"以权威值为准"模糊处理                         |
 | A7  | P1   | `[D1.3]`/`[G9]`               | DrawTile per-seat 隐私在 `local_gateway` 有测试覆盖，`gate_remote` 路径需补等价测试 |
-| A8  | P1   | `[D5.1]`/`[D5.2]`             | 杠四形态在 `MeldInfo` 是否区分齐 / cli 是否按形态渲染待补回归         |
+| A8  | P1   | `[D5.1]`/`[D5.2]`             | 杠形态在 `MeldInfo` 与 cli 副露轨道中区分。**状态：已修复**（`TestApplyAnGangRecordsConcealedMeldAndHidesActionTile` + `TestApplyBuGangCompletesWithoutRobCandidate` + `TestApplyBuGangCanBeRobbedWithoutGangRecord` + `TestFormatMeldGlyphsDistinguishesMeldKinds`） |
 | A9  | P1   | `[D6.1]`/`[T3.1]`             | 海底 / 杠上花 / 杠上炮等 `ScoringContext` 上下文在 cli 是否展示待补    |
 | A10 | P1   | `[S3.1]`/`[S4.1]`/`[S5.1]`    | 多家胡只保留第一个 winner 显示；流局 penalties 未在浮窗 / stdout 暴露；底栏键位文案错（"R 再来一局/L 离桌"）。**状态：已修复**（`TestPlayerJourney_S3_1_MultiWinnerExpandsEachHuSeat` + `TestPlayerJourney_S4_1_DrawPenaltiesAreSurfaced` + `TestSettlementDialogIncludesAllScoresWhenRevealed` 更新）。`[S7.1]` 零和的服务端断言归 A6 跟进；本段已加 `TestPlayerJourney_S7_1_SettlementZeroSum` 作为 cli 侧护栏 + 服务端基线。 |
 | A18 | P0   | `[R1.1]`/`[R1.2]`             | 再开一桌 LeaveRoom→AutoMatch 顺序无回归；既有 `restartAfterSettlement` 在 LeaveRoom 失败时仍继续 AutoMatch（与 [R1.1] 严格 reading "真请求成功" 存在偏差，目前保留并以注释 + 测试锁定意图）。**状态：已锁定回归**（`TestPlayerJourney_R1_1_RestartIssuesLeaveThenAutoMatch`）。 |
@@ -188,19 +188,21 @@
 
 ---
 
-### A8 (P1) 杠四形态 / 暗杠隐私，违反 `[D5.1]` / `[D5.2]`
+### A8 (P1) 杠形态 / 暗杠隐私，违反 `[D5.1]` / `[D5.2]`
 
 **现状**：
 
-- `MeldInfo` 是否区分 `直杠/明杠/暗杠/补杠` 四种、`cmd/cli/scene_*` 的副露轨道是否按形态展示——本轮未做帧文本扫描，spec 要求显式区分。
-- 暗杠在他家视角的占位渲染、明牌字段是否被网关过滤——`local_gateway_test.go` 显示本地路径在 `DrawTile` 上做了 per-seat 抹除，**暗杠的明牌过滤**需要单独核（不在 DrawTile 路径，而在 `MeldInfo` 投影路径）。
+- `MeldInfo.kind` 已区分 `zhi_gang` / `an_gang` / `bu_gang`，TUI 副露轨道按 `直杠` / `暗杠` / `补杠` 展示。
+- 暗杠动作通知使用 per-seat 投影：非本人 `ActionNotify.tile` 与 `detail.tile` 为空，cli 将未知暗杠牌面渲染为"暗牌 暗杠"。
 
-**gap 性质**：服务端投影 + 网关 per-seat 过滤 + cli scene。
+**gap 性质**：已修复；后续若新增完整快照 per-seat 结构化副露过滤，需复用同一隐私规则。
 
 **回归测试名**：
 
-- `TestPlayerJourney_D5_1_MeldKindsDistinguishable`
-- `TestPlayerJourney_D5_2_AnGangPrivacyOthersHidden`
+- `TestApplyAnGangRecordsConcealedMeldAndHidesActionTile`
+- `TestApplyBuGangCompletesWithoutRobCandidate`
+- `TestApplyBuGangCanBeRobbedWithoutGangRecord`
+- `TestFormatMeldGlyphsDistinguishesMeldKinds`
 
 ---
 

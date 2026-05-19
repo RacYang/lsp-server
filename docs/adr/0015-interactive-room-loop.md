@@ -38,7 +38,7 @@ Phase 4 需要同时解决三个问题：
 
 - `discard_req`：完整打通并真正推进轮次。
 - `hu_req`：当前仅覆盖自摸待决窗口；客户端看到 `action = "tsumo_choice"` 后可选择胡或直接打出摸到的牌。
-- `pong_req` / `gang_req`：支持针对最近一次弃牌的多候选抢答窗口，可中断当前待出牌座位；Phase 4 的裁决为“杠优先于碰、同优先级按出牌座位下家顺序”。Phase 5 起该优先级扩展为“胡优先于杠、杠优先于碰”。
+- `chi_req` / `pong_req` / `gang_req`：支持针对最近一次弃牌的多候选抢答窗口，可中断当前待出牌座位。Phase 5 起裁决优先级由规则 `ClaimPolicy` 声明，四川血战默认不开放吃，抢答优先级为“胡优先于杠、杠优先于碰”。
 
 ### 3. 恢复只承诺“最小可继续交互”
 
@@ -55,30 +55,30 @@ Redis `snapmeta.round_json` 保存最小恢复事实集合：
 
 - 接受当前轮次的 `discard_req`。
 - 在自摸待决时接受 `hu_req` 或继续 `discard_req`。
-- 在最近一次弃牌仍可被中断时，恢复抢答候选窗口并接受合法的 `pong_req` / `gang_req`。
+- 在最近一次弃牌仍可被中断时，恢复抢答候选窗口并接受合法的 `chi_req` / `pong_req` / `gang_req`。
 - 继续通过 `StreamEvents` 向 gate 补发后续事件。
 
 ### 4. Phase 5 客户端意图消费
 
 Phase 5 起，换三张与定缺请求中的客户端意图进入服务端裁决：
 
-- `ExchangeThreeReq.direction` 采用 `1=顺时针`、`2=对家`、`3=逆时针`，四家必须提交一致方向；超时托管沿用默认逆时针方向，保持 Phase 4 行为。
-- `QueMenReq.suit` 在 `0..2` 范围内时优先生效；只有非法值或超时托管才回退到服务端 `chooseQueSuit` 启发式。
+- `ExchangeThreeReq.direction` 采用 `1=顺时针`、`2=对家`、`3=逆时针`，四家必须提交一致方向；机器人/自动回放可使用默认逆时针方向，真人超时不得复用自动回放语义。
+- `QueMenReq.suit` 在 `0..2` 范围内时优先生效；只有非法值或机器人/自动回放路径才回退到服务端 `chooseQueSuit` 启发式。
 - 玩家可自行选择手中持有量较大的花色作为缺门，服务端不拒绝该选择。该策略保留玩家自由度，后续可通过指标观察是否需要产品层约束。
 
 ### 5. 玩家客户端私有视图
 
 Phase 6 起，`RoundState` 在开局发牌后为四个座位各生成一条 `InitialDealNotify`，通过 `Notification.TargetSeat` 定向到对应玩家。广播通知沿用 `TargetSeat = -1`；集群模式下该字段映射为 `cluster.v1.RoomServiceStreamEventsResponse.target_seat`，由 `gate` 按本地座位映射发送到目标用户连接。
 
-`RoundView` 同时暴露四家手牌、弃牌与副露摘要；`SnapshotNotify` 只填充当前玩家自己的 `your_hand_tiles`，但完整返回 `discards_by_seat` 与 `melds_by_seat`。这样真实客户端不再依赖服务端托管的 `chooseExchangeTiles` fallback，也能在重连后恢复可继续操作的牌桌。
+`RoundView` 同时暴露四家手牌、弃牌与副露摘要；`SnapshotNotify` 只填充当前玩家自己的 `your_hand_tiles`，但完整返回 `discards_by_seat` 与 `melds_by_seat`。这样真实客户端不依赖服务端代玩家选择默认动作，也能在重连后恢复可继续操作的牌桌。
 
 ### 6. Surrender 与离线座位
 
-主动离房与离线超时统一复用 room actor 的 `Leave -> Surrender` 状态机：waiting/ready/settling/closed 真离座，playing 中标记 surrender 并保留座位 `user_id`。`RoundState.surrendered` 由 actor 串行更新，后续 timeout 与 claim 窗口只通过 mailbox 投递托管动作，不允许 gate 或 lobby 直接改写局内状态。
+主动离房与离线超时统一复用 room actor 的 `Leave -> Surrender` 状态机：waiting/ready/settling/closed 真离座，playing 中标记 surrender 并保留座位 `user_id`。`RoundState.surrendered` 由 actor 串行更新；真人等待态 timeout 只能产生 `pass` 或 `surrender` 语义，不允许 gate、lobby 或通用 timeout 入口替真人选择胡/杠/碰/出牌。
 
 ## 后果
 
 - 端到端测试从“只等结算”改为“在收到 `draw_tile` 后由对应座位回发 `discard_req`”。
 - `room` 冷启动恢复能力显著增强，`pong` / `gang` 的抢答候选窗口已纳入最小恢复承诺。
-- 超时策略目前提供 actor 内串行执行的托管入口；后台定时器调度可在此基础上接入。
+- 超时策略目前提供 actor 内串行执行的 deadline 入口；真人路径只允许 pass/surrender，机器人自动动作必须走独立 bot/auto round 路径。
 - 玩家客户端可以在不读取服务端内部状态的前提下获得自己的完整手牌；其它玩家手牌仍不通过广播泄露。

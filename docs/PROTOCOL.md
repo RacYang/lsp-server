@@ -69,6 +69,8 @@
 | 43 | 添加机器人响应 | `add_bot_resp` | S→C |
 | 44 | 规则列表请求 | `list_rules_req` | C→S |
 | 45 | 规则列表响应 | `list_rules_resp` | S→C |
+| 46 | 吃请求 | `chi_req` | C→S |
+| 47 | 吃响应 | `chi_resp` | S→C |
 
 ## Phase 3 登录与重连（节选）
 
@@ -92,9 +94,9 @@
 
 - `discard_req` 已打通到 `ws -> gate -> room.ApplyEvent -> room actor -> StreamEvents`，服务端进入真正的“等待摸牌/等待出牌”循环，而不是 `ready` 后自动整局回放。
 - `Envelope.idempotency_key` 可由客户端为会改变房间状态的请求生成。WS 入口会对已知状态变更请求做进程内去重，未知 `msg_id` 不进入幂等缓存。
-- `pong_req` / `gang_req` / `hu_req` / `pass_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口，`pass_req` 表示当前被询问玩家主动放弃本次抢答或自摸选择。
+- `pong_req` / `chi_req` / `gang_req` / `hu_req` / `pass_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口，`pass_req` 表示当前被询问玩家主动放弃本次抢答或自摸选择。四川血战默认 `ClaimPolicy` 不产生 `chi` 候选，但协议、网关和 room engine 链路必须存在。
 - 服务端只允许当前最高优先级候选响应抢答窗口。候选主动 `pass_req` 后，服务端移除该候选并接力下一 top candidate；若无人可抢，则关闭窗口并继续摸牌。每个接力候选拿到完整 `ClaimWindow`。
-- 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端可发送 `hu_req` 胡牌，也可发送 `pass_req` 表示不胡。主动过会把摸到的牌加入手牌并进入 `discard` 等待态，让玩家自行选牌打出；服务端超时托管才会默认打出 `pendingDraw`。
+- 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端可发送 `hu_req` 胡牌，也可发送 `pass_req` 表示不胡。主动过会把摸到的牌加入手牌并进入 `discard` 等待态，让玩家自行选牌打出；真人超时不得默认胡牌或打出 `pendingDraw`，只能显式过或判该席 `surrendered`。
 - `SnapshotNotify` 现已追加 `acting_seat`、`acting_seats`、`phase`、`waiting_action`、`pending_tile`、`available_actions`、`claim_candidates` 与 `last_step`，用于重连后恢复当前等待态。`SnapshotNotify.state` 只表示房间 FSM（waiting/ready/playing/settling/closed），局内进度优先以 `phase` 为准；`waiting_action` 只表示服务端等待的动作类型。
 - `ActionNotify.detail` 与 `SnapshotNotify.last_action` 是最近动作的结构化权威字段，包含 actor、source、target、tile 与 step；客户端不再从最后一张弃牌或日志文本推断桌心最近动作。
 - `StartGameNotify`、`DrawTileNotify`、`ActionNotify` 与 `SnapshotNotify` 追加 `wall_remaining`；桌内剩牌数必须以服务端字段为准。
@@ -102,7 +104,8 @@
 - `SeatInfo` 追加 `online`、`auto_play`、`disconnected_at_ms`、`status` 与 `total_score`；`SettlementNotify.total_scores` 与 `RoomMeta.rule_meta` 支撑 TUI B 类的实时积分和规则摘要。
 - `InitialDealNotify` 由 `room` 在完成开局发牌后按座位定向下发，每个连接只会收到自己座位的 13 张初始手牌；集群模式通过 `cluster.v1.RoomServiceStreamEventsResponse.target_seat` 传递定向语义，`-1` 表示广播。
 - `DrawTileNotify` 通过每座位投影下发：摸牌本人收到具体 `tile`，其他座位收到空 `tile` 与相同 `seat_index`。隐私敏感局内事件不得全量明文广播。
-- 服务端托管入口在当前等待态超时时可自动执行默认动作：抢答窗口选择最高优先级候选，出牌/自摸待决窗口默认打出确定性弃牌。玩家显式请求不会触发自动出牌；碰牌后必须等待该玩家下一次 `discard_req` 或托管超时。
+- 真人座位超时时不得由服务端代做收益动作：抢答窗口只能 `pass` 或判该席 `surrendered`，出牌/自摸待决只能判该席 `surrendered` 并从后续摸打轮转移除。机器人和自动回放仍可走独立的 bot/auto round 路径；碰牌后必须等待该玩家下一次 `discard_req`。
+- `MeldInfo.kind` 区分 `pong`、`chi`、`zhi_gang`、`an_gang`、`bu_gang`。其中 `zhi_gang` 为别人弃牌直杠，`an_gang` 为暗杠，`bu_gang` 为补杠；协议动作可继续使用 `ActionNotify.action="gang"`，但 `ActionNotify.detail.action`、`MeldInfo.kind`、结算 `GangKind` 与 TUI 展示必须区分具体形态。抢杠胡只针对 `bu_gang`，不得抢暗杠或直杠。
 - WS 入口有 token bucket 限流；room actor mailbox 也有有界队列。触发限流时响应 `ERROR_CODE_RATE_LIMITED` 或直接丢弃过频帧并计入指标。
 
 ## 状态事实与前后端契约
@@ -130,8 +133,8 @@
 ## Phase 5 协议与观测补充
 
 - `Envelope.idempotency_key` 会随所有请求载荷传递，WS 入口只对会改变房间状态的已知请求做进程内快速去重；跨进程幂等仍以 `RoomService.ApplyEvent.idempotency_key` 与 Redis 为准。
-- `ActionNotify.action` 当前冻结为 `discard`、`pong`、`gang`、`hu`、`exchange_three`、`que_men`、`hu_choice`、`qiang_gang_choice`、`pong_choice`、`gang_choice`、`tsumo_choice`。吃牌、补杠等新增动作必须先成为规则 `ClaimPolicy` 颗粒，再同步协议文档与 ADR。
-- `SnapshotNotify.claim_candidates` 与 `ActionNotify.action` 的 `hu_choice` / `qiang_gang_choice` / `pong_choice` / `gang_choice` 共同描述抢答窗口，重连客户端应优先以快照中的等待态恢复 UI。
+- `ActionNotify.action` 当前冻结为 `discard`、`chi`、`pong`、`gang`、`hu`、`exchange_three`、`que_men`、`hu_choice`、`qiang_gang_choice`、`chi_choice`、`pong_choice`、`gang_choice`、`tsumo_choice`。规则层新增动作必须先成为 `ClaimPolicy` 颗粒，再同步协议文档与 ADR。
+- `SnapshotNotify.claim_candidates` 与 `ActionNotify.action` 的 `hu_choice` / `qiang_gang_choice` / `chi_choice` / `pong_choice` / `gang_choice` 共同描述抢答窗口，重连客户端应优先以快照中的等待态恢复 UI。
 - `SettlementNotify.per_winner_breakdown` 透传每个赢家的结构化分摊结果；包牌、退税、查花猪与查大叫等罚分仍通过结算字段表达，不依赖客户端重新推导。
 - 未知 `msg_id` 不进入幂等缓存，也不会分配新的 `ErrorCode`；服务端以 `lsp_unknown_msg_total` 计数供观测。
 - 幂等重放、限流与 actor 队列满分别进入 `lsp_idempotent_replay_total`、`lsp_rate_limited_total` 与 `lsp_actor_queue_depth`，客户端可见错误码仍只使用本页枚举。

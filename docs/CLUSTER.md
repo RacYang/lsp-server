@@ -50,7 +50,7 @@ Phase 4 起，Redis `snapmeta` 追加 `round_json`，保存进行中牌局的最
 - 四家手牌、牌墙剩余顺序、定缺结果。
 - 已累计番数与当前赢家座位。
 
-恢复策略是：先用 `snapmeta` 直接重建最小运行态，再由 `room_events` / `StreamEvents` 继续补齐客户端可见历史。若 `round_json` 缺失，则不会再把房间错误恢复成不可交互的 `playing`，而是降级回可重新准备的阶段。`pong` / `gang` 抢答窗口会随候选座位与动作一起恢复，裁决仍由单房 actor 串行执行。
+恢复策略是：先用 `snapmeta` 直接重建最小运行态，再由 `room_events` / `StreamEvents` 继续补齐客户端可见历史。若 `round_json` 缺失，则不会再把房间错误恢复成不可交互的 `playing`，而是降级回可重新准备的阶段。`chi` / `pong` / `gang` 抢答窗口会随候选座位与动作一起恢复，裁决仍由单房 actor 串行执行。
 
 ## 安全缩容
 
