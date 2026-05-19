@@ -666,6 +666,142 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 	require.False(t, rs.claimWindowOpen)
 	require.Len(t, notifs, 2)
 	require.Equal(t, Seat(2), rs.turn)
+	require.Len(t, rs.meldInfosBySeat()[2].GetMelds(), 1)
+	require.Equal(t, "zhi_gang", rs.meldInfosBySeat()[2].GetMelds()[0].GetKind())
+	require.EqualValues(t, 0, rs.meldInfosBySeat()[2].GetMelds()[0].GetClaimedFromSeat())
+	require.Equal(t, rules.GangKindMing, rs.gangRecords[0].Kind)
+}
+
+func TestApplyAnGangRecordsConcealedMeldAndHidesActionTile(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-an-gang",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1)}), hand.New(), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		waitingDiscard:  true,
+		turn:            0,
+		lastDiscardSeat: -1,
+	}
+	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyGang(context.Background(), rs, 0, "m1")
+	require.NoError(t, err)
+	require.Len(t, notifs, 2)
+	require.Equal(t, rules.GangKindAn, rs.gangRecords[0].Kind)
+	info := rs.meldInfosBySeat()[0].GetMelds()[0]
+	require.Equal(t, "an_gang", info.GetKind())
+	require.True(t, info.GetConcealed())
+	require.Equal(t, PrivacyPerSeat, notifs[0].Privacy)
+
+	var other clientv1.Envelope
+	require.NoError(t, proto.Unmarshal(notifs[0].Project(1), &other))
+	require.Empty(t, other.GetAction().GetTile())
+	require.Empty(t, other.GetAction().GetDetail().GetTile())
+}
+
+func TestApplyBuGangCompletesWithoutRobCandidate(t *testing.T) {
+	t.Parallel()
+
+	gangTile := tile.Must(tile.SuitCharacters, 5)
+	rs := &RoundState{
+		roomID:          "r-bu-gang",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{gangTile}), hand.New(), hand.New(), hand.New()},
+		melds:           [][]string{{"pong:m5,m5,m5:1"}, nil, nil, nil},
+		queBySeat:       make([]int32, 4),
+		waitingDiscard:  true,
+		turn:            0,
+		lastDiscardSeat: -1,
+	}
+	_, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyGang(context.Background(), rs, 0, "m5")
+	require.NoError(t, err)
+	require.Equal(t, rules.GangKindBu, rs.gangRecords[0].Kind)
+	info := rs.meldInfosBySeat()[0].GetMelds()[0]
+	require.Equal(t, "bu_gang", info.GetKind())
+	require.False(t, rs.qiangGangWindow)
+}
+
+func TestApplyBuGangCanBeRobbedWithoutGangRecord(t *testing.T) {
+	t.Parallel()
+
+	gangTile := tile.Must(tile.SuitCharacters, 5)
+	readyHand := []tile.Tile{
+		tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1),
+		tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2),
+		tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3),
+		tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4),
+		gangTile,
+	}
+	rs := &RoundState{
+		roomID:          "r-rob-bu-gang",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{gangTile}), hand.New(), hand.FromTiles(readyHand), hand.New()},
+		melds:           [][]string{{"pong:m5,m5,m5:1"}, nil, nil, nil},
+		queBySeat:       make([]int32, 4),
+		waitingDiscard:  true,
+		turn:            0,
+		lastDiscardSeat: -1,
+	}
+	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
+	notifs, err := e.ApplyGang(context.Background(), rs, 0, "m5")
+	require.NoError(t, err)
+	require.True(t, rs.qiangGangWindow)
+	require.Len(t, notifs, 1)
+	require.Equal(t, Seat(2), rs.claimSeat())
+
+	_, err = e.ApplyHu(context.Background(), rs, 2)
+	require.NoError(t, err)
+	require.Empty(t, rs.gangRecords)
+	require.NotContains(t, rs.hands[0].Tiles(), gangTile)
+	require.Equal(t, "pong", rs.meldInfosBySeat()[0].GetMelds()[0].GetKind())
+}
+
+type allowChiClaimPolicy struct{}
+
+func (allowChiClaimPolicy) Candidates(ctx rules.ClaimContext) []rules.ClaimAction {
+	if ctx.Hued || ctx.Hand == nil || ctx.Tile == 0 || ctx.Seat == ctx.SourceSeat {
+		return nil
+	}
+	return []rules.ClaimAction{{Name: rules.ActionChi, ChoiceAction: "chi_choice", Priority: 1}}
+}
+
+func TestApplyChiRecordsStructuredMeldAndRequiresExplicitDiscard(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-chi",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles(nil),
+		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3)}), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		caps:            rules.CapabilitySet{Claims: allowChiClaimPolicy{}},
+		lastDiscard:     tile.Must(tile.SuitCharacters, 1),
+		lastDiscardSeat: 0,
+		claimWindowOpen: true,
+		claimCandidates: []claimCandidate{{seat: 1, actions: []string{"chi"}, priority: 1, choiceAction: "chi_choice"}},
+		turn:            0,
+	}
+	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyChi(context.Background(), rs, 1, nil)
+	require.NoError(t, err)
+	require.Len(t, notifs, 1)
+	require.True(t, rs.waitingDiscard)
+	require.Equal(t, Seat(1), rs.turn)
+	require.Empty(t, rs.hands[1].Tiles())
+	info := rs.meldInfosBySeat()[1].GetMelds()[0]
+	require.Equal(t, "chi", info.GetKind())
+	require.Equal(t, []string{"m1", "m2", "m3"}, info.GetTiles())
+	require.EqualValues(t, 0, info.GetClaimedFromSeat())
 }
 
 func TestApplyPassRelaysClaimCandidate(t *testing.T) {
@@ -724,6 +860,45 @@ func TestApplyPassSelfDrawKeepsPlayerDiscardChoice(t *testing.T) {
 	require.False(t, rs.waitingTsumo)
 	require.True(t, rs.waitingDiscard)
 	require.Contains(t, rs.hands[0].Tiles(), drawn)
+}
+
+func TestApplyHuClearsHuedSeatActionWindowBeforeNextDraw(t *testing.T) {
+	t.Parallel()
+
+	drawn := tile.Must(tile.SuitCharacters, 5)
+	rs := &RoundState{
+		roomID:          "r-hu-clears-window",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 5)}), hand.New(), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		turn:            0,
+		waitingTsumo:    true,
+		pendingDraw:     drawn,
+		currentDraw:     drawn,
+		lastDiscardSeat: -1,
+	}
+
+	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyHu(context.Background(), rs, 0)
+	require.NoError(t, err)
+	require.True(t, rs.isHued(0))
+	require.Equal(t, Seat(1), rs.turn)
+	require.NotEmpty(t, notifs)
+
+	var hu *clientv1.ActionNotify
+	for _, notification := range notifs {
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		if action := env.GetAction(); action != nil && action.GetAction() == "hu" {
+			hu = action
+			break
+		}
+	}
+	require.NotNil(t, hu)
+	require.Equal(t, clientv1.WaitingReason_WAITING_REASON_NONE, hu.GetPhaseUpdate().GetReason())
+	require.NotContains(t, hu.GetPhaseUpdate().GetActingSeats(), int32(0), "已胡座位不得继续作为行动座位下发")
 }
 
 func TestClaimWindowPersistsAndRestores(t *testing.T) {
@@ -791,7 +966,7 @@ func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
 	require.True(t, sawSeat1Draw)
 }
 
-func TestApplyTimeoutUsesBestClaimCandidate(t *testing.T) {
+func TestPlayerJourney_C2_2_ClaimTimeoutDoesNotChooseForHuman(t *testing.T) {
 	t.Parallel()
 
 	rs := &RoundState{
@@ -810,12 +985,61 @@ func TestApplyTimeoutUsesBestClaimCandidate(t *testing.T) {
 
 	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyTimeout(context.Background(), rs)
 	require.NoError(t, err)
-	require.False(t, rs.claimWindowOpen)
-	require.Len(t, notifs, 2)
-	require.Equal(t, Seat(2), rs.turn)
+	require.True(t, rs.isSurrendered(2))
+	require.True(t, rs.claimWindowOpen, "下一候选仍可继续抢答")
+	require.NotEmpty(t, notifs)
+	for _, notification := range notifs {
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		if action := env.GetAction(); action != nil {
+			require.NotContains(t, []string{"hu", "gang", "pong"}, action.GetAction(), "真人超时不得替玩家选择收益动作")
+		}
+	}
 }
 
-func TestApplyTimeoutAutoDiscardsCurrentTurn(t *testing.T) {
+func TestPlayerJourney_E1_ExchangeTimeoutSurrendersDoesNotChooseForHuman(t *testing.T) {
+	t.Parallel()
+
+	rs := roundWaitingExchange()
+	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
+	_, err := e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, tilesToStrings(rs.hands[0].Tiles()), 1)
+	require.NoError(t, err)
+	seat1Hand := append([]tile.Tile(nil), rs.hands[1].Tiles()...)
+
+	notifs, err := e.ApplyTimeout(context.Background(), rs)
+	require.NoError(t, err)
+	require.True(t, rs.isSurrendered(1))
+	require.True(t, rs.waitingExchange)
+	require.False(t, rs.waitingQueMen)
+	require.Empty(t, notifs)
+	require.Equal(t, seat1Hand, rs.hands[1].Tiles(), "真人换三张超时不得由服务端代选手牌")
+}
+
+func TestPlayerJourney_Q1_QueTimeoutSurrendersDoesNotChooseForHuman(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-timeout-que",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitDots, 9)}), hand.New(), hand.New()},
+		queBySeat:       []int32{0, -1, -1, -1},
+		queSubmitted:    []bool{true, false, false, false},
+		waitingQueMen:   true,
+		lastDiscardSeat: -1,
+	}
+
+	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyTimeout(context.Background(), rs)
+	require.NoError(t, err)
+	require.True(t, rs.isSurrendered(1))
+	require.True(t, rs.waitingQueMen)
+	require.Empty(t, notifs)
+	require.EqualValues(t, -1, rs.queBySeat[1], "真人定缺超时不得由服务端代选缺门")
+}
+
+func TestPlayerJourney_D2_4_DiscardTimeoutSurrenders(t *testing.T) {
 	t.Parallel()
 
 	rs := &RoundState{
@@ -833,11 +1057,19 @@ func TestApplyTimeoutAutoDiscardsCurrentTurn(t *testing.T) {
 
 	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyTimeout(context.Background(), rs)
 	require.NoError(t, err)
-	require.Len(t, notifs, 2)
+	require.True(t, rs.isSurrendered(0))
+	require.Len(t, notifs, 1)
 	require.Equal(t, Seat(1), rs.turn)
+	for _, notification := range notifs {
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		if action := env.GetAction(); action != nil {
+			require.NotEqual(t, "discard", action.GetAction(), "真人出牌超时不得由服务端代选弃牌")
+		}
+	}
 }
 
-func TestServiceAutoTimeoutSubmitsThroughActor(t *testing.T) {
+func TestServiceAutoTimeoutSurrendersThroughActor(t *testing.T) {
 	t.Parallel()
 
 	rs := &RoundState{
@@ -859,7 +1091,10 @@ func TestServiceAutoTimeoutSubmitsThroughActor(t *testing.T) {
 	require.NoError(t, svc.RecoverRoom("r-service-timeout", []string{"u0", "u1", "u2", "u3"}, "playing", data))
 	notifs, err := svc.AutoTimeout(context.Background(), "r-service-timeout")
 	require.NoError(t, err)
-	require.Len(t, notifs, 2)
+	require.Len(t, notifs, 1)
+	a := svc.getActor("r-service-timeout")
+	require.NotNil(t, a)
+	require.True(t, a.room.Surrendered[0])
 }
 
 func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
@@ -973,6 +1208,31 @@ func TestServiceLeaveDuringPlayCanBeDisabled(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.Error(t, svc.Leave(ctx, roomID, "u2"))
+}
+
+func TestRoundPersistRestoresSurrenderedSeats(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-persist-surrendered",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
+		queBySeat:       make([]int32, 4),
+		waitingDiscard:  true,
+		turn:            1,
+		lastDiscardSeat: -1,
+		surrendered:     []bool{false, false, true, false},
+	}
+
+	data, err := rs.MarshalRoundPersistJSON()
+	require.NoError(t, err)
+	restored, err := RestoreRoundFromPersistJSON(rs.roomID, data)
+	require.NoError(t, err)
+	require.True(t, restored.isSurrendered(2))
+	require.Equal(t, []int32{1}, restored.actingSeats())
 }
 
 func TestDoGangClosesRoomAfterSettlement(t *testing.T) {

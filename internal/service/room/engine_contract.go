@@ -1,8 +1,6 @@
 package room
 
 import (
-	"strings"
-
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
@@ -182,35 +180,37 @@ func (rs *RoundState) meldInfosBySeat() []*clientv1.SeatMelds {
 }
 
 func meldInfoFromEncoded(seat Seat, encoded string, step int) *clientv1.MeldInfo {
-	kind, raw, ok := strings.Cut(encoded, ":")
-	if !ok || kind == "" || raw == "" {
+	fact, ok := parseMeldFact(encoded)
+	if !ok || fact.Kind == "" {
 		return nil
 	}
 	var count int
-	concealed := false
-	switch kind {
+	switch fact.Kind {
 	case "pong":
 		count = 3
-	case "gang":
+	case "gang", "zhi_gang", "an_gang", "bu_gang":
 		count = 4
-	case "an_gang":
-		count = 4
-		concealed = true
-	case "bu_gang":
-		count = 4
+	case "chi", "chow":
+		count = 3
 	default:
 		return nil
 	}
 	tiles := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		tiles = append(tiles, raw)
+	if len(fact.Tiles) == 1 && count > 1 {
+		for i := 0; i < count; i++ {
+			tiles = append(tiles, fact.Tiles[0].String())
+		}
+	} else {
+		for _, t := range fact.Tiles {
+			tiles = append(tiles, t.String())
+		}
 	}
 	return &clientv1.MeldInfo{
 		SeatIndex:       seat.Proto(),
-		Kind:            kind,
+		Kind:            fact.Kind,
 		Tiles:           tiles,
-		ClaimedFromSeat: SeatInvalid.Proto(),
-		Concealed:       concealed,
+		ClaimedFromSeat: fact.ClaimedFrom.Proto(),
+		Concealed:       fact.Concealed,
 		Step:            int64(step),
 	}
 }

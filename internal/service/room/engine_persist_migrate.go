@@ -9,6 +9,7 @@ import "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 //   - v0 / v1：单赢家（WinnerSeat）+ TotalFanBySeat 总分。
 //   - v2：多赢家（WinnerSeats）+ Ledger 流水（ADR-0020）。
 //   - v3：补 Dealer/OpeningDraw/DealerFirstDiscard 庄家与首巡窗口（ADR-0021）。
+//   - v4：持久化 SurrenderedSeats，恢复后继续跳过弃局座位。
 func migratePersistToCurrent(rp *roundPersist) {
 	if rp == nil {
 		return
@@ -18,6 +19,9 @@ func migratePersistToCurrent(rp *roundPersist) {
 	}
 	if rp.SchemaVersion == 2 {
 		migrateV2ToV3(rp)
+	}
+	if rp.SchemaVersion == 3 {
+		migrateV3ToV4(rp)
 	}
 }
 
@@ -38,6 +42,10 @@ func migrateV2ToV3(rp *roundPersist) {
 	rp.OpeningDrawSeat = -1
 	rp.DealerFirstDiscardOpen = false
 	rp.SchemaVersion = 3
+}
+
+func migrateV3ToV4(rp *roundPersist) {
+	rp.SchemaVersion = 4
 }
 
 // legacyLedgerFromTotals 将 v0/v1 的座位总分翻译为单条 legacy_total 流水，保留可审计性。

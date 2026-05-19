@@ -223,13 +223,27 @@ type PhaseToken struct {
 // PhaseDriftError 表示客户端令牌与服务端当前阶段不一致；Current 字段总是非 nil，
 // 调用方据此回写最新阶段视图给客户端，避免客户端基于陈旧 UI 再次提交。
 type PhaseDriftError struct {
-	Token   PhaseToken
-	Current PhaseToken
+	Token    PhaseToken
+	Current  PhaseToken
+	Progress RoundProgress
 }
 
 // Error 描述 drift 的关键字段，便于日志与单测断言。
 func (e *PhaseDriftError) Error() string {
 	return "phase drifted"
+}
+
+func (e *PhaseDriftError) PhaseUpdate() *clientv1.PhaseUpdate {
+	if e == nil {
+		return nil
+	}
+	if e.Progress.Step != 0 || e.Progress.Phase != clientv1.Phase_PHASE_UNSPECIFIED || e.Progress.Reason != ReasonNone {
+		return e.Progress.toPhaseUpdate()
+	}
+	return &clientv1.PhaseUpdate{
+		Step:   e.Current.Step,
+		Reason: e.Current.Reason.Proto(),
+	}
 }
 
 // validatePhaseToken 在 actor 处理任意状态变更动作前调用。
@@ -245,8 +259,9 @@ func (rs *RoundState) validatePhaseToken(tok *PhaseToken) error {
 		return nil
 	}
 	return &PhaseDriftError{
-		Token:   *tok,
-		Current: PhaseToken{Step: int64(rs.step), Reason: rs.phaseReason},
+		Token:    *tok,
+		Current:  PhaseToken{Step: int64(rs.step), Reason: rs.phaseReason},
+		Progress: rs.roundProgress(),
 	}
 }
 
@@ -294,23 +309,26 @@ func (rs *RoundState) actingSeats() []int32 {
 	}
 	switch {
 	case rs.waitingExchange:
-		return pendingSeats(rs.exchangeSubmitted)
+		return rs.pendingActiveSeats(rs.exchangeSubmitted)
 	case rs.waitingQueMen:
-		return pendingSeats(rs.queSubmitted)
+		return rs.pendingActiveSeats(rs.queSubmitted)
 	case rs.claimWindowOpen:
 		if seat := rs.claimSeat(); seat >= 0 {
 			return []int32{seat.Proto()}
 		}
 	case rs.waitingTsumo || rs.waitingDiscard:
-		return []int32{rs.turn.Proto()}
+		if !rs.isHued(rs.turn) && !rs.isSurrendered(rs.turn) {
+			return []int32{rs.turn.Proto()}
+		}
 	}
 	return nil
 }
 
-func pendingSeats(done []bool) []int32 {
+func (rs *RoundState) pendingActiveSeats(done []bool) []int32 {
 	out := make([]int32, 0, 4)
 	for seat := 0; seat < 4; seat++ {
-		if seat >= len(done) || !done[seat] {
+		s := Seat(seat)
+		if (seat >= len(done) || !done[seat]) && (rs == nil || (!rs.isHued(s) && !rs.isSurrendered(s))) {
 			out = append(out, Seat(seat).Proto())
 		}
 	}

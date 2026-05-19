@@ -128,6 +128,22 @@ func (a *roomActor) doPong(userID string) ([]Notification, error) {
 	return notifications, nil
 }
 
+func (a *roomActor) doChi(userID string, tiles []string) ([]Notification, error) {
+	seat, err := a.seatOf(userID)
+	if err != nil {
+		return nil, err
+	}
+	notifications, err := a.engine.ApplyChi(context.Background(), a.round, seat, tiles)
+	if err != nil {
+		return nil, err
+	}
+	if a.round.closed {
+		a.closeRoomAfterRound()
+		a.round = nil
+	}
+	return notifications, nil
+}
+
 func (a *roomActor) doGang(userID, tile string) ([]Notification, error) {
 	seat, err := a.seatOf(userID)
 	if err != nil {
@@ -181,11 +197,23 @@ func (a *roomActor) doAutoTimeout() ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.syncSurrenderedFromRound()
 	if a.round.closed {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
 	return notifications, nil
+}
+
+func (a *roomActor) syncSurrenderedFromRound() {
+	if a == nil || a.room == nil || a.round == nil {
+		return
+	}
+	for seat := 0; seat < 4 && seat < len(a.round.surrendered); seat++ {
+		if a.round.surrendered[seat] {
+			a.room.Surrendered[seat] = true
+		}
+	}
 }
 
 func (a *roomActor) doExchangeThree(userID string, tiles []string, direction int32) ([]Notification, error) {

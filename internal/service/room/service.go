@@ -332,6 +332,15 @@ func (s *Service) Pong(ctx context.Context, roomID, userID string, tok *PhaseTok
 	return a.submitPong(ctx, userID, tok)
 }
 
+// Chi 提交弃牌抢答窗口中的吃牌动作。默认四川血战规则不会开放该动作。
+func (s *Service) Chi(ctx context.Context, roomID, userID string, tiles []string, tok *PhaseToken) ([]Notification, error) {
+	a := s.getActor(roomID)
+	if a == nil {
+		return nil, fmt.Errorf("room not found")
+	}
+	return a.submitChi(ctx, userID, tiles, tok)
+}
+
 // Gang 提交弃牌抢答窗口中的杠牌或当前座位自杠动作。
 func (s *Service) Gang(ctx context.Context, roomID, userID, tile string, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)

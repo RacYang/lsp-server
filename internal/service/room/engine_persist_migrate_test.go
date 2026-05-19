@@ -71,7 +71,7 @@ func TestMigratePersist_V2InitializesDealerWindow(t *testing.T) {
 	}
 }
 
-func TestMigratePersist_V3IsIdempotent(t *testing.T) {
+func TestMigratePersist_V3PromotesToV4WithoutMutatingDealerWindow(t *testing.T) {
 	rp := &roundPersist{
 		SchemaVersion:          3,
 		WinnerSeats:            []int{1},
@@ -81,8 +81,8 @@ func TestMigratePersist_V3IsIdempotent(t *testing.T) {
 	}
 	migratePersistToCurrent(rp)
 
-	if rp.SchemaVersion != 3 {
-		t.Fatalf("v3 should remain at 3, got %d", rp.SchemaVersion)
+	if rp.SchemaVersion != roundPersistSchemaVersion {
+		t.Fatalf("v3 should promote to %d, got %d", roundPersistSchemaVersion, rp.SchemaVersion)
 	}
 	if rp.DealerSeat != 2 || rp.OpeningDrawSeat != 2 || !rp.DealerFirstDiscardOpen {
 		t.Fatalf("v3 fields must not be mutated, got dealer=%d opening=%d open=%v",

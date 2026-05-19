@@ -20,7 +20,7 @@ func (e *Engine) ApplyExchangeThreeByPlayer(_ context.Context, rs *RoundState, s
 	return e.applyExchangeThree(rs, seat, tiles, direction, false)
 }
 
-// ApplyExchangeThreeByTimeout 为未响应座位托管选择三张牌；仅托管入口允许自动选牌。
+// ApplyExchangeThreeByTimeout 为机器人/自动回放路径选择三张牌；真人 ApplyTimeout 不调用该入口。
 func (e *Engine) ApplyExchangeThreeByTimeout(_ context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
 	direction := defaultExchangeDirection
 	if rs != nil && rs.exchangeDirection > 0 {
@@ -63,13 +63,59 @@ func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, d
 	}
 	rs.exchangeSelection[seat] = selection
 	rs.exchangeSubmitted[seat] = true
-	for _, done := range rs.exchangeSubmitted {
-		if !done {
-			return nil, nil
+	if !rs.allExchangeParticipantsDone() {
+		return nil, nil
+	}
+	return e.completeExchangeThree(rs)
+}
+
+func (e *Engine) surrenderExchangeSeat(rs *RoundState, seat Seat) ([]Notification, error) {
+	if e == nil {
+		return nil, fmt.Errorf("nil engine")
+	}
+	if rs == nil {
+		return nil, fmt.Errorf("nil round state")
+	}
+	if rs.closed {
+		return nil, fmt.Errorf("round closed")
+	}
+	if !rs.waitingExchange {
+		return nil, fmt.Errorf("exchange not allowed")
+	}
+	if seat < 0 || seat > 3 {
+		return nil, fmt.Errorf("invalid seat")
+	}
+	rs.markSurrendered(seat)
+	for len(rs.exchangeSubmitted) < 4 {
+		rs.exchangeSubmitted = append(rs.exchangeSubmitted, false)
+	}
+	for len(rs.exchangeSelection) < 4 {
+		rs.exchangeSelection = append(rs.exchangeSelection, nil)
+	}
+	rs.exchangeSubmitted[seat] = true
+	rs.exchangeSelection[seat] = []tile.Tile{}
+	if !rs.allExchangeParticipantsDone() {
+		rs.enterPhase(ReasonExchangeThree)
+		return nil, nil
+	}
+	return e.completeExchangeThree(rs)
+}
+
+func (rs *RoundState) allExchangeParticipantsDone() bool {
+	if rs == nil {
+		return false
+	}
+	for seat, done := range rs.exchangeSubmitted {
+		if !done && !rs.isSurrendered(Seat(seat)) {
+			return false
 		}
 	}
+	return true
+}
+
+func (e *Engine) completeExchangeThree(rs *RoundState) ([]Notification, error) {
 	exchangedAwayBySeat := exchangeSelectionsToStrings(rs.exchangeSelection)
-	receivedTiles := exchangeThreeWithSelections(rs.hands, rs.exchangeSelection, rs.exchangeDirection)
+	receivedTiles := exchangeThreeWithSelections(rs.hands, rs.exchangeSelection, rs.exchangeDirection, false)
 	for i := range rs.exchangeSelection {
 		rs.exchangeSelection[i] = nil
 	}
@@ -219,7 +265,7 @@ func exchangeThree(hands []*hand.Hand) []*clientv1.SeatTiles {
 	return perSeat
 }
 
-func exchangeThreeWithSelections(hands []*hand.Hand, selections [][]tile.Tile, direction int32) []*clientv1.SeatTiles {
+func exchangeThreeWithSelections(hands []*hand.Hand, selections [][]tile.Tile, direction int32, fallbackMissing bool) []*clientv1.SeatTiles {
 	offset, ok := normalizeExchangeDirection(direction)
 	if !ok {
 		offset = defaultExchangeDirection
@@ -227,7 +273,7 @@ func exchangeThreeWithSelections(hands []*hand.Hand, selections [][]tile.Tile, d
 	exchanged := make([][]tile.Tile, 4)
 	for seat := 0; seat < 4; seat++ {
 		chosen := append([]tile.Tile(nil), selections[seat]...)
-		if len(chosen) == 0 {
+		if len(chosen) == 0 && fallbackMissing && selections[seat] == nil {
 			chosen = chooseExchangeTiles(hands[seat])
 		}
 		for _, t := range chosen {

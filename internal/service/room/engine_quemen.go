@@ -35,11 +35,53 @@ func (e *Engine) ApplyQueMen(ctx context.Context, rs *RoundState, seat Seat, sui
 		rs.queBySeat[seat] = int32(chooseQueSuit(rs.hands[seat]))
 	}
 	rs.queSubmitted[seat] = true
-	for _, done := range rs.queSubmitted {
-		if !done {
-			return nil, nil
+	if !rs.allQueParticipantsDone() {
+		return nil, nil
+	}
+	return e.completeQueMen(ctx, rs)
+}
+
+func (e *Engine) surrenderQueMenSeat(ctx context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
+	if e == nil {
+		return nil, fmt.Errorf("nil engine")
+	}
+	if rs == nil {
+		return nil, fmt.Errorf("nil round state")
+	}
+	if rs.closed {
+		return nil, fmt.Errorf("round closed")
+	}
+	if !rs.waitingQueMen {
+		return nil, fmt.Errorf("que men not allowed")
+	}
+	if seat < 0 || seat > 3 {
+		return nil, fmt.Errorf("invalid seat")
+	}
+	rs.markSurrendered(seat)
+	for len(rs.queSubmitted) < 4 {
+		rs.queSubmitted = append(rs.queSubmitted, false)
+	}
+	rs.queSubmitted[seat] = true
+	if !rs.allQueParticipantsDone() {
+		rs.enterPhase(ReasonQueMen)
+		return nil, nil
+	}
+	return e.completeQueMen(ctx, rs)
+}
+
+func (rs *RoundState) allQueParticipantsDone() bool {
+	if rs == nil {
+		return false
+	}
+	for seat, done := range rs.queSubmitted {
+		if !done && !rs.isSurrendered(Seat(seat)) {
+			return false
 		}
 	}
+	return true
+}
+
+func (e *Engine) completeQueMen(ctx context.Context, rs *RoundState) ([]Notification, error) {
 	rs.enterPhase(ReasonNone)
 	progress := rs.drawTransitionProgress()
 	queDone := &clientv1.QueMenDoneNotify{QueSuitBySeat: rs.queBySeat}

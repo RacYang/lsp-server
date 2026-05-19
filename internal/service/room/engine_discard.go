@@ -188,6 +188,9 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		WallRemaining:        rs.wall.Remaining(),
 	})
 	appendHuEntries(rs, seat, breakdown.Total, source, payer, breakdown)
+	if source == rules.HuSourceQiangGang && rs.pendingGangSeat.Valid() && rs.pendingGangTile != 0 {
+		_ = rs.hands[rs.pendingGangSeat].Remove(rs.pendingGangTile)
+	}
 	rs.markHued(seat)
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
@@ -195,6 +198,7 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	rs.lastDiscardAfterGang = false
 	rs.closeOpeningHuWindow(source)
 	rs.clearClaimWindow()
+	rs.enterPhase(ReasonNone)
 	if source != rules.HuSourceTsumo {
 		metrics.ClaimWindowTotal.WithLabelValues("hu").Inc()
 	}
@@ -412,11 +416,25 @@ func (rs *RoundState) nextActiveSeat(from Seat) Seat {
 	}
 	for offset := 1; offset <= 4; offset++ {
 		seat := Seat((int(from) + offset) % 4)
-		if !rs.isHued(seat) {
+		if !rs.isHued(seat) && !rs.isSurrendered(seat) {
 			return seat
 		}
 	}
 	return from
+}
+
+func (rs *RoundState) activeCount() int {
+	if rs == nil {
+		return 0
+	}
+	n := 0
+	for seat := 0; seat < 4; seat++ {
+		s := Seat(seat)
+		if !rs.isHued(s) && !rs.isSurrendered(s) {
+			n++
+		}
+	}
+	return n
 }
 
 func (rs *RoundState) shouldFinishRound() bool {

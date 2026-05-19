@@ -12,7 +12,7 @@ import (
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
 
-const roundPersistSchemaVersion = 3
+const roundPersistSchemaVersion = 4
 
 // ProjectRoundState 返回当前局面面向协议、快照和 bot 的统一事实投影。
 func ProjectRoundState(rs *RoundState) RoundProjection {
@@ -115,16 +115,6 @@ func (rs *RoundState) removeLastDiscard(seat Seat, t tile.Tile) {
 	rs.discards[seat] = ds[:len(ds)-1]
 }
 
-func (rs *RoundState) recordMeld(seat Seat, meld string) {
-	if rs == nil || seat < 0 || seat > 3 || meld == "" {
-		return
-	}
-	if len(rs.melds) < 4 {
-		rs.melds = make([][]string, 4)
-	}
-	rs.melds[seat] = append(rs.melds[seat], meld)
-}
-
 func (rs *RoundState) handStringsBySeat() [][]string {
 	out := make([][]string, 4)
 	if rs == nil {
@@ -180,14 +170,14 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 	}
 	if rs.waitingExchange {
 		for seat, done := range rs.exchangeSubmitted {
-			if !done {
+			if !done && !rs.isSurrendered(Seat(seat)) {
 				return Seat(seat).Proto(), "exchange_three", "", []string{"exchange_three"}
 			}
 		}
 	}
 	if rs.waitingQueMen {
 		for seat, done := range rs.queSubmitted {
-			if !done {
+			if !done && !rs.isSurrendered(Seat(seat)) {
 				return Seat(seat).Proto(), "que_men", "", []string{"que_men"}
 			}
 		}
@@ -208,9 +198,15 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 		}
 	}
 	if rs.waitingTsumo {
+		if rs.isSurrendered(rs.turn) {
+			return -1, "tsumo_window", rs.pendingDraw.String(), nil
+		}
 		return rs.turn.Proto(), "tsumo_window", rs.pendingDraw.String(), []string{"hu", "pass"}
 	}
 	if rs.waitingDiscard {
+		if rs.isSurrendered(rs.turn) {
+			return -1, "discard", "", nil
+		}
 		actions := []string{"discard"}
 		for _, t := range rs.hands[rs.turn].Tiles() {
 			if rs.canSelfGang(rs.turn, t.String()) {
@@ -250,8 +246,10 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		WaitingTsumo:           rs.waitingTsumo,
 		ClaimWindowOpen:        rs.claimWindowOpen,
 		QiangGangWindow:        rs.qiangGangWindow,
+		PendingGangSeat:        int(rs.pendingGangSeat),
 		WinnerSeats:            seatsToPersist(rs.winnerSeats),
 		HuedSeats:              append([]bool(nil), rs.huedSeats...),
+		SurrenderedSeats:       append([]bool(nil), rs.surrendered...),
 		Ledger:                 append([]xuezhandaodi.ScoreEntry(nil), rs.ledger...),
 		GangRecords:            append([]rules.GangRecord(nil), rs.gangRecords...),
 		LastGangFollowUp:       rs.lastGangFollowUp,
@@ -277,6 +275,9 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 	}
 	if rs.currentDraw != 0 {
 		rp.CurrentDraw = rs.currentDraw.String()
+	}
+	if rs.pendingGangTile != 0 {
+		rp.PendingGangTile = rs.pendingGangTile.String()
 	}
 	if rs.lastDiscard != 0 {
 		rp.LastDiscard = rs.lastDiscard.String()
@@ -400,6 +401,7 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		waitingTsumo:           rp.WaitingTsumo,
 		claimWindowOpen:        rp.ClaimWindowOpen,
 		qiangGangWindow:        rp.QiangGangWindow,
+		pendingGangSeat:        SeatFromInt(rp.PendingGangSeat),
 		turn:                   SeatFromInt(rp.Turn),
 		step:                   rp.Step,
 		dealerSeat:             SeatFromInt(rp.DealerSeat),
@@ -407,6 +409,7 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		dealerFirstDiscardOpen: rp.DealerFirstDiscardOpen,
 		winnerSeats:            seatsFromPersist(rp.WinnerSeats),
 		huedSeats:              append([]bool(nil), rp.HuedSeats...),
+		surrendered:            append([]bool(nil), rp.SurrenderedSeats...),
 		ledger:                 append([]xuezhandaodi.ScoreEntry(nil), rp.Ledger...),
 		gangRecords:            append([]rules.GangRecord(nil), rp.GangRecords...),
 		lastGangFollowUp:       rp.LastGangFollowUp,
@@ -432,6 +435,13 @@ func decodeTileFieldsIntoRound(rs *RoundState, rp *roundPersist) error {
 			return fmt.Errorf("parse current draw: %w", err)
 		}
 		rs.currentDraw = t
+	}
+	if rp.PendingGangTile != "" {
+		t, err := tile.Parse(rp.PendingGangTile)
+		if err != nil {
+			return fmt.Errorf("parse pending gang tile: %w", err)
+		}
+		rs.pendingGangTile = t
 	}
 	if rp.LastDiscard != "" {
 		t, err := tile.Parse(rp.LastDiscard)
@@ -529,11 +539,17 @@ func finalizeRoundInvariants(rs *RoundState) {
 	for len(rs.huedSeats) < 4 {
 		rs.huedSeats = append(rs.huedSeats, false)
 	}
+	for len(rs.surrendered) < 4 {
+		rs.surrendered = append(rs.surrendered, false)
+	}
 	for len(rs.discards) < 4 {
 		rs.discards = append(rs.discards, nil)
 	}
 	for len(rs.melds) < 4 {
 		rs.melds = append(rs.melds, nil)
+	}
+	if !rs.pendingGangSeat.Valid() && rs.qiangGangWindow {
+		rs.pendingGangSeat = rs.lastDiscardSeat
 	}
 	for _, seat := range rs.winnerSeats {
 		if seat >= 0 && seat < 4 {

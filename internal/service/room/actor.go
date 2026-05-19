@@ -76,6 +76,14 @@ type cmdPong struct {
 	res      chan actionResult
 }
 
+type cmdChi struct {
+	userID   string
+	tiles    []string
+	phaseTok *PhaseToken
+	ctx      context.Context
+	res      chan actionResult
+}
+
 type cmdGang struct {
 	userID   string
 	tile     string
@@ -218,6 +226,18 @@ func (a *roomActor) run() {
 			notifications, err := a.doPong(m.userID)
 			if err != nil {
 				a.logActionRejected(m.ctx, m.userID, "pong", m.phaseTok, err)
+			}
+			a.resetScheduler()
+			m.res <- actionResult{notifications: notifications, err: err}
+		case cmdChi:
+			if err := a.checkPhaseToken(m.phaseTok); err != nil {
+				a.logActionRejected(m.ctx, m.userID, "chi", m.phaseTok, err)
+				m.res <- actionResult{err: err}
+				continue
+			}
+			notifications, err := a.doChi(m.userID, m.tiles)
+			if err != nil {
+				a.logActionRejected(m.ctx, m.userID, "chi", m.phaseTok, err)
 			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
@@ -426,6 +446,10 @@ func (a *roomActor) submitPong(ctx context.Context, userID string, tok *PhaseTok
 	return a.submitAction(ctx, cmdPong{userID: userID, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
 }
 
+func (a *roomActor) submitChi(ctx context.Context, userID string, tiles []string, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdChi{userID: userID, tiles: tiles, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
+}
+
 func (a *roomActor) submitGang(ctx context.Context, userID, tile string, tok *PhaseToken) ([]Notification, error) {
 	return a.submitAction(ctx, cmdGang{userID: userID, tile: tile, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
 }
@@ -617,6 +641,9 @@ func (a *roomActor) submitAction(ctx context.Context, cmd any) ([]Notification, 
 		rr := <-c.res
 		return rr.notifications, rr.err
 	case cmdPong:
+		rr := <-c.res
+		return rr.notifications, rr.err
+	case cmdChi:
 		rr := <-c.res
 		return rr.notifications, rr.err
 	case cmdGang:

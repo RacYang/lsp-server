@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
@@ -43,7 +44,7 @@ func (e *Engine) ApplyPongByPlayer(_ context.Context, rs *RoundState, seat Seat)
 		}
 	}
 	rs.removeLastDiscard(claimedFromSeat, claimedTile)
-	rs.recordMeld(seat, "pong:"+claimedTile.String())
+	rs.recordMeldFact(seat, "pong", []tile.Tile{claimedTile, claimedTile, claimedTile}, claimedFromSeat)
 	rs.turn = seat
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
@@ -88,6 +89,78 @@ func (e *Engine) ApplyPongByTimeout(ctx context.Context, rs *RoundState, seat Se
 	return append(out, next...), nil
 }
 
+// ApplyChi 处理弃牌抢答窗口中的吃牌动作。正式四川血战规则不会产生 chi 候选；
+// 该链路用于规则能力打开后的统一动作契约。
+func (e *Engine) ApplyChi(_ context.Context, rs *RoundState, seat Seat, tileTexts []string) ([]Notification, error) {
+	if e == nil {
+		return nil, fmt.Errorf("nil engine")
+	}
+	if rs == nil {
+		return nil, fmt.Errorf("nil round state")
+	}
+	if seat < 0 || seat > 3 {
+		return nil, fmt.Errorf("invalid seat")
+	}
+	if !rs.canClaimChi(seat) {
+		return nil, fmt.Errorf("chi not allowed")
+	}
+	claimedTile := rs.lastDiscard
+	claimedFromSeat := rs.lastDiscardSeat
+	chiTiles, err := rs.resolveChiTiles(seat, claimedTile, tileTexts)
+	if err != nil {
+		return nil, err
+	}
+	metrics.ClaimWindowTotal.WithLabelValues("chi").Inc()
+	rs.clearClaimWindow()
+	rs.closeOpeningClaimWindow()
+	if err := rs.rewindInterruptedTurn(); err != nil {
+		return nil, err
+	}
+	consume := append([]tile.Tile(nil), chiTiles...)
+	removedClaimed := false
+	for i := 0; i < len(consume); i++ {
+		if consume[i] == claimedTile && !removedClaimed {
+			removedClaimed = true
+			consume = append(consume[:i], consume[i+1:]...)
+			break
+		}
+	}
+	if !removedClaimed {
+		return nil, fmt.Errorf("chi tiles missing claimed tile")
+	}
+	for _, t := range consume {
+		if err := rs.hands[seat].Remove(t); err != nil {
+			return nil, fmt.Errorf("consume chi tile: %w", err)
+		}
+	}
+	rs.removeLastDiscard(claimedFromSeat, claimedTile)
+	rs.recordMeldFact(seat, "chi", chiTiles, claimedFromSeat)
+	rs.turn = seat
+	rs.pendingDraw = 0
+	rs.currentDraw = 0
+	rs.lastDiscard = 0
+	rs.lastDiscardSeat = SeatInvalid
+	rs.enterPhase(ReasonDiscard)
+	detail := rs.actionDetail(seat, "chi", claimedTile, seat, claimedFromSeat)
+	rs.rememberLastAction(detail)
+	progress := rs.roundProgress()
+	action := &clientv1.ActionNotify{
+		SeatIndex: seat.Proto(),
+		Action:    "chi",
+		Tile:      claimedTile.String(),
+		Detail:    detail,
+	}
+	progress.applyToAction(action)
+	payload, err := marshalEnvelope(&clientv1.Envelope{
+		ReqId: fmt.Sprintf("chi-%d", rs.step),
+		Body:  &clientv1.Envelope_Action{Action: action},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []Notification{{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}}, nil
+}
+
 // ApplyGang 处理弃牌抢杠或当前座位自杠，并继续摸补牌。
 func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileText string) ([]Notification, error) {
 	if e == nil {
@@ -100,21 +173,23 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 		return nil, fmt.Errorf("invalid seat")
 	}
 	claimGang := rs.canClaimGang(seat)
-	selfGang := rs.canSelfGang(seat, tileText)
-	if !claimGang && !selfGang {
+	gangTile, parseErr := tile.Parse(tileText)
+	buGang := parseErr == nil && rs.canBuGang(seat, gangTile)
+	anGang := parseErr == nil && rs.canAnGang(seat, gangTile)
+	if !claimGang && !buGang && !anGang {
 		return nil, fmt.Errorf("gang not allowed")
 	}
 	if claimGang {
 		metrics.ClaimWindowTotal.WithLabelValues("gang").Inc()
 	}
-	var gangTile tile.Tile
-	var err error
-	var out []Notification
 	gangFromSeat := SeatInvalid
-	if claimGang {
+	meldKind := "an_gang"
+	switch {
+	case claimGang:
 		gangTile = rs.lastDiscard
 		fromSeat := rs.lastDiscardSeat
 		gangFromSeat = fromSeat
+		meldKind = "zhi_gang"
 		rs.clearClaimWindow()
 		rs.closeOpeningClaimWindow()
 		if err := rs.rewindInterruptedTurn(); err != nil {
@@ -126,17 +201,15 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 			}
 		}
 		rs.removeLastDiscard(fromSeat, gangTile)
-		rs.recordMeld(seat, "gang:"+gangTile.String())
+		rs.recordMeldFact(seat, "zhi_gang", []tile.Tile{gangTile, gangTile, gangTile, gangTile}, fromSeat)
 		rs.lastDiscard = 0
 		rs.lastDiscardSeat = SeatInvalid
 		appendGangEntries(rs, seat, gangTile, rules.GangKindMing, fromSeat)
-	} else {
-		gangTile, err = tile.Parse(tileText)
-		if err != nil {
-			return nil, fmt.Errorf("parse gang tile: %w", err)
-		}
+	case buGang:
 		rs.lastDiscard = gangTile
 		rs.lastDiscardSeat = seat
+		rs.pendingGangSeat = seat
+		rs.pendingGangTile = gangTile
 		rs.qiangGangWindow = true
 		rs.claimCandidates = rs.buildClaimCandidates()
 		if len(rs.claimCandidates) > 0 {
@@ -144,21 +217,36 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 			return rs.claimPromptNotifications(gangTile)
 		}
 		rs.clearClaimWindow()
+		if err := rs.completeBuGang(seat, gangTile); err != nil {
+			return nil, err
+		}
+		meldKind = "bu_gang"
+	default:
+		rs.clearClaimWindow()
 		for i := 0; i < 4; i++ {
 			if err := rs.hands[seat].Remove(gangTile); err != nil {
 				return nil, fmt.Errorf("consume self gang tiles: %w", err)
 			}
 		}
-		rs.recordMeld(seat, "gang:"+gangTile.String())
+		rs.recordMeldFact(seat, "an_gang", []tile.Tile{gangTile, gangTile, gangTile, gangTile}, SeatInvalid)
 		appendGangEntries(rs, seat, gangTile, rules.GangKindAn, SeatInvalid)
 	}
+	return e.finishGangAction(rs, seat, gangTile, meldKind, gangFromSeat)
+}
+
+func (e *Engine) finishGangAction(rs *RoundState, seat Seat, gangTile tile.Tile, meldKind string, gangFromSeat Seat) ([]Notification, error) {
 	rs.turn = seat
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
+	rs.lastDiscard = 0
+	rs.lastDiscardSeat = SeatInvalid
+	rs.qiangGangWindow = false
+	rs.pendingGangSeat = SeatInvalid
+	rs.pendingGangTile = 0
 	rs.enterPhase(ReasonNone)
 	seatIndex := seat.Proto()
-	detail := rs.actionDetail(seat, "gang", gangTile, seat, SeatInvalid)
-	if claimGang {
+	detail := rs.actionDetail(seat, meldKind, gangTile, seat, SeatInvalid)
+	if gangFromSeat.Valid() {
 		detail.SourceSeat = gangFromSeat.Proto()
 	}
 	rs.rememberLastAction(detail)
@@ -179,7 +267,28 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 	if err != nil {
 		return nil, err
 	}
-	out = append(out, Notification{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat})
+	notification := Notification{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}
+	if meldKind == "an_gang" {
+		notification.Privacy = PrivacyPerSeat
+		notification.Project = func(target Seat) []byte {
+			projected := proto.Clone(action).(*clientv1.ActionNotify)
+			if target != seat {
+				projected.Tile = ""
+				if projected.Detail != nil {
+					projected.Detail.Tile = ""
+				}
+			}
+			payload, err := marshalEnvelope(&clientv1.Envelope{
+				ReqId: fmt.Sprintf("gang-%d", rs.step),
+				Body:  &clientv1.Envelope_Action{Action: projected},
+			})
+			if err != nil {
+				return nil
+			}
+			return payload
+		}
+	}
+	out := []Notification{notification}
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {
 		return nil, err
@@ -209,6 +318,16 @@ func (e *Engine) ApplyPass(_ context.Context, rs *RoundState, seat Seat) ([]Noti
 			metrics.ClaimWindowTotal.WithLabelValues("relay").Inc()
 			return rs.claimPromptNotifications(rs.lastDiscard)
 		}
+		if rs.qiangGangWindow && rs.pendingGangSeat.Valid() && rs.pendingGangTile != 0 {
+			seat := rs.pendingGangSeat
+			gangTile := rs.pendingGangTile
+			rs.clearClaimWindow()
+			if err := rs.completeBuGang(seat, gangTile); err != nil {
+				return nil, err
+			}
+			rs.turn = seat
+			return e.finishGangAction(rs, seat, gangTile, "bu_gang", SeatInvalid)
+		}
 		rs.clearClaimWindow()
 		rs.closeOpeningClaimWindow()
 		return e.drawForCurrentTurn(rs)
@@ -234,12 +353,20 @@ func (rs *RoundState) canClaimGang(seat Seat) bool {
 	return rs != nil && !rs.isHued(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "gang")
 }
 
+func (rs *RoundState) canClaimChi(seat Seat) bool {
+	return rs != nil && !rs.isHued(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "chi")
+}
+
 func (rs *RoundState) canSelfGang(seat Seat, tileText string) bool {
-	if rs == nil || seat != rs.turn || !rs.waitingDiscard || rs.isHued(seat) {
-		return false
-	}
 	target, err := tile.Parse(tileText)
 	if err != nil {
+		return false
+	}
+	return rs.canAnGang(seat, target) || rs.canBuGang(seat, target)
+}
+
+func (rs *RoundState) canAnGang(seat Seat, target tile.Tile) bool {
+	if rs == nil || seat != rs.turn || !rs.waitingDiscard || rs.isHued(seat) {
 		return false
 	}
 	if rs.tileIsQueSuit(seat, target) {
@@ -252,6 +379,131 @@ func (rs *RoundState) canSelfGang(seat Seat, tileText string) bool {
 		}
 	}
 	return count >= 4
+}
+
+func (rs *RoundState) canBuGang(seat Seat, target tile.Tile) bool {
+	if rs == nil || seat != rs.turn || !rs.waitingDiscard || rs.isHued(seat) {
+		return false
+	}
+	if target == 0 || rs.tileIsQueSuit(seat, target) || !rs.hasPongMeld(seat, target) {
+		return false
+	}
+	for _, t := range rs.hands[seat].Tiles() {
+		if t == target {
+			return true
+		}
+	}
+	return false
+}
+
+func (rs *RoundState) completeBuGang(seat Seat, gangTile tile.Tile) error {
+	if rs == nil {
+		return fmt.Errorf("nil round state")
+	}
+	if err := rs.hands[seat].Remove(gangTile); err != nil {
+		return fmt.Errorf("consume bu gang tile: %w", err)
+	}
+	if !rs.upgradePongToBuGang(seat, gangTile) {
+		return fmt.Errorf("missing pong meld for bu gang")
+	}
+	appendGangEntries(rs, seat, gangTile, rules.GangKindBu, SeatInvalid)
+	rs.pendingGangSeat = SeatInvalid
+	rs.pendingGangTile = 0
+	return nil
+}
+
+func (rs *RoundState) resolveChiTiles(seat Seat, claimed tile.Tile, tileTexts []string) ([]tile.Tile, error) {
+	if rs == nil || claimed == 0 {
+		return nil, fmt.Errorf("missing chi tile")
+	}
+	if len(tileTexts) > 0 {
+		if len(tileTexts) != 3 {
+			return nil, fmt.Errorf("chi requires 3 tiles")
+		}
+		tiles := make([]tile.Tile, 0, 3)
+		hasClaimed := false
+		for _, raw := range tileTexts {
+			t, err := tile.Parse(raw)
+			if err != nil {
+				return nil, fmt.Errorf("parse chi tile: %w", err)
+			}
+			if t == claimed {
+				hasClaimed = true
+			}
+			tiles = append(tiles, t)
+		}
+		if !hasClaimed {
+			return nil, fmt.Errorf("chi tiles missing claimed tile")
+		}
+		if !isChiSequence(tiles) {
+			return nil, fmt.Errorf("invalid chi sequence")
+		}
+		if !rs.handContainsChiRemainder(seat, claimed, tiles) {
+			return nil, fmt.Errorf("chi tiles not in hand")
+		}
+		return tiles, nil
+	}
+	for start := claimed.Rank() - 2; start <= claimed.Rank(); start++ {
+		if start < 1 || start+2 > 9 {
+			continue
+		}
+		a, _ := tile.New(claimed.Suit(), start)
+		b, _ := tile.New(claimed.Suit(), start+1)
+		c, _ := tile.New(claimed.Suit(), start+2)
+		tiles := []tile.Tile{a, b, c}
+		if !rs.handContainsChiRemainder(seat, claimed, tiles) {
+			continue
+		}
+		return tiles, nil
+	}
+	return nil, fmt.Errorf("no valid chi sequence")
+}
+
+func (rs *RoundState) handContainsChiRemainder(seat Seat, claimed tile.Tile, tiles []tile.Tile) bool {
+	need := map[tile.Tile]int{}
+	removedClaimed := false
+	for _, t := range tiles {
+		if t == claimed && !removedClaimed {
+			removedClaimed = true
+			continue
+		}
+		need[t]++
+	}
+	if !removedClaimed {
+		return false
+	}
+	for _, t := range rs.hands[seat].Tiles() {
+		if need[t] > 0 {
+			need[t]--
+		}
+	}
+	for _, n := range need {
+		if n > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func isChiSequence(tiles []tile.Tile) bool {
+	if len(tiles) != 3 {
+		return false
+	}
+	suit := tiles[0].Suit()
+	ranks := []int{tiles[0].Rank(), tiles[1].Rank(), tiles[2].Rank()}
+	for _, t := range tiles[1:] {
+		if t.Suit() != suit {
+			return false
+		}
+	}
+	for i := 0; i < len(ranks)-1; i++ {
+		for j := i + 1; j < len(ranks); j++ {
+			if ranks[j] < ranks[i] {
+				ranks[i], ranks[j] = ranks[j], ranks[i]
+			}
+		}
+	}
+	return ranks[0]+1 == ranks[1] && ranks[1]+1 == ranks[2]
 }
 
 // rewindInterruptedTurn 把 rs.turn 那家尚未完成的摸牌回滚到牌墙。
@@ -298,6 +550,8 @@ func (rs *RoundState) clearClaimWindow() {
 	}
 	rs.claimCandidates = nil
 	rs.qiangGangWindow = false
+	rs.pendingGangSeat = SeatInvalid
+	rs.pendingGangTile = 0
 	rs.enterPhase(ReasonNone)
 }
 
@@ -312,6 +566,9 @@ func (rs *RoundState) buildClaimCandidates() []claimCandidate {
 	}
 	for offset := 1; offset < 4; offset++ {
 		seat := Seat((int(rs.lastDiscardSeat) + offset) % 4)
+		if rs.isSurrendered(seat) {
+			continue
+		}
 		claimActions := claimPolicy.Candidates(rules.ClaimContext{
 			Seat:            seat,
 			SourceSeat:      rs.lastDiscardSeat,
@@ -351,7 +608,7 @@ func filterQueSuitClaimActions(actions []string, priority int, choiceAction stri
 	out := actions[:0]
 	for _, action := range actions {
 		switch action {
-		case string(rules.ActionPong), string(rules.ActionGang):
+		case string(rules.ActionPong), string(rules.ActionGang), string(rules.ActionChi):
 			continue
 		default:
 			out = append(out, action)

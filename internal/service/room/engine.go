@@ -95,6 +95,8 @@ type RoundState struct {
 	claimWindowOpen        bool
 	claimCandidates        []claimCandidate
 	qiangGangWindow        bool
+	pendingGangSeat        Seat
+	pendingGangTile        tile.Tile
 	turn                   Seat
 	step                   int
 	dealerSeat             Seat
@@ -155,9 +157,12 @@ type roundPersist struct {
 	ClaimWindowOpen        bool                      `json:"claim_window_open,omitempty"`
 	ClaimCandidates        []claimCandidatePersist   `json:"claim_candidates,omitempty"`
 	QiangGangWindow        bool                      `json:"qiang_gang_window,omitempty"`
+	PendingGangSeat        int                       `json:"pending_gang_seat,omitempty"`
+	PendingGangTile        string                    `json:"pending_gang_tile,omitempty"`
 	WinnerSeat             int                       `json:"winner_seat,omitempty"` // 兼容 schema_version=0/1 的单赢家快照
 	WinnerSeats            []int                     `json:"winner_seats,omitempty"`
 	HuedSeats              []bool                    `json:"hued_seats,omitempty"`
+	SurrenderedSeats       []bool                    `json:"surrendered_seats,omitempty"`
 	TotalFanBySeat         []int32                   `json:"total_fan_by_seat,omitempty"` // 兼容 schema_version=0/1
 	Ledger                 []xuezhandaodi.ScoreEntry `json:"ledger,omitempty"`
 	GangRecords            []rules.GangRecord        `json:"gang_records,omitempty"`

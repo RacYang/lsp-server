@@ -3,11 +3,9 @@ package room
 import (
 	"context"
 	"fmt"
-
-	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
-// ApplyTimeout 执行服务端超时/托管动作；调用方可在定时器到期后提交到同一 room actor。
+// ApplyTimeout 执行服务端超时兜底；真人座位超时不得替玩家选择收益动作。
 func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notification, error) {
 	if e == nil {
 		return nil, fmt.Errorf("nil engine")
@@ -20,15 +18,15 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 	}
 	if rs.waitingExchange {
 		for seat, done := range rs.exchangeSubmitted {
-			if !done {
-				return e.ApplyExchangeThreeByTimeout(ctx, rs, Seat(seat))
+			if !done && !rs.isSurrendered(Seat(seat)) {
+				return e.surrenderExchangeSeat(rs, Seat(seat))
 			}
 		}
 	}
 	if rs.waitingQueMen {
 		for seat, done := range rs.queSubmitted {
-			if !done {
-				return e.ApplyQueMen(ctx, rs, Seat(seat), 0)
+			if !done && !rs.isSurrendered(Seat(seat)) {
+				return e.surrenderQueMenSeat(ctx, rs, Seat(seat))
 			}
 		}
 	}
@@ -39,28 +37,49 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 			rs.closeOpeningClaimWindow()
 			return e.drawForCurrentTurn(rs)
 		}
-		if rs.isSurrendered(candidate.seat) {
-			return e.ApplyPass(ctx, rs, candidate.seat)
-		}
-		if hasAction(candidate.actions, "hu") {
-			return e.ApplyHu(ctx, rs, candidate.seat)
-		}
-		if hasAction(candidate.actions, "gang") {
-			return e.ApplyGang(ctx, rs, candidate.seat, rs.lastDiscard.String())
-		}
-		return e.ApplyPongByTimeout(ctx, rs, candidate.seat)
+		rs.markSurrendered(candidate.seat)
+		return e.ApplyPass(ctx, rs, candidate.seat)
 	}
 	if rs.waitingTsumo {
-		return e.ApplyDiscard(ctx, rs, rs.turn, rs.pendingDraw.String())
+		return e.surrenderTurnAndContinue(ctx, rs, rs.turn)
 	}
 	if rs.waitingDiscard {
-		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
-		discard := chooseDiscard(rs.hands[rs.turn], tile.Suit(rs.queBySeat[rs.turn]))
-		return e.ApplyDiscard(ctx, rs, rs.turn, discard.String())
+		return e.surrenderTurnAndContinue(ctx, rs, rs.turn)
 	}
 	return nil, fmt.Errorf("round not waiting for action")
 }
 
 func (rs *RoundState) isSurrendered(seat Seat) bool {
 	return rs != nil && int(seat) >= 0 && int(seat) < len(rs.surrendered) && rs.surrendered[seat]
+}
+
+func (rs *RoundState) markSurrendered(seat Seat) {
+	if rs == nil || seat < 0 || seat > 3 {
+		return
+	}
+	for len(rs.surrendered) < 4 {
+		rs.surrendered = append(rs.surrendered, false)
+	}
+	rs.surrendered[seat] = true
+}
+
+func (e *Engine) surrenderTurnAndContinue(ctx context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
+	if rs == nil {
+		return nil, fmt.Errorf("nil round state")
+	}
+	rs.markSurrendered(seat)
+	rs.pendingDraw = 0
+	rs.currentDraw = 0
+	rs.clearClaimWindow()
+	rs.closeOpeningClaimWindow()
+	if rs.activeCount() <= 1 || rs.shouldFinishRound() {
+		settlement, err := rs.finishRound()
+		if err != nil {
+			return nil, err
+		}
+		return []Notification{settlement}, nil
+	}
+	rs.turn = rs.nextActiveSeat(seat)
+	rs.enterPhase(ReasonNone)
+	return e.drawForCurrentTurn(rs)
 }
