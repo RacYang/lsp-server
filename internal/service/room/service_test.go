@@ -596,6 +596,131 @@ func TestQueSuitCannotSelfGang(t *testing.T) {
 	require.False(t, rs.canSelfGang(0, "p9"))
 }
 
+func TestApplyDiscardOpenMeldHuBeatsPong(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-open-discard-hu",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 5), tile.Must(tile.SuitBamboo, 5)}), hand.New(), hand.New()},
+		queBySeat:       []int32{int32(tile.SuitCharacters), int32(tile.SuitCharacters), -1, -1},
+		queSubmitted:    []bool{true, true, false, false},
+		melds:           [][]string{nil, {"pong:p7,p7,p7:2", "pong:p2,p2,p2:3"}, nil, nil},
+		waitingDiscard:  true,
+		turn:            0,
+		lastDiscardSeat: -1,
+		huedSeats:       make([]bool, 4),
+		surrendered:     make([]bool, 4),
+	}
+
+	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyDiscard(context.Background(), rs, 0, "s2")
+	require.NoError(t, err)
+	require.True(t, rs.claimWindowOpen)
+	require.Len(t, rs.claimCandidates, 1)
+	require.Equal(t, Seat(1), rs.claimCandidates[0].seat)
+	require.Contains(t, rs.claimCandidates[0].actions, "hu")
+	require.Contains(t, rs.claimCandidates[0].actions, "pong")
+	require.Equal(t, "hu_choice", rs.claimCandidates[0].claimChoiceAction())
+
+	var sawHuChoice bool
+	for _, notification := range notifs {
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		if action := env.GetAction(); action != nil && action.GetAction() == "hu_choice" {
+			sawHuChoice = true
+			require.EqualValues(t, 1, action.GetSeatIndex())
+			require.Equal(t, []string{"hu", "pong"}, action.GetPhaseUpdate().GetAvailableActions())
+		}
+	}
+	require.True(t, sawHuChoice)
+}
+
+func TestQueSuitBlocksHuCandidateAndSelfDraw(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-que-blocks-hu",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 5), tile.Must(tile.SuitBamboo, 5)}), hand.New(), hand.New()},
+		queBySeat:       []int32{int32(tile.SuitCharacters), int32(tile.SuitBamboo), -1, -1},
+		queSubmitted:    []bool{true, true, false, false},
+		melds:           [][]string{nil, {"pong:p7,p7,p7:2", "pong:p2,p2,p2:3"}, nil, nil},
+		waitingDiscard:  true,
+		turn:            0,
+		lastDiscardSeat: -1,
+		huedSeats:       make([]bool, 4),
+		surrendered:     make([]bool, 4),
+	}
+	_, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyDiscard(context.Background(), rs, 0, "s2")
+	require.NoError(t, err)
+	require.False(t, rs.claimWindowOpen)
+	require.Empty(t, rs.claimCandidates)
+
+	drawState := &RoundState{
+		roomID:          "r-que-blocks-tsumo",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 5), tile.Must(tile.SuitBamboo, 5)}), hand.New(), hand.New(), hand.New()},
+		queBySeat:       []int32{int32(tile.SuitBamboo), -1, -1, -1},
+		queSubmitted:    []bool{true, false, false, false},
+		melds:           [][]string{{"pong:p7,p7,p7:1", "pong:p2,p2,p2:2"}, nil, nil, nil},
+		turn:            0,
+		lastDiscardSeat: -1,
+		huedSeats:       make([]bool, 4),
+		surrendered:     make([]bool, 4),
+	}
+	_, err = NewEngine("sichuan_xuezhandaodi_huansanzhang").drawForCurrentTurn(drawState)
+	require.NoError(t, err)
+	require.False(t, drawState.waitingTsumo)
+	require.True(t, drawState.waitingDiscard)
+}
+
+func TestSelfDrawHuWithOpenQueSuitMeldUsesClosedHandOnlyForQueBlock(t *testing.T) {
+	t.Parallel()
+
+	rs := &RoundState{
+		roomID:          "r-open-que-meld-tsumo",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7), tile.Must(tile.SuitDots, 9)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 4), tile.Must(tile.SuitDots, 4), tile.Must(tile.SuitDots, 5), tile.Must(tile.SuitDots, 6), tile.Must(tile.SuitBamboo, 4), tile.Must(tile.SuitBamboo, 4), tile.Must(tile.SuitBamboo, 4), tile.Must(tile.SuitBamboo, 7), tile.Must(tile.SuitBamboo, 8), tile.Must(tile.SuitBamboo, 9)}), hand.New(), hand.New(), hand.New()},
+		queBySeat:       []int32{int32(tile.SuitCharacters), -1, -1, -1},
+		queSubmitted:    []bool{true, false, false, false},
+		melds:           [][]string{{"pong:m3,m3,m3:1"}, nil, nil, nil},
+		turn:            0,
+		lastDiscardSeat: -1,
+		huedSeats:       make([]bool, 4),
+		surrendered:     make([]bool, 4),
+	}
+
+	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").drawForCurrentTurn(rs)
+	require.NoError(t, err)
+	require.True(t, rs.waitingTsumo)
+	require.False(t, rs.waitingDiscard)
+	require.Equal(t, tile.Must(tile.SuitDots, 7), rs.pendingDraw)
+
+	var sawChoice bool
+	for _, notification := range notifs {
+		var env clientv1.Envelope
+		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
+		if action := env.GetAction(); action != nil && action.GetAction() == "tsumo_choice" {
+			sawChoice = true
+			require.EqualValues(t, 0, action.GetSeatIndex())
+			require.Equal(t, []string{"hu", "pass"}, action.GetPhaseUpdate().GetAvailableActions())
+		}
+	}
+	require.True(t, sawChoice)
+}
+
 func TestDrawTileNotificationProjectsTileOnlyToActor(t *testing.T) {
 	t.Parallel()
 

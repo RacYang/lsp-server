@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -94,4 +95,42 @@ func (rs *RoundState) hasPongMeld(seat Seat, target tile.Tile) bool {
 		}
 	}
 	return false
+}
+
+func (rs *RoundState) meldContexts(seat Seat) []rules.MeldContext {
+	if rs == nil || seat < 0 || seat > 3 || int(seat) >= len(rs.melds) {
+		return nil
+	}
+	out := make([]rules.MeldContext, 0, len(rs.melds[seat]))
+	for _, encoded := range rs.melds[seat] {
+		fact, ok := parseMeldFact(encoded)
+		if !ok {
+			continue
+		}
+		tiles := expandMeldTiles(fact)
+		if len(tiles) < 3 {
+			continue
+		}
+		out = append(out, rules.MeldContext{
+			Kind:      fact.Kind,
+			Tiles:     tiles,
+			Concealed: fact.Concealed,
+		})
+	}
+	return out
+}
+
+func expandMeldTiles(fact meldFact) []tile.Tile {
+	if len(fact.Tiles) != 1 {
+		return append([]tile.Tile(nil), fact.Tiles...)
+	}
+	t := fact.Tiles[0]
+	switch fact.Kind {
+	case "pong":
+		return []tile.Tile{t, t, t}
+	case "gang", "zhi_gang", "an_gang", "bu_gang":
+		return []tile.Tile{t, t, t, t}
+	default:
+		return append([]tile.Tile(nil), fact.Tiles...)
+	}
 }

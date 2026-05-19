@@ -159,19 +159,13 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	default:
 		return nil, fmt.Errorf("hu not allowed")
 	}
-	result, ok := rs.rule.CheckHu(rs.hands[seat], winTile, rules.HuContext{
-		Source:          source,
-		PendingTile:     winTile,
-		Que:             queSuits(rs.queBySeat),
-		Discarder:       rs.lastDiscardSeat,
-		IsHaiDi:         rs.isHaiDi(),
-		IsGangShangHua:  source == rules.HuSourceTsumo && rs.lastGangFollowUp,
-		ResponsibleSeat: payer,
-		GangHistory:     append([]rules.GangRecord(nil), rs.gangRecords...),
-		WallRemaining:   rs.wall.Remaining(),
-	})
+	result, ok := rs.checkSeatHu(seat, winTile, source)
 	if !ok {
 		return nil, fmt.Errorf("hu not allowed")
+	}
+	wallRemaining := 0
+	if rs.wall != nil {
+		wallRemaining = rs.wall.Remaining()
 	}
 	breakdown := rs.rule.ScoreFans(result, rules.ScoreContext{
 		HuSeat:               seat,
@@ -184,8 +178,9 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		IsGangShangHua:       source == rules.HuSourceTsumo && rs.lastGangFollowUp,
 		IsGangShangPao:       source != rules.HuSourceTsumo && rs.lastDiscardAfterGang,
 		Que:                  append([]tile.Suit(nil), queSuits(rs.queBySeat)...),
+		Melds:                rs.meldContexts(seat),
 		ResponsibleSeat:      payer,
-		WallRemaining:        rs.wall.Remaining(),
+		WallRemaining:        wallRemaining,
 	})
 	appendHuEntries(rs, seat, breakdown.Total, source, payer, breakdown)
 	if source == rules.HuSourceQiangGang && rs.pendingGangSeat.Valid() && rs.pendingGangTile != 0 {
@@ -290,7 +285,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	}
 	seatIndex := turn.Proto()
 	rs.currentDraw = drawn
-	if _, ok := rs.rule.CheckHu(rs.hands[turn], drawn, rules.HuContext{}); ok {
+	if _, ok := rs.checkSeatHu(turn, drawn, rules.HuSourceTsumo); ok {
 		rs.pendingDraw = drawn
 		rs.enterPhase(ReasonTsumo)
 		progress := rs.roundProgress()

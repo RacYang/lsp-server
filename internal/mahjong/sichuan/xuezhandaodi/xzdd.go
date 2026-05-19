@@ -93,16 +93,68 @@ func (x *rule) BuildWall(ctx context.Context, seed int64) *wall.Wall {
 	return w
 }
 
-func (x *rule) CheckHu(h *hand.Hand, target tile.Tile, _ rules.HuContext) (rules.HuResult, bool) {
-	if h == nil {
+func (x *rule) CheckHu(h *hand.Hand, target tile.Tile, hc rules.HuContext) (rules.HuResult, bool) {
+	if h == nil || target == 0 {
 		return rules.HuResult{}, false
 	}
-	c := h.Counts()
-	c[target.Index()]++
-	if !hu.IsWinning(c) {
+	closed := h.Counts()
+	closed[target.Index()]++
+	if hc.HasQueSuit && countsHoldSuit(closed, hc.QueSuit) {
 		return rules.HuResult{}, false
 	}
-	return rules.HuResult{Win: c}, true
+	openMelds := countOpenMelds(hc.Melds)
+	if !hu.IsWinningWithOpenMelds(closed, openMelds) {
+		return rules.HuResult{}, false
+	}
+	win := closed
+	for _, meld := range hc.Melds {
+		for _, t := range meld.Tiles {
+			if t != 0 {
+				win[t.Index()]++
+			}
+		}
+	}
+	return rules.HuResult{
+		Win:       win,
+		Closed:    closed,
+		OpenMelds: openMelds,
+		Melds:     cloneMeldContexts(hc.Melds),
+	}, true
+}
+
+func countsHoldSuit(c hu.Counts, suit tile.Suit) bool {
+	if suit < tile.SuitCharacters || suit > tile.SuitBamboo {
+		return false
+	}
+	base := int(suit) * 9
+	for i := 0; i < 9; i++ {
+		if c[base+i] > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func countOpenMelds(melds []rules.MeldContext) int {
+	n := 0
+	for _, meld := range melds {
+		if len(meld.Tiles) >= 3 {
+			n++
+		}
+	}
+	return n
+}
+
+func cloneMeldContexts(in []rules.MeldContext) []rules.MeldContext {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]rules.MeldContext, len(in))
+	for i, meld := range in {
+		out[i] = meld
+		out[i].Tiles = append([]tile.Tile(nil), meld.Tiles...)
+	}
+	return out
 }
 
 func (x *rule) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Breakdown {

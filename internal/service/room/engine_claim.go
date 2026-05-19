@@ -780,21 +780,9 @@ func (rs *RoundState) claimHuContext(seat Seat) rules.HuContext {
 	if rs == nil {
 		return rules.HuContext{}
 	}
-	wallRemaining := 0
-	if rs.wall != nil {
-		wallRemaining = rs.wall.Remaining()
-	}
-	ctx := rules.HuContext{
-		Source:          rules.HuSourceDiscard,
-		PendingTile:     rs.lastDiscard,
-		Discarder:       rs.lastDiscardSeat,
-		ResponsibleSeat: rs.lastDiscardSeat,
-		GangHistory:     append([]rules.GangRecord(nil), rs.gangRecords...),
-		WallRemaining:   wallRemaining,
-	}
+	source := rules.HuSourceDiscard
 	if rs.qiangGangWindow {
-		ctx.Source = rules.HuSourceQiangGang
+		source = rules.HuSourceQiangGang
 	}
-	_ = seat
-	return ctx
+	return rs.huContextForSeat(seat, source, rs.lastDiscard)
 }

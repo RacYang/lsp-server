@@ -101,6 +101,27 @@ func TestBuildTableFrontendModelTsumoWindow(t *testing.T) {
 	require.Equal(t, ClaimActionHu, model.ActionWindow.Actions[0])
 }
 
+func TestBuildTableFrontendModelClaimHuPongDefaultsToHu(t *testing.T) {
+	view := RoomView{
+		Phase:         phaseTable,
+		SeatIndex:     0,
+		RoomState:     "playing",
+		ActingSeat:    0,
+		ActingSeats:   []int32{0},
+		RoundPhase:    clientv1.Phase_PHASE_CLAIM,
+		WaitingAction: "claim_window",
+		PendingTile:   "s2",
+		ClaimCandidates: map[int32][]string{
+			0: {"hu", "pong", "pass"},
+		},
+	}
+	model := BuildTableFrontendModel(view, TableLocalUI{}, time.Unix(0, 0))
+	require.NotNil(t, model.ActionWindow)
+	require.Equal(t, []PlayerAction{ActionHu, ActionPong, ActionPass}, model.AllowedActions)
+	require.Equal(t, []ClaimAction{ClaimActionHu, ClaimActionPong, ClaimActionPass}, model.ActionWindow.Actions)
+	require.Equal(t, 0, model.ActionWindow.Selected)
+}
+
 func TestBuildTableFrontendModelHuedSelfCannotDiscard(t *testing.T) {
 	view := RoomView{
 		Phase:            phaseTable,

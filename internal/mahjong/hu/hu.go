@@ -27,6 +27,29 @@ func IsWinning(c Counts) bool {
 	return SevenPairs(c) || StandardForm(c)
 }
 
+// IsWinningWithOpenMelds 判断带固定副露面子数的和牌形。
+//
+// openMelds 表示已经完成的副露面子数量；c 只包含暗手加本次和牌张。
+// 无副露时保持普通 14 张判定；有副露时七对子不成立，暗手部分只需要
+// 组成剩余面子加一对将。
+func IsWinningWithOpenMelds(c Counts, openMelds int) bool {
+	if openMelds < 0 || openMelds > 4 {
+		return false
+	}
+	if openMelds == 0 {
+		return IsWinning(c)
+	}
+	if c.Total() != 14-openMelds*3 {
+		return false
+	}
+	for _, n := range c {
+		if n > 4 {
+			return false
+		}
+	}
+	return StandardFormWithOpenMelds(c, openMelds)
+}
+
 // SevenPairs 判断是否为七对子（允许 4 张相同作两对，川麻常见处理）。
 func SevenPairs(c Counts) bool {
 	if c.Total() != 14 {
@@ -63,6 +86,24 @@ func StandardForm(c Counts) bool {
 	if c.Total() != 14 {
 		return false
 	}
+	return standardFormMelds(c, 4)
+}
+
+// StandardFormWithOpenMelds 判断暗手是否能和已固定副露组成标准形。
+func StandardFormWithOpenMelds(c Counts, openMelds int) bool {
+	if openMelds < 0 || openMelds > 4 {
+		return false
+	}
+	if c.Total() != 14-openMelds*3 {
+		return false
+	}
+	return standardFormMelds(c, 4-openMelds)
+}
+
+func standardFormMelds(c Counts, meldsNeeded int) bool {
+	if meldsNeeded < 0 || meldsNeeded > 4 {
+		return false
+	}
 	// 枚举将牌位置
 	for i := 0; i < 27; i++ {
 		if c[i] < 2 {
@@ -70,7 +111,7 @@ func StandardForm(c Counts) bool {
 		}
 		rest := c
 		rest[i] -= 2
-		if meldAll(rest) {
+		if meldN(rest, meldsNeeded) {
 			return true
 		}
 	}
@@ -79,9 +120,16 @@ func StandardForm(c Counts) bool {
 
 // meldAll 递归消耗面子：每次必须覆盖当前最小非零下标。
 func meldAll(c Counts) bool {
+	return meldN(c, c.Total()/3)
+}
+
+func meldN(c Counts, need int) bool {
+	if need < 0 || c.Total() != need*3 {
+		return false
+	}
 	i := nextNonZero(c)
 	if i < 0 {
-		return true
+		return need == 0
 	}
 	suit := i / 9
 	r := i % 9
@@ -91,7 +139,7 @@ func meldAll(c Counts) bool {
 	if c[i] >= 3 {
 		rest := c
 		rest[i] -= 3
-		if meldAll(rest) {
+		if meldN(rest, need-1) {
 			return true
 		}
 	}
@@ -110,7 +158,7 @@ func meldAll(c Counts) bool {
 			rest[a]--
 			rest[b]--
 			rest[cc]--
-			if meldAll(rest) {
+			if meldN(rest, need-1) {
 				return true
 			}
 		}

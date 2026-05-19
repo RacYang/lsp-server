@@ -48,20 +48,27 @@ type GangRecord struct {
 
 // HuContext 为和牌判定上下文；规则实现可按需消费场况字段。
 type HuContext struct {
+	Seat            domainroom.Seat
 	Source          HuSource
 	PendingTile     tile.Tile
 	Que             []tile.Suit
+	HasQueSuit      bool
+	QueSuit         tile.Suit
 	Discarder       domainroom.Seat
 	IsHaiDi         bool
 	IsGangShangHua  bool
 	ResponsibleSeat domainroom.Seat
 	GangHistory     []GangRecord
+	Melds           []MeldContext
 	WallRemaining   int
 }
 
 // HuResult 保存和牌后的 14 张计数快照，供计分使用。
 type HuResult struct {
-	Win hu.Counts
+	Win       hu.Counts
+	Closed    hu.Counts
+	OpenMelds int
+	Melds     []MeldContext
 }
 
 // ScoreContext 为计分上下文；Phase 5 规则 PR 会逐步消费这些字段。
@@ -70,6 +77,7 @@ type ScoreContext struct {
 	DealerSeat           domainroom.Seat
 	SeatGenTiles         [][]tile.Tile
 	GangRecords          []GangRecord
+	Melds                []MeldContext
 	IsTsumo              bool
 	IsOpeningDraw        bool
 	IsDealerFirstDiscard bool
@@ -79,6 +87,13 @@ type ScoreContext struct {
 	Que                  []tile.Suit
 	ResponsibleSeat      domainroom.Seat
 	WallRemaining        int
+}
+
+// MeldContext 是规则层计算胡牌与番种所需的副露事实。
+type MeldContext struct {
+	Kind      string
+	Tiles     []tile.Tile
+	Concealed bool
 }
 
 // GameState 描述血战到底结束条件所需的最小信息。
