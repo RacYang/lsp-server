@@ -83,7 +83,9 @@ def candidate_files(check: str) -> list[pathlib.Path]:
     if check == "file-header":
         return sorted(ROOT.glob("scripts/*.sh")) + sorted(ROOT.glob("scripts/*.py"))
     if check == "rule-shape":
-        return sorted((ROOT / ".claude" / "rules").glob("*.md"))
+        return sorted((ROOT / ".claude" / "rules").glob("*.md")) + sorted(
+            (ROOT / ".codex" / "skills" / "lsp-server-governance" / "references" / "rules").glob("*.md")
+        )
     return [p for p in ROOT.glob("**/*.go") if "gen" not in p.parts and ".build" not in p.parts]
 
 

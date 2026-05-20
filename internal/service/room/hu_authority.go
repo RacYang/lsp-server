@@ -47,8 +47,9 @@ func (rs *RoundState) huContextForSeat(seat Seat, source rules.HuSource, pending
 		ctx.Source = rules.HuSourceQiangGang
 	}
 	if rs.hasQueSuit(seat) {
+		queSuit := rs.queBySeat[seat]
 		ctx.HasQueSuit = true
-		ctx.QueSuit = tile.Suit(rs.queBySeat[seat])
+		ctx.QueSuit = tile.Suit(queSuit) //nolint:gosec // 缺门花色已校验为万、筒、条三种合法值。
 	}
 	return ctx
 }

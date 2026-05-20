@@ -1,0 +1,10 @@
+id: rule
+purpose: 新增 Claude Code 规则骨架
+applies_to_glob: ".claude/rules/*.md"
+coverage_cell: evolve/rule
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "description:[\\s\\S]+\\*\\*ADR\\*\\*[\\s\\S]+\\*\\*Enforcer\\*\\*[\\s\\S]+\\*\\*负例\\*\\*"
+related_rules: [rule-shape]
+related_commands: [add-constraint]

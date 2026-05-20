@@ -1,0 +1,10 @@
+id: go-table-test
+purpose: 新增 Go 表驱动测试骨架
+applies_to_glob: "**/*_test.go"
+coverage_cell: verify/table-test
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "tests := \\[\\]struct"
+related_rules: [test-layout]
+related_commands: [add-table-test, fix-bug]

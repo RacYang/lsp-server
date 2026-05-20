@@ -272,6 +272,7 @@ language:
     - "**/README.md"
     - ".claude/rules/*.md"
     - ".claude/commands/*.md"
+    - ".codex/skills/**/*.md"
   docs_exclude:
     - ".build/negatives/**"
     - "api/gen/**"

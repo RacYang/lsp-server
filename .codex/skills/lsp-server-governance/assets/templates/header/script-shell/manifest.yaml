@@ -1,0 +1,10 @@
+id: script-shell
+purpose: Shell 脚本文件头
+applies_to_glob: "scripts/*.sh"
+coverage_cell: crosscut/file-header
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "#!/usr/bin/env bash[\\s\\S]+set -euo pipefail"
+related_rules: [file-header]
+related_commands: [add-template]

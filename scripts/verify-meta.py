@@ -10,9 +10,11 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RULES_DIR = ROOT / ".claude" / "rules"
+CODEX_RULES_DIR = ROOT / ".codex" / "skills" / "lsp-server-governance" / "references" / "rules"
 CONFIG_FILE = ROOT / ".build" / "config.yaml"
 RULE_SCHEMA_FILE = ROOT / ".build" / "schema" / "rules.schema.json"
 CLAUDE_FILE = ROOT / "CLAUDE.md"
+AGENTS_FILE = ROOT / "AGENTS.md"
 COMMANDS_DIR = ROOT / ".claude" / "commands"
 TEMPLATES_DIR = ROOT / ".claude" / "templates"
 ALLOWED_FIELDS = ("description", "alwaysApply", "globs")
@@ -73,8 +75,8 @@ def validate_enforcer(enforcer: str, owner: pathlib.Path) -> None:
     raise ValueError(f"{owner}: unsupported enforcer: {enforcer}")
 
 
-def validate_rules() -> None:
-    for rule_file in sorted(RULES_DIR.glob("*.md")):
+def validate_rule_dir(rule_dir: pathlib.Path) -> None:
+    for rule_file in sorted(rule_dir.glob("*.md")):
         data, order = parse_frontmatter(rule_file)
         if not data.get("description"):
             raise ValueError(f"{rule_file}: missing description")
@@ -102,6 +104,11 @@ def validate_rules() -> None:
             raise ValueError(f"{rule_file}: negative_test must end with .neg")
 
 
+def validate_rules() -> None:
+    validate_rule_dir(RULES_DIR)
+    validate_rule_dir(CODEX_RULES_DIR)
+
+
 def find_yq() -> str:
     yq = shutil.which("yq")
     if yq is None:
@@ -120,16 +127,21 @@ def yq_value(expr: str) -> str:
     ).stdout.strip()
 
 
-def validate_entry_file() -> None:
-    text = CLAUDE_FILE.read_text()
+def validate_entry_file(path: pathlib.Path) -> None:
+    text = path.read_text()
     max_lines = int(yq_value(".governance.entry_md_max_lines"))
     line_count = len(text.splitlines())
     if line_count > max_lines:
-        raise ValueError(f"{CLAUDE_FILE}: line count {line_count} exceeds {max_lines}")
+        raise ValueError(f"{path}: line count {line_count} exceeds {max_lines}")
     anchors = yq_value(".governance.entry_md_required_anchors[]").splitlines()
     for anchor in anchors:
         if anchor not in text:
-            raise ValueError(f"{CLAUDE_FILE}: missing required anchor {anchor}")
+            raise ValueError(f"{path}: missing required anchor {anchor}")
+
+
+def validate_entry_files() -> None:
+    validate_entry_file(CLAUDE_FILE)
+    validate_entry_file(AGENTS_FILE)
 
 
 def validate_governance_counts() -> None:
@@ -157,7 +169,7 @@ def main() -> int:
     try:
         validate_config_exists()
         validate_rules()
-        validate_entry_file()
+        validate_entry_files()
         validate_governance_counts()
     except (ValueError, subprocess.CalledProcessError) as exc:
         print(str(exc), file=sys.stderr)

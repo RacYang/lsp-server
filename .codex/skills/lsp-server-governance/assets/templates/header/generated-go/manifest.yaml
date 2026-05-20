@@ -1,0 +1,10 @@
+id: generated-go
+purpose: Go 派生产物文件头
+applies_to_glob: "**/*.pb.go"
+coverage_cell: crosscut/generated
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "Code generated .* DO NOT EDIT\\."
+related_rules: [generated-marker]
+related_commands: [update-ssot]

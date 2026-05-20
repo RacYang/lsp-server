@@ -1,0 +1,16 @@
+---
+description: 提交历史禁止出现 SSOT 明确禁用的 Trailer（当前含 Made-with）
+alwaysApply: true
+---
+
+# Git 提交 Trailer
+
+- SSOT 中 `git.trailers.forbidden` 当前禁止 `Made-with` 进入提交历史。
+- `commit-msg` hook 会先移除禁用 trailer，再由 `scripts/verify-commit-msg.py` 校验最终提交信息。
+- 直接校验提交消息文件时，若仍包含禁用 trailer，验证必须失败。
+
+---
+
+- **ADR**：`docs/adr/0007-git-workflow-policy.md`
+- **Enforcer**：`scripts/verify-commit-msg.py`
+- **负例**：`.build/negatives/commit_forbidden_trailer.txt.neg`

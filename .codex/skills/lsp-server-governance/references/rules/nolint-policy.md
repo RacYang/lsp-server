@@ -1,0 +1,16 @@
+---
+description: nolint 豁免必须指向已启用 linter 且写明同行原因
+globs: ["**/*.go"]
+---
+
+# nolint 豁免策略
+
+- `nolint` 必须写成 `//nolint:<linter>`，不得使用裸 `//nolint`。
+- `<linter>` 必须存在于 `.build/config.yaml` 的 `lint.golangci.enable`。
+- 每条豁免必须在同一行 `//` 后写明原因；可被 SSOT 全局规则表达的，不保留行级豁免。
+
+---
+
+- **ADR**：`docs/adr/0036-static-analysis-and-lint-policy.md`
+- **Enforcer**：`scripts/verify-nolint-policy.py`
+- **负例**：`.build/negatives/nolint_policy_missing_reason.go.neg`

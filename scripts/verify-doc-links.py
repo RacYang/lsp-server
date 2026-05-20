@@ -9,12 +9,16 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOC_PATHS = [
     ROOT / "CLAUDE.md",
+    ROOT / "AGENTS.md",
+    ROOT / ".codex" / "skills" / "lsp-server-governance" / "SKILL.md",
     ROOT / "docs" / "agent-governance" / "coverage-matrix.md",
     *sorted((ROOT / ".claude" / "commands").glob("*.md")),
     *sorted((ROOT / ".claude" / "rules").glob("*.md")),
+    *sorted((ROOT / ".codex" / "skills" / "lsp-server-governance" / "references" / "workflows").glob("*.md")),
+    *sorted((ROOT / ".codex" / "skills" / "lsp-server-governance" / "references" / "rules").glob("*.md")),
 ]
 PATH_PATTERN = re.compile(
-    r"(?<![\w./-])(?P<path>(?:CLAUDE\.md|Makefile|docs/[\w./-]+|\.claude/[\w./-]+|\.build/[\w./-]+|scripts/[\w./-]+)(?:\.(?:md|mdc|yaml|yml|json|py|sh|tmpl|neg))?)"
+    r"(?<![\w./-])(?P<path>(?:CLAUDE\.md|AGENTS\.md|Makefile|docs/[\w./-]+|\.claude/[\w./-]+|\.codex/[\w./-]+|\.build/[\w./-]+|scripts/[\w./-]+)(?:\.(?:md|mdc|yaml|yml|json|py|sh|tmpl|neg))?)"
 )
 IGNORED_PREFIXES = ("https://", "http://")
 

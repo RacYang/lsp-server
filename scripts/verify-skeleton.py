@@ -15,6 +15,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMANDS_DIR = ROOT / ".claude" / "commands"
 RULES_DIR = ROOT / ".claude" / "rules"
 TEMPLATES_DIR = ROOT / ".claude" / "templates"
+CODEX_GOVERNANCE_DIR = ROOT / ".codex" / "skills" / "lsp-server-governance"
+CODEX_WORKFLOWS_DIR = CODEX_GOVERNANCE_DIR / "references" / "workflows"
+CODEX_RULES_DIR = CODEX_GOVERNANCE_DIR / "references" / "rules"
+CODEX_TEMPLATES_DIR = CODEX_GOVERNANCE_DIR / "assets" / "templates"
 MANIFEST_SCHEMA = ROOT / ".build" / "schema" / "manifest.schema.json"
 COMMAND_ANCHORS = ("## When to use", "## Inputs", "## Steps", "## Verify")
 
@@ -51,9 +55,9 @@ def validate_manifest(manifest: pathlib.Path) -> list[str]:
     return errors
 
 
-def validate_commands() -> list[str]:
+def validate_commands(command_dir: pathlib.Path) -> list[str]:
     errors: list[str] = []
-    for cmd in sorted(COMMANDS_DIR.glob("*.md")):
+    for cmd in sorted(command_dir.glob("*.md")):
         text = cmd.read_text()
         for anchor in COMMAND_ANCHORS:
             if anchor not in text:
@@ -69,9 +73,9 @@ def validate_command_file(cmd: pathlib.Path) -> list[str]:
     return [f"{cmd}: missing anchor {anchor}" for anchor in COMMAND_ANCHORS if anchor not in text]
 
 
-def validate_rules() -> list[str]:
+def validate_rules(rule_dir: pathlib.Path) -> list[str]:
     errors: list[str] = []
-    for rule in sorted(RULES_DIR.glob("*.md")):
+    for rule in sorted(rule_dir.glob("*.md")):
         text = rule.read_text()
         if not text.startswith("---\n"):
             errors.append(f"{rule}: missing frontmatter start")
@@ -90,19 +94,19 @@ def validate_rules() -> list[str]:
     return errors
 
 
-def validate_templates() -> list[str]:
+def validate_templates(templates_dir: pathlib.Path) -> list[str]:
     errors: list[str] = []
-    if not TEMPLATES_DIR.exists():
+    if not templates_dir.exists():
         return errors
     if not MANIFEST_SCHEMA.exists():
         errors.append(f"missing manifest schema: {MANIFEST_SCHEMA}")
-    manifests = sorted(TEMPLATES_DIR.glob("**/manifest.yaml"))
+    manifests = sorted(templates_dir.glob("**/manifest.yaml"))
     for manifest in manifests:
         try:
             errors.extend(validate_manifest(manifest))
         except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
             errors.append(f"{manifest}: {exc}")
-    for template_dir in [path for path in TEMPLATES_DIR.glob("*/*") if path.is_dir()]:
+    for template_dir in [path for path in templates_dir.glob("*/*") if path.is_dir()]:
         if not (template_dir / "manifest.yaml").exists():
             errors.append(f"{template_dir}: missing manifest.yaml")
     return errors
@@ -119,7 +123,14 @@ def main() -> int:
     elif args.manifest_file:
         errors = validate_manifest(pathlib.Path(args.manifest_file))
     else:
-        errors = validate_commands() + validate_rules() + validate_templates()
+        errors = (
+            validate_commands(COMMANDS_DIR)
+            + validate_commands(CODEX_WORKFLOWS_DIR)
+            + validate_rules(RULES_DIR)
+            + validate_rules(CODEX_RULES_DIR)
+            + validate_templates(TEMPLATES_DIR)
+            + validate_templates(CODEX_TEMPLATES_DIR)
+        )
     if errors:
         for error in errors:
             print(error, file=sys.stderr)

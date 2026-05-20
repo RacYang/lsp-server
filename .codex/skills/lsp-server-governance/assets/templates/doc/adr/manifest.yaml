@@ -1,0 +1,10 @@
+id: adr
+purpose: ADR 文档骨架
+applies_to_glob: "docs/adr/*.md"
+coverage_cell: design/adr
+verify:
+  - kind: regex
+    path: "{target}"
+    pattern: "## 状态[\\s\\S]+## 背景[\\s\\S]+## 决策"
+related_rules: [docs-chinese]
+related_commands: [add-adr]

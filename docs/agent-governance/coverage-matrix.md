@@ -2,6 +2,8 @@
 
 本文档是 Agent 治理体系的活文档，记录常见任务应使用的 command、template、rule 与 ADR。长期职责边界见 [ADR-0042](../adr/0042-agent-governance.md)。
 
+Claude 与 Codex 治理资产长期双边保留：`.claude/` 是 Claude 入口，`.codex/skills/lsp-server-governance/` 是 Codex 入口。任意一边修改后，必须运行 `make sync-agent-governance` 或 `python3 scripts/sync-agent-governance.py --from codex`，并通过 `make verify-agent-governance-sync`。
+
 ## 生命周期
 
 | 阶段 | 目标 | 入口 |
@@ -57,4 +59,5 @@
 - 每个新增 command 必须能落到一个生命周期阶段。
 - 每个新增 template 必须声明 `coverage_cell`。
 - 每个新增 constraint rule 必须有 ADR、enforcer 与负例。
+- `.claude/rules`、`.claude/commands`、`.claude/templates` 必须与 `.codex/skills/lsp-server-governance/` 下对应镜像保持同步。
 - 如果矩阵提到的资产尚未创建，执行对应阶段时必须优先补齐。
