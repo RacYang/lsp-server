@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	domainroom "racoo.cn/lsp/internal/domain/room"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 func (a *roomActor) doJoin(userID string) (int, error) {
@@ -252,10 +253,17 @@ func (a *roomActor) closeRoomAfterRound() {
 		}
 		a.room.AddRoundScores(scores)
 	}
-	_ = a.room.CloseToSettling()
+	roomLogCtx := logx.WithRoomID(context.Background(), a.room.ID)
+	if err := a.room.CloseToSettling(); err != nil {
+		logx.Warn(roomLogCtx, "房间进入结算态失败", "err", err.Error())
+	}
 	if a.room.CanStartNextHand() {
-		_ = a.room.PrepareNextHand()
+		if err := a.room.PrepareNextHand(); err != nil {
+			logx.Warn(roomLogCtx, "房间准备下一局失败", "err", err.Error())
+		}
 		return
 	}
-	_ = a.room.CloseRoom()
+	if err := a.room.CloseRoom(); err != nil {
+		logx.Warn(roomLogCtx, "房间关闭失败", "err", err.Error())
+	}
 }

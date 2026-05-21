@@ -10,6 +10,7 @@ import (
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // LocalRoomGateway 适配进程内房间服务，供 `cmd/all` 与本地 gate 冒烟复用。
@@ -96,11 +97,17 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 		// 再次复核：lobby.JoinRoom 与 rooms.Join 之间存在 FSM 推进的窗口，
 		// 极端竞态下房间可能已 → playing，按 [L3.1] 必须显式退出。
 		if !roomAcceptsAutoMatchLocal(g.rooms, room.RoomID) {
-			_ = g.lobby.LeaveRoom(ctx, room.RoomID, userID)
+			if err := g.lobby.LeaveRoom(ctx, room.RoomID, userID); err != nil {
+				logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), room.RoomID)
+				logx.Warn(logCtx, "自动匹配竞态退出大厅房间失败", "err", err.Error())
+			}
 			continue
 		}
 		if _, err := g.rooms.Join(ctx, room.RoomID, userID); err != nil {
-			_ = g.lobby.LeaveRoom(ctx, room.RoomID, userID)
+			if leaveErr := g.lobby.LeaveRoom(ctx, room.RoomID, userID); leaveErr != nil {
+				logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), room.RoomID)
+				logx.Warn(logCtx, "自动匹配加入失败后退出大厅房间失败", "err", leaveErr.Error())
+			}
 			continue
 		}
 		_ = padWithBots
@@ -112,7 +119,10 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 	}
 	seat, err := g.rooms.Join(ctx, roomID, userID)
 	if err != nil {
-		_ = g.lobby.LeaveRoom(ctx, roomID, userID)
+		if leaveErr := g.lobby.LeaveRoom(ctx, roomID, userID); leaveErr != nil {
+			logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+			logx.Warn(logCtx, "创建房间加入失败后退出大厅房间失败", "err", leaveErr.Error())
+		}
 		return "", -1, err
 	}
 	_ = padWithBots
@@ -207,7 +217,10 @@ func (g *LocalRoomGateway) Leave(ctx context.Context, roomID, userID string) (fu
 		return nil, fmt.Errorf("nil local room gateway")
 	}
 	if g.lobby != nil {
-		_ = g.lobby.LeaveRoom(ctx, roomID, userID)
+		if err := g.lobby.LeaveRoom(ctx, roomID, userID); err != nil {
+			logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+			logx.Warn(logCtx, "离开房间时同步大厅状态失败", "err", err.Error())
+		}
 	}
 	if err := g.rooms.Leave(ctx, roomID, userID); err != nil {
 		return nil, err
@@ -230,7 +243,10 @@ func (g *LocalRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID s
 			if g.hub != nil && g.hub.IsRegistered(userID, roomID) {
 				return
 			}
-			_ = g.rooms.Leave(context.Background(), roomID, userID)
+			if err := g.rooms.Leave(context.Background(), roomID, userID); err != nil {
+				logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), userID), roomID)
+				logx.Warn(logCtx, "离线超时投降离开房间失败", "err", err.Error())
+			}
 		}
 	}()
 	return nil

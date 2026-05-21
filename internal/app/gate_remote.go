@@ -483,13 +483,18 @@ func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID 
 		}
 		roomClient, _, err := g.roomClientForRoom(context.Background(), roomID)
 		if err != nil {
+			logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), userID), roomID)
+			logx.Warn(logCtx, "离线投降获取 room client 失败", "err", err.Error())
 			return
 		}
-		_, _ = roomClient.ApplyEvent(context.Background(), &clusterv1.ApplyEventRequest{
+		if _, applyErr := roomClient.ApplyEvent(context.Background(), &clusterv1.ApplyEventRequest{
 			RoomId: roomID,
 			UserId: userID,
 			Body:   &clusterv1.ApplyEventRequest_Leave{Leave: &clusterv1.LeaveEvent{}},
-		})
+		}); applyErr != nil {
+			logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), userID), roomID)
+			logx.Warn(logCtx, "离线超时投降事件发送失败", "err", applyErr.Error())
+		}
 	}()
 	return nil
 }
@@ -1083,7 +1088,10 @@ func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID 
 		if g.sess != nil && evt.GetCursor() != "" {
 			cur := evt.GetCursor()
 			for _, uid := range delivered {
-				_ = g.sess.UpdateCursor(streamCtx, uid, cur)
+				if err := g.sess.UpdateCursor(streamCtx, uid, cur); err != nil {
+					logCtx := logx.WithRoomID(logx.WithUserID(streamCtx, uid), roomID)
+					logx.Warn(logCtx, "更新会话游标失败", "cursor", cur, "err", err.Error())
+				}
 			}
 		}
 	}
@@ -1145,13 +1153,17 @@ func (g *remoteRoomGateway) roomAddressForRoom(ctx context.Context, roomID strin
 	}
 	if !ok {
 		if g.routeCache != nil {
-			_ = g.routeCache.DeleteRoomRouteCache(ctx, roomID)
+			if err := g.routeCache.DeleteRoomRouteCache(ctx, roomID); err != nil {
+				logx.Warn(logx.WithRoomID(ctx, roomID), "删除房间路由缓存失败", "err", err.Error())
+			}
 		}
 		return "", fmt.Errorf("room owner not found: %s", roomID)
 	}
 	nodeID := resolvedNodeID
 	if g.routeCache != nil && cachedNodeID != resolvedNodeID {
-		_ = g.routeCache.PutRoomRouteCache(ctx, roomID, redis.RouteRecord{RoomNodeID: resolvedNodeID}, 0)
+		if err := g.routeCache.PutRoomRouteCache(ctx, roomID, redis.RouteRecord{RoomNodeID: resolvedNodeID}, 0); err != nil {
+			logx.Warn(logx.WithRoomID(ctx, roomID), "写入房间路由缓存失败", "err", err.Error())
+		}
 	}
 	nodeInfo, ok, err := g.discovery.ResolveNode(ctx, nodeid.KindRoom, nodeID)
 	if err != nil {
