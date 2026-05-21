@@ -21,7 +21,7 @@
 ## 2. 关键发现
 
 - §N 在 cli 这一侧的状态机长期已经按 `Reconnecting` / `SnapshotStep` / `NetStatusOffline` 三条独立信号驱动，但**这些不变量从未被打上 spec 编号**。本段主要工作是把它们逐条钉死：未来重构 reducer / 网络层时，破坏 `[N1.2]` 或 `[N1.3]` 的提交会立刻在 cli 包内红，比"等到联调出 bug"早 N 天。
-- `[N1.3]` 的 stale-drop 通道目前覆盖 `InitialDeal / DrawTile / Action / ExchangeThreeDone / QueMenDone / StartGame` 六类增量（见 `envelopeStep`）。`Settlement / RouteRedirect / Snapshot` 自身不走 step 切点（前者属"窗口结束"事件、后者本身就是权威源）。如果未来加新的 step-bearing notify，应当**同步扩展 `envelopeStep`**——这是一处典型的"加字段不扩 switch 就会漏丢弃"陷阱，建议下次扩展时先补 N1.3 用例再加字段。
+- `[N1.3]` 的 stale-drop 通道目前覆盖 `InitialDeal / DrawTile / Action / OpeningDone / StartGame` 五类增量（见 `envelopeStep`）。`Settlement / RouteRedirect / Snapshot` 自身不走 step 切点（前者属"窗口结束"事件、后者本身就是权威源）。如果未来加新的 step-bearing notify，应当**同步扩展 `envelopeStep`**——这是一处典型的"加字段不扩 switch 就会漏丢弃"陷阱，建议下次扩展时先补 N1.3 用例再加字段。
 - `[N2.1]` 离桌时**目前没有 confirm 弹窗**。`runtime.room.allow_leave_during_play=true` 时离桌会被服务端判弃局，玩家可能因为误按 Enter 而失分；`[R3.1]` 已经把"必须显式提示"列为 MUST，但 cli 这一侧仍在 `A20` 候选。本段先把 Offline + Enter 的 RPC 链路钉死，confirm 提示作为下一轮 UX 单独提。
 - `[N4.1]` 与 `[L10.1]` 共用 `BlockingError` 路径（A13 已修复），本段不重复回归。但要注意：**重连过程**中收到非 OK LoginResp 时也必须走同一路径，而不是仅在首登失败时阻断；现状 `silent_login.go` 已经把两条路径合并到同一 reducer，回归用例分布在 `TestPlayerJourney_G11_*` 与 `TestSilentLogin*`。
 

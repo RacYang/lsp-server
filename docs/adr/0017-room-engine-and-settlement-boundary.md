@@ -10,12 +10,16 @@ date: 2026-04-27
 
 已采纳。
 
+## 当前实现状态
+
+本 ADR 完成了双引擎收敛。ADR-0040 后，结算边界进一步泛化：`room` 运行路径不直接依赖四川血战结构，统一记录 `WinEvent` / `ScoreEvent` 并调用规则策略生成 `SettlementResult`。四川血战、国标 MCR 等玩法差异只存在于各自规则包。
+
 ## 背景
 
 Phase 4 之前，项目存在两套相似的牌局引擎：
 
 - `internal/service/game.Engine`：早期用于自动回放与端到端冒烟。
-- `internal/service/room.Engine`：当前真实客户端交互主链路，承载 actor 串行状态、换三张、定缺、摸打、抢答、恢复 JSON 与结算推送。
+- `internal/service/room.Engine`：当前真实客户端交互主链路，承载 actor 串行状态、通用局流程、动作窗口、恢复 JSON 与结算推送；换三张、定缺等只由规则策略投影。
 
 两套引擎都能生成 `client.v1` 通知，并各自维护一份自动回放和结算逻辑。Phase 5 将补完血战多胡、点炮、抢杠、退税、查叫、杠分流水等规则；继续保留双引擎会导致规则与结算实现漂移。
 
@@ -29,7 +33,7 @@ Phase 4 之前，项目存在两套相似的牌局引擎：
 
 ### 2. 结算归属规则包
 
-当前 MVP 结算从 `room` 包迁移到 `internal/mahjong/sichuan/xuezhandaodi.BuildSettlement`。`room` 引擎只负责在一局结束时收集运行态并调用规则包生成：
+历史 MVP 结算从 `room` 包迁移到 `internal/mahjong/sichuan/xuezhandaodi.BuildSettlement`。当前实现中，`room` 引擎只负责在一局结束时收集通用事实并调用当前规则包的 `SettlementPolicy` 生成：
 
 - `SeatScore`
 - `PenaltyItem`
@@ -40,13 +44,13 @@ Phase 5.3 扩展 `HuContext` / `ScoreContext`，把以下字段纳入规则接�
 - `HuSource`：`tsumo` / `discard` / `qiang_gang` / `bu_gang`。
 - `GangRecord`：杠牌座位、杠类型、牌、来源座位、责任座位与步骤。
 - 和牌场况：`IsHaiDi`、`IsGangShangHua`、`Discarder`、`ResponsibleSeat`、`WallRemaining`。
-- 计分场况：每家根牌、杠流水、自摸标记、缺门数组与剩余牌数。
+- 计分场况：每家根牌、杠流水、自摸标记、规则投影与剩余牌数。
 
-当前 `xuezhandaodi.ScoreFans` 接受扩展后的结构但暂不消费，后续每条血战规则 PR 在这些字段上增量实现。
+历史阶段由 `xuezhandaodi.ScoreFans` 消费这些上下文；当前生产规则必须通过显式 `ScoringPolicy` / `SettlementPolicy` 接入。
 
-### 2.1 Phase 5.3 score ledger 与分摊口径
+### 2.1 Phase 5.3 ScoreEvent 与分摊口径
 
-Phase 5.3 将 `RoundState.totalFanBySeat` 替换为结算流水 `ScoreEntry`。房间层只负责把胡牌与杠牌事实追加到流水；`xuezhandaodi.BuildSettlement` 在局末 fold 出座位总分、罚分、退税与 `per_winner_breakdown`。
+Phase 5.3 将 `RoundState.totalFanBySeat` 替换为结算流水。当前模型进一步收口为通用 `ScoreEvent`：房间层只负责追加胡牌、杠牌等通用计分事实；具体规则包在局末 fold 出座位总分、罚分、退税与 `per_winner_breakdown`。
 
 胡牌分摊口径如下：
 
@@ -73,6 +77,6 @@ Phase 5.3 将 `RoundState.totalFanBySeat` 替换为结算流水 `ScoreEntry`。�
 
 ## 后果
 
-- 后续血战规则只需修改 `internal/mahjong/sichuan/xuezhandaodi` 与 `rules` 上下文，不需要同步双引擎。
+- 后续玩法只需修改对应规则包、规则测试与必要协议投影，不需要同步双引擎或改 room 主流程。
 - `internal/service/room/engine_auto.go` 成为唯一自动回放入口。
-- `BuildSettlement` 已完成 Phase 5.3 的查叫、花猪、退税、杠分流水与 `per_winner_breakdown` 折叠；后续规则深化应继续通过 `rules.ScoreContext` 与 `ScoreEntry` 扩展，而不是在传输层拼接口径。
+- 四川规则包已完成 Phase 5.3 的查叫、花猪、退税、杠分流水与 `per_winner_breakdown` 折叠；后续规则深化应继续通过 `rules.ScoreContext`、`ScoreEvent` 与规则策略扩展，而不是在传输层拼接口径。

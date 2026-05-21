@@ -44,12 +44,7 @@
 | 18 | 离房请求 | `leave_room_req` | C→S |
 | 19 | 离房响应 | `leave_room_resp` | S→C |
 | 20 | 路由重定向 | `route_redirect` | S→C |
-| 21 | 换三张请求 | `exchange_three_req` | C→S |
-| 22 | 换三张响应 | `exchange_three_resp` | S→C |
-| 23 | 换三张完成通知 | `exchange_three_done` | S→C |
-| 24 | 定缺请求 | `que_men_req` | C→S |
-| 25 | 定缺响应 | `que_men_resp` | S→C |
-| 26 | 定缺完成通知 | `que_men_done` | S→C |
+| 21-26 | 已删除并保留 | opening 旧专属消息号 | - |
 | 27 | 快照通知 | `snapshot` | S→C |
 | 28 | 碰响应 | `pong_resp` | S→C |
 | 29 | 杠响应 | `gang_resp` | S→C |
@@ -71,13 +66,24 @@
 | 45 | 规则列表响应 | `list_rules_resp` | S→C |
 | 46 | 吃请求 | `chi_req` | C→S |
 | 47 | 吃响应 | `chi_resp` | S→C |
+| 48 | 开局动作请求 | `opening_action_req` | C→S |
+| 49 | 开局动作响应 | `opening_action_resp` | S→C |
+| 50 | 开局完成通知 | `opening_done` | S→C |
+
+`opening_action_req` 是所有规则开局动作的当前唯一提交入口，`opening_done` 是所有开局步骤完成后的当前唯一完成投影。旧的 `exchange_three_req` / `que_men_req` / `exchange_three_done` / `que_men_done` 已从当前 proto 与 msgid 中删除；编号和 Envelope 字段号只作为 reserved 历史槽位保留，不复用。
+
+`exchange_three`、`que_men`、`chi` 等动作名是协议动作投影；服务端是否在 `available_actions` / `waiting_action` 中投影它们，只由当前规则策略决定。客户端不得把这些动作名解释为 room 内部固定阶段。开局动作提交时，客户端把该动作名放入 `OpeningActionRequest.action`，其它参数通过 `tiles`、`direction`、`suit` 或 `params` 传递，具体含义由规则包 `OpeningPolicy.Apply` 解释。开局完成时，服务端把规则投影放入 `OpeningDoneNotify.action/kind/params/seat_tiles/seat_ints/local_tiles`；客户端只消费这些服务端权威字段，不本地推导玩法。
+
+客户端本地也不得重新引入 `exchange` / `que_men` 专属 phase。换三张、定缺可以作为 UI 文案、光标模式或快捷键 adapter 出现，但本地局内阶段必须仍是 generic opening，输入许可只看 `PhaseUpdate.reason=OPENING`、`waiting_action`、`available_actions` 与 `acting_seats`。
+
+`PhaseUpdate.reason` 使用通用等待窗口：所有开局步骤统一为 `WAITING_REASON_OPENING`，具体开局动作只看 `waiting_action` / `available_actions`。旧的开局专用 reason 已废弃，不再作为当前客户端令牌输入。
 
 ## Phase 3 登录与重连（节选）
 
 - `LoginRequest.session_token` 非空时表示尝试恢复；服务端校验 Redis 中的令牌摘要与会话记录。
 - `LoginResponse.session_token` 为新签发或沿用（重连成功时与请求相同）的不透明令牌；`resumed` 表示是否恢复上下文；`resume_cursor` 为建议保存的事件游标。
 - `session_token` 绑定用户会话，不绑定具体 `gate` 副本；同集群内任意 `gate` 都应能恢复大厅态或牌桌态。
-- 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`；其中 `your_hand_tiles` 仅包含当前连接所属座位的手牌，`discards_by_seat` 与 `melds_by_seat` 用于兼容旧客户端，结构化桌面应优先读取 `meld_infos_by_seat`。`phase`、`acting_seats`、`last_step`、`last_action`、`wall_remaining` 与 `deadline_unix_ms` 是局内恢复的权威切点，客户端应丢弃 `step <= last_step` 的陈旧推进事件。
+- 重连成功后服务端可额外推送一帧 `msg_id=27` 的 `SnapshotNotify`，载荷为 `Envelope.snapshot`；其中 `your_hand_tiles` 仅包含当前连接所属座位的手牌，`discards_by_seat`、`melds_by_seat` 与 `meld_infos_by_seat` 都是当前快照投影。`phase`、`acting_seats`、`last_step`、`last_action`、`wall_remaining` 与 `deadline_unix_ms` 是局内恢复的权威切点，客户端应丢弃 `step <= last_step` 的陈旧推进事件。
 
 ## 业务错误码（ErrorCode 节选）
 
@@ -94,7 +100,7 @@
 
 - `discard_req` 已打通到 `ws -> gate -> room.ApplyEvent -> room actor -> StreamEvents`，服务端进入真正的“等待摸牌/等待出牌”循环，而不是 `ready` 后自动整局回放。
 - `Envelope.idempotency_key` 可由客户端为会改变房间状态的请求生成。WS 入口会对已知状态变更请求做进程内去重，未知 `msg_id` 不进入幂等缓存。
-- `pong_req` / `chi_req` / `gang_req` / `hu_req` / `pass_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口，`pass_req` 表示当前被询问玩家主动放弃本次抢答或自摸选择。四川血战默认 `ClaimPolicy` 不产生 `chi` 候选，但协议、网关和 room engine 链路必须存在。
+- `pong_req` / `chi_req` / `gang_req` / `hu_req` / `pass_req` 都有显式响应帧；`hu_req` 支持自摸、点炮胡与抢杠胡窗口，`pass_req` 表示当前被询问玩家主动放弃本次抢答或自摸选择。四川血战默认 `ClaimPolicy` 不产生 `chi` 候选，但协议、网关和 room engine 链路必须存在；其它规则可通过策略开放 `chi`，无需改 room 主流程。
 - 服务端只允许当前最高优先级候选响应抢答窗口。候选主动 `pass_req` 后，服务端移除该候选并接力下一 top candidate；若无人可抢，则关闭窗口并继续摸牌。每个接力候选拿到完整 `ClaimWindow`。
 - 当某玩家摸牌后可自摸时，服务端先广播一条 `action.action = "tsumo_choice"` 的提示；客户端可发送 `hu_req` 胡牌，也可发送 `pass_req` 表示不胡。主动过会把摸到的牌加入手牌并进入 `discard` 等待态，让玩家自行选牌打出；真人超时不得默认胡牌或打出 `pendingDraw`，只能显式过或判该席 `surrendered`。
 - `SnapshotNotify` 现已追加 `acting_seat`、`acting_seats`、`phase`、`waiting_action`、`pending_tile`、`available_actions`、`claim_candidates` 与 `last_step`，用于重连后恢复当前等待态。`SnapshotNotify.state` 只表示房间 FSM（waiting/ready/playing/settling/closed），局内进度优先以 `phase` 为准；`waiting_action` 只表示服务端等待的动作类型。
@@ -114,7 +120,8 @@
 
 - `SnapshotNotify.state` 只表示 `RoomLifecycle`，值域为 `waiting`、`ready`、`playing`、`settling`、`closed`。它不表达换三张、摸牌、出牌或抢答等局内阶段。
 - `phase` 表示 `RoundProgress` 中的局内阶段。Go 实现中应使用 `RoundPhase` 等命名避免与房间 FSM 混淆。
-- `waiting_action` 表示服务端正在等待的动作类型，值域为 `exchange_three`、`que_men`、`discard`、`claim_window`、`tsumo_window`、`none` 或空值。`draw`、`摸牌中` 等展示状态不是合法 `waiting_action`。
+- `PHASE_OPENING` 是唯一开局阶段。换三张、定缺或未来规则的开局步骤只通过 `waiting_action` / `available_actions` 表达，不再有专属 phase。
+- `waiting_action` 表示服务端正在等待的动作类型，值域来自规则策略和通用动作管线。`exchange_three`、`que_men` 是兼容动作名，只有对应规则投影时才出现；`discard`、`claim_window`、`tsumo_window`、`none` 或空值用于通用摸打等待态。`draw`、`摸牌中` 等展示状态不是合法 `waiting_action`。
 - `PHASE_DRAW` 表示局内进度处于摸牌推进阶段，客户端可据此展示“摸牌中”；但它不是可提交动作的等待态，输入许可仍以 `available_actions`、`acting_seats` 和候选窗口为准。
 - `acting_seats` 使用复数语义，覆盖换三张、定缺、抢答候选和单座位出牌等场景。客户端不得只凭单个 `acting_seat` 推断权限。
 - `SeatInfo` 是座位名册与状态的权威来源。客户端不得本地改写 `is_bot`、`online`、`auto_play`、`status` 或 `hand_count` 来弥补响应缺口。

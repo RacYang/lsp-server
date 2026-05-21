@@ -20,7 +20,7 @@ Phase 4 已提供 `ApplyTimeout` 托管入口，但没有后台调度器；测�
 - 每个 room actor 持有 `roomScheduler`。actor 在状态推进后按当前等待态重置定时器。
 - 定时器回调只调用 `submitAutoTimeout` 向同一 mailbox 投递命令，不直接读写 `RoundState`。
 - 托管产生的通知通过 `Service.SetAutoTimeoutHandler` 交给本地 Hub 或 room gRPC server 处理，沿用现有广播、持久化和事件流路径。
-- 配置暴露 `room.timeout.exchange_three`、`que_men`、`claim_window`、`tsumo_window`、`discard`；未配置时使用 `15s / 15s / 3s / 3s / 15s`。
+- 当前实现已把开局等待收口为通用 `opening`；配置暴露 `room.timeout.opening` 与可选 `room.timeout.opening_by_action`，摸打窗口继续使用 `claim_window`、`tsumo_window`、`discard`。未配置时开局动作默认 15s。
 - `session.Hub` 记录 `lastHeartbeat`，可通过注入时钟关闭超时连接；关闭连接本身不直接改变房间 FSM。
 - WebSocket 关闭后由 gate 安排 `runtime.room.surrender_after_offline` 延迟任务；超时前若 Hub 已重新注册同一用户与房间，则任务退出；否则向 room actor 投递 surrender 路径。该延迟与 `runtime.room.surrender_action_timeout` 分工不同：前者决定离线多久后接管，后者决定已 surrender 座位在局内动作窗口中的托管响应速度。
 

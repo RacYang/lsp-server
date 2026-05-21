@@ -10,6 +10,10 @@ date: 2026-04-22
 
 已采纳。
 
+## 当前实现状态
+
+ADR-0040/RuleState opaque 化后，`round_json` 的恢复边界从“某个血战快照字段集合”升级为通用局面事实、`rule_id`、opaque `rule_state`、`win_events` 与 `score_events`。当前实现已硬切：低版本、缺版本或高版本快照都不可恢复，由上层降级重新准备。
+
 ## 背景
 
 客户端 WebSocket 易断；`gate` 需在重连后恢复房间上下文。若 `session_token` 仅可解析而不可校验，任意客户端可冒充他人会话；若快照与 `StreamEvents` 回放边界不清，会出现重复或漏事件。
@@ -37,7 +41,7 @@ date: 2026-04-22
 
 - 归属以 etcd 为准（[ADR-0008](0008-cluster-topology-control-data-plane.md)、[ADR-0011](0011-room-affinity-routing.md)）。  
 - `room` 进程启动后，对当前节点 claim 的活跃 `room_id`：读 Redis `snapmeta`、PG `game_summaries` 与 `room_events` 推导到一致 `seq` 的最小一致状态并重建单房 actor；恢复完成前对该房拒绝 `SnapshotRoom` / `StreamEvents` / `ApplyEvent` 或返回 `ERROR_CODE_RECONNECTING`。
-- `snapmeta` 中的 `round_json` 保存进行中局的最小权威事实：轮到谁、是否处于自摸待决、碰/杠抢答候选窗口、四家手牌、剩余牌墙、定缺、已累计番数。
+- `snapmeta` 中的 `round_json` 保存进行中局的最小权威事实：轮到谁、是否处于自摸待决、碰/杠抢答候选窗口、四家手牌、剩余牌墙、`rule_id`、opaque `rule_state`、`win_events` 与 `score_events`。定缺、换三张提交态等规则私有事实只通过当前 `rule_state` 保存和投影。
 - 恢复后保证继续处理 `discard_req` / `hu_req` / 合法的 `pong_req` / `gang_req`，并通过 `StreamEvents(since_cursor=snapshot_cursor)` 让客户端补齐可见历史。
 - 碰/杠抢答窗口按候选座位与候选动作恢复；更复杂的弃牌后胡牌优先级、过手限制等规则仍通过后续 ADR 收敛。
 

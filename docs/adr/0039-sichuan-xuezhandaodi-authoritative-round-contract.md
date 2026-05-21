@@ -10,6 +10,10 @@ date: 2026-05-07
 
 已采纳。
 
+## 当前实现状态
+
+本 ADR 仍记录四川血战联调阶段的权威局内契约。ADR-0040 后，契约已被泛化为“通用 room 管线 + 规则策略包”：换三张方向、定缺、提交态等四川私有事实由四川规则包保存在 opaque `rule_state` 中，并通过 `RuleStateProjector` 投影给协议；room 不再读取 `RoundState.exchangeDirection` 这类规则私有字段。
+
 ## 背景
 
 四川血战交互链路曾把玩家命令、托管命令、局内阶段、手牌增量和广播载荷混在同一批窄事件里推进。典型问题包括：碰牌后服务端替玩家自动出牌、换三张非法选牌被静默替换、托管换三张方向与玩家已选方向冲突、客户端 `StartGame` 把阶段拉回换三张，以及摸牌明文被全房广播。
@@ -19,7 +23,7 @@ date: 2026-05-07
 ## 决策
 
 1. Room Engine 区分玩家显式命令与托管命令。玩家入口严格校验并只完成玩家已请求的动作；托管入口才允许自动选择换三张、定缺或出牌。
-2. 换三张方向是 `RoundState.exchangeDirection` 的局共识字段。`ExchangeThreeRequest.direction` 仅作为首个有效 hint；后续玩家和托管均读取服务端权威方向。
+2. 换三张方向是四川规则包私有状态中的局共识字段，并通过规则投影下发。`ExchangeThreeRequest.direction` 仅作为首个有效 hint；后续玩家和托管均读取服务端权威方向。
 3. `client.v1` 追加 `Phase`、`step`、`acting_seats` 与 `SnapshotNotify.last_step` 字段。客户端优先读取服务端 phase，并用 snapshot step 丢弃快照之前的陈旧推进事件。
 4. `Notification` 引入 public / per-seat privacy。隐私敏感事件必须由网关按座位投影，摸牌第一批落地为本人可见牌面、他人仅见摸牌动作。
 5. lsp-cli 的请求响应以 `req_id` 关联，不再只按响应类型等待。事件总线在订阅缓冲满时丢弃最旧事件，避免新响应被旧事件挤掉。

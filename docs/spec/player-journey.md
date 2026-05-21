@@ -40,6 +40,8 @@ Esc 一旦绑定了"退出 cli / 返回 / 打开局内菜单"等多重职责，�
 
 ## 0.1 标准依据
 
+本 spec 以默认规则 `sichuan_xuezhandaodi_huansanzhang` 的玩家旅程为主；换三张、定缺、缺门灰显和血战续行是该默认规则的服务端投影，不是所有麻将规则的通用房间模型。通用输入许可仍只依赖 `RoundProgress.acting_seats` 与 `available_actions`。
+
 - 玩法（外部权威）：
   - [维基百科 · 四川麻將](https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E9%BA%BB%E5%B0%87)
   - [四川麻将游戏规则详解（血战到底/血流成河）](https://cns-scmajianggame.com/rules)
@@ -121,9 +123,9 @@ Esc 一旦绑定了"退出 cli / 返回 / 打开局内菜单"等多重职责，�
 - `[E1.1] (MUST)` `RoundProgress.waiting_action=exchange_three` 时本家必须看到完整 13 张权威手牌；任何错位视为缺陷。
 - `[E1.2] (MUST)` 选 3 张必须强制同一花色（万/筒/条）；UI 在选第二张异花色时即拒绝标记，不依赖服务端兜底。
 - `[E2.1] (MUST)` 键位：`←/→` 移光标、`Space` 标记 / 取消、`Enter` 在 `已选 3/3` 时提交。底栏必须实时显示 `已选 N/3`。
-- `[E2.2] (MUST)` 服务端拒绝（`ExchangeThreeResponse.error_code` 非 OK）必须把原因落到 UXTransient notice，并保留 marked 状态让玩家改选。
+- `[E2.2] (MUST)` 服务端拒绝（`OpeningActionResponse.error_code` 非 OK，`action=exchange_three`）必须把原因落到 UXTransient notice，并保留 marked 状态让玩家改选。
 - `[E3.1] (MUST)` 服务端按 `RoundState.exchangeDirection`（ADR-0039 决策 2）执行交换；客户端不得自行猜方向或本地复刻交换结果。
-- `[E3.2] (MUST)` `ExchangeThreeDoneNotify` 到达后，本家手牌必须由服务端权威投影更新（旧 3 张消失 + 新 3 张出现），cli 不得生成过渡帧。
+- `[E3.2] (MUST)` `OpeningDoneNotify(action=exchange_three)` 到达后，本家手牌必须由服务端权威投影更新（旧 3 张消失 + 新 3 张出现），cli 不得生成过渡帧。
 - `[E4.1] (SHOULD)` 三家完成后桌心或顶栏短暂提示"换三张完成"，提示不得阻塞下一帧输入。
 - `[E4.2] (MAY)` 换牌瞬间允许新牌入手动画 / 高光。
 
@@ -150,7 +152,7 @@ Esc 一旦绑定了"退出 cli / 返回 / 打开局内菜单"等多重职责，�
 - `[D2.4] (MUST)` 出牌超时按 surrender 处理：达 `runtime.room.surrender_action_timeout` 后服务端必须直接判该席 `surrendered`（弃局），不得替玩家选任何具体牌；该席退出本局摸打轮转，桌内剩余玩家按 ROOM-FSM 继续推进。客户端按 `[G13]` 渲染该席为 `▲ 弃局`。
 - `[D3.1] (SHOULD)` 桌心必须显示最近一打（`SnapshotNotify.last_action` / `ActionNotify.detail`），含座位方位与玩家昵称。
 - `[D3.2] (SHOULD)` 自家牌河、他家牌河必须按 `RoundFacts.discards` 投影；不得用按键回放估算。
-- `[D4.1] (MUST)` 已胡座位（`hued_seats` 含）不参与摸打轮转；TUI 在该座位显示"已胡"明确状态。
+- `[D4.1] (MUST)` 默认四川血战下，已胡座位由服务端规则投影标记，不参与后续摸打轮转；TUI 在该座位显示"已胡"明确状态。其它规则是否首胡终局、胡后退出或继续参与，只看服务端 `available_actions`、座位状态和结算投影。
 - `[D4.2] (MUST)` 牌墙剩牌数（`wall_remaining`）必须实时显示且与权威字段相等；零和耗尽时进入流局路径而非继续摸。
 - `[D5.1] (MUST)` 杠的三种执行形态（直杠 `zhi_gang` / 暗杠 `an_gang` / 补杠 `bu_gang`）必须由服务端 `MeldInfo.kind` 区分；TUI 副露轨道按形态展示，不混淆。
 - `[D5.2] (MUST)` 暗杠在他家视角只显示"暗杠"占位，不暴露具体牌（与 `[G9]` 联动）。
@@ -263,7 +265,7 @@ Esc 一旦绑定了"退出 cli / 返回 / 打开局内菜单"等多重职责，�
 - `636fbaa fix(cli): 防止座位手牌错位` → 反 `[E1.1]` / `[D1.2]`：换三张/摸打过程中自家手牌错位。回归断言：自家 seat_index 与 user_id 在整局不漂移，手牌索引稳定。
 - `936e82e fix(cli): 修复牌桌交互与机器人同步` → 反 `[P1.1]` / `[P1.2]`：机器人补位与本地座位状态投影不一致。回归断言：所有 SeatInfo 字段不被 cli 本地写回。
 - `4a6231c fix(cli): 修复牌桌状态同步与机器人回填` → 反 `[G3]` / `[G4]`：本地/集群事件信息量不等价。回归断言：local 与 cluster 模式下同 trace_id 事件序列字段集合相等。
-- `f6e765a fix: 修复换三张手牌同步与交互提示` → 反 `[E3.2]` / `[E2.2]`：换三张完成后客户端手牌未按权威投影刷新或拒绝原因被吞。回归断言：`ExchangeThreeDoneNotify` 后下一帧手牌按权威投影替换。
+- `f6e765a fix: 修复换三张手牌同步与交互提示` → 反 `[E3.2]` / `[E2.2]`：换三张完成后客户端手牌未按权威投影刷新或拒绝原因被吞。回归断言：`OpeningDoneNotify(action=exchange_three)` 后下一帧手牌按权威投影替换。
 - `a86afc9 fix(cli): 消除出牌失败提示测试竞态` → 反 `[D2.3]`：出牌失败时手牌恢复与提示链有竞态。回归断言：在所有 `DiscardResponse.error_code != OK` 用例下，下一帧手牌恢复且 notice 非空。
 - 当前未提交 diff（`internal/app/gate_remote.go` + `internal/handler/local_gateway.go` 的 AutoMatch 探活） → 反 `[L3.1]`：AutoMatch 把玩家塞进 playing 房。回归断言：local 与 remote 两条 gateway 路径均通过 `SnapshotRoom`/`stage` 跳过 playing/settling 房，并能在没有空房时回落到 CreateRoom。
 - 现状：`cmd/cli/scene_lobby.go` 私密房创建后直接进入预备页，无显式房间码展示步骤 → 反 `[L5.2]` / `[P4.2]` 的 MUST 部分。回归断言：私密房创建后下一帧在 `SceneRoomPrep` 顶栏可见 `room_id` 子串，且持续可见直到 `RoomLifecycle=playing`。

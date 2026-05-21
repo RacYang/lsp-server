@@ -22,7 +22,8 @@ date: 2026-05-08
 2. `region` 表示地域、流派或规则来源；`variant` 表示玩法名称；`option` 表示可组合玩法选项。即使某玩法暂时只有一种形态，也必须显式填写 `option`，默认使用 `biaozhun`。
 3. 禁止拼音首字母缩写、英文与拼音混写、缺少 `option` 段的规则 ID。
 4. Go 包路径是实现细节，应尽量与地域和玩法全拼保持一致，但不得作为对外契约替代 `rule_id`。
-5. 当前四川血战到底注册两套规则：
+5. 当前注册规则：
+   - `guobiao_jingji_biaozhun`
    - `sichuan_xuezhandaodi_huansanzhang`
    - `sichuan_xuezhandaodi_biaozhun`
 6. 后端通过规则注册表提供 `ListRules` 能力，客户端不再硬编码可用规则清单。

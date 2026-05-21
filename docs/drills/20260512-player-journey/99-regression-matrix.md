@@ -21,9 +21,9 @@
 | `[E1.1]` | P1 | A14 | `TestPlayerJourney_E1_1_ExchangeThreeKeepsThirteenAuthoritativeTiles` | `state_apply.go` |
 | `[E1.2]` | P1 | A14 | `TestPlayerJourney_E1_2_ExchangeMarkRejectsCrossSuit` | `table_screen.go::sameExchangeSuit` |
 | `[E2.1]` | P1 | A14 | `TestCentralPromptStates`（更新断言为「已选 N/3」字面） | `interaction.go::primaryPrompt` |
-| `[E2.2]` | P1 | A14 | `TestPlayerJourney_E2_2_ExchangeThreeRejectionSurfacesNotice` | `state_apply.go::Envelope_ExchangeThreeResp` |
+| `[E2.2]` | P1 | A14 | `TestPlayerJourney_E2_2_ExchangeThreeRejectionSurfacesNotice` | `state_apply.go::Envelope_OpeningActionResp` |
 | `[Q1.1]` | P1 | A15 | `TestPlayerJourney_Q1_1_QueMenKeysOnlyMPS` + `TestPlayerJourney_Q1_1_QueMenKeysSilentWhenNotAllowed` | `table_screen.go` |
-| `[Q1.2]` | P1 | A15 | `TestPlayerJourney_Q1_2_QueMenDoneFillsRoster` | `state_apply.go::applyQueMenDone` |
+| `[Q1.2]` | P1 | A15 | `TestPlayerJourney_Q1_2_OpeningMissingSuitDoneFillsRoster` | `state_apply.go::applyOpeningMissingSuitDone` |
 | `[Q2.1]` | P2 | A15 | `TestCentralPromptStates`（hint 含「选定后不可更改」断言） | `interaction.go` |
 | `[Q2.2]` | P1 | A16 | `TestPlayerJourney_Q2_2_QueSuitTileDecodingAndCursorOverlay` | `seat_tiles.go::drawSouthHand` |
 | `[D1.1]` | P1 | A16 | `TestPlayerJourney_D1_1_PhaseDrawDoesNotWriteWaitingAction` | `state_apply.go` |
