@@ -113,8 +113,8 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		rs.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
 		rs.SetAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay)
 		rs.SetTimeoutConfig(roomsvc.TimeoutConfig{
-			ExchangeThree:   cfg.RoomTimeouts.ExchangeThree,
-			QueMen:          cfg.RoomTimeouts.QueMen,
+			OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
+			OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
 			ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
 			TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
 			Discard:         cfg.RoomTimeouts.Discard,

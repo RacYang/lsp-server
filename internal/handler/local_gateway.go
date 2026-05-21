@@ -303,22 +303,11 @@ func (g *LocalRoomGateway) Pass(ctx context.Context, roomID, userID string, tok 
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32, tok *clientv1.PhaseToken) (func(), error) {
+func (g *LocalRoomGateway) OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.ExchangeThree(ctx, roomID, userID, tiles, direction, roomsvc.PhaseTokenFromProto(tok))
-	if err != nil {
-		return nil, err
-	}
-	return g.broadcastAfter(roomID, notifications), nil
-}
-
-func (g *LocalRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32, tok *clientv1.PhaseToken) (func(), error) {
-	if g == nil || g.rooms == nil {
-		return nil, fmt.Errorf("nil local room gateway")
-	}
-	notifications, err := g.rooms.QueMen(ctx, roomID, userID, suit, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.OpeningAction(ctx, roomID, userID, action, tiles, direction, suit, params, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, err
 	}
@@ -402,10 +391,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 	}
 	view, _, _ := g.rooms.RoundView(ctx, srec.RoomID)
 	mySeat := seatIndexForUser(players, uid)
-	var queSuits []int32
-	if roundJSON, err := g.rooms.RoundPersistSnapshot(ctx, srec.RoomID); err == nil && len(roundJSON) > 0 {
-		queSuits, _ = roomsvc.QueSuitsFromPersistJSON(roundJSON)
-	}
+	queSuits := append([]int32(nil), view.QueBySeat...)
 	snap := &clientv1.SnapshotNotify{
 		RoomId:           srec.RoomID,
 		PlayerIds:        append([]string(nil), players...),

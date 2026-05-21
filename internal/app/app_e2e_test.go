@@ -266,29 +266,35 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				hand = append([]string(nil), hand[3:]...)
 				req := &clientv1.Envelope{
 					ReqId: fmt.Sprintf("exchange-%d", n),
-					Body: &clientv1.Envelope_ExchangeThreeReq{
-						ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles},
+					Body: &clientv1.Envelope_OpeningActionReq{
+						OpeningActionReq: &clientv1.OpeningActionRequest{
+							Action: "exchange_three",
+							Tiles:  tiles,
+						},
 					},
 				}
 				pb, err := proto.Marshal(req)
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ExchangeThreeReq, pb)); err != nil {
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.OpeningActionReq, pb)); err != nil {
 					return nil, err
 				}
 			case "que_men":
 				req := &clientv1.Envelope{
 					ReqId: fmt.Sprintf("que-%d", n),
-					Body: &clientv1.Envelope_QueMenReq{
-						QueMenReq: &clientv1.QueMenRequest{Suit: 0},
+					Body: &clientv1.Envelope_OpeningActionReq{
+						OpeningActionReq: &clientv1.OpeningActionRequest{
+							Action: "que_men",
+							Suit:   0,
+						},
 					},
 				}
 				pb, err := proto.Marshal(req)
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.QueMenReq, pb)); err != nil {
+				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.OpeningActionReq, pb)); err != nil {
 					return nil, err
 				}
 			case "pong_choice":

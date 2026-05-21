@@ -75,26 +75,15 @@ func passErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope,
 	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PassResp{PassResp: &clientv1.PassResponse{}}}, after
 }
 
-func exchangeThreeErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
+func openingActionErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
 	if err != nil {
-		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{
+		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_OpeningActionResp{OpeningActionResp: &clientv1.OpeningActionResponse{
 			ErrorCode:    actionErrorCode(err),
 			ErrorMessage: err.Error(),
 			PhaseUpdate:  phaseUpdateFromActionError(err),
 		}}}, nil
 	}
-	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{}}}, after
-}
-
-func queMenErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
-	if err != nil {
-		return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_QueMenResp{QueMenResp: &clientv1.QueMenResponse{
-			ErrorCode:    actionErrorCode(err),
-			ErrorMessage: err.Error(),
-			PhaseUpdate:  phaseUpdateFromActionError(err),
-		}}}, nil
-	}
-	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_QueMenResp{QueMenResp: &clientv1.QueMenResponse{}}}, after
+	return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_OpeningActionResp{OpeningActionResp: &clientv1.OpeningActionResponse{}}}, after
 }
 
 func actionErrorCode(err error) clientv1.ErrorCode {
@@ -141,10 +130,8 @@ func outboundMsgID(kind roomsvc.Kind) (uint16, bool) {
 	switch kind {
 	case roomsvc.KindInitialDeal:
 		return msgid.InitialDealNotify, true
-	case roomsvc.KindExchangeThreeDone:
-		return msgid.ExchangeThreeDone, true
-	case roomsvc.KindQueMenDone:
-		return msgid.QueMenDone, true
+	case roomsvc.KindOpeningDone:
+		return msgid.OpeningDone, true
 	case roomsvc.KindStartGame:
 		return msgid.StartGame, true
 	case roomsvc.KindDrawTile:

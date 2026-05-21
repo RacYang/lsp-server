@@ -8,22 +8,24 @@ option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
 enum Phase {
   PHASE_UNSPECIFIED = 0;
   PHASE_LOBBY = 1;
-  PHASE_EXCHANGE = 2;
-  PHASE_QUE_MEN = 3;
+  reserved 2, 3;
+  reserved "PHASE_EXCHANGE", "PHASE_QUE_MEN";
   PHASE_DRAW = 4;
   PHASE_DISCARD = 5;
   PHASE_CLAIM = 6;
   PHASE_TSUMO = 7;
   PHASE_SETTLE = 8;
   PHASE_CLOSED = 9;
+  PHASE_OPENING = 10;
 }
 
 // WaitingReason 与 client.v1.WaitingReason 保持同编号；详见 ADR-0045。
 enum WaitingReason {
   WAITING_REASON_UNSPECIFIED = 0;
   WAITING_REASON_NONE = 1;
-  WAITING_REASON_EXCHANGE_THREE = 2;
-  WAITING_REASON_QUE_MEN = 3;
+  WAITING_REASON_OPENING = 2;
+  reserved 3;
+  reserved "WAITING_REASON_EXCHANGE_THREE", "WAITING_REASON_QUE_MEN";
   WAITING_REASON_CLAIM_WINDOW = 4;
   WAITING_REASON_TSUMO = 5;
   WAITING_REASON_DISCARD = 6;
@@ -57,18 +59,19 @@ service RoomService {
 
 message ApplyEventRequest {
   string room_id = 1;
+  reserved 7, 8;
+  reserved "exchange_three", "que_men";
   oneof body {
     ReadyEvent ready = 2;
     DiscardEvent discard = 3;
     PongEvent pong = 4;
     GangEvent gang = 5;
     HuEvent hu = 6;
-    ExchangeThreeEvent exchange_three = 7;
-    QueMenEvent que_men = 8;
     PassEvent pass = 11;
     LeaveEvent leave = 12;
     JoinEvent join = 14;
     ChiEvent chi = 15;
+    OpeningActionEvent opening_action = 16;
   }
   string idempotency_key = 9;
   string user_id = 10;
@@ -147,15 +150,16 @@ message SeatInfo {
 // RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
 message RoomServiceStreamEventsResponse {
   string room_id = 1;
+  reserved 6, 7;
+  reserved "exchange_three_done", "que_men_done";
   oneof body {
     StartGameEvent start_game = 2;
     DrawTileEvent draw_tile = 3;
     ActionEvent action = 4;
     SettlementEvent settlement = 5;
-    ExchangeThreeDoneEvent exchange_three_done = 6;
-    QueMenDoneEvent que_men_done = 7;
     RouteRedirectEvent route_redirect = 8;
     InitialDealEvent initial_deal = 10;
+    OpeningDoneEvent opening_done = 12;
   }
   string cursor = 9;
   // target_seat 为 -1 时广播；0..3 时仅发送给指定座位。
@@ -182,14 +186,12 @@ message HuEvent {}
 
 message PassEvent {}
 
-message ExchangeThreeEvent {
-  repeated string tiles = 1;
-  // 1=顺时针 2=对家 3=逆时针（四家必须提交一致方向）
-  int32 direction = 2;
-}
-
-message QueMenEvent {
-  int32 suit = 1;
+message OpeningActionEvent {
+  string action = 1;
+  repeated string tiles = 2;
+  int32 direction = 3;
+  int32 suit = 4;
+  map<string, string> params = 5;
 }
 
 message StartGameEvent {
@@ -247,22 +249,33 @@ message SettlementEvent {
   PhaseUpdate phase_update = 10;
 }
 
-message ExchangeThreeDoneEvent {
-  repeated SeatTiles seat_tiles = 1;
-  repeated string your_exchanged_away = 2;
-  Phase phase = 3;
-  int64 step = 4;
-  repeated int32 acting_seats = 5;
-  int32 direction = 6;
-  PhaseUpdate phase_update = 7;
+message OpeningSeatTiles {
+  string key = 1;
+  repeated SeatTiles seats = 2;
 }
 
-message QueMenDoneEvent {
-  repeated int32 que_suit_by_seat = 1;
-  Phase phase = 2;
-  int64 step = 3;
-  repeated int32 acting_seats = 4;
-  PhaseUpdate phase_update = 5;
+message OpeningSeatInts {
+  string key = 1;
+  repeated int32 values = 2;
+}
+
+message OpeningLocalTiles {
+  string key = 1;
+  repeated string tiles = 2;
+}
+
+message OpeningDoneEvent {
+  string action = 1;
+  string step_id = 2;
+  string kind = 3;
+  map<string, string> params = 4;
+  repeated OpeningSeatTiles seat_tiles = 5;
+  repeated OpeningSeatInts seat_ints = 6;
+  repeated OpeningLocalTiles local_tiles = 7;
+  Phase phase = 8;
+  int64 step = 9;
+  repeated int32 acting_seats = 10;
+  PhaseUpdate phase_update = 11;
 }
 
 message RouteRedirectEvent {

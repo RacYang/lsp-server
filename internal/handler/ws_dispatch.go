@@ -43,10 +43,8 @@ func dispatchFrame(
 		handleHeartbeat(deps, conn, state, h.Payload)
 	case msgid.RenameReq:
 		handleRename(ctx, deps, conn, state, h.Payload)
-	case msgid.ExchangeThreeReq:
-		handleExchangeThree(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.QueMenReq:
-		handleQueMen(ctx, deps, conn, state, h.MsgID, h.Payload)
+	case msgid.OpeningActionReq:
+		handleOpeningAction(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.LeaveRoomReq:
 		handleLeaveRoom(ctx, deps, conn, state, h.MsgID, h.Payload)
 	case msgid.DiscardReq:

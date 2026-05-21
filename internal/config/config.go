@@ -32,11 +32,11 @@ type Config struct {
 
 // RoomTimeouts 定义房间各等待态服务端托管超时。
 type RoomTimeouts struct {
-	ExchangeThree time.Duration
-	QueMen        time.Duration
-	ClaimWindow   time.Duration
-	TsumoWindow   time.Duration
-	Discard       time.Duration
+	OpeningDefault  time.Duration
+	OpeningByAction map[string]time.Duration
+	ClaimWindow     time.Duration
+	TsumoWindow     time.Duration
+	Discard         time.Duration
 }
 
 // RuntimeConfig 定义可在运行时 YAML 中调整的容量与限流参数。
@@ -169,11 +169,11 @@ func Load(path string) (Config, error) {
 		ObsAddr:              v.GetString("obs.addr"),
 		EtcdEndpoints:        v.GetString("etcd.endpoints"),
 		RoomTimeouts: RoomTimeouts{
-			ExchangeThree: v.GetDuration("room.timeout.exchange_three"),
-			QueMen:        v.GetDuration("room.timeout.que_men"),
-			ClaimWindow:   v.GetDuration("room.timeout.claim_window"),
-			TsumoWindow:   v.GetDuration("room.timeout.tsumo_window"),
-			Discard:       v.GetDuration("room.timeout.discard"),
+			OpeningDefault:  v.GetDuration("room.timeout.opening"),
+			OpeningByAction: roomTimeoutActionDurations(v.GetStringMapString("room.timeout.opening_by_action")),
+			ClaimWindow:     v.GetDuration("room.timeout.claim_window"),
+			TsumoWindow:     v.GetDuration("room.timeout.tsumo_window"),
+			Discard:         v.GetDuration("room.timeout.discard"),
 		},
 		Runtime: RuntimeConfig{
 			GateWSRateLimitPerSecond:   v.GetFloat64("runtime.gate.ws_rate_limit_per_second"),
@@ -211,4 +211,18 @@ func Load(path string) (Config, error) {
 		}.withDefaults(),
 	}
 	return cfg, nil
+}
+
+func roomTimeoutActionDurations(raw map[string]string) map[string]time.Duration {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]time.Duration, len(raw))
+	for action, value := range raw {
+		dur, err := time.ParseDuration(strings.TrimSpace(value))
+		if err == nil && strings.TrimSpace(action) != "" {
+			out[strings.TrimSpace(action)] = dur
+		}
+	}
+	return out
 }

@@ -3,6 +3,8 @@ package room
 import (
 	"context"
 	"fmt"
+
+	"racoo.cn/lsp/internal/mahjong/rules"
 )
 
 // ApplyTimeout 执行服务端超时兜底；真人座位超时不得替玩家选择收益动作。
@@ -16,17 +18,15 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 	if rs.closed {
 		return nil, fmt.Errorf("round closed")
 	}
-	if rs.waitingExchange {
-		for seat, done := range rs.exchangeSubmitted {
-			if !done && !rs.isSurrendered(Seat(seat)) {
-				return e.surrenderExchangeSeat(rs, Seat(seat))
-			}
+	rs.ensureRuleRuntime()
+	if rs.waitingOpening {
+		step, ok := rs.currentOpeningStep()
+		if !ok {
+			return nil, fmt.Errorf("round not waiting for opening action")
 		}
-	}
-	if rs.waitingQueMen {
-		for seat, done := range rs.queSubmitted {
+		for seat, done := range rs.openingSubmitted(step.Action) {
 			if !done && !rs.isSurrendered(Seat(seat)) {
-				return e.surrenderQueMenSeat(ctx, rs, Seat(seat))
+				return e.surrenderOpeningSeat(rs, Seat(seat), step)
 			}
 		}
 	}
@@ -47,6 +47,14 @@ func (e *Engine) ApplyTimeout(ctx context.Context, rs *RoundState) ([]Notificati
 		return e.surrenderTurnAndContinue(ctx, rs, rs.turn)
 	}
 	return nil, fmt.Errorf("round not waiting for action")
+}
+
+func (e *Engine) surrenderOpeningSeat(rs *RoundState, seat Seat, step *rules.OpeningStep) ([]Notification, error) {
+	if step == nil {
+		return nil, fmt.Errorf("round not waiting for opening action")
+	}
+	rs.markSurrendered(seat)
+	return e.applyOpeningAction(rs, seat, rules.OpeningActionName(step.Action), nil, 0, 0, nil, true, true)
 }
 
 func (rs *RoundState) isSurrendered(seat Seat) bool {

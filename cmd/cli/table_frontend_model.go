@@ -274,6 +274,9 @@ func actionWindowFromFacts(view RoomView, local TableLocalUI, now time.Time, all
 }
 
 func disabledReasonFromModel(view RoomView, local TableLocalUI, model TableFrontendModel) string {
+	if model.ScreenPhase == TableScreenSettlement {
+		return ""
+	}
 	if view.SeatIndex < 0 || view.SeatIndex > 3 {
 		return "尚未入座"
 	}

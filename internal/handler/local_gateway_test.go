@@ -20,11 +20,14 @@ func TestLocalRoomGatewayListRules(t *testing.T) {
 	g := NewLocalRoomGateway(nil, nil, nil)
 	rules, err := g.ListRules(context.Background())
 	require.NoError(t, err)
-	require.Len(t, rules, 2)
-	require.Equal(t, "sichuan_xuezhandaodi_biaozhun", rules[0].GetRuleId())
-	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", rules[1].GetRuleId())
-	require.NotContains(t, rules[0].GetEnabledFeatures(), "exchange_three")
-	require.Contains(t, rules[1].GetEnabledFeatures(), "exchange_three")
+	require.Len(t, rules, 3)
+	require.Equal(t, "guobiao_jingji_biaozhun", rules[0].GetRuleId())
+	require.Equal(t, "sichuan_xuezhandaodi_biaozhun", rules[1].GetRuleId())
+	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", rules[2].GetRuleId())
+	require.Contains(t, rules[0].GetEnabledFeatures(), "mcr_81_fans")
+	require.Contains(t, rules[0].GetEnabledFeatures(), "full_tiles")
+	require.NotContains(t, rules[1].GetEnabledFeatures(), "exchange_three")
+	require.Contains(t, rules[2].GetEnabledFeatures(), "exchange_three")
 }
 
 func TestLocalRoomGatewayNilErrors(t *testing.T) {
@@ -45,9 +48,9 @@ func TestLocalRoomGatewayNilErrors(t *testing.T) {
 	require.Error(t, err)
 	_, err = g.Hu(ctx, "r", "u", nil)
 	require.Error(t, err)
-	_, err = g.ExchangeThree(ctx, "r", "u", nil, 0, nil)
+	_, err = g.OpeningAction(ctx, "r", "u", "exchange_three", nil, 0, 0, nil, nil)
 	require.Error(t, err)
-	_, err = g.QueMen(ctx, "r", "u", 0, nil)
+	_, err = g.OpeningAction(ctx, "r", "u", "que_men", nil, 0, 0, nil, nil)
 	require.Error(t, err)
 	_, err = g.Resume(ctx, "tok")
 	require.Error(t, err)
@@ -140,11 +143,11 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 		require.True(t, ok)
 		seat := seatIndexForUser(view.PlayerIDs[:], uid)
 		require.GreaterOrEqual(t, seat, 0)
-		_, err = gw.ExchangeThree(ctx, "resume-room", uid, view.HandsBySeat[seat][:3], 0, nil)
+		_, err = gw.OpeningAction(ctx, "resume-room", uid, "exchange_three", view.HandsBySeat[seat][:3], 0, 0, nil, nil)
 		require.NoError(t, err)
 	}
 	for _, uid := range []string{"resume-user", "u2", "u3", "u4"} {
-		_, err = gw.QueMen(ctx, "resume-room", uid, 0, nil)
+		_, err = gw.OpeningAction(ctx, "resume-room", uid, "que_men", nil, 0, 0, nil, nil)
 		require.NoError(t, err)
 	}
 	require.NoError(t, mgr.BindRoom(ctx, "resume-user", "resume-room"))

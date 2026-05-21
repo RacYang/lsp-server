@@ -39,10 +39,7 @@ func (f *fakeResumeGateway) Leave(_ context.Context, _, _ string) (func(), error
 	return nil, nil
 }
 func (f *fakeResumeGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
-func (f *fakeResumeGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
-	return nil, nil
-}
-func (f *fakeResumeGateway) QueMen(_ context.Context, _, _ string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
+func (f *fakeResumeGateway) OpeningAction(_ context.Context, _, _, _ string, _ []string, _, _ int32, _ map[string]string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
 func (f *fakeResumeGateway) Discard(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
@@ -107,10 +104,7 @@ func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) 
 }
 func (g *joinStubGateway) Leave(_ context.Context, _, _ string) (func(), error) { return nil, nil }
 func (g *joinStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
-func (g *joinStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
-	return nil, nil
-}
-func (g *joinStubGateway) QueMen(_ context.Context, _, _ string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
+func (g *joinStubGateway) OpeningAction(_ context.Context, _, _, _ string, _ []string, _, _ int32, _ map[string]string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
 func (g *joinStubGateway) Discard(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {

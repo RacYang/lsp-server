@@ -1,8 +1,10 @@
 // Package hu 提供和牌判定：标准形（四面子一对将）与七对子。
 package hu
 
-// Counts 为 27 维牌张计数表：万 0..8、筒 9..17、条 18..26。
-type Counts [27]int
+import "racoo.cn/lsp/internal/mahjong/tile"
+
+// Counts 为 34 维牌张计数表：万筒条 0..26、字牌 27..33。花牌不参与牌型分解。
+type Counts [tile.PlayableTileCount]int
 
 // Total 返回总张数。
 func (c Counts) Total() int {
@@ -73,7 +75,7 @@ func SevenPairs(c Counts) bool {
 }
 
 func nextNonZero(c Counts) int {
-	for i := 0; i < 27; i++ {
+	for i := 0; i < tile.PlayableTileCount; i++ {
 		if c[i] > 0 {
 			return i
 		}
@@ -105,7 +107,7 @@ func standardFormMelds(c Counts, meldsNeeded int) bool {
 		return false
 	}
 	// 枚举将牌位置
-	for i := 0; i < 27; i++ {
+	for i := 0; i < tile.PlayableTileCount; i++ {
 		if c[i] < 2 {
 			continue
 		}
@@ -130,6 +132,14 @@ func meldN(c Counts, need int) bool {
 	i := nextNonZero(c)
 	if i < 0 {
 		return need == 0
+	}
+	if i >= tile.SuitedTileCount {
+		if c[i] >= 3 {
+			rest := c
+			rest[i] -= 3
+			return meldN(rest, need-1)
+		}
+		return false
 	}
 	suit := i / 9
 	r := i % 9

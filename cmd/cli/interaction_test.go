@@ -16,8 +16,8 @@ func TestDeriveInteractionModelPhases(t *testing.T) {
 	}{
 		{name: "login", view: RoomView{Phase: phaseLogin}, want: PhaseLogin},
 		{name: "lobby", view: RoomView{Phase: phaseLobby}, want: PhaseLobby},
-		{name: "exchange", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "exchange_three"}, want: PhaseExchange},
-		{name: "que", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "que_men"}, want: PhaseQueMen},
+		{name: "exchange", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "exchange_three"}, want: PhaseOpening},
+		{name: "que", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "que_men"}, want: PhaseOpening},
 		{name: "draw", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 1, RoundPhase: clientv1.Phase_PHASE_DRAW, WaitingAction: "none"}, want: PhaseOtherTurn},
 		{name: "discard", view: RoomView{Phase: phaseTable, SeatIndex: 0, ActingSeat: 0, WaitingAction: "discard"}, want: PhaseDiscard},
 		{name: "claim", view: RoomView{Phase: phaseTable, SeatIndex: 1, ActingSeat: 1, WaitingAction: "claim_window", ClaimCandidates: map[int32][]string{1: {"hu", "pass"}}}, want: PhaseClaim},
@@ -39,8 +39,8 @@ func TestExchangeAndQueMenAllowConcurrentSeats(t *testing.T) {
 		want   PlayerAction
 		phase  TablePhase
 	}{
-		{"exchange_three", ActionExchangeThree, PhaseExchange},
-		{"que_men", ActionQueMen, PhaseQueMen},
+		{"exchange_three", ActionExchangeThree, PhaseOpening},
+		{"que_men", ActionQueMen, PhaseOpening},
 	}
 	for _, tc := range cases {
 		t.Run(tc.action, func(t *testing.T) {

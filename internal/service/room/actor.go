@@ -111,21 +111,16 @@ type cmdAutoTimeout struct {
 	res chan actionResult
 }
 
-type cmdExchangeThree struct {
+type cmdOpeningAction struct {
 	userID    string
+	action    string
 	tiles     []string
 	direction int32
+	suit      int32
+	params    map[string]string
 	phaseTok  *PhaseToken
 	ctx       context.Context
 	res       chan actionResult
-}
-
-type cmdQueMen struct {
-	userID   string
-	suit     int32
-	phaseTok *PhaseToken
-	ctx      context.Context
-	res      chan actionResult
 }
 
 type actionResult struct {
@@ -288,27 +283,15 @@ func (a *roomActor) run() {
 			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
-		case cmdExchangeThree:
+		case cmdOpeningAction:
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
-				a.logActionRejected(m.ctx, m.userID, "exchange_three", m.phaseTok, err)
+				a.logActionRejected(m.ctx, m.userID, m.action, m.phaseTok, err)
 				m.res <- actionResult{err: err}
 				continue
 			}
-			notifications, err := a.doExchangeThree(m.userID, m.tiles, m.direction)
+			notifications, err := a.doOpeningAction(m.userID, m.action, m.tiles, m.direction, m.suit, m.params)
 			if err != nil {
-				a.logActionRejected(m.ctx, m.userID, "exchange_three", m.phaseTok, err)
-			}
-			a.resetScheduler()
-			m.res <- actionResult{notifications: notifications, err: err}
-		case cmdQueMen:
-			if err := a.checkPhaseToken(m.phaseTok); err != nil {
-				a.logActionRejected(m.ctx, m.userID, "que_men", m.phaseTok, err)
-				m.res <- actionResult{err: err}
-				continue
-			}
-			notifications, err := a.doQueMen(m.userID, m.suit)
-			if err != nil {
-				a.logActionRejected(m.ctx, m.userID, "que_men", m.phaseTok, err)
+				a.logActionRejected(m.ctx, m.userID, m.action, m.phaseTok, err)
 			}
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
@@ -476,12 +459,18 @@ func (a *roomActor) submitAutoTimeout(ctx context.Context) ([]Notification, erro
 	return a.submitAction(ctx, cmdAutoTimeout{ctx: ctx, res: make(chan actionResult, 1)})
 }
 
-func (a *roomActor) submitExchangeThree(ctx context.Context, userID string, tiles []string, direction int32, tok *PhaseToken) ([]Notification, error) {
-	return a.submitAction(ctx, cmdExchangeThree{userID: userID, tiles: append([]string(nil), tiles...), direction: direction, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
-}
-
-func (a *roomActor) submitQueMen(ctx context.Context, userID string, suit int32, tok *PhaseToken) ([]Notification, error) {
-	return a.submitAction(ctx, cmdQueMen{userID: userID, suit: suit, phaseTok: tok, ctx: ctx, res: make(chan actionResult, 1)})
+func (a *roomActor) submitOpeningAction(ctx context.Context, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *PhaseToken) ([]Notification, error) {
+	return a.submitAction(ctx, cmdOpeningAction{
+		userID:    userID,
+		action:    action,
+		tiles:     append([]string(nil), tiles...),
+		direction: direction,
+		suit:      suit,
+		params:    cloneStringMap(params),
+		phaseTok:  tok,
+		ctx:       ctx,
+		res:       make(chan actionResult, 1),
+	})
 }
 
 // logActionRejected 在 actor 单协程内统一记录动作拒绝日志，覆盖 token 漂移与状态不满足。
@@ -658,10 +647,7 @@ func (a *roomActor) submitAction(ctx context.Context, cmd any) ([]Notification, 
 	case cmdAutoTimeout:
 		rr := <-c.res
 		return rr.notifications, rr.err
-	case cmdExchangeThree:
-		rr := <-c.res
-		return rr.notifications, rr.err
-	case cmdQueMen:
+	case cmdOpeningAction:
 		rr := <-c.res
 		return rr.notifications, rr.err
 	default:

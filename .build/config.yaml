@@ -79,6 +79,8 @@ lint:
   arch:
     layers:
       # 将麻将子包拆分为独立组件，避免 go-arch-lint 将子包 import 误判为跨组件依赖
+      mahjong_builtin: internal/mahjong/builtin/**
+      mahjong_guobiao: internal/mahjong/guobiao/jingji/**
       mahjong_xuezhandaodi: internal/mahjong/sichuan/xuezhandaodi/**
       mahjong_rules: internal/mahjong/rules/**
       mahjong_tile: internal/mahjong/tile/**
@@ -104,6 +106,8 @@ lint:
       pkg: pkg/**
       apigen: api/gen/**
     deny:
+      - from: mahjong_builtin
+        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_xuezhandaodi
         to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
       - from: mahjong_rules
@@ -128,6 +132,8 @@ lint:
         to: [net, handler, cluster, bot, cmd]
       - from: pkg
         to:
+          - mahjong_builtin
+          - mahjong_guobiao
           - mahjong_xuezhandaodi
           - mahjong_rules
           - mahjong_tile
@@ -153,6 +159,8 @@ lint:
           - apigen
       - from: apigen
         to:
+          - mahjong_builtin
+          - mahjong_guobiao
           - mahjong_xuezhandaodi
           - mahjong_rules
           - mahjong_tile
@@ -195,6 +203,7 @@ mahjong:
       - gb
       - hsz
     allowed_ids:
+      - guobiao_jingji_biaozhun
       - sichuan_xuezhandaodi_huansanzhang
       - sichuan_xuezhandaodi_biaozhun
 

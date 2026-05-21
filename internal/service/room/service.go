@@ -32,8 +32,8 @@ type Service struct {
 
 // TimeoutConfig 定义各等待态的服务端托管时长。
 type TimeoutConfig struct {
-	ExchangeThree   time.Duration
-	QueMen          time.Duration
+	OpeningDefault  time.Duration
+	OpeningByAction map[string]time.Duration
 	ClaimWindow     time.Duration
 	TsumoWindow     time.Duration
 	Discard         time.Duration
@@ -43,8 +43,7 @@ type TimeoutConfig struct {
 // DefaultTimeoutConfig 返回 Phase 5 定时器默认值。
 func DefaultTimeoutConfig() TimeoutConfig {
 	return TimeoutConfig{
-		ExchangeThree:   15 * time.Second,
-		QueMen:          15 * time.Second,
+		OpeningDefault:  15 * time.Second,
 		ClaimWindow:     5 * time.Second,
 		TsumoWindow:     15 * time.Second,
 		Discard:         15 * time.Second,
@@ -54,12 +53,23 @@ func DefaultTimeoutConfig() TimeoutConfig {
 
 func (cfg TimeoutConfig) withDefaults() TimeoutConfig {
 	def := DefaultTimeoutConfig()
-	if cfg.ExchangeThree <= 0 {
-		cfg.ExchangeThree = def.ExchangeThree
+	hasOpeningActionOverrides := cfg.OpeningByAction != nil
+	if cfg.OpeningDefault <= 0 {
+		cfg.OpeningDefault = def.OpeningDefault
 	}
-	if cfg.QueMen <= 0 {
-		cfg.QueMen = def.QueMen
+	openingByAction := make(map[string]time.Duration)
+	if !hasOpeningActionOverrides && cfg.OpeningDefault == def.OpeningDefault {
+		for action, dur := range def.OpeningByAction {
+			openingByAction[action] = dur
+		}
+	} else {
+		for action, dur := range cfg.OpeningByAction {
+			if action != "" && dur > 0 {
+				openingByAction[action] = dur
+			}
+		}
 	}
+	cfg.OpeningByAction = openingByAction
 	if cfg.ClaimWindow <= 0 {
 		cfg.ClaimWindow = def.ClaimWindow
 	}
@@ -218,11 +228,11 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 		initialRound.tmo = s.tmo
 		if initialRound.phaseStartUnixMs == 0 && initialRound.phaseReason != ReasonNone {
 			initialRound.phaseStartUnixMs = s.clock.Now().UnixMilli()
-			if dur := s.tmo.DurationFor(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
+			if dur := initialRound.phaseDuration(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
 				initialRound.deadlineUnixMs = initialRound.phaseStartUnixMs + dur.Milliseconds()
 			}
 		} else if initialRound.phaseReason != ReasonNone {
-			if dur := s.tmo.DurationFor(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
+			if dur := initialRound.phaseDuration(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
 				initialRound.deadlineUnixMs = initialRound.phaseStartUnixMs + dur.Milliseconds()
 			}
 		}
@@ -377,22 +387,12 @@ func (s *Service) AutoTimeout(ctx context.Context, roomID string) ([]Notificatio
 	return a.submitAutoTimeout(ctx)
 }
 
-// ExchangeThree 提交换三张确认；最后一名提交后统一换牌并进入定缺阶段。
-func (s *Service) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *PhaseToken) ([]Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitExchangeThree(ctx, userID, tiles, direction, tok)
-}
-
-// QueMen 提交定缺确认；最后一名提交后开局并进入首轮摸牌。
-func (s *Service) QueMen(ctx context.Context, roomID, userID string, suit int32, tok *PhaseToken) ([]Notification, error) {
-	a := s.getActor(roomID)
-	if a == nil {
-		return nil, fmt.Errorf("room not found")
-	}
-	return a.submitQueMen(ctx, userID, suit, tok)
+	return a.submitOpeningAction(ctx, userID, action, tiles, direction, suit, params, tok)
 }
 
 // RoundPersistSnapshot 返回当前进行中牌局的最小可恢复快照。

@@ -539,6 +539,7 @@ func trimLastRune(s string) string {
 
 func fallbackRules() []LobbyRuleMeta {
 	return []LobbyRuleMeta{
+		{RuleID: "guobiao_jingji_biaozhun", DisplayName: "国标麻将（竞技标准）", ShortDesc: "完整牌组、吃碰杠、花牌补花、8 分起胡"},
 		{RuleID: "sichuan_xuezhandaodi_huansanzhang", DisplayName: "四川血战到底（换三张）", ShortDesc: "换三张、定缺、血战到底"},
 		{RuleID: "sichuan_xuezhandaodi_biaozhun", DisplayName: "四川血战到底（标准）", ShortDesc: "定缺、血战到底"},
 	}

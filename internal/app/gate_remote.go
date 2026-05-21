@@ -553,24 +553,18 @@ func (g *remoteRoomGateway) Pass(ctx context.Context, roomID, userID string, tok
 	})
 }
 
-func (g *remoteRoomGateway) ExchangeThree(ctx context.Context, roomID, userID string, tiles []string, direction int32, tok *clientv1.PhaseToken) (func(), error) {
+func (g *remoteRoomGateway) OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *clientv1.PhaseToken) (func(), error) {
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: clientPhaseTokToCluster(tok),
-		Body: &clusterv1.ApplyEventRequest_ExchangeThree{ExchangeThree: &clusterv1.ExchangeThreeEvent{
+		Body: &clusterv1.ApplyEventRequest_OpeningAction{OpeningAction: &clusterv1.OpeningActionEvent{
+			Action:    action,
 			Tiles:     append([]string(nil), tiles...),
 			Direction: direction,
+			Suit:      suit,
+			Params:    cloneStringMap(params),
 		}},
-	})
-}
-
-func (g *remoteRoomGateway) QueMen(ctx context.Context, roomID, userID string, suit int32, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
-		RoomId:     roomID,
-		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
-		Body:       &clusterv1.ApplyEventRequest_QueMen{QueMen: &clusterv1.QueMenEvent{Suit: suit}},
 	})
 }
 
@@ -582,10 +576,8 @@ func clientPhaseTokToCluster(tok *clientv1.PhaseToken) *clusterv1.PhaseToken {
 	}
 	var reason clusterv1.WaitingReason
 	switch tok.GetReason() {
-	case clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
-		reason = clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
-	case clientv1.WaitingReason_WAITING_REASON_QUE_MEN:
-		reason = clusterv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case clientv1.WaitingReason_WAITING_REASON_OPENING:
+		reason = clusterv1.WaitingReason_WAITING_REASON_OPENING
 	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
 		reason = clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
 	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
@@ -916,10 +908,8 @@ func clusterPhaseUpdateToClient(pu *clusterv1.PhaseUpdate) *clientv1.PhaseUpdate
 
 func clusterWaitingReasonToClient(reason clusterv1.WaitingReason) clientv1.WaitingReason {
 	switch reason {
-	case clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
-		return clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
-	case clusterv1.WaitingReason_WAITING_REASON_QUE_MEN:
-		return clientv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case clusterv1.WaitingReason_WAITING_REASON_OPENING:
+		return clientv1.WaitingReason_WAITING_REASON_OPENING
 	case clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
 		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
 	case clusterv1.WaitingReason_WAITING_REASON_TSUMO:
@@ -1309,35 +1299,21 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 				PhaseUpdate:        clusterPhaseUpdateToClient(body.Settlement.GetPhaseUpdate()),
 			}},
 		})
-	case *clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone:
-		perSeat := make([]*clientv1.SeatTiles, 0, len(body.ExchangeThreeDone.GetSeatTiles()))
-		for _, item := range body.ExchangeThreeDone.GetSeatTiles() {
-			perSeat = append(perSeat, &clientv1.SeatTiles{
-				SeatIndex: item.GetSeatIndex(),
-				Tiles:     append([]string(nil), item.GetTiles()...),
-			})
-		}
-		return marshalClientEnvelope(msgid.ExchangeThreeDone, &clientv1.Envelope{
+	case *clusterv1.RoomServiceStreamEventsResponse_OpeningDone:
+		return marshalClientEnvelope(msgid.OpeningDone, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-				PerSeat:           perSeat,
-				YourExchangedAway: append([]string(nil), body.ExchangeThreeDone.GetYourExchangedAway()...),
-				Direction:         body.ExchangeThreeDone.GetDirection(),
-				Phase:             clusterPhaseToClient(body.ExchangeThreeDone.GetPhase()),
-				Step:              body.ExchangeThreeDone.GetStep(),
-				ActingSeats:       append([]int32(nil), body.ExchangeThreeDone.GetActingSeats()...),
-				PhaseUpdate:       clusterPhaseUpdateToClient(body.ExchangeThreeDone.GetPhaseUpdate()),
-			}},
-		})
-	case *clusterv1.RoomServiceStreamEventsResponse_QueMenDone:
-		return marshalClientEnvelope(msgid.QueMenDone, &clientv1.Envelope{
-			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
-				QueSuitBySeat: append([]int32(nil), body.QueMenDone.GetQueSuitBySeat()...),
-				Phase:         clusterPhaseToClient(body.QueMenDone.GetPhase()),
-				Step:          body.QueMenDone.GetStep(),
-				ActingSeats:   append([]int32(nil), body.QueMenDone.GetActingSeats()...),
-				PhaseUpdate:   clusterPhaseUpdateToClient(body.QueMenDone.GetPhaseUpdate()),
+			Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+				Action:      body.OpeningDone.GetAction(),
+				StepId:      body.OpeningDone.GetStepId(),
+				Kind:        body.OpeningDone.GetKind(),
+				Params:      cloneStringMap(body.OpeningDone.GetParams()),
+				SeatTiles:   clusterOpeningSeatTilesToClient(body.OpeningDone.GetSeatTiles()),
+				SeatInts:    clusterOpeningSeatIntsToClient(body.OpeningDone.GetSeatInts()),
+				LocalTiles:  clusterOpeningLocalTilesToClient(body.OpeningDone.GetLocalTiles()),
+				Phase:       clusterPhaseToClient(body.OpeningDone.GetPhase()),
+				Step:        body.OpeningDone.GetStep(),
+				ActingSeats: append([]int32(nil), body.OpeningDone.GetActingSeats()...),
+				PhaseUpdate: clusterPhaseUpdateToClient(body.OpeningDone.GetPhaseUpdate()),
 			}},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_RouteRedirect:
@@ -1359,4 +1335,46 @@ func marshalClientEnvelope(msgID uint16, env *clientv1.Envelope) (uint16, []byte
 		return 0, nil, err
 	}
 	return msgID, payload, nil
+}
+
+func cloneStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func clusterOpeningSeatTilesToClient(in []*clusterv1.OpeningSeatTiles) []*clientv1.OpeningSeatTiles {
+	out := make([]*clientv1.OpeningSeatTiles, 0, len(in))
+	for _, group := range in {
+		seats := make([]*clientv1.SeatTiles, 0, len(group.GetSeats()))
+		for _, item := range group.GetSeats() {
+			seats = append(seats, &clientv1.SeatTiles{
+				SeatIndex: item.GetSeatIndex(),
+				Tiles:     append([]string(nil), item.GetTiles()...),
+			})
+		}
+		out = append(out, &clientv1.OpeningSeatTiles{Key: group.GetKey(), Seats: seats})
+	}
+	return out
+}
+
+func clusterOpeningSeatIntsToClient(in []*clusterv1.OpeningSeatInts) []*clientv1.OpeningSeatInts {
+	out := make([]*clientv1.OpeningSeatInts, 0, len(in))
+	for _, group := range in {
+		out = append(out, &clientv1.OpeningSeatInts{Key: group.GetKey(), Values: append([]int32(nil), group.GetValues()...)})
+	}
+	return out
+}
+
+func clusterOpeningLocalTilesToClient(in []*clusterv1.OpeningLocalTiles) []*clientv1.OpeningLocalTiles {
+	out := make([]*clientv1.OpeningLocalTiles, 0, len(in))
+	for _, group := range in {
+		out = append(out, &clientv1.OpeningLocalTiles{Key: group.GetKey(), Tiles: append([]string(nil), group.GetTiles()...)})
+	}
+	return out
 }

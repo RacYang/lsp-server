@@ -73,11 +73,9 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 	case *clusterv1.ApplyEventRequest_Pass:
 		notifications, err := s.rooms.Pass(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_ExchangeThree:
-		notifications, err := s.rooms.ExchangeThree(ctx, roomID, userID, req.GetExchangeThree().GetTiles(), req.GetExchangeThree().GetDirection(), clusterPhaseTokToRoom(req.GetPhaseToken()))
-		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_QueMen:
-		notifications, err := s.rooms.QueMen(ctx, roomID, userID, req.GetQueMen().GetSuit(), clusterPhaseTokToRoom(req.GetPhaseToken()))
+	case *clusterv1.ApplyEventRequest_OpeningAction:
+		event := req.GetOpeningAction()
+		notifications, err := s.rooms.OpeningAction(ctx, roomID, userID, event.GetAction(), event.GetTiles(), event.GetDirection(), event.GetSuit(), event.GetParams(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *clusterv1.ApplyEventRequest_Leave:
 		if err := s.rooms.Leave(ctx, roomID, userID); err != nil {
@@ -102,10 +100,8 @@ func clusterPhaseTokToRoom(tok *clusterv1.PhaseToken) *roomsvc.PhaseToken {
 	}
 	var reason roomsvc.WaitingReason
 	switch tok.GetReason() {
-	case clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
-		reason = roomsvc.ReasonExchangeThree
-	case clusterv1.WaitingReason_WAITING_REASON_QUE_MEN:
-		reason = roomsvc.ReasonQueMen
+	case clusterv1.WaitingReason_WAITING_REASON_OPENING:
+		reason = roomsvc.ReasonOpening
 	case clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
 		reason = roomsvc.ReasonClaimWindow
 	case clusterv1.WaitingReason_WAITING_REASON_TSUMO:

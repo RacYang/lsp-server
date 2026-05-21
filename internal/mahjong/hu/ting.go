@@ -8,7 +8,7 @@ func TingTiles(c Counts) []tile.Tile {
 		return nil
 	}
 	out := make([]tile.Tile, 0, 9)
-	for idx := 0; idx < 27; idx++ {
+	for idx := 0; idx < tile.PlayableTileCount; idx++ {
 		if c[idx] >= 4 {
 			continue
 		}

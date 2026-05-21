@@ -16,8 +16,7 @@ import (
 type TableGateway interface {
 	Ready(ctx context.Context) error
 	Discard(ctx context.Context, tile string) error
-	ExchangeThree(ctx context.Context, tiles []string, direction int32) error
-	QueMen(ctx context.Context, suit int32) error
+	OpeningAction(ctx context.Context, action PlayerAction, tiles []string, direction, suit int32) error
 	Pong(ctx context.Context) error
 	Chi(ctx context.Context, tiles []string) error
 	Gang(ctx context.Context, tile string) error
@@ -348,11 +347,11 @@ func retryLeaveRoom(ctx context.Context, gateway TableGateway, attempts int, int
 // 本地 SeatIndex 合法，不再要求 model.SelfSeat == model.ActingSeat，避免出现
 // "我能看到提示但按 m/p/s 没反应" 的死锁。
 func submitQueMen(ctx context.Context, gateway TableGateway, model InteractionModel, suit int32) tableEventResult {
-	if model.Phase != PhaseQueMen || model.SelfSeat < 0 || model.SelfSeat > 3 {
+	if model.Phase != PhaseOpening || !containsAction(model.Allowed, ActionQueMen) || model.SelfSeat < 0 || model.SelfSeat > 3 {
 		return tableEventResult{}
 	}
 	go func() {
-		_ = gateway.QueMen(ctx, suit)
+		_ = gateway.OpeningAction(ctx, ActionQueMen, nil, 0, suit)
 	}()
 	return tableEventResult{}
 }
@@ -471,7 +470,7 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 		recordPendingExchange(state, view.SeatIndex, tiles)
 		cursor.SubmitAt(view.LastStep)
 		go func() {
-			if err := gateway.ExchangeThree(ctx, tiles, 0); err != nil {
+			if err := gateway.OpeningAction(ctx, ActionExchangeThree, tiles, 0, 0); err != nil {
 				cursor.RollbackPending()
 				clearPendingExchange(state, view.SeatIndex)
 				noticeAsyncFailure(state, "换三张失败", err)
@@ -484,7 +483,7 @@ func submitCursorAction(ctx context.Context, state *AppState, cursor *HandCursor
 		suit := int32(cursor.Index)
 		cursor.SubmitAt(view.LastStep)
 		go func() {
-			if err := gateway.QueMen(ctx, suit); err != nil {
+			if err := gateway.OpeningAction(ctx, ActionQueMen, nil, 0, suit); err != nil {
 				cursor.RollbackPending()
 				noticeAsyncFailure(state, "定缺失败", err)
 			}

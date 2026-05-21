@@ -6,14 +6,16 @@ import (
 )
 
 func (rs *RoundState) checkSeatHu(seat Seat, target tile.Tile, source rules.HuSource) (rules.HuResult, bool) {
-	if rs == nil || rs.rule == nil || target == 0 || seat < 0 || seat >= SeatCount {
+	if rs == nil || target == 0 || seat < 0 || seat >= SeatCount {
 		return rules.HuResult{}, false
 	}
+	rs.ensureRuleRuntime()
 	idx := int(seat)
-	if idx >= len(rs.hands) || rs.hands[idx] == nil || rs.isHued(seat) || rs.isSurrendered(seat) {
+	if idx >= len(rs.hands) || rs.hands[idx] == nil || rs.isSeatOutAfterHu(seat) || rs.isSurrendered(seat) {
 		return rules.HuResult{}, false
 	}
-	return rs.rule.CheckHu(rs.hands[idx], target, rs.huContextForSeat(seat, source, target))
+	winPolicy := rs.caps.Win
+	return winPolicy.CheckHu(rs.hands[idx], target, rs.huContextForSeat(seat, source, target))
 }
 
 func (rs *RoundState) huContextForSeat(seat Seat, source rules.HuSource, pending tile.Tile) rules.HuContext {
@@ -34,7 +36,7 @@ func (rs *RoundState) huContextForSeat(seat Seat, source rules.HuSource, pending
 		Seat:            seat,
 		Source:          source,
 		PendingTile:     pending,
-		Que:             queSuits(rs.queBySeat),
+		RuleState:       rs.ruleState,
 		Discarder:       discarder,
 		IsHaiDi:         rs.isHaiDi(),
 		IsGangShangHua:  source == rules.HuSourceTsumo && rs.lastGangFollowUp,
@@ -46,20 +48,5 @@ func (rs *RoundState) huContextForSeat(seat Seat, source rules.HuSource, pending
 	if source == rules.HuSourceQiangGang || rs.qiangGangWindow {
 		ctx.Source = rules.HuSourceQiangGang
 	}
-	if rs.hasQueSuit(seat) {
-		queSuit := rs.queBySeat[seat]
-		ctx.HasQueSuit = true
-		ctx.QueSuit = tile.Suit(queSuit) //nolint:gosec // 缺门花色已校验为万、筒、条三种合法值。
-	}
 	return ctx
-}
-
-func (rs *RoundState) hasQueSuit(seat Seat) bool {
-	if rs == nil || seat < 0 || int(seat) >= len(rs.queBySeat) {
-		return false
-	}
-	if int(seat) >= len(rs.queSubmitted) || !rs.queSubmitted[seat] {
-		return false
-	}
-	return rs.queBySeat[seat] >= 0 && rs.queBySeat[seat] <= 2
 }

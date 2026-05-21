@@ -58,6 +58,9 @@ func (s *BotState) RememberExchange(tiles []string) {
 
 func (s *BotState) applyEnvelope(env *clientv1.Envelope) {
 	v := &s.view
+	if pu := extractPhaseUpdate(env); pu != nil {
+		applyBotPhaseUpdate(v, pu)
+	}
 	switch body := env.GetBody().(type) {
 	case *clientv1.Envelope_LoginResp:
 		if body.LoginResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
@@ -82,34 +85,26 @@ func (s *BotState) applyEnvelope(env *clientv1.Envelope) {
 		}
 	case *clientv1.Envelope_StartGame:
 		v.RoomID = body.StartGame.GetRoomId()
-		v.WaitingAction = "exchange_three"
-		v.AvailableAction = []string{"exchange_three"}
 		v.LastSettlement = nil
 	case *clientv1.Envelope_InitialDeal:
 		if body.InitialDeal.GetSeatIndex() == v.SeatIndex {
 			v.HandTiles = sortedTiles(body.InitialDeal.GetTiles())
 		}
-	case *clientv1.Envelope_ExchangeThreeDone:
-		applyExchangeDone(v, body.ExchangeThreeDone, s.pendingExchange)
-		s.pendingExchange = nil
-	case *clientv1.Envelope_QueMenDone:
-		for seat, suit := range body.QueMenDone.GetQueSuitBySeat() {
-			if seat >= 0 && seat < len(v.QueBySeat) {
-				v.QueBySeat[seat] = suit
-			}
+	case *clientv1.Envelope_OpeningDone:
+		applyOpeningDone(v, body.OpeningDone, s.pendingExchange)
+		if body.OpeningDone.GetAction() == string(ActionExchangeThree) || body.OpeningDone.GetKind() == "exchange_done" {
+			s.pendingExchange = nil
 		}
-		v.WaitingAction = "discard"
-		v.AvailableAction = []string{"discard"}
 	case *clientv1.Envelope_DrawTile:
 		applyDraw(v, body.DrawTile)
 	case *clientv1.Envelope_Action:
 		applyAction(v, body.Action)
 	case *clientv1.Envelope_PassResp:
 		if body.PassResp.GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-			if v.WaitingAction == "tsumo_window" {
+			if v.WaitingAction == "tsumo_window" && body.PassResp.GetPhaseUpdate() == nil {
 				v.WaitingAction = "discard"
 				v.AvailableAction = []string{"discard"}
-			} else {
+			} else if body.PassResp.GetPhaseUpdate() == nil {
 				v.AvailableAction = nil
 			}
 			v.ClaimCandidates = map[int32][]string{}
@@ -130,10 +125,26 @@ func (s *BotState) applyEnvelope(env *clientv1.Envelope) {
 	}
 }
 
-func applyExchangeDone(v *BotView, done *clientv1.ExchangeThreeDoneNotify, exchanged []string) {
-	for _, item := range done.GetPerSeat() {
+func applyOpeningDone(v *BotView, done *clientv1.OpeningDoneNotify, exchanged []string) {
+	switch {
+	case done.GetAction() == string(ActionExchangeThree) || done.GetKind() == "exchange_done":
+		applyOpeningExchangeDone(v, done, exchanged)
+	case done.GetAction() == string(ActionQueMen) || done.GetKind() == "missing_suit_done":
+		for seat, suit := range openingSeatInts(done, "que_suit") {
+			if seat >= 0 && seat < len(v.QueBySeat) {
+				v.QueBySeat[seat] = suit
+			}
+		}
+	}
+}
+
+func applyOpeningExchangeDone(v *BotView, done *clientv1.OpeningDoneNotify, exchanged []string) {
+	for _, item := range openingSeatTiles(done, "received") {
 		if item.GetSeatIndex() != v.SeatIndex {
 			continue
+		}
+		if local := openingLocalTiles(done, "exchanged_away"); len(local) > 0 {
+			exchanged = local
 		}
 		for _, t := range exchanged {
 			v.HandTiles = removeOneTile(v.HandTiles, t)
@@ -141,8 +152,112 @@ func applyExchangeDone(v *BotView, done *clientv1.ExchangeThreeDoneNotify, excha
 		v.HandTiles = sortedTiles(append(v.HandTiles, item.GetTiles()...))
 		break
 	}
-	v.WaitingAction = "que_men"
-	v.AvailableAction = []string{"que_men"}
+}
+
+func openingSeatTiles(done *clientv1.OpeningDoneNotify, key string) []*clientv1.SeatTiles {
+	if done == nil {
+		return nil
+	}
+	for _, group := range done.GetSeatTiles() {
+		if group.GetKey() == key {
+			return group.GetSeats()
+		}
+	}
+	return nil
+}
+
+func openingSeatInts(done *clientv1.OpeningDoneNotify, key string) []int32 {
+	if done == nil {
+		return nil
+	}
+	for _, group := range done.GetSeatInts() {
+		if group.GetKey() == key {
+			return group.GetValues()
+		}
+	}
+	return nil
+}
+
+func openingLocalTiles(done *clientv1.OpeningDoneNotify, key string) []string {
+	if done == nil {
+		return nil
+	}
+	for _, group := range done.GetLocalTiles() {
+		if group.GetKey() == key {
+			return append([]string(nil), group.GetTiles()...)
+		}
+	}
+	return nil
+}
+
+func extractPhaseUpdate(env *clientv1.Envelope) *clientv1.PhaseUpdate {
+	if env == nil {
+		return nil
+	}
+	switch body := env.GetBody().(type) {
+	case *clientv1.Envelope_StartGame:
+		return body.StartGame.GetPhaseUpdate()
+	case *clientv1.Envelope_DrawTile:
+		return body.DrawTile.GetPhaseUpdate()
+	case *clientv1.Envelope_Action:
+		return body.Action.GetPhaseUpdate()
+	case *clientv1.Envelope_OpeningDone:
+		return body.OpeningDone.GetPhaseUpdate()
+	case *clientv1.Envelope_Settlement:
+		return body.Settlement.GetPhaseUpdate()
+	case *clientv1.Envelope_Snapshot:
+		return body.Snapshot.GetPhaseUpdate()
+	case *clientv1.Envelope_DiscardResp:
+		return body.DiscardResp.GetPhaseUpdate()
+	case *clientv1.Envelope_OpeningActionResp:
+		return body.OpeningActionResp.GetPhaseUpdate()
+	case *clientv1.Envelope_PongResp:
+		return body.PongResp.GetPhaseUpdate()
+	case *clientv1.Envelope_GangResp:
+		return body.GangResp.GetPhaseUpdate()
+	case *clientv1.Envelope_HuResp:
+		return body.HuResp.GetPhaseUpdate()
+	case *clientv1.Envelope_PassResp:
+		return body.PassResp.GetPhaseUpdate()
+	case *clientv1.Envelope_ReadyResp:
+		return body.ReadyResp.GetPhaseUpdate()
+	default:
+		return nil
+	}
+}
+
+func applyBotPhaseUpdate(v *BotView, pu *clientv1.PhaseUpdate) {
+	if v == nil || pu == nil {
+		return
+	}
+	actions := append([]string(nil), pu.GetAvailableActions()...)
+	v.AvailableAction = actions
+	if acting := pu.GetActingSeats(); len(acting) > 0 {
+		v.ActingSeat = acting[0]
+	} else if pu.GetReason() == clientv1.WaitingReason_WAITING_REASON_NONE {
+		v.ActingSeat = -1
+	}
+	switch pu.GetReason() {
+	case clientv1.WaitingReason_WAITING_REASON_OPENING:
+		v.WaitingAction = firstAction(actions)
+	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
+		v.WaitingAction = "discard"
+	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
+		v.WaitingAction = "claim_window"
+	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
+		v.WaitingAction = "tsumo_window"
+	case clientv1.WaitingReason_WAITING_REASON_NONE:
+		if len(actions) == 0 {
+			v.WaitingAction = ""
+		}
+	}
+}
+
+func firstAction(actions []string) string {
+	if len(actions) == 0 {
+		return ""
+	}
+	return actions[0]
 }
 
 func applyDraw(v *BotView, draw *clientv1.DrawTileNotify) {
@@ -153,8 +268,10 @@ func applyDraw(v *BotView, draw *clientv1.DrawTileNotify) {
 	}
 	v.ActingSeat = seat
 	v.PendingTile = t
-	v.WaitingAction = "discard"
-	v.AvailableAction = []string{"discard"}
+	if draw.GetPhaseUpdate() == nil {
+		v.WaitingAction = "discard"
+		v.AvailableAction = []string{"discard"}
+	}
 	if seat == v.SeatIndex && t != "" {
 		v.HandTiles = sortedTiles(append(v.HandTiles, t))
 	}
@@ -167,17 +284,11 @@ func applyAction(v *BotView, action *clientv1.ActionNotify) {
 	if seat >= 0 && seat < 4 {
 		v.ActingSeat = seat
 	}
+	if action.GetPhaseUpdate() != nil {
+		// PhaseUpdate is authoritative for action windows; action strings are only visible projections.
+		return
+	}
 	switch act {
-	case "exchange_three":
-		if seat == v.SeatIndex {
-			v.WaitingAction = "exchange_three"
-			v.AvailableAction = []string{"exchange_three"}
-		}
-	case "que_men":
-		if seat == v.SeatIndex {
-			v.WaitingAction = "que_men"
-			v.AvailableAction = []string{"que_men"}
-		}
 	case "discard":
 		recordDiscard(v, seat, t)
 	case "pong":

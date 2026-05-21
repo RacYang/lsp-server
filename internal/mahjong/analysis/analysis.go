@@ -10,7 +10,7 @@ import (
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
-// Counts 是与 tile.Tile.Index 对齐的 27 维牌张计数。
+// Counts 是与 tile.Tile.Index 对齐的 34 维牌张计数，不含花牌。
 type Counts = hu.Counts
 
 // PublicInfo 表示当前座位可见的公开牌桌信息。
@@ -228,10 +228,10 @@ func standardShanten(c Counts) int {
 	best := 8
 	var walk func(Counts, int, int, int, bool)
 	walk = func(cur Counts, idx int, melds int, taatsu int, pair bool) {
-		for idx < 27 && cur[idx] == 0 {
+		for idx < tile.PlayableTileCount && cur[idx] == 0 {
 			idx++
 		}
-		if idx >= 27 {
+		if idx >= tile.PlayableTileCount {
 			if taatsu > 4-melds {
 				taatsu = 4 - melds
 			}
@@ -250,9 +250,10 @@ func standardShanten(c Counts) int {
 			next[idx] -= 3
 			walk(next, idx, melds+1, taatsu, pair)
 		}
+		suited := idx < tile.SuitedTileCount
 		suitStart := (idx / 9) * 9
 		pos := idx - suitStart
-		if pos <= 6 && cur[idx+1] > 0 && cur[idx+2] > 0 {
+		if suited && pos <= 6 && cur[idx+1] > 0 && cur[idx+2] > 0 {
 			next := cur
 			next[idx]--
 			next[idx+1]--
@@ -269,13 +270,13 @@ func standardShanten(c Counts) int {
 			next[idx] -= 2
 			walk(next, idx, melds, taatsu+1, pair)
 		}
-		if pos <= 7 && cur[idx+1] > 0 {
+		if suited && pos <= 7 && cur[idx+1] > 0 {
 			next := cur
 			next[idx]--
 			next[idx+1]--
 			walk(next, idx, melds, taatsu+1, pair)
 		}
-		if pos <= 6 && cur[idx+2] > 0 {
+		if suited && pos <= 6 && cur[idx+2] > 0 {
 			next := cur
 			next[idx]--
 			next[idx+2]--
@@ -322,6 +323,9 @@ func suitCounts(ts []tile.Tile) map[tile.Suit]int {
 		tile.SuitBamboo:     0,
 	}
 	for _, t := range ts {
+		if !t.IsSuited() {
+			continue
+		}
 		out[t.Suit()]++
 	}
 	return out
@@ -391,7 +395,7 @@ func countTileInMelds(melds []string, target tile.Tile) int {
 func countTileInMeld(raw string, target tile.Tile) int {
 	n := 0
 	for i := 0; i+1 < len(raw); i++ {
-		if raw[i] != 'm' && raw[i] != 'p' && raw[i] != 's' {
+		if raw[i] != 'm' && raw[i] != 'p' && raw[i] != 's' && raw[i] != 'z' && raw[i] != 'f' {
 			continue
 		}
 		t, err := tile.Parse(raw[i : i+2])

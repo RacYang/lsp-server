@@ -16,8 +16,7 @@ const (
 	PhaseLogin
 	PhaseLobby
 	PhaseWaiting
-	PhaseExchange
-	PhaseQueMen
+	PhaseOpening
 	PhaseDiscard
 	PhaseClaim
 	PhaseTsumo
@@ -122,7 +121,7 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 	}
 	switch view.WaitingAction {
 	case "exchange_three":
-		model.Phase = PhaseExchange
+		model.Phase = PhaseOpening
 		// 川麻血战：换三张是 4 家并发，不存在"轮到谁"的概念。只要本地 SeatIndex 合法
 		// 就给 ActionExchangeThree，让任何座位都能 Space 标记 / Enter 提交。
 		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
@@ -132,7 +131,7 @@ func DeriveInteractionModel(view RoomView) InteractionModel {
 			model.Hint = waitingHint(view)
 		}
 	case "que_men":
-		model.Phase = PhaseQueMen
+		model.Phase = PhaseOpening
 		// 定缺同理：4 家并发选缺一门，不依赖 ActingSeat。
 		if view.SeatIndex >= 0 && view.SeatIndex < 4 {
 			model.Allowed = []PlayerAction{ActionQueMen}
@@ -189,19 +188,17 @@ func DerivePhase(view RoomView, cursor *HandCursor) TablePhase {
 			return PhaseClaim
 		}
 		return PhaseOtherTurn
-	case PhaseExchange:
-		return PhaseExchange
+	case PhaseOpening:
+		if containsAction(model.Allowed, ActionExchangeThree) || containsAction(model.Allowed, ActionQueMen) {
+			return PhaseOpening
+		}
+		return PhaseOtherTurn
 	case PhaseDiscard:
 		if view.SeatIndex == view.ActingSeat {
 			if cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 {
 				return PhaseMyTurnSelected
 			}
 			return PhaseMyTurnIdle
-		}
-		return PhaseOtherTurn
-	case PhaseQueMen:
-		if containsAction(model.Allowed, ActionQueMen) {
-			return PhaseQueMen
 		}
 		return PhaseOtherTurn
 	case PhaseWaiting:
@@ -256,7 +253,7 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 	if ux.PendingFeedback != "" {
 		return ux.PendingFeedback
 	}
-	if phase := ux.Phase; phase == PhaseExchange && cursor != nil && cursor.Mode == CursorModeMulti3 && view.SeatIndex >= 0 {
+	if phase := ux.Phase; phase == PhaseOpening && cursor != nil && cursor.Mode == CursorModeMulti3 && view.SeatIndex >= 0 {
 		// [E2.1] 底栏必须实时显示「已选 N/3」字面格式；满 3 张时切到提交提示。
 		marked := len(cursor.Marked)
 		if marked < 3 {
@@ -264,7 +261,7 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 		}
 		return "换三张：已选 3/3，按 Enter 交换"
 	}
-	if ux.Phase == PhaseQueMen && cursor != nil && cursor.Mode == CursorModeQueMen {
+	if ux.Phase == PhaseOpening && cursor != nil && cursor.Mode == CursorModeQueMen {
 		return fmt.Sprintf("定缺：已选缺%s，Enter 确认（选定后不可更改）", queChoiceLabel(cursor.Index))
 	}
 	if ux.Phase == PhaseMyTurnSelected && cursor != nil && cursor.Mode == CursorModeSingle && cursor.Index >= 0 && view.SeatIndex >= 0 {
@@ -274,10 +271,15 @@ func primaryPrompt(view RoomView, cursor *HandCursor, model InteractionModel, ux
 		}
 	}
 	switch model.Phase {
-	case PhaseExchange:
-		return "换三张：选 3 张同花色"
-	case PhaseQueMen:
-		return "定缺：选一门不要，选定后不可更改"
+	case PhaseOpening:
+		switch {
+		case containsAction(model.Allowed, ActionExchangeThree):
+			return "换三张：选 3 张同花色"
+		case containsAction(model.Allowed, ActionQueMen):
+			return "定缺：选一门不要，选定后不可更改"
+		default:
+			return waitingUXHint(view)
+		}
 	case PhaseDiscard:
 		if containsAction(model.Allowed, ActionDiscard) {
 			return "轮到你：选择一张牌打出"
@@ -308,14 +310,15 @@ func keyHintForUX(view RoomView, cursor *HandCursor, ux TableUXModel) string {
 		return ux.DisabledReason + "　? 帮助"
 	}
 	switch ux.Phase {
-	case PhaseExchange:
+	case PhaseOpening:
+		if containsAction(ux.AllowedActions, ActionQueMen) {
+			return "定缺：←→ 选择缺门　Enter 确认　m/p/s 快捷"
+		}
 		marked := 0
 		if cursor != nil {
 			marked = len(cursor.Marked)
 		}
 		return fmt.Sprintf("换三张：已选 %d/3　←→ 选牌　Space 标记　Enter 确认", marked)
-	case PhaseQueMen:
-		return "定缺：←→ 选择缺门　Enter 确认　m/p/s 快捷"
 	case PhaseMyTurnIdle, PhaseMyTurnSelected:
 		if containsAction(ux.AllowedActions, ActionGang) {
 			return "轮到你：←→ 选牌　Enter 打出　g 杠"
@@ -363,7 +366,7 @@ func disabledReason(view RoomView, cursor *HandCursor, model InteractionModel) s
 		if model.Claim == nil {
 			return "还没轮到你：" + waitingUXHint(view)
 		}
-	case PhaseExchange, PhaseQueMen:
+	case PhaseOpening:
 		if len(model.Allowed) == 0 {
 			return "当前不能操作：" + waitingUXHint(view)
 		}

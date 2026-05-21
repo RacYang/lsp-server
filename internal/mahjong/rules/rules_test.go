@@ -2,7 +2,10 @@ package rules
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 
 	"racoo.cn/lsp/internal/mahjong/fan"
@@ -13,6 +16,36 @@ import (
 
 type fakeRule struct {
 	id string
+}
+
+func TestRuleStateMarshalsOnlyOpaqueFields(t *testing.T) {
+	raw := []byte(`{
+		"schema_version": 2,
+		"data": {"custom": true}
+	}`)
+	var state RuleState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatalf("unmarshal rule state: %v", err)
+	}
+	out, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal rule state: %v", err)
+	}
+	if string(out) != `{"schema_version":2,"data":{"custom":true}}` {
+		t.Fatalf("RuleState must write only opaque fields, got %s", out)
+	}
+}
+
+func TestRuleStateRejectsLegacyEmbeddedFields(t *testing.T) {
+	raw := []byte(`{
+		"schema_version": 2,
+		"data": {"custom": true},
+		"missing_suit_by_seat": [0,1,2,-1]
+	}`)
+	var state RuleState
+	if err := json.Unmarshal(raw, &state); err == nil {
+		t.Fatal("RuleState must reject legacy embedded fields")
+	}
 }
 
 func (f *fakeRule) ID() string { return f.id }
@@ -32,16 +65,6 @@ func (f *fakeRule) CheckHu(h *hand.Hand, target tile.Tile, hc HuContext) (HuResu
 	return HuResult{}, false
 }
 
-func (f *fakeRule) ScoreFans(result HuResult, sc ScoreContext) fan.Breakdown {
-	_ = result
-	_ = sc
-	return fan.Breakdown{}
-}
-
-func (f *fakeRule) GameOver(state GameState) bool {
-	return state.WallRemaining == 0
-}
-
 type capabilityRule struct {
 	fakeRule
 	caps CapabilitySet
@@ -49,6 +72,40 @@ type capabilityRule struct {
 
 func (c *capabilityRule) Capabilities() CapabilitySet {
 	return c.caps
+}
+
+type fakeScoringPolicy struct{}
+
+func (fakeScoringPolicy) FeatureFlags() []string { return nil }
+func (fakeScoringPolicy) ScoreWin(HuResult, ScoreContext) (fan.Breakdown, []ScoreEvent, bool) {
+	return fan.Breakdown{}, nil, false
+}
+func (fakeScoringPolicy) ScoreGang(GangScoreContext) ([]ScoreEvent, GangRecord) {
+	return nil, GangRecord{}
+}
+
+type fakeTerminationPolicy struct{}
+
+func (fakeTerminationPolicy) FeatureFlags() []string { return nil }
+func (fakeTerminationPolicy) GameOver(TerminationContext) bool {
+	return false
+}
+
+func fullCapabilities(r *fakeRule) CapabilitySet {
+	return CapabilitySet{
+		Metadata:    RuleMetadata{DisplayName: "能力测试"},
+		TileSet:     r,
+		Claims:      NoEatingClaimPolicy{},
+		SelfActions: StandardSelfActionPolicy{},
+		Win:         r,
+		State:       EmptyRuleStatePolicy{},
+		StateView:   EmptyRuleStatePolicy{},
+		Turn:        FeatureSet{"test_turn"},
+		Scoring:     fakeScoringPolicy{},
+		Settlement:  FeatureSet{"test_settlement"},
+		Termination: fakeTerminationPolicy{},
+		Projection:  FeatureSet{"test_projection"},
+	}
 }
 
 func TestRegisterAndMustGet(t *testing.T) {
@@ -108,11 +165,43 @@ func TestDuplicateRegisterPanics(t *testing.T) {
 	Register(&fakeRule{id: id})
 }
 
-func TestDefaultCapabilitiesProvideNoEatingClaimPolicy(t *testing.T) {
+func TestCapabilitiesOfRequiresProvider(t *testing.T) {
 	r := &fakeRule{id: "capability_default"}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected CapabilitiesOf to reject rule without provider")
+		}
+	}()
+	_ = CapabilitiesOf(r)
+}
+
+func TestCapabilitiesOfRequiresCompleteRuntimeStrategies(t *testing.T) {
+	r := &capabilityRule{
+		fakeRule: fakeRule{id: "capability_provider_partial"},
+		caps: CapabilitySet{
+			Metadata: RuleMetadata{DisplayName: "能力测试"},
+			Opening:  StaticOpeningFlow{"deal"},
+		},
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected CapabilitiesOf to reject incomplete capability set")
+		}
+	}()
+	_ = CapabilitiesOf(r)
+}
+
+func TestCapabilitiesOfAcceptsExplicitRuntimeStrategies(t *testing.T) {
+	base := &fakeRule{id: "capability_provider_full"}
+	r := &capabilityRule{fakeRule: *base, caps: fullCapabilities(base)}
+	r.caps.Opening = StaticOpeningFlow{"deal"}
+
 	caps := CapabilitiesOf(r)
-	if caps.Claims == nil {
-		t.Fatal("expected default claim policy")
+	if caps.Metadata.DisplayName != "能力测试" {
+		t.Fatalf("metadata mismatch: %+v", caps.Metadata)
+	}
+	if got := caps.Opening.Steps(); fmt.Sprint(got) != "[deal]" {
+		t.Fatalf("unexpected opening steps: %v", got)
 	}
 	target := tile.Must(tile.SuitCharacters, 3)
 	actions := caps.Claims.Candidates(ClaimContext{
@@ -134,24 +223,48 @@ func TestDefaultCapabilitiesProvideNoEatingClaimPolicy(t *testing.T) {
 	}
 }
 
-func TestCapabilitiesOfProviderFillsMissingClaimPolicy(t *testing.T) {
-	r := &capabilityRule{
-		fakeRule: fakeRule{id: "capability_provider"},
-		caps: CapabilitySet{
-			Metadata: RuleMetadata{DisplayName: "能力测试"},
-			Opening:  StaticOpeningFlow{"deal"},
-		},
+func TestRulesPackageDoesNotContainRuntimeFallbackAdapters(t *testing.T) {
+	src, err := os.ReadFile("rules.go")
+	if err != nil {
+		t.Fatalf("read rules.go: %v", err)
 	}
-	caps := CapabilitiesOf(r)
-	if caps.Metadata.DisplayName != "能力测试" {
-		t.Fatalf("metadata mismatch: %+v", caps.Metadata)
+	ruleInterface := ruleInterfaceSource(t, string(src))
+	for _, forbidden := range []string{
+		"BuildWall(",
+		"CheckHu(",
+		"ScoreFans(",
+		"GameOver(",
+	} {
+		if strings.Contains(ruleInterface, forbidden) {
+			t.Fatalf("Rule interface must be metadata-only and must not contain %q", forbidden)
+		}
 	}
-	if caps.Claims == nil {
-		t.Fatal("expected fallback claim policy")
+	for _, forbidden := range []string{
+		"legacyTileSetPolicy",
+		"legacyWinPolicy",
+		"legacyScoringPolicy",
+		"legacyTerminationPolicy",
+		"默认能力",
+		"fallback",
+	} {
+		if strings.Contains(string(src), forbidden) {
+			t.Fatalf("rules.go must not contain runtime fallback adapter %q", forbidden)
+		}
 	}
-	if got := caps.Opening.Steps(); fmt.Sprint(got) != "[deal]" {
-		t.Fatalf("unexpected opening steps: %v", got)
+}
+
+func ruleInterfaceSource(t *testing.T, src string) string {
+	t.Helper()
+	start := strings.Index(src, "type Rule interface {")
+	if start < 0 {
+		t.Fatal("missing Rule interface")
 	}
+	rest := src[start:]
+	end := strings.Index(rest, "\n}")
+	if end < 0 {
+		t.Fatal("unterminated Rule interface")
+	}
+	return rest[:end]
 }
 
 func TestFeatureSetReturnsCopy(t *testing.T) {

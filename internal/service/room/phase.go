@@ -21,8 +21,7 @@ type WaitingReason int
 
 const (
 	ReasonNone WaitingReason = iota
-	ReasonExchangeThree
-	ReasonQueMen
+	ReasonOpening
 	ReasonClaimWindow
 	ReasonTsumo
 	ReasonDiscard
@@ -33,10 +32,8 @@ const (
 // String 用于结构化日志输出。
 func (r WaitingReason) String() string {
 	switch r {
-	case ReasonExchangeThree:
-		return "exchange_three"
-	case ReasonQueMen:
-		return "que_men"
+	case ReasonOpening:
+		return "opening"
 	case ReasonClaimWindow:
 		return "claim_window"
 	case ReasonTsumo:
@@ -53,10 +50,8 @@ func (r WaitingReason) String() string {
 // Proto 返回与 client.v1.WaitingReason 对齐的 proto 枚举值。
 func (r WaitingReason) Proto() clientv1.WaitingReason {
 	switch r {
-	case ReasonExchangeThree:
-		return clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
-	case ReasonQueMen:
-		return clientv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case ReasonOpening:
+		return clientv1.WaitingReason_WAITING_REASON_OPENING
 	case ReasonClaimWindow:
 		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
 	case ReasonTsumo:
@@ -73,10 +68,8 @@ func (r WaitingReason) Proto() clientv1.WaitingReason {
 // WaitingReasonFromProto 将 proto 枚举映射回 Go 枚举。
 func WaitingReasonFromProto(p clientv1.WaitingReason) WaitingReason {
 	switch p {
-	case clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
-		return ReasonExchangeThree
-	case clientv1.WaitingReason_WAITING_REASON_QUE_MEN:
-		return ReasonQueMen
+	case clientv1.WaitingReason_WAITING_REASON_OPENING:
+		return ReasonOpening
 	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
 		return ReasonClaimWindow
 	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
@@ -97,10 +90,8 @@ func (cfg TimeoutConfig) DurationFor(reason WaitingReason, surrender bool) time.
 		return cfg.SurrenderAction
 	}
 	switch reason {
-	case ReasonExchangeThree:
-		return cfg.ExchangeThree
-	case ReasonQueMen:
-		return cfg.QueMen
+	case ReasonOpening:
+		return cfg.OpeningDefault
 	case ReasonClaimWindow:
 		return cfg.ClaimWindow
 	case ReasonTsumo:
@@ -112,10 +103,20 @@ func (cfg TimeoutConfig) DurationFor(reason WaitingReason, surrender bool) time.
 	}
 }
 
+func (cfg TimeoutConfig) DurationForOpeningAction(action string, surrender bool) time.Duration {
+	if surrender {
+		return cfg.SurrenderAction
+	}
+	if dur := cfg.OpeningByAction[action]; dur > 0 {
+		return dur
+	}
+	return cfg.OpeningDefault
+}
+
 // enterPhase 是 RoundState 阶段切换的唯一写入入口。
 //
 // 不变量：
-//  1. 该方法是 phaseReason / phaseStartUnixMs / waitingExchange / waitingQueMen /
+//  1. 该方法是 phaseReason / phaseStartUnixMs / opening wait flag /
 //     claimWindowOpen / waitingTsumo / waitingDiscard 七个字段的唯一写入位置。
 //  2. 调用时刻立即计算 deadlineUnixMs；engine 任意构造 RoundProgress / PhaseUpdate
 //     的代码均在调用 enterPhase 之后取值，从结构上消除 stale-deadline 错位。
@@ -126,16 +127,13 @@ func (rs *RoundState) enterPhase(reason WaitingReason) {
 	if rs == nil {
 		return
 	}
-	rs.waitingExchange = false
-	rs.waitingQueMen = false
+	rs.waitingOpening = false
 	rs.claimWindowOpen = false
 	rs.waitingTsumo = false
 	rs.waitingDiscard = false
 	switch reason {
-	case ReasonExchangeThree:
-		rs.waitingExchange = true
-	case ReasonQueMen:
-		rs.waitingQueMen = true
+	case ReasonOpening:
+		rs.waitingOpening = true
 	case ReasonClaimWindow:
 		rs.claimWindowOpen = true
 	case ReasonTsumo:
@@ -151,11 +149,25 @@ func (rs *RoundState) enterPhase(reason WaitingReason) {
 	}
 	surrender := rs.surrenderedWaitingSeat(reason)
 	rs.phaseStartUnixMs = rs.clk.Now().UnixMilli()
-	if dur := rs.tmo.DurationFor(reason, surrender); dur > 0 {
+	if dur := rs.phaseDuration(reason, surrender); dur > 0 {
 		rs.deadlineUnixMs = rs.phaseStartUnixMs + dur.Milliseconds()
 	} else {
 		rs.deadlineUnixMs = 0
 	}
+}
+
+func (rs *RoundState) phaseDuration(reason WaitingReason, surrender bool) time.Duration {
+	if rs == nil {
+		return 0
+	}
+	if reason == ReasonOpening {
+		action := ""
+		if step, ok := rs.currentOpeningStep(); ok {
+			action = step.Action
+		}
+		return rs.tmo.DurationForOpeningAction(action, surrender)
+	}
+	return rs.tmo.DurationFor(reason, surrender)
 }
 
 // surrenderedWaitingSeat 判断 reason 当前等待的目标座位是否处于托管/掉线状态。
@@ -165,14 +177,12 @@ func (rs *RoundState) surrenderedWaitingSeat(reason WaitingReason) bool {
 		return false
 	}
 	switch reason {
-	case ReasonExchangeThree:
-		for seat, done := range rs.exchangeSubmitted {
-			if !done && rs.isSurrendered(Seat(seat)) {
-				return true
-			}
+	case ReasonOpening:
+		step, ok := rs.currentOpeningStep()
+		if !ok {
+			return false
 		}
-	case ReasonQueMen:
-		for seat, done := range rs.queSubmitted {
+		for seat, done := range rs.openingSubmitted(step.Action) {
 			if !done && rs.isSurrendered(Seat(seat)) {
 				return true
 			}
@@ -288,10 +298,8 @@ func (rs *RoundState) phase() clientv1.Phase {
 	switch {
 	case rs.closed:
 		return clientv1.Phase_PHASE_CLOSED
-	case rs.waitingExchange:
-		return clientv1.Phase_PHASE_EXCHANGE
-	case rs.waitingQueMen:
-		return clientv1.Phase_PHASE_QUE_MEN
+	case rs.waitingOpening:
+		return rs.openingPhase()
 	case rs.claimWindowOpen:
 		return clientv1.Phase_PHASE_CLAIM
 	case rs.waitingTsumo:
@@ -308,27 +316,31 @@ func (rs *RoundState) actingSeats() []int32 {
 		return nil
 	}
 	switch {
-	case rs.waitingExchange:
-		return rs.pendingActiveSeats(rs.exchangeSubmitted)
-	case rs.waitingQueMen:
-		return rs.pendingActiveSeats(rs.queSubmitted)
+	case rs.waitingOpening:
+		if step, ok := rs.currentOpeningStep(); ok {
+			return rs.pendingActiveSeats(rs.openingSubmitted(step.Action))
+		}
 	case rs.claimWindowOpen:
 		if seat := rs.claimSeat(); seat >= 0 {
 			return []int32{seat.Proto()}
 		}
 	case rs.waitingTsumo || rs.waitingDiscard:
-		if !rs.isHued(rs.turn) && !rs.isSurrendered(rs.turn) {
+		if !rs.isSeatOutAfterHu(rs.turn) && !rs.isSurrendered(rs.turn) {
 			return []int32{rs.turn.Proto()}
 		}
 	}
 	return nil
 }
 
+func (rs *RoundState) openingPhase() clientv1.Phase {
+	return clientv1.Phase_PHASE_OPENING
+}
+
 func (rs *RoundState) pendingActiveSeats(done []bool) []int32 {
 	out := make([]int32, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		s := Seat(seat)
-		if (seat >= len(done) || !done[seat]) && (rs == nil || (!rs.isHued(s) && !rs.isSurrendered(s))) {
+		if (seat >= len(done) || !done[seat]) && (rs == nil || (!rs.isSeatOutAfterHu(s) && !rs.isSurrendered(s))) {
 			out = append(out, Seat(seat).Proto())
 		}
 	}

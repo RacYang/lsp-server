@@ -57,7 +57,7 @@ func TestFanDeepeningYAMLFixtures(t *testing.T) {
 				GangRecords:          fixtureGangRecords(t, tc.GangRecords),
 			}
 			result := rules.HuResult{Win: countsFromFixtureTiles(t, tc.Win)}
-			breakdown := x.ScoreFans(result, ctx)
+			breakdown := testScoreWin(x, result, ctx)
 			labels := map[string]bool{}
 			for _, item := range breakdown.Items {
 				labels[item.Label] = true
@@ -122,11 +122,11 @@ type gangRefundFixtureCase struct {
 	SkippedSeat   int                 `yaml:"skipped_seat"`
 	NoTingSeat    int                 `yaml:"no_ting_seat"`
 	Draw          bool                `yaml:"draw"`
-	Ledger        []fixtureScoreEntry `yaml:"ledger"`
+	ScoreEvents   []fixtureScoreEvent `yaml:"score_events"`
 	ExpectPenalty fixturePenalty      `yaml:"expect_penalty"`
 }
 
-type fixtureScoreEntry struct {
+type fixtureScoreEvent struct {
 	Reason string `yaml:"reason"`
 	From   int    `yaml:"from"`
 	To     int    `yaml:"to"`
@@ -159,11 +159,11 @@ func TestGangRefundYAMLFixtures(t *testing.T) {
 			if tc.NoTingSeat > 0 {
 				hands[tc.NoTingSeat] = handFromFixtureTiles(t, []string{"m1", "m3", "m5", "m7", "m9"})
 			}
-			ledger := make([]ScoreEntry, 0, len(tc.Ledger))
-			for _, entry := range tc.Ledger {
-				ledger = append(ledger, ScoreEntry{Reason: entry.Reason, FromSeat: domainroom.SeatFromInt(entry.From), ToSeat: domainroom.SeatFromInt(entry.To), Amount: entry.Amount, WinnerSeat: domainroom.SeatInvalid})
+			scoreEvents := make([]rules.ScoreEvent, 0, len(tc.ScoreEvents))
+			for _, entry := range tc.ScoreEvents {
+				scoreEvents = append(scoreEvents, rules.ScoreEvent{Reason: entry.Reason, FromSeat: domainroom.SeatFromInt(entry.From), ToSeat: domainroom.SeatFromInt(entry.To), Amount: entry.Amount, WinnerSeat: domainroom.SeatInvalid})
 			}
-			_, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, fixtureSeats(winners))
+			_, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, scoreEvents, fixtureSeats(winners))
 			for _, penalty := range penalties {
 				if penalty.GetReason() == tc.ExpectPenalty.Reason &&
 					penalty.GetFromSeat() == tc.ExpectPenalty.From &&

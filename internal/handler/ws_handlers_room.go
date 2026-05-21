@@ -135,9 +135,9 @@ func handleLeaveRoom(
 	logx.Info(logx.WithRoomID(logx.WithUserID(ctx, state.userID), oldRoomID), "玩家离开房间")
 }
 
-// handleExchangeThree / handleQueMen / handleDiscard / handlePong / handleGang / handleHu
+// handleOpeningAction / handleDiscard / handlePong / handleGang / handleHu
 // 形成对等结构：unmarshal → 必要字段非空校验 → 限流/幂等 → 调用服务 → 响应 + after 闭包。
-func handleExchangeThree(
+func handleOpeningAction(
 	ctx context.Context,
 	deps Deps,
 	conn *websocket.Conn,
@@ -149,40 +149,16 @@ func handleExchangeThree(
 	if err := proto.Unmarshal(payload, &env); err != nil {
 		return
 	}
-	req := env.GetExchangeThreeReq()
+	req := env.GetOpeningActionReq()
 	if req == nil || state.roomID == "" || state.userID == "" {
 		return
 	}
 	if shouldDropRequest(&env, msgID, state.userID) {
 		return
 	}
-	after, err := deps.Rooms.ExchangeThree(ctx, state.roomID, state.userID, req.GetTiles(), req.GetDirection(), req.GetPhaseToken())
-	resp, after := exchangeThreeErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.ExchangeThreeResp, resp, after)
-}
-
-func handleQueMen(
-	ctx context.Context,
-	deps Deps,
-	conn *websocket.Conn,
-	state *wsConnState,
-	msgID uint16,
-	payload []byte,
-) {
-	var env clientv1.Envelope
-	if err := proto.Unmarshal(payload, &env); err != nil {
-		return
-	}
-	req := env.GetQueMenReq()
-	if req == nil || state.roomID == "" || state.userID == "" {
-		return
-	}
-	if shouldDropRequest(&env, msgID, state.userID) {
-		return
-	}
-	after, err := deps.Rooms.QueMen(ctx, state.roomID, state.userID, req.GetSuit(), req.GetPhaseToken())
-	resp, after := queMenErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.QueMenResp, resp, after)
+	after, err := deps.Rooms.OpeningAction(ctx, state.roomID, state.userID, req.GetAction(), req.GetTiles(), req.GetDirection(), req.GetSuit(), req.GetParams(), req.GetPhaseToken())
+	resp, after := openingActionErrEnvelope(env.ReqId, after, err)
+	respondAction(conn, env.ReqId, msgid.OpeningActionResp, resp, after)
 }
 
 func handleDiscard(

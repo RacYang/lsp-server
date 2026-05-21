@@ -82,8 +82,8 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	svcCore.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
 	svcCore.SetAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay)
 	svcCore.SetTimeoutConfig(roomsvc.TimeoutConfig{
-		ExchangeThree:   cfg.RoomTimeouts.ExchangeThree,
-		QueMen:          cfg.RoomTimeouts.QueMen,
+		OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
+		OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
 		ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
 		TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
 		Discard:         cfg.RoomTimeouts.Discard,
@@ -245,7 +245,7 @@ func deriveRecoveredState(current string, rows []postgres.RoomEventRow) string {
 	state := current
 	for _, row := range rows {
 		switch row.Kind {
-		case string(roomsvc.KindExchangeThreeDone), string(roomsvc.KindQueMenDone), string(roomsvc.KindStartGame), string(roomsvc.KindDrawTile), string(roomsvc.KindAction):
+		case string(roomsvc.KindOpeningDone), string(roomsvc.KindStartGame), string(roomsvc.KindDrawTile), string(roomsvc.KindAction):
 			state = "playing"
 		case string(roomsvc.KindSettlement):
 			state = "closed"

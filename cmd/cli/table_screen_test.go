@@ -93,7 +93,7 @@ func TestQueMenUsesSelectionCursorAndEnter(t *testing.T) {
 			v.QueBySeat[i] = -1
 		}
 	})
-	gateway := &fakeTableGateway{queMen: make(chan int32, 1)}
+	gateway := &fakeTableGateway{openingActions: make(chan fakeOpeningAction, 1)}
 	cursor := &HandCursor{}
 
 	result := handleTableKey(context.Background(), tcell.NewEventKey(tcell.KeyRight, 0, 0),
@@ -106,16 +106,24 @@ func TestQueMenUsesSelectionCursorAndEnter(t *testing.T) {
 		state, gateway, cursor, &OverlayState{}, nil, nil, nil)
 	require.Nil(t, result.exit)
 	select {
-	case suit := <-gateway.queMen:
-		require.EqualValues(t, 1, suit)
+	case got := <-gateway.openingActions:
+		require.Equal(t, ActionQueMen, got.action)
+		require.EqualValues(t, 1, got.suit)
 	case <-time.After(time.Second):
 		t.Fatal("Enter should submit selected que men suit")
 	}
 }
 
 type fakeTableGateway struct {
-	ready  chan struct{}
-	queMen chan int32
+	ready          chan struct{}
+	openingActions chan fakeOpeningAction
+}
+
+type fakeOpeningAction struct {
+	action    PlayerAction
+	tiles     []string
+	direction int32
+	suit      int32
 }
 
 func (g *fakeTableGateway) Ready(context.Context) error {
@@ -127,11 +135,14 @@ func (g *fakeTableGateway) Ready(context.Context) error {
 
 func (g *fakeTableGateway) Discard(context.Context, string) error { return nil }
 
-func (g *fakeTableGateway) ExchangeThree(context.Context, []string, int32) error { return nil }
-
-func (g *fakeTableGateway) QueMen(_ context.Context, suit int32) error {
-	if g.queMen != nil {
-		g.queMen <- suit
+func (g *fakeTableGateway) OpeningAction(_ context.Context, action PlayerAction, tiles []string, direction, suit int32) error {
+	if g.openingActions != nil {
+		g.openingActions <- fakeOpeningAction{
+			action:    action,
+			tiles:     append([]string(nil), tiles...),
+			direction: direction,
+			suit:      suit,
+		}
 	}
 	return nil
 }

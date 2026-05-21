@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
+	_ "racoo.cn/lsp/internal/mahjong/builtin" // 注册内置麻将规则。
 	"racoo.cn/lsp/internal/mahjong/rules"
-	_ "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi" // 注册当前内置四川血战规则。
 )
 
 var (

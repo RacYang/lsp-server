@@ -10,7 +10,7 @@ import (
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
-func TestScoreFansQingYiSeWithSevenPairs(t *testing.T) {
+func TestScoreWinQingYiSeWithSevenPairs(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	// 清一色万子七对：m1m1 m3m3 m5m5 m7m7 m9m9 m2m2 m4m4（13 张）+ m4 进张成对
@@ -22,17 +22,17 @@ func TestScoreFansQingYiSeWithSevenPairs(t *testing.T) {
 		h.Add(ti)
 	}
 	win, _ := tile.Parse("m7")
-	res, ok := x.CheckHu(h, win, rules.HuContext{})
+	res, ok := testCheckHu(x, h, win, rules.HuContext{})
 	if !ok {
 		t.Fatal("expected win")
 	}
-	b := x.ScoreFans(res, rules.ScoreContext{})
+	b := testScoreWin(x, res, rules.ScoreContext{})
 	if b.Total < 8 {
 		t.Fatalf("expected qi dui + qing yise, got %+v total=%d", b.Items, b.Total)
 	}
 }
 
-func TestScoreFansDuiDuiHu(t *testing.T) {
+func TestScoreWinDuiDuiHu(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	// 13 张：111 222 333 444 5，胡 5 成对对胡。
@@ -47,17 +47,17 @@ func TestScoreFansDuiDuiHu(t *testing.T) {
 		h.Add(ti)
 	}
 	win, _ := tile.Parse("s5")
-	res, ok := x.CheckHu(h, win, rules.HuContext{})
+	res, ok := testCheckHu(x, h, win, rules.HuContext{})
 	if !ok {
 		t.Fatal("expected win")
 	}
-	b := x.ScoreFans(res, rules.ScoreContext{})
+	b := testScoreWin(x, res, rules.ScoreContext{})
 	if b.Total < 2 {
 		t.Fatalf("expected dui dui hu fan, got %+v total=%d", b.Items, b.Total)
 	}
 }
 
-func TestScoreFansQiDuiWithGen(t *testing.T) {
+func TestScoreWinQiDuiWithGen(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	for _, s := range []string{
@@ -72,36 +72,36 @@ func TestScoreFansQiDuiWithGen(t *testing.T) {
 		h.Add(ti)
 	}
 	win, _ := tile.Parse("s6")
-	res, ok := x.CheckHu(h, win, rules.HuContext{})
+	res, ok := testCheckHu(x, h, win, rules.HuContext{})
 	if !ok {
 		t.Fatal("expected win")
 	}
-	b := x.ScoreFans(res, rules.ScoreContext{})
+	b := testScoreWin(x, res, rules.ScoreContext{})
 	if !hasFanKind(b, fan.KindLongQiDui) {
 		t.Fatalf("expected long qi dui, got %+v total=%d", b.Items, b.Total)
 	}
 }
 
-func TestScoreFansHeavenlyAndEarthlyHand(t *testing.T) {
+func TestScoreWinHeavenlyAndEarthlyHand(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	res := rules.HuResult{Win: countsFromTileTexts(t, []string{
 		"m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "p1", "p1", "p1", "p2", "p2",
 	})}
-	heavenly := x.ScoreFans(res, rules.ScoreContext{HuSeat: 0, DealerSeat: 0, IsTsumo: true, IsOpeningDraw: true})
+	heavenly := testScoreWin(x, res, rules.ScoreContext{HuSeat: 0, DealerSeat: 0, IsTsumo: true, IsOpeningDraw: true})
 	if !hasFanKind(heavenly, fan.KindHeavenlyHand) || hasFanKind(heavenly, fan.KindPingHu) {
 		t.Fatalf("unexpected heavenly hand breakdown: %+v", heavenly.Items)
 	}
-	earthly := x.ScoreFans(res, rules.ScoreContext{HuSeat: 1, DealerSeat: 0, IsDealerFirstDiscard: true})
+	earthly := testScoreWin(x, res, rules.ScoreContext{HuSeat: 1, DealerSeat: 0, IsDealerFirstDiscard: true})
 	if !hasFanKind(earthly, fan.KindEarthlyHand) || hasFanKind(earthly, fan.KindPingHu) {
 		t.Fatalf("unexpected earthly hand breakdown: %+v", earthly.Items)
 	}
-	notEarthly := x.ScoreFans(res, rules.ScoreContext{HuSeat: 1, DealerSeat: 0, IsTsumo: true, IsOpeningDraw: true})
+	notEarthly := testScoreWin(x, res, rules.ScoreContext{HuSeat: 1, DealerSeat: 0, IsTsumo: true, IsOpeningDraw: true})
 	if hasFanKind(notEarthly, fan.KindEarthlyHand) {
 		t.Fatalf("tsumo should not be earthly hand: %+v", notEarthly.Items)
 	}
 }
 
-func TestScoreFansShiBaLuoHanFiltersWinnerSeat(t *testing.T) {
+func TestScoreWinShiBaLuoHanFiltersWinnerSeat(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	res := rules.HuResult{Win: countsFromTileTexts(t, []string{
 		"m1", "m1", "m1", "m2", "m2", "m2", "m3", "m3", "m3", "p4", "p4", "p4", "s5", "s5",
@@ -112,11 +112,11 @@ func TestScoreFansShiBaLuoHanFiltersWinnerSeat(t *testing.T) {
 		{Seat: 2, Kind: rules.GangKindBu},
 		{Seat: 2, Kind: rules.GangKindMing},
 	}
-	b := x.ScoreFans(res, rules.ScoreContext{HuSeat: 2, GangRecords: records})
+	b := testScoreWin(x, res, rules.ScoreContext{HuSeat: 2, GangRecords: records})
 	if !hasFanKind(b, fan.KindShiBaLuoHan) || hasFanKind(b, fan.KindAnGang) {
 		t.Fatalf("expected shi ba luo han without an gang stacking, got %+v", b.Items)
 	}
-	other := x.ScoreFans(res, rules.ScoreContext{HuSeat: 1, GangRecords: records})
+	other := testScoreWin(x, res, rules.ScoreContext{HuSeat: 1, GangRecords: records})
 	if hasFanKind(other, fan.KindShiBaLuoHan) {
 		t.Fatalf("other player's gangs should not count: %+v", other.Items)
 	}

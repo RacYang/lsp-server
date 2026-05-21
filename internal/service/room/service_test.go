@@ -4,6 +4,7 @@ package room
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -14,9 +15,9 @@ import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/clock"
 	domainroom "racoo.cn/lsp/internal/domain/room"
+	_ "racoo.cn/lsp/internal/mahjong/guobiao/jingji"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 	"racoo.cn/lsp/internal/net/msgid"
@@ -63,8 +64,8 @@ func TestStartRoundBiaozhunSkipsExchangeThree(t *testing.T) {
 	players := [4]string{"u0", "u1", "u2", "u3"}
 	rs, notifications, err := e.StartRound(context.Background(), "room-biaozhun", players)
 	require.NoError(t, err)
-	require.False(t, rs.waitingExchange)
-	require.True(t, rs.waitingQueMen)
+	require.True(t, rs.waitingOpening)
+	require.Equal(t, "que_men", rs.waitingKind())
 	require.Len(t, notifications, 8)
 	for _, notification := range notifications[4:] {
 		require.Equal(t, KindAction, notification.Kind)
@@ -73,7 +74,7 @@ func TestStartRoundBiaozhunSkipsExchangeThree(t *testing.T) {
 		action := env.GetAction()
 		require.NotNil(t, action)
 		require.Equal(t, "que_men", action.GetAction())
-		require.Equal(t, clientv1.Phase_PHASE_QUE_MEN, action.GetPhase())
+		require.Equal(t, clientv1.Phase_PHASE_OPENING, action.GetPhase())
 	}
 }
 
@@ -192,7 +193,7 @@ func TestServiceSupportsConfiguredNextHand(t *testing.T) {
 	a := &roomActor{
 		room: r,
 		round: &RoundState{
-			ledger: make([]xuezhandaodi.ScoreEntry, 0),
+			scoreEvents: make([]rules.ScoreEvent, 0),
 		},
 	}
 	a.closeRoomAfterRound()
@@ -304,7 +305,7 @@ func TestRoundViewShowsClaimWindow(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2), tile.Must(tile.SuitDots, 7)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitDots, 9)}), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            1,
 		currentDraw:     tile.Must(tile.SuitDots, 7),
@@ -332,8 +333,8 @@ func TestRoundViewIncludesAuthoritativeTUIFields(t *testing.T) {
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7), tile.Must(tile.SuitDots, 8)}),
 		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
 		melds:           [][]string{{"pong:m3"}, nil, {"gang:p5"}, nil},
-		ledger:          make([]xuezhandaodi.ScoreEntry, 0),
-		queBySeat:       make([]int32, 4),
+		scoreEvents:     make([]rules.ScoreEvent, 0),
+		ruleState:       testRuleState(make([]int32, 4)),
 		lastDiscardSeat: -1,
 		deadlineUnixMs:  12345,
 	}
@@ -370,7 +371,7 @@ func TestExchangeThreeUsesClientDirection(t *testing.T) {
 			rs := roundWaitingExchange()
 			e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
 			for seat := 0; seat < 4; seat++ {
-				_, err := e.ApplyExchangeThree(context.Background(), rs, Seat(seat), tilesToStrings(rs.hands[seat].Tiles()), tt.direction)
+				_, err := e.ApplyOpeningActionByPlayer(context.Background(), rs, Seat(seat), openingExchangeThree, tilesToStrings(rs.hands[seat].Tiles()), tt.direction, 0, nil)
 				require.NoError(t, err)
 			}
 			require.Equal(t, tt.wantSeat0, rs.hands[0].Tiles())
@@ -383,11 +384,11 @@ func TestExchangeThreeKeepsFirstDirectionAsAuthority(t *testing.T) {
 
 	rs := roundWaitingExchange()
 	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
-	_, err := e.ApplyExchangeThree(context.Background(), rs, 0, tilesToStrings(rs.hands[0].Tiles()), 1)
+	_, err := e.ApplyOpeningActionByPlayer(context.Background(), rs, 0, openingExchangeThree, tilesToStrings(rs.hands[0].Tiles()), 1, 0, nil)
 	require.NoError(t, err)
-	_, err = e.ApplyExchangeThree(context.Background(), rs, 1, tilesToStrings(rs.hands[1].Tiles()), 2)
+	_, err = e.ApplyOpeningActionByPlayer(context.Background(), rs, 1, openingExchangeThree, tilesToStrings(rs.hands[1].Tiles()), 2, 0, nil)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, rs.exchangeDirection)
+	require.EqualValues(t, 1, testSichuanExchangeDirection(rs.ruleState))
 }
 
 func TestExchangeThreeRejectsInvalidPlayerSelection(t *testing.T) {
@@ -395,13 +396,13 @@ func TestExchangeThreeRejectsInvalidPlayerSelection(t *testing.T) {
 
 	rs := roundWaitingExchange()
 	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
-	_, err := e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, []string{"m1", "m2"}, 0)
+	_, err := e.ApplyOpeningActionByPlayer(context.Background(), rs, 0, openingExchangeThree, []string{"m1", "m2"}, 0, 0, nil)
 	require.ErrorContains(t, err, "invalid exchange selection")
-	require.False(t, rs.exchangeSubmitted[0])
+	require.False(t, rs.openingSubmitted(openingExchangeThree)[0])
 
-	_, err = e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, []string{"m1", "m2", "p9"}, 0)
+	_, err = e.ApplyOpeningActionByPlayer(context.Background(), rs, 0, openingExchangeThree, []string{"m1", "m2", "p9"}, 0, 0, nil)
 	require.ErrorContains(t, err, "exchange tile from hand")
-	require.False(t, rs.exchangeSubmitted[0])
+	require.False(t, rs.openingSubmitted(openingExchangeThree)[0])
 }
 
 func TestExchangeTimeoutUsesAuthoritativeDirection(t *testing.T) {
@@ -409,15 +410,15 @@ func TestExchangeTimeoutUsesAuthoritativeDirection(t *testing.T) {
 
 	rs := roundWaitingExchange()
 	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
-	_, err := e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, tilesToStrings(rs.hands[0].Tiles()), 1)
+	_, err := e.ApplyOpeningActionByPlayer(context.Background(), rs, 0, openingExchangeThree, tilesToStrings(rs.hands[0].Tiles()), 1, 0, nil)
 	require.NoError(t, err)
 	for seat := 1; seat < 4; seat++ {
-		_, err := e.ApplyExchangeThreeByTimeout(context.Background(), rs, Seat(seat))
+		_, err := e.ApplyTimeout(context.Background(), rs)
 		require.NoError(t, err)
 	}
-	require.False(t, rs.waitingExchange)
-	require.True(t, rs.waitingQueMen)
-	require.EqualValues(t, 1, rs.exchangeDirection)
+	require.True(t, rs.waitingOpening)
+	require.Equal(t, "que_men", rs.waitingKind())
+	require.EqualValues(t, 1, testSichuanExchangeDirection(rs.ruleState))
 }
 
 func TestQueMenUsesClientSuit(t *testing.T) {
@@ -430,15 +431,14 @@ func TestQueMenUsesClientSuit(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
-		queSubmitted:    make([]bool, 4),
-		waitingQueMen:   true,
+		ruleState:       testRuleStateWithSubmitted(make([]int32, 4), openingQueMen, make([]bool, 4)),
+		waitingOpening:  true,
 		lastDiscardSeat: -1,
 	}
 	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
-	_, err := e.ApplyQueMen(context.Background(), rs, 0, int32(tile.SuitBamboo))
+	_, err := e.ApplyOpeningActionByPlayer(context.Background(), rs, 0, openingQueMen, nil, 0, int32(tile.SuitBamboo), nil)
 	require.NoError(t, err)
-	require.EqualValues(t, tile.SuitBamboo, rs.queBySeat[0])
+	require.EqualValues(t, tile.SuitBamboo, rs.missingSuitBySeat()[0])
 }
 
 func TestQueMenStartGameUsesZeroBasedRoundAndHandIndex(t *testing.T) {
@@ -451,13 +451,12 @@ func TestQueMenStartGameUsesZeroBasedRoundAndHandIndex(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
-		queSubmitted:    []bool{true, true, true, false},
-		waitingQueMen:   true,
+		ruleState:       testRuleStateWithSubmitted(make([]int32, 4), openingQueMen, []bool{true, true, true, false}),
+		waitingOpening:  true,
 		lastDiscardSeat: -1,
 	}
 	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
-	notifs, err := e.ApplyQueMen(context.Background(), rs, 3, int32(tile.SuitBamboo))
+	notifs, err := e.ApplyOpeningActionByPlayer(context.Background(), rs, 3, openingQueMen, nil, 0, int32(tile.SuitBamboo), nil)
 	require.NoError(t, err)
 
 	var start *clientv1.StartGameNotify
@@ -484,7 +483,7 @@ func TestApplyPongInterruptsPendingTurn(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2), tile.Must(tile.SuitDots, 7)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitDots, 9)}), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            1,
 		currentDraw:     tile.Must(tile.SuitDots, 7),
@@ -506,18 +505,14 @@ func TestApplyPongInterruptsPendingTurn(t *testing.T) {
 
 func roundWaitingExchange() *RoundState {
 	return &RoundState{
-		roomID:            "r-exchange",
-		ruleID:            "sichuan_xuezhandaodi_huansanzhang",
-		rule:              rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
-		playerIDs:         [4]string{"u0", "u1", "u2", "u3"},
-		hands:             []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2), tile.Must(tile.SuitDots, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 1), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 5), tile.Must(tile.SuitCharacters, 6)})},
-		queBySeat:         make([]int32, 4),
-		waitingExchange:   true,
-		exchangeSubmitted: make([]bool, 4),
-		exchangeDirection: -1,
-		exchangeSelection: make([][]tile.Tile, 4),
-		queSubmitted:      make([]bool, 4),
-		lastDiscardSeat:   -1,
+		roomID:          "r-exchange",
+		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
+		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 2), tile.Must(tile.SuitDots, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 1), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 5), tile.Must(tile.SuitCharacters, 6)})},
+		ruleState:       testRuleState(make([]int32, 4)),
+		waitingOpening:  true,
+		lastDiscardSeat: -1,
 	}
 }
 
@@ -531,7 +526,7 @@ func TestApplyDiscardPromptsClaimInsteadOfNextDraw(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3)}), hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -567,8 +562,7 @@ func TestQueSuitDiscardDoesNotOfferPongOrGang(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3)}), hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
-		queBySeat:       []int32{int32(tile.SuitDots), int32(tile.SuitDots), int32(tile.SuitCharacters), int32(tile.SuitDots)},
-		queSubmitted:    []bool{true, true, true, true},
+		ruleState:       testRuleStateWithSubmitted([]int32{int32(tile.SuitDots), int32(tile.SuitDots), int32(tile.SuitCharacters), int32(tile.SuitDots)}, openingQueMen, []bool{true, true, true, true}),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -588,8 +582,7 @@ func TestQueSuitCannotSelfGang(t *testing.T) {
 		ruleID:         "sichuan_xuezhandaodi_huansanzhang",
 		rule:           rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
 		hands:          []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 9), tile.Must(tile.SuitDots, 9), tile.Must(tile.SuitDots, 9), tile.Must(tile.SuitDots, 9)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:      []int32{int32(tile.SuitDots), -1, -1, -1},
-		queSubmitted:   []bool{true, false, false, false},
+		ruleState:      testRuleStateWithSubmitted([]int32{int32(tile.SuitDots), -1, -1, -1}, openingQueMen, []bool{true, false, false, false}),
 		waitingDiscard: true,
 		turn:           0,
 	}
@@ -606,13 +599,11 @@ func TestApplyDiscardOpenMeldHuBeatsPong(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 5), tile.Must(tile.SuitBamboo, 5)}), hand.New(), hand.New()},
-		queBySeat:       []int32{int32(tile.SuitCharacters), int32(tile.SuitCharacters), -1, -1},
-		queSubmitted:    []bool{true, true, false, false},
+		ruleState:       testRuleStateWithSubmitted([]int32{int32(tile.SuitCharacters), int32(tile.SuitCharacters), -1, -1}, openingQueMen, []bool{true, true, false, false}),
 		melds:           [][]string{nil, {"pong:p7,p7,p7:2", "pong:p2,p2,p2:3"}, nil, nil},
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
-		huedSeats:       make([]bool, 4),
 		surrendered:     make([]bool, 4),
 	}
 
@@ -648,13 +639,11 @@ func TestQueSuitBlocksHuCandidateAndSelfDraw(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 5), tile.Must(tile.SuitBamboo, 5)}), hand.New(), hand.New()},
-		queBySeat:       []int32{int32(tile.SuitCharacters), int32(tile.SuitBamboo), -1, -1},
-		queSubmitted:    []bool{true, true, false, false},
+		ruleState:       testRuleStateWithSubmitted([]int32{int32(tile.SuitCharacters), int32(tile.SuitBamboo), -1, -1}, openingQueMen, []bool{true, true, false, false}),
 		melds:           [][]string{nil, {"pong:p7,p7,p7:2", "pong:p2,p2,p2:3"}, nil, nil},
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
-		huedSeats:       make([]bool, 4),
 		surrendered:     make([]bool, 4),
 	}
 	_, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyDiscard(context.Background(), rs, 0, "s2")
@@ -669,12 +658,10 @@ func TestQueSuitBlocksHuCandidateAndSelfDraw(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 2), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 3), tile.Must(tile.SuitBamboo, 5), tile.Must(tile.SuitBamboo, 5)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       []int32{int32(tile.SuitBamboo), -1, -1, -1},
-		queSubmitted:    []bool{true, false, false, false},
+		ruleState:       testRuleStateWithSubmitted([]int32{int32(tile.SuitBamboo), -1, -1, -1}, openingQueMen, []bool{true, false, false, false}),
 		melds:           [][]string{{"pong:p7,p7,p7:1", "pong:p2,p2,p2:2"}, nil, nil, nil},
 		turn:            0,
 		lastDiscardSeat: -1,
-		huedSeats:       make([]bool, 4),
 		surrendered:     make([]bool, 4),
 	}
 	_, err = NewEngine("sichuan_xuezhandaodi_huansanzhang").drawForCurrentTurn(drawState)
@@ -693,12 +680,10 @@ func TestSelfDrawHuWithOpenQueSuitMeldUsesClosedHandOnlyForQueBlock(t *testing.T
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7), tile.Must(tile.SuitDots, 9)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 4), tile.Must(tile.SuitDots, 4), tile.Must(tile.SuitDots, 5), tile.Must(tile.SuitDots, 6), tile.Must(tile.SuitBamboo, 4), tile.Must(tile.SuitBamboo, 4), tile.Must(tile.SuitBamboo, 4), tile.Must(tile.SuitBamboo, 7), tile.Must(tile.SuitBamboo, 8), tile.Must(tile.SuitBamboo, 9)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       []int32{int32(tile.SuitCharacters), -1, -1, -1},
-		queSubmitted:    []bool{true, false, false, false},
+		ruleState:       testRuleStateWithSubmitted([]int32{int32(tile.SuitCharacters), -1, -1, -1}, openingQueMen, []bool{true, false, false, false}),
 		melds:           [][]string{{"pong:m3,m3,m3:1"}, nil, nil, nil},
 		turn:            0,
 		lastDiscardSeat: -1,
-		huedSeats:       make([]bool, 4),
 		surrendered:     make([]bool, 4),
 	}
 
@@ -731,7 +716,7 @@ func TestDrawTileNotificationProjectsTileOnlyToActor(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		turn:            1,
 		lastDiscardSeat: -1,
 	}
@@ -761,7 +746,7 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)})},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -807,7 +792,7 @@ func TestApplyAnGangRecordsConcealedMeldAndHidesActionTile(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -839,7 +824,7 @@ func TestApplyBuGangCompletesWithoutRobCandidate(t *testing.T) {
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{gangTile}), hand.New(), hand.New(), hand.New()},
 		melds:           [][]string{{"pong:m5,m5,m5:1"}, nil, nil, nil},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -871,7 +856,7 @@ func TestApplyBuGangCanBeRobbedWithoutGangRecord(t *testing.T) {
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{gangTile}), hand.New(), hand.FromTiles(readyHand), hand.New()},
 		melds:           [][]string{{"pong:m5,m5,m5:1"}, nil, nil, nil},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -902,15 +887,18 @@ func (allowChiClaimPolicy) Candidates(ctx rules.ClaimContext) []rules.ClaimActio
 func TestApplyChiRecordsStructuredMeldAndRequiresExplicitDiscard(t *testing.T) {
 	t.Parallel()
 
+	rule := rules.MustGet("sichuan_xuezhandaodi_huansanzhang")
+	caps := rules.CapabilitiesOf(rule)
+	caps.Claims = allowChiClaimPolicy{}
 	rs := &RoundState{
 		roomID:          "r-chi",
 		ruleID:          "sichuan_xuezhandaodi_huansanzhang",
-		rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		rule:            rule,
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles(nil),
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3)}), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
-		caps:            rules.CapabilitySet{Claims: allowChiClaimPolicy{}},
+		ruleState:       testRuleState(make([]int32, 4)),
+		caps:            caps,
 		lastDiscard:     tile.Must(tile.SuitCharacters, 1),
 		lastDiscardSeat: 0,
 		claimWindowOpen: true,
@@ -939,7 +927,7 @@ func TestApplyPassRelaysClaimCandidate(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)})},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -971,7 +959,7 @@ func TestApplyPassSelfDrawKeepsPlayerDiscardChoice(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles(nil),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitDots, 1)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		turn:            0,
 		waitingTsumo:    true,
 		pendingDraw:     drawn,
@@ -998,7 +986,7 @@ func TestApplyHuClearsHuedSeatActionWindowBeforeNextDraw(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 5)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		turn:            0,
 		waitingTsumo:    true,
 		pendingDraw:     drawn,
@@ -1011,6 +999,7 @@ func TestApplyHuClearsHuedSeatActionWindowBeforeNextDraw(t *testing.T) {
 	require.True(t, rs.isHued(0))
 	require.Equal(t, Seat(1), rs.turn)
 	require.NotEmpty(t, notifs)
+	require.False(t, containsSettlement(notifs), "血战首家胡牌后不得立刻结算")
 
 	var hu *clientv1.ActionNotify
 	for _, notification := range notifs {
@@ -1026,6 +1015,32 @@ func TestApplyHuClearsHuedSeatActionWindowBeforeNextDraw(t *testing.T) {
 	require.NotContains(t, hu.GetPhaseUpdate().GetActingSeats(), int32(0), "已胡座位不得继续作为行动座位下发")
 }
 
+func TestGuobiaoFirstHuEndsRound(t *testing.T) {
+	t.Parallel()
+
+	drawn := tile.Must(tile.SuitCharacters, 5)
+	rs := &RoundState{
+		roomID:          "r-guobiao-hu",
+		ruleID:          "guobiao_jingji_biaozhun",
+		rule:            rules.MustGet("guobiao_jingji_biaozhun"),
+		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
+		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
+		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 5)}), hand.New(), hand.New(), hand.New()},
+		ruleState:       testRuleState(make([]int32, 4)),
+		turn:            0,
+		waitingTsumo:    true,
+		pendingDraw:     drawn,
+		currentDraw:     drawn,
+		lastDiscardSeat: -1,
+		scoreEvents:     make([]rules.ScoreEvent, 0),
+	}
+
+	notifs, err := NewEngine("guobiao_jingji_biaozhun").ApplyHu(context.Background(), rs, 0)
+	require.NoError(t, err)
+	require.True(t, rs.closed)
+	require.True(t, containsSettlement(notifs), "国标首个合法胡牌应立即结算")
+}
+
 func TestClaimWindowPersistsAndRestores(t *testing.T) {
 	t.Parallel()
 
@@ -1036,7 +1051,7 @@ func TestClaimWindowPersistsAndRestores(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		turn:            1,
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
@@ -1065,10 +1080,8 @@ func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 1), tile.Must(tile.SuitDots, 1)}), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		turn:            1,
-		huedSeats:       make([]bool, 4),
-		winnerSeats:     make([]Seat, 0, 3),
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
 	}
@@ -1079,6 +1092,7 @@ func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
 	require.False(t, rs.closed)
 	require.True(t, rs.isHued(2))
 	require.Equal(t, Seat(1), rs.turn)
+	require.False(t, containsSettlement(notifs), "血战点炮胡后未达到终局条件不得结算")
 
 	var sawSeat1Draw bool
 	for _, notification := range notifs {
@@ -1101,7 +1115,7 @@ func TestPlayerJourney_C2_2_ClaimTimeoutDoesNotChooseForHuman(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3), tile.Must(tile.SuitCharacters, 3)}), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		turn:            1,
 		lastDiscard:     tile.Must(tile.SuitCharacters, 3),
 		lastDiscardSeat: 0,
@@ -1127,15 +1141,15 @@ func TestPlayerJourney_E1_ExchangeTimeoutSurrendersDoesNotChooseForHuman(t *test
 
 	rs := roundWaitingExchange()
 	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
-	_, err := e.ApplyExchangeThreeByPlayer(context.Background(), rs, 0, tilesToStrings(rs.hands[0].Tiles()), 1)
+	_, err := e.ApplyOpeningActionByPlayer(context.Background(), rs, 0, openingExchangeThree, tilesToStrings(rs.hands[0].Tiles()), 1, 0, nil)
 	require.NoError(t, err)
 	seat1Hand := append([]tile.Tile(nil), rs.hands[1].Tiles()...)
 
 	notifs, err := e.ApplyTimeout(context.Background(), rs)
 	require.NoError(t, err)
 	require.True(t, rs.isSurrendered(1))
-	require.True(t, rs.waitingExchange)
-	require.False(t, rs.waitingQueMen)
+	require.True(t, rs.waitingOpening)
+	require.Equal(t, "exchange_three", rs.waitingKind())
 	require.Empty(t, notifs)
 	require.Equal(t, seat1Hand, rs.hands[1].Tiles(), "真人换三张超时不得由服务端代选手牌")
 }
@@ -1150,18 +1164,18 @@ func TestPlayerJourney_Q1_QueTimeoutSurrendersDoesNotChooseForHuman(t *testing.T
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitDots, 9)}), hand.New(), hand.New()},
-		queBySeat:       []int32{0, -1, -1, -1},
-		queSubmitted:    []bool{true, false, false, false},
-		waitingQueMen:   true,
+		ruleState:       testRuleStateWithSubmitted([]int32{0, -1, -1, -1}, openingQueMen, []bool{true, false, false, false}),
+		waitingOpening:  true,
 		lastDiscardSeat: -1,
 	}
 
 	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyTimeout(context.Background(), rs)
 	require.NoError(t, err)
 	require.True(t, rs.isSurrendered(1))
-	require.True(t, rs.waitingQueMen)
+	require.True(t, rs.waitingOpening)
+	require.Equal(t, "que_men", rs.waitingKind())
 	require.Empty(t, notifs)
-	require.EqualValues(t, -1, rs.queBySeat[1], "真人定缺超时不得由服务端代选缺门")
+	require.EqualValues(t, -1, rs.missingSuitBySeat()[1], "真人定缺超时不得由服务端代选缺门")
 }
 
 func TestPlayerJourney_D2_4_DiscardTimeoutSurrenders(t *testing.T) {
@@ -1174,7 +1188,7 @@ func TestPlayerJourney_D2_4_DiscardTimeoutSurrenders(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -1204,7 +1218,7 @@ func TestServiceAutoTimeoutSurrendersThroughActor(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            0,
 		lastDiscardSeat: -1,
@@ -1227,11 +1241,14 @@ func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
 	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
 	svc.SetClock(fc)
 	svc.SetTimeoutConfig(TimeoutConfig{
-		ExchangeThree: time.Second,
-		QueMen:        time.Second,
-		ClaimWindow:   time.Second,
-		TsumoWindow:   time.Second,
-		Discard:       time.Second,
+		OpeningDefault: time.Second,
+		OpeningByAction: map[string]time.Duration{
+			openingExchangeThree: time.Second,
+			openingQueMen:        time.Second,
+		},
+		ClaimWindow: time.Second,
+		TsumoWindow: time.Second,
+		Discard:     time.Second,
 	})
 	got := make(chan []Notification, 1)
 	svc.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []Notification) {
@@ -1345,7 +1362,7 @@ func TestRoundPersistRestoresSurrenderedSeats(t *testing.T) {
 		playerIDs:       [4]string{"u0", "u1", "u2", "u3"},
 		wall:            wall.NewFromOrderedTiles([]tile.Tile{tile.Must(tile.SuitDots, 7)}),
 		hands:           []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()},
-		queBySeat:       make([]int32, 4),
+		ruleState:       testRuleState(make([]int32, 4)),
 		waitingDiscard:  true,
 		turn:            1,
 		lastDiscardSeat: -1,
@@ -1380,7 +1397,7 @@ func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 		playerIDs:      [4]string{"u0", "u1", "u2", "u3"},
 		wall:           wall.NewFromOrderedTiles(nil),
 		hands:          []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1)}), hand.New(), hand.New(), hand.New()},
-		queBySeat:      make([]int32, 4),
+		ruleState:      testRuleState(make([]int32, 4)),
 		waitingDiscard: true,
 		turn:           0,
 	}
@@ -1398,10 +1415,8 @@ func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 
 func outboundTestMsgID(kind Kind) (uint16, bool) {
 	switch kind {
-	case KindExchangeThreeDone:
-		return msgid.ExchangeThreeDone, true
-	case KindQueMenDone:
-		return msgid.QueMenDone, true
+	case KindOpeningDone:
+		return msgid.OpeningDone, true
 	case KindStartGame:
 		return msgid.StartGame, true
 	case KindDrawTile:
@@ -1421,24 +1436,31 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		if a == nil || a.round == nil {
 			return nil
 		}
-		if a.round.waitingExchange {
-			for seat, done := range a.round.exchangeSubmitted {
-				if !done {
-					tiles := tilesToStrings(a.round.hands[seat].Tiles()[:3])
-					if _, err := svc.ExchangeThree(ctx, roomID, a.room.PlayerIDs[seat], tiles, 0, nil); err != nil {
-						return err
-					}
-				}
+		if a.round.waitingOpening {
+			step, ok := a.round.currentOpeningStep()
+			if !ok {
+				return fmt.Errorf("round waiting opening without current step")
 			}
-			continue
-		}
-		if a.round.waitingQueMen {
-			for seat, done := range a.round.queSubmitted {
-				if !done {
-					if _, err := svc.QueMen(ctx, roomID, a.room.PlayerIDs[seat], 0, nil); err != nil {
-						return err
+			switch step.Action {
+			case openingExchangeThree:
+				for seat, done := range a.round.openingSubmitted(step.Action) {
+					if !done {
+						tiles := tilesToStrings(a.round.hands[seat].Tiles()[:3])
+						if _, err := svc.OpeningAction(ctx, roomID, a.room.PlayerIDs[seat], openingExchangeThree, tiles, 0, 0, nil, nil); err != nil {
+							return err
+						}
 					}
 				}
+			case openingQueMen:
+				for seat, done := range a.round.openingSubmitted(step.Action) {
+					if !done {
+						if _, err := svc.OpeningAction(ctx, roomID, a.room.PlayerIDs[seat], openingQueMen, nil, 0, 0, nil, nil); err != nil {
+							return err
+						}
+					}
+				}
+			default:
+				return fmt.Errorf("unsupported opening action %s", step.Action)
 			}
 			continue
 		}
@@ -1468,12 +1490,15 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 			if err == nil && containsSettlement(notifs) {
 				return nil
 			}
+			if err == nil {
+				continue
+			}
 			if err != nil && !bytes.Contains([]byte(err.Error()), []byte("hu not allowed")) {
 				return err
 			}
 		}
 		//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
-		discard := chooseDiscard(a.round.hands[seat], tile.Suit(a.round.queBySeat[seat]))
+		discard := chooseDiscard(a.round.hands[seat], tile.Suit(a.round.missingSuitBySeat()[seat]))
 		notifs, err := svc.Discard(ctx, roomID, userID, discard.String(), nil)
 		if err != nil {
 			if bytes.Contains([]byte(err.Error()), []byte("round closed")) {

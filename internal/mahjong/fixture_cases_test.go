@@ -43,14 +43,15 @@ func TestJSONSimpleHu(t *testing.T) {
 		t.Fatalf("parse win: %v", err)
 	}
 	r := rules.MustGet("sichuan_xuezhandaodi_huansanzhang")
-	res, ok := r.CheckHu(h, winTile, rules.HuContext{})
+	caps := rules.CapabilitiesOf(r)
+	res, ok := caps.Win.CheckHu(h, winTile, rules.HuContext{})
 	if ok != fx.WantWin {
 		t.Fatalf("want_win=%v got=%v", fx.WantWin, ok)
 	}
 	if !ok {
 		return
 	}
-	sc := r.ScoreFans(res, rules.ScoreContext{})
+	sc, _, _ := caps.Scoring.ScoreWin(res, rules.ScoreContext{})
 	if sc.Total < fx.WantMinTotalFan {
 		t.Fatalf("fan total=%d want>=%d", sc.Total, fx.WantMinTotalFan)
 	}

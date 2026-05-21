@@ -8,6 +8,7 @@ import (
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
+	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -26,25 +27,13 @@ const (
 	ReasonChaDaJiao   = "查大叫"
 )
 
-// ScoreEntry 是血战结算流水；FromSeat/ToSeat 为 -1 时表示系统池。
-type ScoreEntry struct {
-	Reason     string          `json:"reason"`
-	FromSeat   domainroom.Seat `json:"from_seat"`
-	ToSeat     domainroom.Seat `json:"to_seat"`
-	Amount     int32           `json:"amount"`
-	Step       int             `json:"step"`
-	WinnerSeat domainroom.Seat `json:"winner_seat"`
-	WinnerFan  int32           `json:"winner_fan,omitempty"`
-	FanNames   []string        `json:"fan_names,omitempty"`
-}
-
 // BuildSettlement 生成当前四川血战子集的结算摘要。
 // 当前结算先汇总房间引擎已经计算好的胡牌与杠分，再补充查花猪、查大叫等局末罚分。
 // 后续扩展番种或包牌规则时，应优先扩展规则上下文与结构化明细，而不是在传输层拼文本。
-func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32, ledger []ScoreEntry, winnerSeats []domainroom.Seat) ([]*clientv1.SeatScore, []*clientv1.PenaltyItem, []*clientv1.WinnerBreakdown, string) {
+func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32, scoreEvents []rules.ScoreEvent, winnerSeats []domainroom.Seat) ([]*clientv1.SeatScore, []*clientv1.PenaltyItem, []*clientv1.WinnerBreakdown, string) {
 	seatScores := make([]*clientv1.SeatScore, 0, 4)
 	penalties := make([]*clientv1.PenaltyItem, 0)
-	balances := foldLedger(ledger)
+	balances := foldScoreEvents(scoreEvents)
 	detail := "荒牌"
 	winners := map[domainroom.Seat]struct{}{}
 	if len(winnerSeats) > 0 {
@@ -55,7 +44,7 @@ func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32,
 		}
 		detail = strings.Join(parts, "、") + " 胡牌"
 	}
-	breakdowns := buildWinnerBreakdowns(playerIDs, ledger, winners)
+	breakdowns := buildWinnerBreakdowns(playerIDs, scoreEvents, winners)
 	for seat := 0; seat < 4; seat++ {
 		seatID := domainroom.SeatFromInt(seat)
 		seatIndex := seatID.Proto()
@@ -78,7 +67,7 @@ func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32,
 				}
 			}
 		}
-		appendRefundPenalties(&penalties, balances, ledger, seat, skipped, len(winners) == 0 && !isTing(hands[seat]))
+		appendRefundPenalties(&penalties, balances, scoreEvents, seat, skipped, len(winners) == 0 && !isTing(hands[seat]))
 		seatScores = append(seatScores, &clientv1.SeatScore{
 			SeatIndex: seatIndex,
 			UserId:    playerIDs[seat],
@@ -99,9 +88,9 @@ func holdsQueSuit(h *hand.Hand, queSuit tile.Suit) bool {
 	return false
 }
 
-func foldLedger(ledger []ScoreEntry) []int32 {
+func foldScoreEvents(scoreEvents []rules.ScoreEvent) []int32 {
 	balances := make([]int32, 4)
-	for _, entry := range ledger {
+	for _, entry := range scoreEvents {
 		if entry.Amount <= 0 {
 			continue
 		}
@@ -130,11 +119,11 @@ func appendPenalty(penalties *[]*clientv1.PenaltyItem, balances []int32, reason 
 	}
 }
 
-func appendRefundPenalties(penalties *[]*clientv1.PenaltyItem, balances []int32, ledger []ScoreEntry, seat int, skipped, noTingDraw bool) {
+func appendRefundPenalties(penalties *[]*clientv1.PenaltyItem, balances []int32, scoreEvents []rules.ScoreEvent, seat int, skipped, noTingDraw bool) {
 	if !skipped && !noTingDraw {
 		return
 	}
-	for _, entry := range ledger {
+	for _, entry := range scoreEvents {
 		seatID := domainroom.SeatFromInt(seat)
 		if entry.ToSeat != seatID || entry.FromSeat < 0 || entry.Amount <= 0 {
 			continue
@@ -168,10 +157,10 @@ func isTing(h *hand.Hand) bool {
 	return hu.IsTing(h.Counts())
 }
 
-func buildWinnerBreakdowns(playerIDs [4]string, ledger []ScoreEntry, winners map[domainroom.Seat]struct{}) []*clientv1.WinnerBreakdown {
+func buildWinnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, winners map[domainroom.Seat]struct{}) []*clientv1.WinnerBreakdown {
 	bySeat := make(map[domainroom.Seat]*clientv1.WinnerBreakdown, len(winners))
 	seenName := make(map[domainroom.Seat]map[string]struct{}, len(winners))
-	for _, entry := range ledger {
+	for _, entry := range scoreEvents {
 		if entry.WinnerSeat < 0 || entry.WinnerSeat > 3 {
 			continue
 		}

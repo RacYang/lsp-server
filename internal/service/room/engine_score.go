@@ -3,8 +3,17 @@ package room
 import (
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
+)
+
+const (
+	reasonHuTsumo     = "hu_tsumo"
+	reasonHuDiscard   = "hu_discard"
+	reasonHuQiangGang = "hu_qiang_gang"
+	reasonGangMing    = "gang_ming"
+	reasonGangBu      = "gang_bu"
+	reasonGangAn      = "gang_an"
+	reasonBaoPai      = "包牌"
 )
 
 // appendHuEntries 把一次胡牌转换为可审计结算流水；自摸三家支付，点炮与抢杠只由责任座位支付。
@@ -12,29 +21,29 @@ func appendHuEntries(rs *RoundState, winner Seat, fanTotal int, source rules.HuS
 	if rs == nil || winner < 0 || winner > 3 || fanTotal <= 0 {
 		return
 	}
-	reason := xuezhandaodi.ReasonHuTsumo
+	reason := reasonHuTsumo
 	switch source {
 	case rules.HuSourceDiscard:
-		reason = xuezhandaodi.ReasonHuDiscard
+		reason = reasonHuDiscard
 	case rules.HuSourceQiangGang:
-		reason = xuezhandaodi.ReasonHuQiangGang
+		reason = reasonHuQiangGang
 	}
 	amount := int32(fanTotal) //nolint:gosec // 番数很小
 	names := fanLabels(breakdown)
 	if source == rules.HuSourceQiangGang && payer >= 0 {
-		names = append(names, xuezhandaodi.ReasonBaoPai)
+		names = append(names, reasonBaoPai)
 	}
 	if source == rules.HuSourceTsumo {
 		for other := Seat(0); other < SeatCount; other++ {
-			if other == winner || rs.isHued(other) {
+			if other == winner || rs.isSeatOutAfterHu(other) {
 				continue
 			}
-			rs.ledger = append(rs.ledger, huScoreEntry(reason, other, winner, amount, rs.step, winner, names))
+			rs.scoreEvents = append(rs.scoreEvents, huScoreEvent(reason, other, winner, amount, rs.step, winner, names))
 		}
 		return
 	}
 	if payer >= 0 && payer < 4 && payer != winner {
-		rs.ledger = append(rs.ledger, huScoreEntry(reason, payer, winner, amount, rs.step, winner, names))
+		rs.scoreEvents = append(rs.scoreEvents, huScoreEvent(reason, payer, winner, amount, rs.step, winner, names))
 	}
 }
 
@@ -44,19 +53,19 @@ func appendGangEntries(rs *RoundState, seat Seat, gangTile tile.Tile, kind rules
 		return
 	}
 	amount := int32(1)
-	reason := xuezhandaodi.ReasonGangMing
+	reason := reasonGangMing
 	switch kind {
 	case rules.GangKindAn:
 		amount = 2
-		reason = xuezhandaodi.ReasonGangAn
+		reason = reasonGangAn
 	case rules.GangKindBu:
-		reason = xuezhandaodi.ReasonGangBu
+		reason = reasonGangBu
 	}
 	for other := Seat(0); other < SeatCount; other++ {
-		if other == seat || rs.isHued(other) {
+		if other == seat || rs.isSeatOutAfterHu(other) {
 			continue
 		}
-		rs.ledger = append(rs.ledger, xuezhandaodi.ScoreEntry{
+		rs.scoreEvents = append(rs.scoreEvents, rules.ScoreEvent{
 			Reason:     reason,
 			FromSeat:   other,
 			ToSeat:     seat,
@@ -76,9 +85,28 @@ func appendGangEntries(rs *RoundState, seat Seat, gangTile tile.Tile, kind rules
 	rs.lastGangFollowUp = true
 }
 
-// huScoreEntry 统一胡牌流水字段，避免各个动作分支分别拼装结算结构。
-func huScoreEntry(reason string, from, to Seat, amount int32, step int, winner Seat, names []string) xuezhandaodi.ScoreEntry {
-	return xuezhandaodi.ScoreEntry{
+func (rs *RoundState) appendGangScoreEvents(seat Seat, gangTile tile.Tile, kind rules.GangKind, fromSeat Seat) {
+	if rs == nil || seat < 0 || seat > 3 {
+		return
+	}
+	rs.ensureRuleRuntime()
+	scoringPolicy := rs.caps.Scoring
+	events, record := scoringPolicy.ScoreGang(rules.GangScoreContext{
+		Seat:        seat,
+		Kind:        kind,
+		Tile:        gangTile,
+		FromSeat:    fromSeat,
+		ActiveSeats: rs.activeSeats(),
+		Step:        rs.step,
+	})
+	rs.scoreEvents = append(rs.scoreEvents, events...)
+	rs.gangRecords = append(rs.gangRecords, record)
+	rs.lastGangFollowUp = true
+}
+
+// huScoreEvent 统一胡牌计分事件字段，避免各个动作分支分别拼装结算结构。
+func huScoreEvent(reason string, from, to Seat, amount int32, step int, winner Seat, names []string) rules.ScoreEvent {
+	return rules.ScoreEvent{
 		Reason:     reason,
 		FromSeat:   from,
 		ToSeat:     to,
@@ -103,10 +131,10 @@ func fanLabels(b fan.Breakdown) []string {
 	return out
 }
 
-// seatBalancesFromLedger 将流水折叠成四个座位的当前分数，用于推送与测试断言。
-func seatBalancesFromLedger(ledger []xuezhandaodi.ScoreEntry) []int32 {
+// seatBalancesFromScoreEvents 将通用计分事件折叠成四个座位的当前分数，用于推送与测试断言。
+func seatBalancesFromScoreEvents(events []rules.ScoreEvent) []int32 {
 	out := make([]int32, 4)
-	for _, entry := range ledger {
+	for _, entry := range events {
 		if entry.Amount <= 0 {
 			continue
 		}

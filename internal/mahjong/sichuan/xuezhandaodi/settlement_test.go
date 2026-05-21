@@ -20,12 +20,12 @@ func TestBuildSettlementMultiWinnerAndPenalties(t *testing.T) {
 		hand.New(),
 	}
 	queBySeat := []int32{int32(tile.SuitCharacters), int32(tile.SuitDots), int32(tile.SuitBamboo), int32(tile.SuitDots)}
-	ledger := []ScoreEntry{
+	scoreEvents := []rules.ScoreEvent{
 		{Reason: ReasonHuTsumo, FromSeat: 0, ToSeat: 1, Amount: 4, WinnerSeat: 1, WinnerFan: 4, FanNames: []string{"平胡"}},
 		{Reason: ReasonHuDiscard, FromSeat: 3, ToSeat: 2, Amount: 2, WinnerSeat: 2, WinnerFan: 2, FanNames: []string{"对对胡"}},
 	}
 
-	scores, penalties, breakdowns, detail := BuildSettlement(playerIDs, hands, queBySeat, ledger, []domainroom.Seat{1, 2})
+	scores, penalties, breakdowns, detail := BuildSettlement(playerIDs, hands, queBySeat, scoreEvents, []domainroom.Seat{1, 2})
 	if len(scores) != 4 {
 		t.Fatalf("scores len = %d", len(scores))
 	}
@@ -59,9 +59,9 @@ func TestBuildSettlementRefundsGangIncome(t *testing.T) {
 		hand.New(),
 	}
 	queBySeat := []int32{int32(tile.SuitDots), int32(tile.SuitCharacters), int32(tile.SuitBamboo), int32(tile.SuitDots)}
-	ledger := []ScoreEntry{{Reason: ReasonGangMing, FromSeat: 0, ToSeat: 1, Amount: 1, WinnerSeat: domainroom.SeatInvalid}}
+	scoreEvents := []rules.ScoreEvent{{Reason: ReasonGangMing, FromSeat: 0, ToSeat: 1, Amount: 1, WinnerSeat: domainroom.SeatInvalid}}
 
-	scores, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, nil)
+	scores, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, scoreEvents, nil)
 	if scores[1].GetTotalFan() >= 1 {
 		t.Fatalf("expected refund to reduce seat score, got %+v", scores[1])
 	}
@@ -80,7 +80,7 @@ func TestBuildSettlementWinnerBreakdownBaoPai(t *testing.T) {
 	playerIDs := [4]string{"u0", "u1", "u2", "u3"}
 	hands := []*hand.Hand{hand.New(), hand.New(), hand.New(), hand.New()}
 	queBySeat := []int32{0, 1, 2, 0}
-	ledger := []ScoreEntry{{
+	scoreEvents := []rules.ScoreEvent{{
 		Reason:     ReasonHuQiangGang,
 		FromSeat:   0,
 		ToSeat:     2,
@@ -90,7 +90,7 @@ func TestBuildSettlementWinnerBreakdownBaoPai(t *testing.T) {
 		FanNames:   []string{"抢杠胡", ReasonBaoPai},
 	}}
 
-	_, _, breakdowns, _ := BuildSettlement(playerIDs, hands, queBySeat, ledger, []domainroom.Seat{2})
+	_, _, breakdowns, _ := BuildSettlement(playerIDs, hands, queBySeat, scoreEvents, []domainroom.Seat{2})
 	if len(breakdowns) != 1 {
 		t.Fatalf("breakdowns len = %d", len(breakdowns))
 	}
@@ -108,7 +108,7 @@ func TestBuildSettlementWinnerBreakdownBaoPai(t *testing.T) {
 	}
 }
 
-func TestScoreFansContextualKinds(t *testing.T) {
+func TestScoreWinContextualKinds(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	h := hand.FromTiles([]tile.Tile{
 		tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1),
@@ -117,11 +117,11 @@ func TestScoreFansContextualKinds(t *testing.T) {
 		tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4), tile.Must(tile.SuitCharacters, 4),
 		tile.Must(tile.SuitCharacters, 5), tile.Must(tile.SuitCharacters, 5),
 	})
-	res, ok := x.CheckHu(h, tile.Must(tile.SuitCharacters, 5), rules.HuContext{})
+	res, ok := testCheckHu(x, h, tile.Must(tile.SuitCharacters, 5), rules.HuContext{})
 	if !ok {
 		t.Fatal("expected win")
 	}
-	b := x.ScoreFans(res, rules.ScoreContext{
+	b := testScoreWin(x, res, rules.ScoreContext{
 		IsTsumo:        false,
 		IsHaiDi:        true,
 		IsGangShangHua: true,
@@ -141,7 +141,7 @@ func TestScoreFansContextualKinds(t *testing.T) {
 	}
 }
 
-func TestScoreFansDeepeningKinds(t *testing.T) {
+func TestScoreWinDeepeningKinds(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	win := countsFromTiles([]tile.Tile{
 		tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2), tile.Must(tile.SuitCharacters, 2),
@@ -150,7 +150,7 @@ func TestScoreFansDeepeningKinds(t *testing.T) {
 		tile.Must(tile.SuitDots, 5), tile.Must(tile.SuitDots, 5), tile.Must(tile.SuitDots, 5),
 		tile.Must(tile.SuitBamboo, 8), tile.Must(tile.SuitBamboo, 8),
 	})
-	b := x.ScoreFans(rules.HuResult{Win: win}, rules.ScoreContext{
+	b := testScoreWin(x, rules.HuResult{Win: win}, rules.ScoreContext{
 		IsGangShangPao: true,
 		GangRecords: []rules.GangRecord{
 			{Kind: rules.GangKindAn},

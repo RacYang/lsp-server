@@ -160,7 +160,7 @@ func (h *CommandHandler) gang(ctx context.Context, fields []string) error {
 	})
 }
 
-// exchange 换三张：本地先把三张从手牌移除以便立即更新 UI，待 ExchangeThreeDone 再补回新牌。
+// exchange 换三张：本地先把三张从手牌移除以便立即更新 UI，待 opening_done 再补回新牌。
 func (h *CommandHandler) exchange(ctx context.Context, fields []string) error {
 	if len(fields) < 4 {
 		return fmt.Errorf("用法: ex <t1> <t2> <t3> [direction]")
@@ -185,10 +185,15 @@ func (h *CommandHandler) exchange(ctx context.Context, fields []string) error {
 			v.Players[v.SeatIndex].HandCnt = len(v.Players[v.SeatIndex].Hand)
 		}
 	})
-	return h.client.Send(ctx, msgid.ExchangeThreeReq, &clientv1.Envelope{
+	return h.client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
 		ReqId:          newReqID("exchange"),
 		IdempotencyKey: newReqID("idem-exchange"),
-		Body:           &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles, Direction: direction, PhaseToken: h.state.PhaseToken()}},
+		Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
+			Action:     string(ActionExchangeThree),
+			Tiles:      append([]string(nil), tiles...),
+			Direction:  direction,
+			PhaseToken: h.state.PhaseToken(),
+		}},
 	})
 }
 
@@ -200,10 +205,14 @@ func (h *CommandHandler) que(ctx context.Context, fields []string) error {
 	if !ok {
 		return fmt.Errorf("未知花色 %q，仅支持 m/p/s", fields[1])
 	}
-	return h.client.Send(ctx, msgid.QueMenReq, &clientv1.Envelope{
+	return h.client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
 		ReqId:          newReqID("que"),
 		IdempotencyKey: newReqID("idem-que"),
-		Body:           &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: suit, PhaseToken: h.state.PhaseToken()}},
+		Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
+			Action:     string(ActionQueMen),
+			Suit:       suit,
+			PhaseToken: h.state.PhaseToken(),
+		}},
 	})
 }
 

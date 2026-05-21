@@ -13,19 +13,3 @@ const (
 func SeatFromInt(v int) Seat {
 	return domainroom.SeatFromInt(v)
 }
-
-func seatsToPersist(in []Seat) []int {
-	out := make([]int, 0, len(in))
-	for _, seat := range in {
-		out = append(out, int(seat))
-	}
-	return out
-}
-
-func seatsFromPersist(in []int) []Seat {
-	out := make([]Seat, 0, len(in))
-	for _, seat := range in {
-		out = append(out, SeatFromInt(seat))
-	}
-	return out
-}

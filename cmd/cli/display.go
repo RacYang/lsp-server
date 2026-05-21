@@ -226,6 +226,8 @@ var ruleDisplayNames = map[string]string{
 	"sichuan":                           "川麻血战",
 	"sichuan_xz":                        "川麻血战",
 	"sichuan_xuezhandaodi_huansanzhang": "川麻血战 (血战到底)",
+	"sichuan_xuezhandaodi_biaozhun":     "川麻血战 (标准)",
+	"guobiao_jingji_biaozhun":           "国标麻将 (竞技标准)",
 	"sichuan_dx":                        "川麻倒下",
 	"changsha":                          "长沙麻将",
 	"japanese":                          "日麻立直",
@@ -257,10 +259,8 @@ func phaseLabel(phase TablePhase) string {
 	switch phase {
 	case PhaseWaiting:
 		return "等待开局"
-	case PhaseExchange:
-		return "换三张"
-	case PhaseQueMen:
-		return "定缺"
+	case PhaseOpening:
+		return "开局"
 	case PhaseDiscard:
 		return "出牌"
 	case PhaseMyTurnIdle, PhaseMyTurnSelected:
@@ -303,11 +303,11 @@ func focusOnSeat(view RoomView, cursor *HandCursor, seat int32) bool {
 
 func selfHasActionFocus(view RoomView, cursor *HandCursor) bool {
 	switch DerivePhase(view, cursor) {
-	case PhaseExchange, PhaseQueMen, PhaseClaim, PhaseTsumo, PhaseMyTurnIdle, PhaseMyTurnSelected:
+	case PhaseOpening, PhaseClaim, PhaseTsumo, PhaseMyTurnIdle, PhaseMyTurnSelected:
 		return true
 	}
 	switch DeriveInteractionModel(view).Phase {
-	case PhaseExchange, PhaseQueMen, PhaseClaim, PhaseTsumo:
+	case PhaseOpening, PhaseClaim, PhaseTsumo:
 		return true
 	default:
 		return false
@@ -330,10 +330,12 @@ func actionCountdown(view RoomView, now time.Time) (int, bool) {
 		return 0, false
 	}
 	var total time.Duration
-	switch view.WaitingAction {
-	case "exchange_three", "que_men", "discard":
+	switch {
+	case view.RoundPhase == clientv1.Phase_PHASE_OPENING:
 		total = 15 * time.Second
-	case "claim_window", "tsumo_window":
+	case view.WaitingAction == "discard":
+		total = 15 * time.Second
+	case view.WaitingAction == "claim_window" || view.WaitingAction == "tsumo_window":
 		total = 5 * time.Second
 	default:
 		return 0, false
@@ -353,12 +355,13 @@ func focusSummary(view RoomView, now time.Time) string {
 	seat := view.ActingSeat
 	var action string
 	switch ux.Phase {
-	case PhaseExchange:
+	case PhaseOpening:
 		seat = view.SeatIndex
-		action = "换三张"
-	case PhaseQueMen:
-		seat = view.SeatIndex
-		action = "定缺"
+		if containsAction(ux.AllowedActions, ActionQueMen) || view.WaitingAction == "que_men" {
+			action = "定缺"
+		} else {
+			action = "换三张"
+		}
 	case PhaseClaim:
 		action = "等待响应"
 	case PhaseMyTurnIdle, PhaseMyTurnSelected, PhaseDiscard:

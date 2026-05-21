@@ -4,6 +4,7 @@ package hand
 import (
 	"fmt"
 
+	"racoo.cn/lsp/internal/mahjong/hu"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -23,14 +24,20 @@ func FromTiles(ts []tile.Tile) *Hand {
 	return &Hand{tiles: cp}
 }
 
-// Counts 返回 27 维计数，下标与 tile.Tile.Index 一致。
-func (h *Hand) Counts() [27]int {
-	var c [27]int
+// Counts 返回 34 维计数，下标与 tile.Tile.Index 一致；花牌不参与和牌牌型分解。
+func (h *Hand) Counts() hu.Counts {
+	var c hu.Counts
 	if h == nil {
 		return c
 	}
 	for _, t := range h.tiles {
-		c[t.Index()]++
+		if t.IsFlower() {
+			continue
+		}
+		idx := t.Index()
+		if idx >= 0 && idx < tile.PlayableTileCount {
+			c[idx]++
+		}
 	}
 	return c
 }

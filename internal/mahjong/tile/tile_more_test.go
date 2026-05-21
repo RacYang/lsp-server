@@ -31,7 +31,7 @@ func TestFromIndexInvalid(t *testing.T) {
 	if _, err := FromIndex(-1); err == nil {
 		t.Fatal("expected error")
 	}
-	if _, err := FromIndex(27); err == nil {
+	if _, err := FromIndex(FullTileCount); err == nil {
 		t.Fatal("expected error")
 	}
 }

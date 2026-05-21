@@ -144,16 +144,26 @@ func shouldDecide(view BotView) bool {
 	if view.SeatIndex < 0 {
 		return false
 	}
+	if isOpeningDecision(view) {
+		return true
+	}
 	switch view.WaitingAction {
-	case "exchange_three":
-		return len(view.HandTiles) >= 3
-	case "que_men", "discard", "tsumo_window":
-		return view.ActingSeat == view.SeatIndex || view.WaitingAction == "exchange_three" || view.WaitingAction == "que_men"
+	case "discard", "tsumo_window":
+		return view.ActingSeat == view.SeatIndex
 	case "claim_window":
 		actions := view.ClaimCandidates[view.SeatIndex]
 		return len(actions) > 0 || view.ActingSeat == view.SeatIndex
 	default:
 		return false
+	}
+}
+
+func isOpeningDecision(view BotView) bool {
+	switch view.WaitingAction {
+	case "", "none", "discard", "claim_window", "tsumo_window":
+		return false
+	default:
+		return containsAction(view.AvailableAction, view.WaitingAction) && len(view.HandTiles) >= 3
 	}
 }
 
@@ -184,19 +194,22 @@ func (r *Runner) sendAction(ctx context.Context, client *wsclient.Client, action
 	switch action.Kind {
 	case ActionExchangeThree:
 		r.state.RememberExchange(action.Tiles)
-		return client.Send(ctx, msgid.ExchangeThreeReq, &clientv1.Envelope{
+		return client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
 			ReqId:          newReqID("exchange"),
-			IdempotencyKey: r.idempotencyKey(msgid.ExchangeThreeReq),
-			Body: &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{
-				Tiles:     action.Tiles,
-				Direction: 0,
+			IdempotencyKey: r.idempotencyKey(msgid.OpeningActionReq),
+			Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
+				Action: string(ActionExchangeThree),
+				Tiles:  append([]string(nil), action.Tiles...),
 			}},
 		})
 	case ActionQueMen:
-		return client.Send(ctx, msgid.QueMenReq, &clientv1.Envelope{
+		return client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
 			ReqId:          newReqID("que"),
-			IdempotencyKey: r.idempotencyKey(msgid.QueMenReq),
-			Body:           &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: action.Suit}},
+			IdempotencyKey: r.idempotencyKey(msgid.OpeningActionReq),
+			Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
+				Action: string(ActionQueMen),
+				Suit:   action.Suit,
+			}},
 		})
 	case ActionDiscard:
 		return client.Send(ctx, msgid.DiscardReq, &clientv1.Envelope{
@@ -248,7 +261,7 @@ func (r *Runner) sleepForWaiting(ctx context.Context, waiting string) {
 		r.sleepThink(ctx, 700*time.Millisecond, 1600*time.Millisecond)
 	case "discard":
 		r.sleepThink(ctx, 900*time.Millisecond, 2400*time.Millisecond)
-	case "exchange_three", "que_men":
+	default:
 		r.sleepThink(ctx, time.Second, 2500*time.Millisecond)
 	}
 }
@@ -283,8 +296,7 @@ func rejected(env *clientv1.Envelope) bool {
 func actionResponse(env *clientv1.Envelope) bool {
 	switch env.GetBody().(type) {
 	case *clientv1.Envelope_ReadyResp,
-		*clientv1.Envelope_ExchangeThreeResp,
-		*clientv1.Envelope_QueMenResp,
+		*clientv1.Envelope_OpeningActionResp,
 		*clientv1.Envelope_DiscardResp,
 		*clientv1.Envelope_PongResp,
 		*clientv1.Envelope_GangResp,
@@ -300,10 +312,8 @@ func responseCode(env *clientv1.Envelope) clientv1.ErrorCode {
 	switch body := env.GetBody().(type) {
 	case *clientv1.Envelope_ReadyResp:
 		return body.ReadyResp.GetErrorCode()
-	case *clientv1.Envelope_ExchangeThreeResp:
-		return body.ExchangeThreeResp.GetErrorCode()
-	case *clientv1.Envelope_QueMenResp:
-		return body.QueMenResp.GetErrorCode()
+	case *clientv1.Envelope_OpeningActionResp:
+		return body.OpeningActionResp.GetErrorCode()
 	case *clientv1.Envelope_DiscardResp:
 		return body.DiscardResp.GetErrorCode()
 	case *clientv1.Envelope_PongResp:

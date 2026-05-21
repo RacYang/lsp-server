@@ -2,7 +2,6 @@ package room
 
 import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -17,7 +16,8 @@ func (rs *RoundState) ruleMeta() *clientv1.RuleMeta {
 	if rs == nil {
 		return nil
 	}
-	meta := rules.CapabilitiesOf(rs.rule).Metadata
+	rs.ensureRuleRuntime()
+	meta := rs.caps.Metadata
 	if meta.DisplayName == "" && rs.rule != nil {
 		meta.DisplayName = rs.rule.Name()
 	}
@@ -34,7 +34,7 @@ func (rs *RoundState) totalScores() []*clientv1.SeatScore {
 	if rs == nil {
 		return nil
 	}
-	balances := seatBalancesFromLedger(rs.ledger)
+	balances := seatBalancesFromScoreEvents(rs.scoreEvents)
 	out := make([]*clientv1.SeatScore, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		userID := ""
@@ -107,17 +107,7 @@ func (p RoundProgress) applyToStart(start *clientv1.StartGameNotify) {
 	start.PhaseUpdate = p.toPhaseUpdate()
 }
 
-func (p RoundProgress) applyToExchangeDone(done *clientv1.ExchangeThreeDoneNotify) {
-	if done == nil {
-		return
-	}
-	done.Phase = p.Phase
-	done.Step = p.Step
-	done.ActingSeats = append([]int32(nil), p.ActingSeats...)
-	done.PhaseUpdate = p.toPhaseUpdate()
-}
-
-func (p RoundProgress) applyToQueMenDone(done *clientv1.QueMenDoneNotify) {
+func (p RoundProgress) applyToOpeningDone(done *clientv1.OpeningDoneNotify) {
 	if done == nil {
 		return
 	}

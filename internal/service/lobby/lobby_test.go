@@ -36,12 +36,15 @@ func TestListRulesReturnsRegisteredRuleMeta(t *testing.T) {
 	s := New()
 	rules, err := s.ListRules(context.Background())
 	require.NoError(t, err)
-	require.Len(t, rules, 2)
-	require.Equal(t, "sichuan_xuezhandaodi_biaozhun", rules[0].RuleID)
-	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", rules[1].RuleID)
+	require.Len(t, rules, 3)
+	require.Equal(t, "guobiao_jingji_biaozhun", rules[0].RuleID)
+	require.Equal(t, "sichuan_xuezhandaodi_biaozhun", rules[1].RuleID)
+	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", rules[2].RuleID)
 	require.NotEmpty(t, rules[0].DisplayName)
-	require.NotContains(t, rules[0].EnabledFeatures, "exchange_three")
-	require.Contains(t, rules[1].EnabledFeatures, "exchange_three")
+	require.Contains(t, rules[0].EnabledFeatures, "mcr_81_fans")
+	require.Contains(t, rules[0].EnabledFeatures, "full_tiles")
+	require.NotContains(t, rules[1].EnabledFeatures, "exchange_three")
+	require.Contains(t, rules[2].EnabledFeatures, "exchange_three")
 }
 
 func TestLeaveRoomFreesSeatForImmediateAutoMatch(t *testing.T) {

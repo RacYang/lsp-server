@@ -153,8 +153,12 @@ func overlayHelpLines(view RoomView) []string {
 	switch phase {
 	case PhaseClaim:
 		lines = append([]string{"当前模式: -- 鸣牌 --", "h 胡 / g 杠 / p 碰 / n 过 / Enter确认", ""}, lines...)
-	case PhaseExchange:
-		lines = append([]string{"当前模式: -- 换三张 --", "Enter标记三张 / Enter提交", ""}, lines...)
+	case PhaseOpening:
+		if containsAction(DeriveInteractionModel(view).Allowed, ActionQueMen) {
+			lines = append([]string{"当前模式: -- 定缺 --", "m/p/s 选缺门 / Enter确认", ""}, lines...)
+		} else {
+			lines = append([]string{"当前模式: -- 开局 --", "Space 标记 / Enter提交", ""}, lines...)
+		}
 	case PhaseSettlement:
 		lines = append([]string{"当前模式: -- 结算 --", "R 再来一局 / L 离桌 / Enter停留", ""}, lines...)
 	}

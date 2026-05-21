@@ -81,7 +81,7 @@ func (e *Engine) ApplyPongByTimeout(ctx context.Context, rs *RoundState, seat Se
 		return nil, err
 	}
 	//nolint:gosec // G115：queBySeat 仅在 0..2 范围（三种花色），不会溢出 byte
-	discard := chooseDiscard(rs.hands[seat], tile.Suit(rs.queBySeat[seat]))
+	discard := chooseDiscard(rs.hands[seat], tile.Suit(rs.missingSuitBySeat()[seat]))
 	next, err := e.ApplyDiscard(ctx, rs, seat, discard.String())
 	if err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 		rs.recordMeldFact(seat, "zhi_gang", []tile.Tile{gangTile, gangTile, gangTile, gangTile}, fromSeat)
 		rs.lastDiscard = 0
 		rs.lastDiscardSeat = SeatInvalid
-		appendGangEntries(rs, seat, gangTile, rules.GangKindMing, fromSeat)
+		rs.appendGangScoreEvents(seat, gangTile, rules.GangKindMing, fromSeat)
 	case buGang:
 		rs.lastDiscard = gangTile
 		rs.lastDiscardSeat = seat
@@ -229,7 +229,7 @@ func (e *Engine) ApplyGang(_ context.Context, rs *RoundState, seat Seat, tileTex
 			}
 		}
 		rs.recordMeldFact(seat, "an_gang", []tile.Tile{gangTile, gangTile, gangTile, gangTile}, SeatInvalid)
-		appendGangEntries(rs, seat, gangTile, rules.GangKindAn, SeatInvalid)
+		rs.appendGangScoreEvents(seat, gangTile, rules.GangKindAn, SeatInvalid)
 	}
 	return e.finishGangAction(rs, seat, gangTile, meldKind, gangFromSeat)
 }
@@ -346,15 +346,15 @@ func (e *Engine) ApplyPass(_ context.Context, rs *RoundState, seat Seat) ([]Noti
 }
 
 func (rs *RoundState) canClaimPong(seat Seat) bool {
-	return rs != nil && !rs.isHued(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "pong")
+	return rs != nil && !rs.isSeatOutAfterHu(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "pong")
 }
 
 func (rs *RoundState) canClaimGang(seat Seat) bool {
-	return rs != nil && !rs.isHued(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "gang")
+	return rs != nil && !rs.isSeatOutAfterHu(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "gang")
 }
 
 func (rs *RoundState) canClaimChi(seat Seat) bool {
-	return rs != nil && !rs.isHued(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "chi")
+	return rs != nil && !rs.isSeatOutAfterHu(seat) && rs.isTopClaimSeat(seat) && rs.hasClaimAction(seat, "chi")
 }
 
 func (rs *RoundState) canSelfGang(seat Seat, tileText string) bool {
@@ -366,34 +366,36 @@ func (rs *RoundState) canSelfGang(seat Seat, tileText string) bool {
 }
 
 func (rs *RoundState) canAnGang(seat Seat, target tile.Tile) bool {
-	if rs == nil || seat != rs.turn || !rs.waitingDiscard || rs.isHued(seat) {
+	if rs == nil || seat != rs.turn || !rs.waitingDiscard || rs.isSeatOutAfterHu(seat) {
 		return false
 	}
-	if rs.tileIsQueSuit(seat, target) {
-		return false
-	}
-	count := 0
-	for _, t := range rs.hands[seat].Tiles() {
-		if t == target {
-			count++
-		}
-	}
-	return count >= 4
+	rs.ensureRuleRuntime()
+	policy := rs.caps.SelfActions
+	return policy.CanAnGang(rules.SelfActionContext{
+		Seat:      seat,
+		Tile:      target,
+		Hand:      rs.hands[seat],
+		RuleState: rs.ruleState,
+		Melds:     rs.meldContexts(seat),
+	})
 }
 
 func (rs *RoundState) canBuGang(seat Seat, target tile.Tile) bool {
-	if rs == nil || seat != rs.turn || !rs.waitingDiscard || rs.isHued(seat) {
+	if rs == nil || seat != rs.turn || !rs.waitingDiscard || rs.isSeatOutAfterHu(seat) {
 		return false
 	}
-	if target == 0 || rs.tileIsQueSuit(seat, target) || !rs.hasPongMeld(seat, target) {
+	if target == 0 || !rs.hasPongMeld(seat, target) {
 		return false
 	}
-	for _, t := range rs.hands[seat].Tiles() {
-		if t == target {
-			return true
-		}
-	}
-	return false
+	rs.ensureRuleRuntime()
+	policy := rs.caps.SelfActions
+	return policy.CanBuGang(rules.SelfActionContext{
+		Seat:      seat,
+		Tile:      target,
+		Hand:      rs.hands[seat],
+		RuleState: rs.ruleState,
+		Melds:     rs.meldContexts(seat),
+	})
 }
 
 func (rs *RoundState) completeBuGang(seat Seat, gangTile tile.Tile) error {
@@ -406,7 +408,7 @@ func (rs *RoundState) completeBuGang(seat Seat, gangTile tile.Tile) error {
 	if !rs.upgradePongToBuGang(seat, gangTile) {
 		return fmt.Errorf("missing pong meld for bu gang")
 	}
-	appendGangEntries(rs, seat, gangTile, rules.GangKindBu, SeatInvalid)
+	rs.appendGangScoreEvents(seat, gangTile, rules.GangKindBu, SeatInvalid)
 	rs.pendingGangSeat = SeatInvalid
 	rs.pendingGangTile = 0
 	return nil
@@ -559,11 +561,10 @@ func (rs *RoundState) buildClaimCandidates() []claimCandidate {
 	if rs == nil || rs.lastDiscard == 0 || rs.lastDiscardSeat < 0 {
 		return nil
 	}
+	rs.ensureRuleRuntime()
 	out := make([]claimCandidate, 0, 3)
 	claimPolicy := rs.caps.Claims
-	if claimPolicy == nil {
-		claimPolicy = rules.CapabilitiesOf(rs.rule).Claims
-	}
+	winPolicy := rs.caps.Win
 	for offset := 1; offset < 4; offset++ {
 		seat := Seat((int(rs.lastDiscardSeat) + offset) % 4)
 		if rs.isSurrendered(seat) {
@@ -575,52 +576,18 @@ func (rs *RoundState) buildClaimCandidates() []claimCandidate {
 			Tile:            rs.lastDiscard,
 			Hand:            rs.hands[seat],
 			QiangGangWindow: rs.qiangGangWindow,
-			Hued:            rs.isHued(seat),
+			Hued:            rs.isSeatOutAfterHu(seat),
 			HuContext:       rs.claimHuContext(seat),
-			CheckHu:         rs.rule.CheckHu,
+			CheckHu:         winPolicy.CheckHu,
+			RuleState:       rs.ruleState,
+			Melds:           rs.meldContexts(seat),
 		})
 		actions, priority, choiceAction := normalizeClaimActions(claimActions)
-		if rs.tileIsQueSuit(seat, rs.lastDiscard) {
-			actions, priority, choiceAction = filterQueSuitClaimActions(actions, priority, choiceAction)
-		}
 		if len(actions) > 0 {
 			out = append(out, claimCandidate{seat: seat, actions: actions, priority: priority, choiceAction: choiceAction})
 		}
 	}
 	return out
-}
-
-func (rs *RoundState) tileIsQueSuit(seat Seat, t tile.Tile) bool {
-	if rs == nil || seat < 0 || int(seat) >= len(rs.queBySeat) || t == 0 {
-		return false
-	}
-	if int(seat) >= len(rs.queSubmitted) || !rs.queSubmitted[seat] {
-		return false
-	}
-	que := rs.queBySeat[seat]
-	if que < 0 || que > 2 {
-		return false
-	}
-	return int32(t.Suit()) == que
-}
-
-func filterQueSuitClaimActions(actions []string, priority int, choiceAction string) ([]string, int, string) {
-	out := actions[:0]
-	for _, action := range actions {
-		switch action {
-		case string(rules.ActionPong), string(rules.ActionGang), string(rules.ActionChi):
-			continue
-		default:
-			out = append(out, action)
-		}
-	}
-	if len(out) == len(actions) {
-		return actions, priority, choiceAction
-	}
-	if len(out) == 0 {
-		return nil, 0, ""
-	}
-	return out, legacyClaimPriority(out), ""
 }
 
 func (rs *RoundState) bestClaimCandidate() (claimCandidate, bool) {
@@ -641,7 +608,16 @@ func (rs *RoundState) bestClaimCandidate() (claimCandidate, bool) {
 
 func (rs *RoundState) isTopClaimSeat(seat Seat) bool {
 	candidate, ok := rs.bestClaimCandidate()
-	return ok && candidate.seat == seat
+	if !ok {
+		return false
+	}
+	targetPriority := candidate.claimPriority()
+	for _, current := range rs.claimCandidates {
+		if current.seat == seat && current.claimPriority() == targetPriority {
+			return true
+		}
+	}
+	return false
 }
 
 func (rs *RoundState) removeClaimCandidate(seat Seat) {
@@ -669,14 +645,38 @@ func (rs *RoundState) hasClaimAction(seat Seat, action string) bool {
 	return false
 }
 
+func (rs *RoundState) claimPriorityForSeat(seat Seat) int {
+	if rs == nil || !rs.claimWindowOpen {
+		return 0
+	}
+	for _, candidate := range rs.claimCandidates {
+		if candidate.seat == seat {
+			return candidate.claimPriority()
+		}
+	}
+	return 0
+}
+
+func (rs *RoundState) hasRemainingHuClaimAtPriority(priority int) bool {
+	if rs == nil || priority <= 0 {
+		return false
+	}
+	for _, candidate := range rs.claimCandidates {
+		if candidate.claimPriority() == priority && hasAction(candidate.actions, string(rules.ActionHu)) {
+			return true
+		}
+	}
+	return false
+}
+
 func (candidate claimCandidate) claimPriority() int {
 	if candidate.priority > 0 {
 		return candidate.priority
 	}
-	return legacyClaimPriority(candidate.actions)
+	return claimPriority(candidate.actions)
 }
 
-func legacyClaimPriority(actions []string) int {
+func claimPriority(actions []string) int {
 	if hasAction(actions, string(rules.ActionHu)) {
 		return 3
 	}
@@ -764,7 +764,7 @@ func (candidate claimCandidate) claimChoiceAction() string {
 }
 
 func (rs *RoundState) rawCanClaimGang(seat Seat) bool {
-	if rs == nil || rs.lastDiscard == 0 || rs.lastDiscardSeat < 0 || seat == rs.lastDiscardSeat || rs.isHued(seat) {
+	if rs == nil || rs.lastDiscard == 0 || rs.lastDiscardSeat < 0 || seat == rs.lastDiscardSeat || rs.isSeatOutAfterHu(seat) {
 		return false
 	}
 	count := 0

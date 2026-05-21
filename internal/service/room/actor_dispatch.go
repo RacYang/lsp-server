@@ -216,20 +216,12 @@ func (a *roomActor) syncSurrenderedFromRound() {
 	}
 }
 
-func (a *roomActor) doExchangeThree(userID string, tiles []string, direction int32) ([]Notification, error) {
+func (a *roomActor) doOpeningAction(userID, action string, tiles []string, direction, suit int32, params map[string]string) ([]Notification, error) {
 	seat, err := a.seatOf(userID)
 	if err != nil {
 		return nil, err
 	}
-	return a.engine.ApplyExchangeThreeByPlayer(context.Background(), a.round, seat, tiles, direction)
-}
-
-func (a *roomActor) doQueMen(userID string, suit int32) ([]Notification, error) {
-	seat, err := a.seatOf(userID)
-	if err != nil {
-		return nil, err
-	}
-	return a.engine.ApplyQueMen(context.Background(), a.round, seat, suit)
+	return a.engine.ApplyOpeningActionByPlayer(context.Background(), a.round, seat, action, tiles, direction, suit, params)
 }
 
 func (a *roomActor) seatOf(userID string) (Seat, error) {
@@ -253,7 +245,7 @@ func (a *roomActor) closeRoomAfterRound() {
 	}
 	if a.round != nil {
 		var scores [4]int32
-		for seat, score := range seatBalancesFromLedger(a.round.ledger) {
+		for seat, score := range seatBalancesFromScoreEvents(a.round.scoreEvents) {
 			if seat < len(scores) {
 				scores[seat] = score
 			}

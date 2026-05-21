@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -115,34 +116,15 @@ func applyEnvelopeLocked(v *RoomView, env *clientv1.Envelope) {
 		v.Reconnecting = true
 		v.LastError = "服务端要求切换网关"
 		appendLog(v, "收到路由重定向: "+body.RouteRedirect.GetWsUrl())
-	case *clientv1.Envelope_ExchangeThreeResp:
-		appendResponseLog(v, "换三张", body.ExchangeThreeResp.GetErrorCode(), body.ExchangeThreeResp.GetErrorMessage())
-		// [E2.2] 服务端拒绝必须把原因落到 UXTransient notice，便于玩家立刻读到并改选；
-		// 不在这里清 Marked，让 cursor 继续保留先前选择以便玩家改 1～2 张就重新提交。
-		if reason := envelopeError(body.ExchangeThreeResp.GetErrorCode(), body.ExchangeThreeResp.GetErrorMessage()); reason != "" {
-			v.UXNotice = "换三张被拒绝：" + reason
+	case *clientv1.Envelope_OpeningActionResp:
+		label := openingActionLabel(v.WaitingAction)
+		appendResponseLog(v, label, body.OpeningActionResp.GetErrorCode(), body.OpeningActionResp.GetErrorMessage())
+		if reason := envelopeError(body.OpeningActionResp.GetErrorCode(), body.OpeningActionResp.GetErrorMessage()); reason != "" {
+			v.UXNotice = label + "被拒绝：" + reason
 			v.UXNoticeUntil = time.Now().Add(3 * time.Second)
 		}
-	case *clientv1.Envelope_ExchangeThreeDone:
-		applyExchangeDone(v, body.ExchangeThreeDone)
-	case *clientv1.Envelope_QueMenResp:
-		appendResponseLog(v, "定缺", body.QueMenResp.GetErrorCode(), body.QueMenResp.GetErrorMessage())
-		// [Q1.1] 服务端拒绝定缺时同样把原因落到 UXTransient，避免玩家误以为已生效。
-		if reason := envelopeError(body.QueMenResp.GetErrorCode(), body.QueMenResp.GetErrorMessage()); reason != "" {
-			v.UXNotice = "定缺被拒绝：" + reason
-			v.UXNoticeUntil = time.Now().Add(3 * time.Second)
-		}
-	case *clientv1.Envelope_QueMenDone:
-		for seat, suit := range body.QueMenDone.GetQueSuitBySeat() {
-			if seat < len(v.QueBySeat) {
-				v.QueBySeat[seat] = suit
-			}
-		}
-		applyRoundProgressFromPhase(v, body.QueMenDone.GetPhase(), body.QueMenDone.GetStep(), body.QueMenDone.GetActingSeats())
-		if body.QueMenDone.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, body.QueMenDone.GetStep(), body.QueMenDone.GetActingSeats(), "discard", []string{"discard"})
-		}
-		appendLog(v, "定缺完成")
+	case *clientv1.Envelope_OpeningDone:
+		applyOpeningDone(v, body.OpeningDone)
 	case *clientv1.Envelope_Snapshot:
 		applySnapshot(v, body.Snapshot)
 	case *clientv1.Envelope_PongResp:
@@ -283,10 +265,10 @@ func applyDraw(v *RoomView, draw *clientv1.DrawTileNotify) {
 		applyPhaseUpdate(v, pu)
 	} else {
 		v.DeadlineUnixMS = draw.GetDeadlineUnixMs()
-	}
-	applyRoundProgressFromPhase(v, draw.GetPhase(), draw.GetStep(), draw.GetActingSeats())
-	if draw.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-		applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, draw.GetStep(), []int32{seat}, "discard", []string{"discard"})
+		applyRoundProgressFromPhase(v, draw.GetPhase(), draw.GetStep(), draw.GetActingSeats())
+		if draw.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
+			applyRoundProgress(v, clientv1.Phase_PHASE_DISCARD, draw.GetStep(), []int32{seat}, "discard", []string{"discard"})
+		}
 	}
 	tsumoPending := v.WaitingAction == "tsumo_window"
 	if duplicate {
@@ -337,16 +319,10 @@ func applyAction(v *RoomView, action *clientv1.ActionNotify) {
 			CreatedAtMs: detail.GetCreatedAtMs(),
 		}
 	}
-	applyRoundProgressFromPhase(v, action.GetPhase(), action.GetStep(), action.GetActingSeats())
+	if action.GetPhaseUpdate() == nil {
+		applyRoundProgressFromPhase(v, action.GetPhase(), action.GetStep(), action.GetActingSeats())
+	}
 	switch action.GetAction() {
-	case "exchange_three":
-		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			applyRoundProgress(v, clientv1.Phase_PHASE_EXCHANGE, action.GetStep(), action.GetActingSeats(), "exchange_three", []string{"exchange_three"})
-		}
-	case "que_men":
-		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-			applyRoundProgress(v, clientv1.Phase_PHASE_QUE_MEN, action.GetStep(), action.GetActingSeats(), "que_men", []string{"que_men"})
-		}
 	case "discard":
 		applyDiscardAction(v, seat, action.GetTile(), action.GetStep())
 		if action.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
@@ -561,15 +537,31 @@ func removeClaimedDiscard(v *RoomView, claimer int32, tile string) {
 	}
 }
 
-func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
-	applyRoundProgressFromPhase(v, done.GetPhase(), done.GetStep(), done.GetActingSeats())
-	if done.GetDirection() > 0 {
-		v.ExchangeDirection = done.GetDirection()
+func applyOpeningDone(v *RoomView, done *clientv1.OpeningDoneNotify) {
+	if done == nil {
+		return
 	}
-	for _, item := range done.GetPerSeat() {
+	if done.GetPhaseUpdate() == nil {
+		applyRoundProgressFromPhase(v, done.GetPhase(), done.GetStep(), done.GetActingSeats())
+	}
+	switch {
+	case done.GetAction() == "exchange_three" || done.GetKind() == "exchange_done":
+		applyOpeningExchangeDone(v, done)
+	case done.GetAction() == "que_men" || done.GetKind() == "missing_suit_done":
+		applyOpeningMissingSuitDone(v, done)
+	default:
+		appendLog(v, "开局步骤完成: "+done.GetAction())
+	}
+}
+
+func applyOpeningExchangeDone(v *RoomView, done *clientv1.OpeningDoneNotify) {
+	if direction, err := strconv.ParseInt(done.GetParams()["direction"], 10, 32); err == nil && direction > 0 {
+		v.ExchangeDirection = int32(direction) //nolint:gosec // 协议方向为小整数
+	}
+	for _, item := range openingSeatTiles(done, "received") {
 		if item.GetSeatIndex() == v.SeatIndex {
 			p := &v.Players[v.SeatIndex]
-			away := done.GetYourExchangedAway()
+			away := openingLocalTiles(done, "exchanged_away")
 			if len(away) == 0 {
 				away = v.PendingExchangeAway
 			}
@@ -582,10 +574,52 @@ func applyExchangeDone(v *RoomView, done *clientv1.ExchangeThreeDoneNotify) {
 			break
 		}
 	}
-	if done.GetPhase() == clientv1.Phase_PHASE_UNSPECIFIED {
-		applyRoundProgress(v, clientv1.Phase_PHASE_QUE_MEN, done.GetStep(), done.GetActingSeats(), "que_men", []string{"que_men"})
-	}
 	appendLog(v, "换三张完成")
+}
+
+func applyOpeningMissingSuitDone(v *RoomView, done *clientv1.OpeningDoneNotify) {
+	for seat, suit := range openingSeatInts(done, "que_suit") {
+		if seat < len(v.QueBySeat) {
+			v.QueBySeat[seat] = suit
+		}
+	}
+	appendLog(v, "定缺完成")
+}
+
+func openingSeatTiles(done *clientv1.OpeningDoneNotify, key string) []*clientv1.SeatTiles {
+	if done == nil {
+		return nil
+	}
+	for _, group := range done.GetSeatTiles() {
+		if group.GetKey() == key {
+			return group.GetSeats()
+		}
+	}
+	return nil
+}
+
+func openingSeatInts(done *clientv1.OpeningDoneNotify, key string) []int32 {
+	if done == nil {
+		return nil
+	}
+	for _, group := range done.GetSeatInts() {
+		if group.GetKey() == key {
+			return group.GetValues()
+		}
+	}
+	return nil
+}
+
+func openingLocalTiles(done *clientv1.OpeningDoneNotify, key string) []string {
+	if done == nil {
+		return nil
+	}
+	for _, group := range done.GetLocalTiles() {
+		if group.GetKey() == key {
+			return append([]string(nil), group.GetTiles()...)
+		}
+	}
+	return nil
 }
 
 func setWaitingAction(v *RoomView, action string, available []string) {
@@ -612,20 +646,16 @@ func extractPhaseUpdate(env *clientv1.Envelope) *clientv1.PhaseUpdate {
 		return body.DrawTile.GetPhaseUpdate()
 	case *clientv1.Envelope_Action:
 		return body.Action.GetPhaseUpdate()
-	case *clientv1.Envelope_ExchangeThreeDone:
-		return body.ExchangeThreeDone.GetPhaseUpdate()
-	case *clientv1.Envelope_QueMenDone:
-		return body.QueMenDone.GetPhaseUpdate()
+	case *clientv1.Envelope_OpeningDone:
+		return body.OpeningDone.GetPhaseUpdate()
 	case *clientv1.Envelope_Settlement:
 		return body.Settlement.GetPhaseUpdate()
 	case *clientv1.Envelope_Snapshot:
 		return body.Snapshot.GetPhaseUpdate()
 	case *clientv1.Envelope_DiscardResp:
 		return body.DiscardResp.GetPhaseUpdate()
-	case *clientv1.Envelope_ExchangeThreeResp:
-		return body.ExchangeThreeResp.GetPhaseUpdate()
-	case *clientv1.Envelope_QueMenResp:
-		return body.QueMenResp.GetPhaseUpdate()
+	case *clientv1.Envelope_OpeningActionResp:
+		return body.OpeningActionResp.GetPhaseUpdate()
 	case *clientv1.Envelope_PongResp:
 		return body.PongResp.GetPhaseUpdate()
 	case *clientv1.Envelope_GangResp:
@@ -651,6 +681,33 @@ func applyPhaseUpdate(v *RoomView, pu *clientv1.PhaseUpdate) {
 	}
 	v.DeadlineUnixMS = pu.GetDeadlineUnixMs()
 	v.PhaseReason = pu.GetReason()
+	if phase := pu.GetPhase(); phase != clientv1.Phase_PHASE_UNSPECIFIED {
+		v.RoundPhase = phase
+	}
+	actingSeats := pu.GetActingSeats()
+	if actingSeats != nil {
+		v.ActingSeats = append([]int32(nil), actingSeats...)
+		if len(actingSeats) > 0 {
+			v.ActingSeat = actingSeats[0]
+		} else if pu.GetReason() == clientv1.WaitingReason_WAITING_REASON_NONE {
+			v.ActingSeat = -1
+		}
+	}
+	available := append([]string(nil), pu.GetAvailableActions()...)
+	switch pu.GetReason() {
+	case clientv1.WaitingReason_WAITING_REASON_OPENING:
+		setWaitingAction(v, firstAvailableAction(available), available)
+	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
+		setWaitingAction(v, "discard", availableOrDefault(available, "discard"))
+	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
+		setWaitingAction(v, "claim_window", available)
+	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
+		setWaitingAction(v, "tsumo_window", available)
+	case clientv1.WaitingReason_WAITING_REASON_NONE:
+		if len(available) == 0 {
+			setWaitingAction(v, "none", nil)
+		}
+	}
 	if serverNow := pu.GetServerNowUnixMs(); serverNow > 0 {
 		clientNow := time.Now().UnixMilli()
 		offset := serverNow - clientNow
@@ -661,6 +718,20 @@ func applyPhaseUpdate(v *RoomView, pu *clientv1.PhaseUpdate) {
 			v.ServerClockOffsetMS = (v.ServerClockOffsetMS*4 + offset) / 5
 		}
 	}
+}
+
+func firstAvailableAction(actions []string) string {
+	if len(actions) == 0 {
+		return "none"
+	}
+	return actions[0]
+}
+
+func availableOrDefault(actions []string, fallback string) []string {
+	if len(actions) > 0 {
+		return actions
+	}
+	return []string{fallback}
 }
 
 // ServerNowUnixMS 返回客户端估计的服务端"现在"时间戳（毫秒）。
@@ -700,10 +771,8 @@ func applyRoundProgress(v *RoomView, phase clientv1.Phase, step int64, actingSea
 
 func waitKindForRoundPhase(phase clientv1.Phase) (string, []string) {
 	switch phase {
-	case clientv1.Phase_PHASE_EXCHANGE:
-		return "exchange_three", []string{"exchange_three"}
-	case clientv1.Phase_PHASE_QUE_MEN:
-		return "que_men", []string{"que_men"}
+	case clientv1.Phase_PHASE_OPENING:
+		return "none", nil
 	case clientv1.Phase_PHASE_DRAW:
 		return "none", nil
 	case clientv1.Phase_PHASE_DISCARD:
@@ -721,10 +790,8 @@ func waitKindForRoundPhase(phase clientv1.Phase) (string, []string) {
 
 func waitingReasonForRoundState(phase clientv1.Phase, waitingAction string) clientv1.WaitingReason {
 	switch {
-	case phase == clientv1.Phase_PHASE_EXCHANGE || waitingAction == "exchange_three":
-		return clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
-	case phase == clientv1.Phase_PHASE_QUE_MEN || waitingAction == "que_men":
-		return clientv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case phase == clientv1.Phase_PHASE_OPENING:
+		return clientv1.WaitingReason_WAITING_REASON_OPENING
 	case phase == clientv1.Phase_PHASE_CLAIM || waitingAction == "claim_window":
 		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
 	case phase == clientv1.Phase_PHASE_TSUMO || waitingAction == "tsumo_window":
@@ -752,10 +819,8 @@ func envelopeStep(env *clientv1.Envelope) int64 {
 		return body.DrawTile.GetStep()
 	case *clientv1.Envelope_Action:
 		return body.Action.GetStep()
-	case *clientv1.Envelope_ExchangeThreeDone:
-		return body.ExchangeThreeDone.GetStep()
-	case *clientv1.Envelope_QueMenDone:
-		return body.QueMenDone.GetStep()
+	case *clientv1.Envelope_OpeningDone:
+		return body.OpeningDone.GetStep()
 	case *clientv1.Envelope_StartGame:
 		return body.StartGame.GetStep()
 	default:
@@ -984,6 +1049,17 @@ func appendResponseLog(v *RoomView, label string, code clientv1.ErrorCode, messa
 	v.UXNotice = notice
 	v.UXNoticeUntil = time.Now().Add(2 * time.Second)
 	appendLog(v, notice)
+}
+
+func openingActionLabel(action string) string {
+	switch action {
+	case "exchange_three":
+		return "换三张"
+	case "que_men":
+		return "定缺"
+	default:
+		return "开局动作"
+	}
 }
 
 func appendLog(v *RoomView, text string) {

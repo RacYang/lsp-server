@@ -1,7 +1,6 @@
 package xuezhandaodi
 
 import (
-	"context"
 	"testing"
 
 	"racoo.cn/lsp/internal/mahjong/hand"
@@ -18,8 +17,8 @@ func TestName(t *testing.T) {
 
 func TestBuildWallSeedZero(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
-	w1 := x.BuildWall(context.Background(), 0)
-	w2 := x.BuildWall(context.Background(), 0)
+	w1 := testBuildWall(x, 0)
+	w2 := testBuildWall(x, 0)
 	if len(w1.Tiles()) != len(w2.Tiles()) {
 		t.Fatal("wall size mismatch")
 	}
@@ -28,7 +27,7 @@ func TestBuildWallSeedZero(t *testing.T) {
 func TestCheckHuNilHand(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	ti := tile.Must(tile.SuitDots, 1)
-	if _, ok := x.CheckHu(nil, ti, rules.HuContext{}); ok {
+	if _, ok := testCheckHu(x, nil, ti, rules.HuContext{}); ok {
 		t.Fatal("expected false")
 	}
 }
@@ -41,12 +40,12 @@ func TestCheckHuFalse(t *testing.T) {
 		h.Add(ti)
 	}
 	ti := tile.Must(tile.SuitDots, 5)
-	if _, ok := x.CheckHu(h, ti, rules.HuContext{}); ok {
+	if _, ok := testCheckHu(x, h, ti, rules.HuContext{}); ok {
 		t.Fatal("expected false")
 	}
 }
 
-func TestScoreFansPingHuOnly(t *testing.T) {
+func TestScoreWinPingHuOnly(t *testing.T) {
 	x := newRule(IDHuansanzhang, true)
 	h := hand.New()
 	for _, s := range []string{"m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "p1", "p1", "p1", "p2"} {
@@ -54,11 +53,11 @@ func TestScoreFansPingHuOnly(t *testing.T) {
 		h.Add(ti)
 	}
 	win, _ := tile.Parse("p2")
-	res, ok := x.CheckHu(h, win, rules.HuContext{})
+	res, ok := testCheckHu(x, h, win, rules.HuContext{})
 	if !ok {
 		t.Fatal("expected win")
 	}
-	b := x.ScoreFans(res, rules.ScoreContext{})
+	b := testScoreWin(x, res, rules.ScoreContext{})
 	if b.Total < 1 {
 		t.Fatalf("expected ping hu fan, got %+v", b)
 	}

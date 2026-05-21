@@ -43,7 +43,7 @@ func (x *rule) Name() string {
 
 func (x *rule) Capabilities() rules.CapabilitySet {
 	features := []string{
-		"que_men",
+		"missing_suit",
 		"no_chi",
 		"pong",
 		"ming_gang",
@@ -55,12 +55,10 @@ func (x *rule) Capabilities() rules.CapabilitySet {
 		"gang_shang",
 		"settlement_penalty",
 	}
-	opening := rules.StaticOpeningFlow{"que_men"}
 	displayName := "四川血战到底"
 	shortDesc := "定缺、无吃、胡牌后血战续行"
 	if x.withExchange {
 		features = append([]string{"exchange_three"}, features...)
-		opening = rules.StaticOpeningFlow{"exchange_three", "que_men"}
 		displayName = "四川血战到底（换三张）"
 		shortDesc = "换三张、定缺、无吃、胡牌后血战续行"
 	}
@@ -71,12 +69,17 @@ func (x *rule) Capabilities() rules.CapabilitySet {
 			EnabledFeatures: append([]string(nil), features...),
 			MaxHands:        4,
 		},
-		Opening:     opening,
-		Claims:      rules.NoEatingClaimPolicy{},
+		TileSet:     x,
+		Opening:     openingPolicy{withExchange: x.withExchange},
+		Claims:      claimPolicy{},
+		SelfActions: selfActionPolicy{},
+		Win:         x,
+		State:       x,
+		StateView:   x,
 		Turn:        rules.FeatureSet{"draw", "tsumo_window", "gang_follow_up", "hai_di"},
-		Scoring:     rules.FeatureSet{"fan_breakdown", "dealer", "advanced_fans", "gang_context"},
-		Settlement:  rules.FeatureSet{"ledger", "cha_hua_zhu", "cha_da_jiao", "tax_refund"},
-		Termination: rules.FeatureSet{"three_hued_or_wall_empty"},
+		Scoring:     scoringPolicy{rule: x},
+		Settlement:  settlementPolicy{rule: x},
+		Termination: terminationPolicy{},
 		Projection:  rules.FeatureSet{"per_seat_hand", "round_snapshot", "tui_authority"},
 	}
 }
@@ -99,8 +102,18 @@ func (x *rule) CheckHu(h *hand.Hand, target tile.Tile, hc rules.HuContext) (rule
 	}
 	closed := h.Counts()
 	closed[target.Index()]++
+	state := decodeRuleState(hc.RuleState)
+	normalizeRuleState(&state, x.withExchange)
 	if hc.HasQueSuit && countsHoldSuit(closed, hc.QueSuit) {
 		return rules.HuResult{}, false
+	}
+	if hc.Seat >= 0 && int(hc.Seat) < len(state.Submitted[openingStepMissing]) &&
+		state.Submitted[openingStepMissing][hc.Seat] &&
+		int(hc.Seat) < len(state.MissingSuits) {
+		missing := state.MissingSuits[hc.Seat]
+		if missing >= 0 && missing <= 2 && countsHoldSuit(closed, tile.Suit(missing)) {
+			return rules.HuResult{}, false
+		}
 	}
 	openMelds := countOpenMelds(hc.Melds)
 	if !hu.IsWinningWithOpenMelds(closed, openMelds) {
@@ -135,6 +148,48 @@ func countsHoldSuit(c hu.Counts, suit tile.Suit) bool {
 	return false
 }
 
+type settlementPolicy struct {
+	rule *rule
+}
+
+func (settlementPolicy) FeatureFlags() []string {
+	return []string{"score_events", "cha_hua_zhu", "cha_da_jiao", "tax_refund"}
+}
+
+func (p settlementPolicy) BuildSettlement(ctx rules.SettlementContext) rules.SettlementResult {
+	winnerSeats := winnerSeatsFromEvents(ctx.WinEvents)
+	state := decodeRuleState(ctx.RuleState)
+	withExchange := p.rule != nil && p.rule.withExchange
+	normalizeRuleState(&state, withExchange)
+	seatScores, penalties, breakdowns, detail := BuildSettlement(ctx.PlayerIDs, ctx.Hands, state.MissingSuits, ctx.ScoreEvents, winnerSeats)
+	winnerIDs := make([]string, 0, len(winnerSeats))
+	for _, seat := range winnerSeats {
+		if seat >= 0 && int(seat) < len(ctx.PlayerIDs) {
+			winnerIDs = append(winnerIDs, ctx.PlayerIDs[seat])
+		}
+	}
+	return rules.SettlementResult{
+		WinnerUserIDs:      winnerIDs,
+		SeatScores:         seatScores,
+		Penalties:          penalties,
+		PerWinnerBreakdown: breakdowns,
+		DetailText:         detail,
+	}
+}
+
+func winnerSeatsFromEvents(events []rules.WinEvent) []domainroom.Seat {
+	out := make([]domainroom.Seat, 0, len(events))
+	seen := map[domainroom.Seat]struct{}{}
+	for _, event := range events {
+		if _, ok := seen[event.Seat]; ok {
+			continue
+		}
+		seen[event.Seat] = struct{}{}
+		out = append(out, event.Seat)
+	}
+	return out
+}
+
 func countOpenMelds(melds []rules.MeldContext) int {
 	n := 0
 	for _, meld := range melds {
@@ -157,7 +212,7 @@ func cloneMeldContexts(in []rules.MeldContext) []rules.MeldContext {
 	return out
 }
 
-func (x *rule) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Breakdown {
+func (x *rule) scoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Breakdown {
 	var b fan.Breakdown
 	c := result.Win
 	specialOpening := false
@@ -234,14 +289,15 @@ func (x *rule) ScoreFans(result rules.HuResult, sc rules.ScoreContext) fan.Break
 	return b
 }
 
-func (x *rule) GameOver(state rules.GameState) bool {
-	if state.HuedPlayers >= 3 {
+type terminationPolicy struct{}
+
+func (terminationPolicy) FeatureFlags() []string { return []string{"three_hued_or_wall_empty"} }
+
+func (terminationPolicy) GameOver(ctx rules.TerminationContext) bool {
+	if len(ctx.WinEvents) >= 3 {
 		return true
 	}
-	if state.WallRemaining <= 0 {
-		return true
-	}
-	return false
+	return ctx.WallRemaining <= 0
 }
 
 func isQingYiSe(c hu.Counts) bool {

@@ -8,21 +8,17 @@ import (
 
 func TestNewFull108Count(t *testing.T) {
 	w := NewFull108()
-	if len(w.tiles) != 108 {
-		t.Fatalf("len=%d", len(w.tiles))
-	}
-	cnt := make(map[tile.Tile]int)
-	for _, ti := range w.tiles {
-		cnt[ti]++
-	}
-	if len(cnt) != 27 {
-		t.Fatalf("distinct tiles=%d", len(cnt))
-	}
-	for _, c := range cnt {
-		if c != 4 {
-			t.Fatalf("want 4 each, got %v", cnt)
-		}
-	}
+	assertWallCopies(t, w, 108, 27, 4, false)
+}
+
+func TestNewFull136Count(t *testing.T) {
+	w := NewFull136()
+	assertWallCopies(t, w, 136, 34, 4, false)
+}
+
+func TestNewFull144Count(t *testing.T) {
+	w := NewFull144()
+	assertWallCopies(t, w, 144, 42, 4, true)
 }
 
 func TestShuffleDeterministic(t *testing.T) {
@@ -47,5 +43,31 @@ func TestDrawExhaust(t *testing.T) {
 	}
 	if _, err := w.Draw(); err == nil {
 		t.Fatal("expected exhaust")
+	}
+}
+
+func assertWallCopies(t *testing.T, w *Wall, total, distinct, commonCopies int, hasFlowers bool) {
+	t.Helper()
+	if len(w.tiles) != total {
+		t.Fatalf("len=%d", len(w.tiles))
+	}
+	cnt := make(map[tile.Tile]int)
+	for _, ti := range w.tiles {
+		cnt[ti]++
+	}
+	if len(cnt) != distinct {
+		t.Fatalf("distinct tiles=%d", len(cnt))
+	}
+	for ti, c := range cnt {
+		want := commonCopies
+		if ti.IsFlower() {
+			if !hasFlowers {
+				t.Fatalf("unexpected flower %v", ti)
+			}
+			want = 1
+		}
+		if c != want {
+			t.Fatalf("tile %v want %d copies, got %d in %v", ti, want, c, cnt)
+		}
 	}
 }

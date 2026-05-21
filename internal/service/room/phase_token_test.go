@@ -10,10 +10,20 @@ package room
 import (
 	"errors"
 	"testing"
+
+	"racoo.cn/lsp/internal/mahjong/rules"
+	_ "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 )
 
 func TestRoundState_validatePhaseToken(t *testing.T) {
-	rs := &RoundState{step: 7, phaseReason: ReasonDiscard}
+	rule := rules.MustGet("sichuan_xuezhandaodi_huansanzhang")
+	rs := &RoundState{
+		step:        7,
+		phaseReason: ReasonDiscard,
+		rule:        rule,
+		ruleID:      rule.ID(),
+		caps:        rules.CapabilitiesOf(rule),
+	}
 
 	if err := rs.validatePhaseToken(nil); err != nil {
 		t.Fatalf("nil token must be accepted for backward compatibility, got %v", err)

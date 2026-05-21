@@ -3,6 +3,7 @@ package hand
 import (
 	"testing"
 
+	"racoo.cn/lsp/internal/mahjong/hu"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -11,7 +12,7 @@ func TestNilHandOperations(t *testing.T) {
 	if h.Len() != 0 {
 		t.Fatal("nil len")
 	}
-	if h.Counts() != ([27]int{}) {
+	if h.Counts() != (hu.Counts{}) {
 		t.Fatal("nil counts")
 	}
 	if h.Tiles() != nil {

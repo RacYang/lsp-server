@@ -89,14 +89,20 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body:   &clusterv1.ApplyEventRequest_ExchangeThree{ExchangeThree: &clusterv1.ExchangeThreeEvent{Tiles: append([]string(nil), hands[seat][:3]...)}},
+					Body: &clusterv1.ApplyEventRequest_OpeningAction{OpeningAction: &clusterv1.OpeningActionEvent{
+						Action: "exchange_three",
+						Tiles:  append([]string(nil), hands[seat][:3]...),
+					}},
 				})
 				require.NoError(t, err)
 			case "que_men":
 				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body:   &clusterv1.ApplyEventRequest_QueMen{QueMen: &clusterv1.QueMenEvent{Suit: 0}},
+					Body: &clusterv1.ApplyEventRequest_OpeningAction{OpeningAction: &clusterv1.OpeningActionEvent{
+						Action: "que_men",
+						Suit:   0,
+					}},
 				})
 				require.NoError(t, err)
 			case "pong_choice":
@@ -286,34 +292,38 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "exchange",
-			kind: roomsvc.KindExchangeThreeDone,
-			env: &clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-				Phase:       clientv1.Phase_PHASE_QUE_MEN,
+			kind: roomsvc.KindOpeningDone,
+			env: &clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+				Action:      "exchange_three",
+				Kind:        "exchange_done",
+				Params:      map[string]string{"direction": "3"},
+				Phase:       clientv1.Phase_PHASE_OPENING,
 				Step:        13,
 				ActingSeats: []int32{0, 1, 2, 3},
-				Direction:   3,
 			}}},
 			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clusterv1.Phase_PHASE_QUE_MEN, evt.GetExchangeThreeDone().GetPhase())
-				require.EqualValues(t, 13, evt.GetExchangeThreeDone().GetStep())
-				require.Equal(t, []int32{0, 1, 2, 3}, evt.GetExchangeThreeDone().GetActingSeats())
-				require.EqualValues(t, 3, evt.GetExchangeThreeDone().GetDirection())
+				require.Equal(t, clusterv1.Phase_PHASE_OPENING, evt.GetOpeningDone().GetPhase())
+				require.EqualValues(t, 13, evt.GetOpeningDone().GetStep())
+				require.Equal(t, []int32{0, 1, 2, 3}, evt.GetOpeningDone().GetActingSeats())
+				require.Equal(t, "3", evt.GetOpeningDone().GetParams()["direction"])
 			},
 		},
 		{
 			name: "que",
-			kind: roomsvc.KindQueMenDone,
-			env: &clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
+			kind: roomsvc.KindOpeningDone,
+			env: &clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+				Action:      "que_men",
+				Kind:        "missing_suit_done",
 				Phase:       clientv1.Phase_PHASE_DRAW,
 				Step:        14,
 				ActingSeats: []int32{0},
 			}}},
 			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetQueMenDone().GetPhase())
-				require.EqualValues(t, 14, evt.GetQueMenDone().GetStep())
-				require.Equal(t, []int32{0}, evt.GetQueMenDone().GetActingSeats())
+				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetOpeningDone().GetPhase())
+				require.EqualValues(t, 14, evt.GetOpeningDone().GetStep())
+				require.Equal(t, []int32{0}, evt.GetOpeningDone().GetActingSeats())
 			},
 		},
 	}
@@ -353,8 +363,12 @@ func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 
 	quePayload, err := proto.Marshal(&clientv1.Envelope{
 		ReqId: "q",
-		Body: &clientv1.Envelope_QueMenDone{
-			QueMenDone: &clientv1.QueMenDoneNotify{QueSuitBySeat: []int32{0, 1, 2, 0}},
+		Body: &clientv1.Envelope_OpeningDone{
+			OpeningDone: &clientv1.OpeningDoneNotify{
+				Action:   "que_men",
+				Kind:     "missing_suit_done",
+				SeatInts: []*clientv1.OpeningSeatInts{{Key: "que_suit", Values: []int32{0, 1, 2, 0}}},
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -366,7 +380,7 @@ func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	srv.persistRoomMeta(ctx, "r-meta", 1, &roomsvc.Notification{Kind: roomsvc.KindQueMenDone, Payload: quePayload})
+	srv.persistRoomMeta(ctx, "r-meta", 1, &roomsvc.Notification{Kind: roomsvc.KindOpeningDone, Payload: quePayload})
 	srv.persistRoomMeta(ctx, "r-meta", 2, &roomsvc.Notification{Kind: roomsvc.KindAction, Payload: actionPayload})
 
 	meta, ok, err := rdb.GetRoomSnapMeta(ctx, "r-meta")

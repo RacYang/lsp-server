@@ -109,7 +109,9 @@ func TestApplyPhaseUpdateRefreshesPhaseTokenStep(t *testing.T) {
 
 func TestFallbackRoundProgressRefreshesPhaseTokenReason(t *testing.T) {
 	st := NewAppState("我")
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+		Action:      "que_men",
+		Kind:        "missing_suit_done",
 		Phase:       clientv1.Phase_PHASE_DISCARD,
 		Step:        13,
 		ActingSeats: []int32{0},
@@ -210,11 +212,13 @@ func TestQueMenStartGameDrawKeepsAuthoritativePhase(t *testing.T) {
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{SeatIndex: 0, Tiles: []string{"m1", "m2", "m3"}}}})
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
-		QueSuitBySeat: []int32{0, 1, 2, 0},
-		Phase:         clientv1.Phase_PHASE_DRAW,
-		Step:          1,
-		ActingSeats:   []int32{0},
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+		Action:      "que_men",
+		Kind:        "missing_suit_done",
+		SeatInts:    []*clientv1.OpeningSeatInts{{Key: "que_suit", Values: []int32{0, 1, 2, 0}}},
+		Phase:       clientv1.Phase_PHASE_DRAW,
+		Step:        1,
+		ActingSeats: []int32{0},
 	}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
 		RoomId:      "r1",
@@ -252,12 +256,11 @@ func TestApplyExchangeDoneReplacesExchangedTiles(t *testing.T) {
 		Tiles:     []string{"m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "s1", "s2", "s3", "s4"},
 	}}})
 
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-		PerSeat: []*clientv1.SeatTiles{{
-			SeatIndex: 0,
-			Tiles:     []string{"p7", "p8", "p9"},
-		}},
-		YourExchangedAway: []string{"m1", "m2", "m3"},
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+		Action:     "exchange_three",
+		Kind:       "exchange_done",
+		SeatTiles:  []*clientv1.OpeningSeatTiles{{Key: "received", Seats: []*clientv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"p7", "p8", "p9"}}}}},
+		LocalTiles: []*clientv1.OpeningLocalTiles{{Key: "exchanged_away", Tiles: []string{"m1", "m2", "m3"}}},
 	}}})
 
 	view := st.Snapshot()
@@ -280,11 +283,10 @@ func TestApplyExchangeDoneUsesPendingAwayWhenProjectionOmitsAway(t *testing.T) {
 		v.PendingExchangeAway = []string{"m1", "m1", "m2"}
 	})
 
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-		PerSeat: []*clientv1.SeatTiles{{
-			SeatIndex: 0,
-			Tiles:     []string{"p7", "p8", "p9"},
-		}},
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+		Action:    "exchange_three",
+		Kind:      "exchange_done",
+		SeatTiles: []*clientv1.OpeningSeatTiles{{Key: "received", Seats: []*clientv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"p7", "p8", "p9"}}}}},
 	}}})
 
 	view := st.Snapshot()
@@ -456,10 +458,15 @@ func TestPlayerJourney_E1_1_ExchangeThreeKeepsThirteenAuthoritativeTiles(t *test
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
 		SeatIndex: 0, Tiles: tiles,
 	}}})
-	// 当前 client.v1 没有 RoundProgressNotify 独立消息，换三张阶段由 ActionNotify
-	// 携带 action="exchange_three" 触发 reducer 把 WaitingAction 写入。
+	// 开局等待态由 PhaseUpdate 权威驱动；action 只是规则投影名称。
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
 		SeatIndex: 0, Action: "exchange_three", ActingSeats: []int32{0, 1, 2, 3},
+		PhaseUpdate: &clientv1.PhaseUpdate{
+			Phase:            clientv1.Phase_PHASE_OPENING,
+			Reason:           clientv1.WaitingReason_WAITING_REASON_OPENING,
+			ActingSeats:      []int32{0, 1, 2, 3},
+			AvailableActions: []string{"exchange_three"},
+		},
 	}}})
 
 	view := st.Snapshot()
@@ -476,13 +483,16 @@ func TestPlayerJourney_E1_1_ExchangeThreeKeepsThirteenAuthoritativeTiles(t *test
 // 通知，让玩家立刻读到拒绝原因并保留先前的 Marked 状态以便改选 1～2 张。
 // 旧实现只把响应追加进 Log，玩家根本看不到任何提示。
 //
-// 本用例直接投递一个 error_code=INVALID_ARGUMENT 的 ExchangeThreeResponse，
+// 本用例直接投递一个 error_code=INVALID_ARGUMENT 的 OpeningActionResponse，
 // 断言 UXNotice 非空、包含「换三张被拒绝」前缀，以及原始 error_message 子串。
 func TestPlayerJourney_E2_2_ExchangeThreeRejectionSurfacesNotice(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeResp{ExchangeThreeResp: &clientv1.ExchangeThreeResponse{
+	st.Mutate(func(v *RoomView) {
+		v.WaitingAction = "exchange_three"
+	})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningActionResp{OpeningActionResp: &clientv1.OpeningActionResponse{
 		ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
 		ErrorMessage: "三张必须同一花色",
 	}}})
@@ -493,17 +503,19 @@ func TestPlayerJourney_E2_2_ExchangeThreeRejectionSurfacesNotice(t *testing.T) {
 	require.Contains(t, view.UXNotice, "三张必须同一花色", "[E2.2] 通知必须携带 error_message 原因")
 }
 
-// TestPlayerJourney_Q1_2_QueMenDoneFillsRoster 锁定 [Q1.2] SeatRoster 携带定缺花色。
+// TestPlayerJourney_Q1_2_OpeningMissingSuitDoneFillsRoster 锁定 [Q1.2] SeatRoster 携带定缺花色。
 //
-// 玩家旅程 [Q1.2] 要求 QueMenDoneNotify 后 view.QueBySeat 必须按服务端权威值
+// 玩家旅程 [Q1.2] 要求 OpeningDoneNotify(action=que_men) 后 view.QueBySeat 必须按服务端权威值
 // 全桌可见，方便后续摸打阶段渲染缺门提示。本用例直接投递四家的 que_suit_by_seat，
 // 断言 view 四个 seat 都拿到了对应的花色编码。
-func TestPlayerJourney_Q1_2_QueMenDoneFillsRoster(t *testing.T) {
+func TestPlayerJourney_Q1_2_OpeningMissingSuitDoneFillsRoster(t *testing.T) {
 	st := NewAppState("我")
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_LoginResp{LoginResp: &clientv1.LoginResponse{UserId: "u0"}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{RoomId: "r1", SeatIndex: 0}}})
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{
-		QueSuitBySeat: []int32{0, 1, 2, 0},
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+		Action:   "que_men",
+		Kind:     "missing_suit_done",
+		SeatInts: []*clientv1.OpeningSeatInts{{Key: "que_suit", Values: []int32{0, 1, 2, 0}}},
 	}}})
 
 	view := st.Snapshot()

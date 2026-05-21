@@ -165,8 +165,8 @@ func (b *BotSupervisor) tickRoom(roomID string, gate *atomic.Int32) {
 }
 
 // processOnce 让所有可行动的 bot 座位提交一次动作；只要至少一个 bot 真的提交，就返回 true。
-// 注意：exchange_three / que_men 阶段四家可并发提交，所以会循环遍历所有 bot 座位；
-// discard / claim / tsumo 单座位生效，"acted" 通常只来自 ActingSeat 那个 bot。
+// opening 阶段可能由规则声明为多座位并发；discard / claim / tsumo 单座位生效，
+// "acted" 通常只来自 ActingSeat 或候选窗口对应的 bot。
 func (b *BotSupervisor) processOnce(roomID string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.tickTimeout)
 	defer cancel()
@@ -193,9 +193,8 @@ func (b *BotSupervisor) processOnce(roomID string) (bool, error) {
 		}
 		if didAct {
 			acted = true
-			// exchange / que_men 之外的等待态，状态机一旦推进，view 已失效，
-			// 让外层 tickRoom 拉新的 RoundView 再决策。
-			if view.WaitingAction != "exchange_three" && view.WaitingAction != "que_men" {
+			// 非并发 opening 等待态一旦推进，view 已失效，让外层拉新 RoundView 再决策。
+			if !isConcurrentOpeningWait(view) {
 				return true, nil
 			}
 		}
@@ -253,12 +252,12 @@ func (b *BotSupervisor) delayForBotAction(waitingAction string) time.Duration {
 	switch waitingAction {
 	case "claim_window":
 		return minDuration(900*time.Millisecond, b.humanRoomDelay)
-	case "exchange_three", "que_men":
-		return minDuration(900*time.Millisecond, b.humanRoomDelay)
 	case "discard", "tsumo_window":
 		return b.humanRoomDelay
-	default:
+	case "", "none":
 		return 0
+	default:
+		return minDuration(900*time.Millisecond, b.humanRoomDelay)
 	}
 }
 
@@ -280,17 +279,16 @@ func roomHasHuman(playerIDs [4]string) bool {
 
 // botShouldAct 在不构造 BotView 的前提下快速过滤"轮不到我"的状态。
 func botShouldAct(seat int32, view roomsvc.RoundView) bool {
+	if view.WaitingAction != "" {
+		submitted := view.OpeningSubmitted[view.WaitingAction]
+		if len(submitted) > 0 {
+			if int(seat) >= len(submitted) {
+				return true
+			}
+			return !submitted[seat]
+		}
+	}
 	switch view.WaitingAction {
-	case "exchange_three":
-		if int(seat) >= len(view.ExchangeSubmitted) {
-			return true
-		}
-		return !view.ExchangeSubmitted[seat]
-	case "que_men":
-		if int(seat) >= len(view.QueSubmitted) {
-			return true
-		}
-		return !view.QueSubmitted[seat]
 	case "discard", "tsumo_window":
 		return view.ActingSeat == seat
 	case "claim_window":
@@ -303,6 +301,10 @@ func botShouldAct(seat int32, view roomsvc.RoundView) bool {
 	default:
 		return false
 	}
+}
+
+func isConcurrentOpeningWait(view roomsvc.RoundView) bool {
+	return view.WaitingAction != "" && len(view.OpeningSubmitted[view.WaitingAction]) > 0
 }
 
 // buildBotView 把 RoundView 投影到指定 bot 座位的 BotView，供策略决策。
@@ -360,9 +362,9 @@ func botAvailableForSeat(seat int32, view roomsvc.RoundView) []string {
 func (b *BotSupervisor) submit(ctx context.Context, roomID, userID string, action bot.Action) ([]roomsvc.Notification, error) {
 	switch action.Kind {
 	case bot.ActionExchangeThree:
-		return b.svc.ExchangeThree(ctx, roomID, userID, action.Tiles, action.Suit, nil)
+		return b.svc.OpeningAction(ctx, roomID, userID, string(action.Kind), action.Tiles, action.Suit, 0, nil, nil)
 	case bot.ActionQueMen:
-		return b.svc.QueMen(ctx, roomID, userID, action.Suit, nil)
+		return b.svc.OpeningAction(ctx, roomID, userID, string(action.Kind), nil, 0, action.Suit, nil, nil)
 	case bot.ActionDiscard:
 		return b.svc.Discard(ctx, roomID, userID, action.Tile, nil)
 	case bot.ActionPong:

@@ -19,10 +19,16 @@ func TestBotStateAppliesVisibleEventsAndHidesOpponentHands(t *testing.T) {
 		Tiles:     []string{"m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3", "m5", "m5", "p7", "p8"},
 	}}})
 	st.RememberExchange([]string{"m1", "m2", "m3"})
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_ExchangeThreeDone{ExchangeThreeDone: &clientv1.ExchangeThreeDoneNotify{
-		PerSeat: []*clientv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"s7", "s8", "s9"}}},
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+		Action:    "exchange_three",
+		Kind:      "exchange_done",
+		SeatTiles: []*clientv1.OpeningSeatTiles{{Key: "received", Seats: []*clientv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"s7", "s8", "s9"}}}}},
 	}}})
-	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_QueMenDone{QueMenDone: &clientv1.QueMenDoneNotify{QueSuitBySeat: []int32{0, 1, 2, 0}}}})
+	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
+		Action:   "que_men",
+		Kind:     "missing_suit_done",
+		SeatInts: []*clientv1.OpeningSeatInts{{Key: "que_suit", Values: []int32{0, 1, 2, 0}}},
+	}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: 1, Tile: "p9"}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{SeatIndex: 1, Action: "discard", Tile: "p9"}}})
 	st.Apply(&clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{SeatIndex: 0, Action: "hu_choice", Tile: "p9"}}})

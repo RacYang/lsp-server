@@ -50,10 +50,7 @@ func (g *actionStubGateway) Leave(_ context.Context, _, _ string) (func(), error
 	return g.makeAfter(), g.actionErr
 }
 func (g *actionStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
-func (g *actionStubGateway) ExchangeThree(_ context.Context, _, _ string, _ []string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
-	return g.makeAfter(), g.actionErr
-}
-func (g *actionStubGateway) QueMen(_ context.Context, _, _ string, _ int32, _ *clientv1.PhaseToken) (func(), error) {
+func (g *actionStubGateway) OpeningAction(_ context.Context, _, _, _ string, _ []string, _, _ int32, _ map[string]string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
 func (g *actionStubGateway) Discard(_ context.Context, _, _, _ string, _ *clientv1.PhaseToken) (func(), error) {
@@ -191,25 +188,32 @@ func actionCases() []actionCase {
 			},
 		},
 		{
-			name:    "exchangeThree",
-			reqMsg:  msgid.ExchangeThreeReq,
-			respMsg: msgid.ExchangeThreeResp,
+			name:    "openingActionExchangeThree",
+			reqMsg:  msgid.OpeningActionReq,
+			respMsg: msgid.OpeningActionResp,
 			build: func(reqID string) proto.Message {
-				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: []string{"1m", "2m", "3m"}, Direction: 1}}}
+				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
+					Action:    "exchange_three",
+					Tiles:     []string{"1m", "2m", "3m"},
+					Direction: 1,
+				}}}
 			},
 			getError: func(e *clientv1.Envelope) (clientv1.ErrorCode, string) {
-				return e.GetExchangeThreeResp().GetErrorCode(), e.GetExchangeThreeResp().GetErrorMessage()
+				return e.GetOpeningActionResp().GetErrorCode(), e.GetOpeningActionResp().GetErrorMessage()
 			},
 		},
 		{
-			name:    "queMen",
-			reqMsg:  msgid.QueMenReq,
-			respMsg: msgid.QueMenResp,
+			name:    "openingActionQueMen",
+			reqMsg:  msgid.OpeningActionReq,
+			respMsg: msgid.OpeningActionResp,
 			build: func(reqID string) proto.Message {
-				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: 0}}}
+				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
+					Action: "que_men",
+					Suit:   0,
+				}}}
 			},
 			getError: func(e *clientv1.Envelope) (clientv1.ErrorCode, string) {
-				return e.GetQueMenResp().GetErrorCode(), e.GetQueMenResp().GetErrorMessage()
+				return e.GetOpeningActionResp().GetErrorCode(), e.GetOpeningActionResp().GetErrorMessage()
 			},
 		},
 	}

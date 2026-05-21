@@ -6,215 +6,244 @@ import (
 	"sort"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/mahjong/hand"
+	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
-// ApplyExchangeThree 兼容旧调用方，按玩家显式命令处理。
-func (e *Engine) ApplyExchangeThree(ctx context.Context, rs *RoundState, seat Seat, tiles []string, direction int32) ([]Notification, error) {
-	return e.ApplyExchangeThreeByPlayer(ctx, rs, seat, tiles, direction)
+func (e *Engine) ApplyOpeningActionByPlayer(_ context.Context, rs *RoundState, seat Seat, action string, tiles []string, direction, suit int32, params map[string]string) ([]Notification, error) {
+	return e.applyOpeningAction(rs, seat, rules.OpeningActionName(action), tiles, direction, suit, params, false, false)
 }
 
-// ApplyExchangeThreeByPlayer 记录玩家已完成换三张确认；玩家提交必须严格校验选牌。
-func (e *Engine) ApplyExchangeThreeByPlayer(_ context.Context, rs *RoundState, seat Seat, tiles []string, direction int32) ([]Notification, error) {
-	return e.applyExchangeThree(rs, seat, tiles, direction, false)
+func (e *Engine) initRoundNotifications(ctx context.Context, rs *RoundState) ([]Notification, error) {
+	if step, ok := rs.currentOpeningStep(); ok {
+		rs.enterPhase(openingWaitingReason(step))
+		return rs.promptSeatActions(step.Action), nil
+	}
+	return e.completeOpening(ctx, rs)
 }
 
-// ApplyExchangeThreeByTimeout 为机器人/自动回放路径选择三张牌；真人 ApplyTimeout 不调用该入口。
-func (e *Engine) ApplyExchangeThreeByTimeout(_ context.Context, rs *RoundState, seat Seat) ([]Notification, error) {
-	direction := defaultExchangeDirection
-	if rs != nil && rs.exchangeDirection > 0 {
-		direction = rs.exchangeDirection
+func (e *Engine) completeOpening(ctx context.Context, rs *RoundState) ([]Notification, error) {
+	rs.enterPhase(ReasonNone)
+	progress := rs.drawTransitionProgress()
+	start := &clientv1.StartGameNotify{
+		RoomId:     rs.roomID,
+		DealerSeat: rs.dealerSeat.Proto(),
+		RoundIndex: 0,
+		HandIndex:  0,
+		RuleMeta:   rs.ruleMeta(),
 	}
-	return e.applyExchangeThree(rs, seat, nil, direction, true)
-}
-
-func (e *Engine) applyExchangeThree(rs *RoundState, seat Seat, tiles []string, direction int32, timeout bool) ([]Notification, error) {
-	if e == nil {
-		return nil, fmt.Errorf("nil engine")
-	}
-	if rs == nil {
-		return nil, fmt.Errorf("nil round state")
-	}
-	if rs.closed {
-		return nil, fmt.Errorf("round closed")
-	}
-	if !rs.waitingExchange {
-		return nil, fmt.Errorf("exchange not allowed")
-	}
-	if seat < 0 || seat > 3 {
-		return nil, fmt.Errorf("invalid seat")
-	}
-	if rs.exchangeSubmitted[seat] {
-		return nil, fmt.Errorf("exchange already submitted")
-	}
-	normalizedDirection := rs.exchangeDirection
-	if normalizedDirection < 0 {
-		var ok bool
-		normalizedDirection, ok = normalizeExchangeDirection(direction)
-		if !ok {
-			normalizedDirection = defaultExchangeDirection
-		}
-	}
-	rs.exchangeDirection = normalizedDirection
-	selection, err := normalizeExchangeSelection(rs.hands[seat], tiles, timeout)
-	if err != nil {
-		return nil, err
-	}
-	rs.exchangeSelection[seat] = selection
-	rs.exchangeSubmitted[seat] = true
-	if !rs.allExchangeParticipantsDone() {
-		return nil, nil
-	}
-	return e.completeExchangeThree(rs)
-}
-
-func (e *Engine) surrenderExchangeSeat(rs *RoundState, seat Seat) ([]Notification, error) {
-	if e == nil {
-		return nil, fmt.Errorf("nil engine")
-	}
-	if rs == nil {
-		return nil, fmt.Errorf("nil round state")
-	}
-	if rs.closed {
-		return nil, fmt.Errorf("round closed")
-	}
-	if !rs.waitingExchange {
-		return nil, fmt.Errorf("exchange not allowed")
-	}
-	if seat < 0 || seat > 3 {
-		return nil, fmt.Errorf("invalid seat")
-	}
-	rs.markSurrendered(seat)
-	for len(rs.exchangeSubmitted) < 4 {
-		rs.exchangeSubmitted = append(rs.exchangeSubmitted, false)
-	}
-	for len(rs.exchangeSelection) < 4 {
-		rs.exchangeSelection = append(rs.exchangeSelection, nil)
-	}
-	rs.exchangeSubmitted[seat] = true
-	rs.exchangeSelection[seat] = []tile.Tile{}
-	if !rs.allExchangeParticipantsDone() {
-		rs.enterPhase(ReasonExchangeThree)
-		return nil, nil
-	}
-	return e.completeExchangeThree(rs)
-}
-
-func (rs *RoundState) allExchangeParticipantsDone() bool {
-	if rs == nil {
-		return false
-	}
-	for seat, done := range rs.exchangeSubmitted {
-		if !done && !rs.isSurrendered(Seat(seat)) {
-			return false
-		}
-	}
-	return true
-}
-
-func (e *Engine) completeExchangeThree(rs *RoundState) ([]Notification, error) {
-	exchangedAwayBySeat := exchangeSelectionsToStrings(rs.exchangeSelection)
-	receivedTiles := exchangeThreeWithSelections(rs.hands, rs.exchangeSelection, rs.exchangeDirection, false)
-	for i := range rs.exchangeSelection {
-		rs.exchangeSelection[i] = nil
-	}
-	rs.enterPhase(ReasonQueMen)
-	progress := rs.roundProgress()
-	exchangePayload, err := marshalExchangeThreeDoneEnvelope(
-		receivedTiles,
-		nil,
-		rs.exchangeDirection,
-		progress,
-	)
-	if err != nil {
-		return nil, err
-	}
-	project := func(target Seat) []byte {
-		if !target.Valid() {
-			return nil
-		}
-		seatTiles := receivedTilesForSeat(receivedTiles, target)
-		payload, err := marshalExchangeThreeDoneEnvelope(
-			seatTiles,
-			exchangedAwayBySeat[target],
-			rs.exchangeDirection,
-			progress,
-		)
-		if err != nil {
-			return nil
-		}
-		return payload
-	}
-	out := []Notification{{
-		Kind:       KindExchangeThreeDone,
-		Payload:    exchangePayload,
-		TargetSeat: BroadcastSeat,
-		Privacy:    PrivacyPerSeat,
-		Project:    project,
-	}}
-	return append(out, rs.promptSeatActions("que_men")...), nil
-}
-
-func marshalExchangeThreeDoneEnvelope(receivedTiles []*clientv1.SeatTiles, exchangedAway []string, direction int32, progress RoundProgress) ([]byte, error) {
-	done := &clientv1.ExchangeThreeDoneNotify{
-		PerSeat:           receivedTiles,
-		Direction:         direction,
-		YourExchangedAway: exchangedAway,
-	}
-	progress.applyToExchangeDone(done)
-	return marshalEnvelope(&clientv1.Envelope{
-		ReqId: "exchange",
-		Body: &clientv1.Envelope_ExchangeThreeDone{
-			ExchangeThreeDone: done,
+	progress.applyToStart(start)
+	startPayload, err := marshalEnvelope(&clientv1.Envelope{
+		ReqId: "start",
+		Body: &clientv1.Envelope_StartGame{
+			StartGame: start,
 		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := []Notification{{Kind: KindStartGame, Payload: startPayload, TargetSeat: BroadcastSeat}}
+	next, err := e.drawForCurrentTurn(rs)
+	if err != nil {
+		return nil, err
+	}
+	_ = ctx
+	return append(out, next...), nil
+}
+
+func (rs *RoundState) currentOpeningStep() (*rules.OpeningStep, bool) {
+	if rs == nil || rs.caps.Opening == nil {
+		return nil, false
+	}
+	return rs.caps.Opening.CurrentStep(rules.OpeningContext{RuleState: rs.ruleState, Hands: rs.hands})
+}
+
+func (e *Engine) applyOpeningAction(rs *RoundState, seat Seat, action rules.OpeningActionName, tiles []string, direction, suit int32, params map[string]string, timeout, surrender bool) ([]Notification, error) {
+	if e == nil {
+		return nil, fmt.Errorf("nil engine")
+	}
+	if rs == nil {
+		return nil, fmt.Errorf("nil round state")
+	}
+	if rs.closed {
+		return nil, fmt.Errorf("round closed")
+	}
+	rs.ensureRuleRuntime()
+	if rs.caps.Opening == nil {
+		return nil, fmt.Errorf("opening action not allowed")
+	}
+	step, ok := rs.currentOpeningStep()
+	if !ok || step.Action != string(action) {
+		return nil, fmt.Errorf("opening action not allowed")
+	}
+	if seat < 0 || seat > 3 {
+		return nil, fmt.Errorf("invalid seat")
+	}
+	result, err := rs.caps.Opening.Apply(rules.OpeningActionContext{
+		OpeningContext: rules.OpeningContext{RuleState: rs.ruleState, Hands: rs.hands},
+		Seat:           seat,
+		Action:         action,
+		Tiles:          append([]string(nil), tiles...),
+		Suit:           suit,
+		Direction:      direction,
+		Params:         cloneStringMap(params),
+		Timeout:        timeout,
+		Surrender:      surrender,
+	})
+	if err != nil {
+		return nil, err
+	}
+	rs.ruleState = result.RuleState
+	if result.Hands != nil {
+		rs.hands = result.Hands
+	}
+	return e.projectOpeningResult(context.Background(), rs, result)
+}
+
+func (e *Engine) projectOpeningResult(ctx context.Context, rs *RoundState, result rules.OpeningResult) ([]Notification, error) {
+	out := make([]Notification, 0, 2)
+	for _, projection := range result.Notifications {
+		notification, err := rs.openingProjectionNotification(projection, result.NextStep)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, notification)
+	}
+	if result.AllOpeningComplete {
+		next, err := e.completeOpening(ctx, rs)
+		if err != nil {
+			return nil, err
+		}
+		return append(out, next...), nil
+	}
+	if result.NextStep != nil {
+		rs.enterPhase(openingWaitingReason(result.NextStep))
+		if result.CompletedStep == nil {
+			return out, nil
+		}
+		out = append(out, rs.promptSeatActions(result.NextStep.Action)...)
+	}
+	return out, nil
+}
+
+func (rs *RoundState) openingProjectionNotification(projection rules.OpeningNotification, nextStep *rules.OpeningStep) (Notification, error) {
+	progress := rs.roundProgress()
+	if nextStep == nil {
+		progress = rs.drawTransitionProgress()
+	}
+	return openingProjectionToNotification(projection, progress)
+}
+
+func openingProjectionToNotification(projection rules.OpeningNotification, progress RoundProgress) (Notification, error) {
+	payload, err := marshalOpeningProjection(projection.Done, progress, -1)
+	if err != nil {
+		return Notification{}, err
+	}
+	notification := Notification{Kind: KindOpeningDone, Payload: payload, TargetSeat: BroadcastSeat}
+	if len(projection.Done.LocalTiles) > 0 {
+		notification.Privacy = PrivacyPerSeat
+		notification.Project = func(target Seat) []byte {
+			if !target.Valid() {
+				return nil
+			}
+			projected, err := marshalOpeningProjection(projection.Done, progress, target)
+			if err != nil {
+				return nil
+			}
+			return projected
+		}
+	}
+	return notification, nil
+}
+
+func marshalOpeningProjection(done rules.OpeningDoneProjection, progress RoundProgress, target Seat) ([]byte, error) {
+	if done.Action == "" || done.Kind == "" {
+		return nil, fmt.Errorf("unsupported opening projection")
+	}
+	payload := &clientv1.OpeningDoneNotify{
+		Action:     done.Action,
+		StepId:     done.StepID,
+		Kind:       done.Kind,
+		Params:     cloneStringMap(done.Params),
+		SeatTiles:  openingSeatTilesToProto(done.SeatTiles),
+		SeatInts:   openingSeatIntsToProto(done.SeatInts),
+		LocalTiles: openingLocalTilesToProto(done.LocalTiles, target),
+	}
+	progress.applyToOpeningDone(payload)
+	return marshalEnvelope(&clientv1.Envelope{
+		ReqId: "opening-done",
+		Body:  &clientv1.Envelope_OpeningDone{OpeningDone: payload},
 	})
 }
 
-func receivedTilesForSeat(receivedTiles []*clientv1.SeatTiles, seat Seat) []*clientv1.SeatTiles {
-	out := make([]*clientv1.SeatTiles, 0, 1)
-	for _, item := range receivedTiles {
-		if item.GetSeatIndex() != seat.Proto() {
-			continue
+func openingSeatTilesToProto(in map[string][]rules.OpeningSeatTilesProjection) []*clientv1.OpeningSeatTiles {
+	keys := make([]string, 0, len(in))
+	for key := range in {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]*clientv1.OpeningSeatTiles, 0, len(keys))
+	for _, key := range keys {
+		items := append([]rules.OpeningSeatTilesProjection(nil), in[key]...)
+		sort.SliceStable(items, func(i, j int) bool { return items[i].Seat < items[j].Seat })
+		seats := make([]*clientv1.SeatTiles, 0, len(items))
+		for _, item := range items {
+			seats = append(seats, &clientv1.SeatTiles{
+				SeatIndex: item.Seat.Proto(),
+				Tiles:     append([]string(nil), item.Tiles...),
+			})
 		}
-		out = append(out, &clientv1.SeatTiles{
-			SeatIndex: item.GetSeatIndex(),
-			Tiles:     append([]string(nil), item.GetTiles()...),
-		})
+		out = append(out, &clientv1.OpeningSeatTiles{Key: key, Seats: seats})
 	}
 	return out
 }
 
-func exchangeSelectionsToStrings(selections [][]tile.Tile) [][]string {
-	out := make([][]string, len(selections))
-	for seat := range selections {
-		out[seat] = tilesToStrings(selections[seat])
+func openingSeatIntsToProto(in map[string][]int32) []*clientv1.OpeningSeatInts {
+	keys := make([]string, 0, len(in))
+	for key := range in {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]*clientv1.OpeningSeatInts, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, &clientv1.OpeningSeatInts{Key: key, Values: append([]int32(nil), in[key]...)})
 	}
 	return out
 }
 
-func (rs *RoundState) initRoundNotifications() ([]Notification, error) {
-	if rs.hasOpeningStep("exchange_three") {
-		rs.enterPhase(ReasonExchangeThree)
-		return rs.promptSeatActions("exchange_three"), nil
+func openingLocalTilesToProto(in map[Seat]map[string][]string, target Seat) []*clientv1.OpeningLocalTiles {
+	if !target.Valid() {
+		return nil
 	}
-	if rs.hasOpeningStep("que_men") {
-		rs.enterPhase(ReasonQueMen)
-		return rs.promptSeatActions("que_men"), nil
+	items := in[target]
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
 	}
-	return nil, fmt.Errorf("unsupported opening flow")
+	sort.Strings(keys)
+	out := make([]*clientv1.OpeningLocalTiles, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, &clientv1.OpeningLocalTiles{Key: key, Tiles: append([]string(nil), items[key]...)})
+	}
+	return out
 }
 
-func (rs *RoundState) hasOpeningStep(step string) bool {
-	if rs == nil || rs.caps.Opening == nil {
-		return false
+func cloneStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
 	}
-	for _, current := range rs.caps.Opening.Steps() {
-		if current == step {
-			return true
-		}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
 	}
-	return false
+	return out
+}
+
+func openingWaitingReason(step *rules.OpeningStep) WaitingReason {
+	if step == nil {
+		return ReasonNone
+	}
+	return ReasonOpening
 }
 
 func (rs *RoundState) promptSeatActions(action string) []Notification {
@@ -239,131 +268,6 @@ func (rs *RoundState) promptSeatActions(action string) []Notification {
 		out = append(out, Notification{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat})
 	}
 	return out
-}
-
-func exchangeThree(hands []*hand.Hand) []*clientv1.SeatTiles {
-	exchanged := make([][]tile.Tile, 4)
-	for seat := 0; seat < 4; seat++ {
-		chosen := chooseExchangeTiles(hands[seat])
-		for _, t := range chosen {
-			_ = hands[seat].Remove(t)
-		}
-		exchanged[seat] = chosen
-	}
-	perSeat := make([]*clientv1.SeatTiles, 0, 4)
-	for seat := 0; seat < 4; seat++ {
-		from := (seat + int(defaultExchangeDirection)) % 4
-		seatIndex := SeatFromInt(seat).Proto()
-		for _, t := range exchanged[from] {
-			hands[seat].Add(t)
-		}
-		perSeat = append(perSeat, &clientv1.SeatTiles{
-			SeatIndex: seatIndex,
-			Tiles:     tilesToStrings(exchanged[from]),
-		})
-	}
-	return perSeat
-}
-
-func exchangeThreeWithSelections(hands []*hand.Hand, selections [][]tile.Tile, direction int32, fallbackMissing bool) []*clientv1.SeatTiles {
-	offset, ok := normalizeExchangeDirection(direction)
-	if !ok {
-		offset = defaultExchangeDirection
-	}
-	exchanged := make([][]tile.Tile, 4)
-	for seat := 0; seat < 4; seat++ {
-		chosen := append([]tile.Tile(nil), selections[seat]...)
-		if len(chosen) == 0 && fallbackMissing && selections[seat] == nil {
-			chosen = chooseExchangeTiles(hands[seat])
-		}
-		for _, t := range chosen {
-			_ = hands[seat].Remove(t)
-		}
-		exchanged[seat] = chosen
-	}
-	perSeat := make([]*clientv1.SeatTiles, 0, 4)
-	for seat := 0; seat < 4; seat++ {
-		from := (seat + int(offset)) % 4
-		seatIndex := SeatFromInt(seat).Proto()
-		for _, t := range exchanged[from] {
-			hands[seat].Add(t)
-		}
-		perSeat = append(perSeat, &clientv1.SeatTiles{
-			SeatIndex: seatIndex,
-			Tiles:     tilesToStrings(exchanged[from]),
-		})
-	}
-	return perSeat
-}
-
-func normalizeExchangeDirection(direction int32) (int32, bool) {
-	switch direction {
-	case 1, 2, 3:
-		return direction, true
-	default:
-		return 0, false
-	}
-}
-
-func normalizeExchangeSelection(h *hand.Hand, raws []string, allowFallback bool) ([]tile.Tile, error) {
-	if h == nil {
-		return nil, fmt.Errorf("missing hand")
-	}
-	if len(raws) == 0 && allowFallback {
-		return chooseExchangeTiles(h), nil
-	}
-	if len(raws) != 3 {
-		return nil, fmt.Errorf("invalid exchange selection")
-	}
-	tmp := hand.FromTiles(append([]tile.Tile(nil), h.Tiles()...))
-	out := make([]tile.Tile, 0, 3)
-	for _, raw := range raws {
-		t, err := tile.Parse(raw)
-		if err != nil {
-			return nil, fmt.Errorf("parse exchange tile %q: %w", raw, err)
-		}
-		if err := tmp.Remove(t); err != nil {
-			return nil, fmt.Errorf("exchange tile from hand: %w", err)
-		}
-		out = append(out, t)
-	}
-	return out, nil
-}
-
-func chooseExchangeTiles(h *hand.Hand) []tile.Tile {
-	ts := append([]tile.Tile(nil), h.Tiles()...)
-	sort.Slice(ts, func(i, j int) bool {
-		if ts[i].Suit() != ts[j].Suit() {
-			return ts[i].Suit() < ts[j].Suit()
-		}
-		return ts[i].Rank() < ts[j].Rank()
-	})
-	suitCount := map[tile.Suit]int{
-		tile.SuitCharacters: 0,
-		tile.SuitDots:       0,
-		tile.SuitBamboo:     0,
-	}
-	for _, t := range ts {
-		suitCount[t.Suit()]++
-	}
-	targetSuit := tile.SuitCharacters
-	maxCount := -1
-	for _, suit := range []tile.Suit{tile.SuitCharacters, tile.SuitDots, tile.SuitBamboo} {
-		if suitCount[suit] > maxCount {
-			targetSuit = suit
-			maxCount = suitCount[suit]
-		}
-	}
-	picked := make([]tile.Tile, 0, 3)
-	for _, t := range ts {
-		if t.Suit() == targetSuit {
-			picked = append(picked, t)
-			if len(picked) == 3 {
-				return picked
-			}
-		}
-	}
-	return ts[:3]
 }
 
 func tilesToStrings(ts []tile.Tile) []string {

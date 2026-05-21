@@ -65,37 +65,26 @@ func (g *wsTableGateway) Discard(ctx context.Context, tile string) error {
 	return nil
 }
 
-// ExchangeThree 提交换三张请求,要求恰好 3 张牌,否则在网络往返之前直接拒绝。
-func (g *wsTableGateway) ExchangeThree(ctx context.Context, tiles []string, direction int32) error {
-	if len(tiles) != 3 {
+func (g *wsTableGateway) OpeningAction(ctx context.Context, action PlayerAction, tiles []string, direction, suit int32) error {
+	if action == ActionExchangeThree && len(tiles) != 3 {
 		return fmt.Errorf("换三张需要 3 张牌,当前 %d", len(tiles))
 	}
-	reqID := newReqID("exchange")
-	env, err := g.rpc.Call(ctx, msgid.ExchangeThreeReq, &clientv1.Envelope{
+	reqID := newReqID("opening")
+	env, err := g.rpc.Call(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
 		ReqId:          reqID,
-		IdempotencyKey: newReqID("idem-exchange"),
-		Body:           &clientv1.Envelope_ExchangeThreeReq{ExchangeThreeReq: &clientv1.ExchangeThreeRequest{Tiles: tiles, Direction: direction, PhaseToken: g.currentPhaseToken()}},
-	}, func(e *clientv1.Envelope) bool { return e.GetExchangeThreeResp() != nil })
+		IdempotencyKey: newReqID("idem-opening"),
+		Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
+			Action:     string(action),
+			Tiles:      append([]string(nil), tiles...),
+			Direction:  direction,
+			Suit:       suit,
+			PhaseToken: g.currentPhaseToken(),
+		}},
+	}, func(e *clientv1.Envelope) bool { return e.GetOpeningActionResp() != nil })
 	if err != nil {
 		return err
 	}
-	if errStr := envelopeError(env.GetExchangeThreeResp().GetErrorCode(), env.GetExchangeThreeResp().GetErrorMessage()); errStr != "" {
-		return errors.New(errStr)
-	}
-	return nil
-}
-
-func (g *wsTableGateway) QueMen(ctx context.Context, suit int32) error {
-	reqID := newReqID("que")
-	env, err := g.rpc.Call(ctx, msgid.QueMenReq, &clientv1.Envelope{
-		ReqId:          reqID,
-		IdempotencyKey: newReqID("idem-que"),
-		Body:           &clientv1.Envelope_QueMenReq{QueMenReq: &clientv1.QueMenRequest{Suit: suit, PhaseToken: g.currentPhaseToken()}},
-	}, func(e *clientv1.Envelope) bool { return e.GetQueMenResp() != nil })
-	if err != nil {
-		return err
-	}
-	if errStr := envelopeError(env.GetQueMenResp().GetErrorCode(), env.GetQueMenResp().GetErrorMessage()); errStr != "" {
+	if errStr := envelopeError(env.GetOpeningActionResp().GetErrorCode(), env.GetOpeningActionResp().GetErrorMessage()); errStr != "" {
 		return errors.New(errStr)
 	}
 	return nil

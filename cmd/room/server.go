@@ -205,14 +205,87 @@ func (s *roomGRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq
 }
 
 func queSuitsFromNotification(n roomsvc.Notification) []int32 {
-	if n.Kind != roomsvc.KindQueMenDone {
+	if n.Kind != roomsvc.KindOpeningDone {
 		return nil
 	}
 	var env clientv1.Envelope
 	if err := proto.Unmarshal(n.Payload, &env); err != nil {
 		return nil
 	}
-	return append([]int32(nil), env.GetQueMenDone().GetQueSuitBySeat()...)
+	return openingSeatInts(env.GetOpeningDone(), "que_suit")
+}
+
+func openingSeatInts(done *clientv1.OpeningDoneNotify, key string) []int32 {
+	if done == nil {
+		return nil
+	}
+	for _, group := range done.GetSeatInts() {
+		if group.GetKey() == key {
+			return append([]int32(nil), group.GetValues()...)
+		}
+	}
+	return nil
+}
+
+func clientOpeningDoneToCluster(done *clientv1.OpeningDoneNotify) *clusterv1.OpeningDoneEvent {
+	if done == nil {
+		return nil
+	}
+	return &clusterv1.OpeningDoneEvent{
+		Action:      done.GetAction(),
+		StepId:      done.GetStepId(),
+		Kind:        done.GetKind(),
+		Params:      cloneStringMap(done.GetParams()),
+		SeatTiles:   clientOpeningSeatTilesToCluster(done.GetSeatTiles()),
+		SeatInts:    clientOpeningSeatIntsToCluster(done.GetSeatInts()),
+		LocalTiles:  clientOpeningLocalTilesToCluster(done.GetLocalTiles()),
+		Phase:       clientPhaseToCluster(done.GetPhase()),
+		Step:        done.GetStep(),
+		ActingSeats: append([]int32(nil), done.GetActingSeats()...),
+		PhaseUpdate: clientPhaseUpdateToCluster(done.GetPhaseUpdate()),
+	}
+}
+
+func clientOpeningSeatTilesToCluster(in []*clientv1.OpeningSeatTiles) []*clusterv1.OpeningSeatTiles {
+	out := make([]*clusterv1.OpeningSeatTiles, 0, len(in))
+	for _, group := range in {
+		seats := make([]*clusterv1.SeatTiles, 0, len(group.GetSeats()))
+		for _, item := range group.GetSeats() {
+			seats = append(seats, &clusterv1.SeatTiles{
+				SeatIndex: item.GetSeatIndex(),
+				Tiles:     append([]string(nil), item.GetTiles()...),
+			})
+		}
+		out = append(out, &clusterv1.OpeningSeatTiles{Key: group.GetKey(), Seats: seats})
+	}
+	return out
+}
+
+func clientOpeningSeatIntsToCluster(in []*clientv1.OpeningSeatInts) []*clusterv1.OpeningSeatInts {
+	out := make([]*clusterv1.OpeningSeatInts, 0, len(in))
+	for _, group := range in {
+		out = append(out, &clusterv1.OpeningSeatInts{Key: group.GetKey(), Values: append([]int32(nil), group.GetValues()...)})
+	}
+	return out
+}
+
+func clientOpeningLocalTilesToCluster(in []*clientv1.OpeningLocalTiles) []*clusterv1.OpeningLocalTiles {
+	out := make([]*clusterv1.OpeningLocalTiles, 0, len(in))
+	for _, group := range in {
+		out = append(out, &clusterv1.OpeningLocalTiles{Key: group.GetKey(), Tiles: append([]string(nil), group.GetTiles()...)})
+	}
+	return out
+}
+
+func cloneStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // SnapshotRoom - 返回快照游标与房间摘要；无持久化时退化为内存视图。
@@ -360,7 +433,7 @@ func phaseUpdateFromRoundView(view roomsvc.RoundView) *clusterv1.PhaseUpdate {
 	return &clusterv1.PhaseUpdate{
 		Phase:            clientPhaseToCluster(view.Phase),
 		Step:             view.LastStep,
-		Reason:           clientWaitingReasonToCluster(waitingReasonFromAction(view.WaitingAction)),
+		Reason:           clientWaitingReasonToCluster(waitingReasonFromRoundView(view)),
 		DeadlineUnixMs:   view.DeadlineUnixMs,
 		ServerNowUnixMs:  time.Now().UnixMilli(),
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
@@ -368,12 +441,11 @@ func phaseUpdateFromRoundView(view roomsvc.RoundView) *clusterv1.PhaseUpdate {
 	}
 }
 
-func waitingReasonFromAction(action string) clientv1.WaitingReason {
-	switch action {
-	case "exchange_three":
-		return clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
-	case "que_men":
-		return clientv1.WaitingReason_WAITING_REASON_QUE_MEN
+func waitingReasonFromRoundView(view roomsvc.RoundView) clientv1.WaitingReason {
+	if view.Phase == clientv1.Phase_PHASE_OPENING {
+		return clientv1.WaitingReason_WAITING_REASON_OPENING
+	}
+	switch view.WaitingAction {
 	case "claim_window":
 		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
 	case "tsumo_window":
@@ -387,10 +459,8 @@ func waitingReasonFromAction(action string) clientv1.WaitingReason {
 
 func clientWaitingReasonToCluster(reason clientv1.WaitingReason) clusterv1.WaitingReason {
 	switch reason {
-	case clientv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE:
-		return clusterv1.WaitingReason_WAITING_REASON_EXCHANGE_THREE
-	case clientv1.WaitingReason_WAITING_REASON_QUE_MEN:
-		return clusterv1.WaitingReason_WAITING_REASON_QUE_MEN
+	case clientv1.WaitingReason_WAITING_REASON_OPENING:
+		return clusterv1.WaitingReason_WAITING_REASON_OPENING
 	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
 		return clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
 	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
@@ -456,14 +526,16 @@ func pickLastQueSuits(ctx context.Context, s *roomGRPCServer, roomID string) []i
 		return nil
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if rows[i].Kind != string(roomsvc.KindQueMenDone) {
+		if rows[i].Kind != string(roomsvc.KindOpeningDone) {
 			continue
 		}
 		var env clientv1.Envelope
 		if err := proto.Unmarshal(rows[i].Payload, &env); err != nil {
 			return nil
 		}
-		return append([]int32(nil), env.GetQueMenDone().GetQueSuitBySeat()...)
+		if qs := openingSeatInts(env.GetOpeningDone(), "que_suit"); len(qs) > 0 {
+			return qs
+		}
 	}
 	return nil
 }
@@ -617,35 +689,10 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 				Step:      env.GetInitialDeal().GetStep(),
 			},
 		}
-	case roomsvc.KindExchangeThreeDone:
-		perSeat := env.GetExchangeThreeDone().GetPerSeat()
-		seatTiles := make([]*clusterv1.SeatTiles, 0, len(perSeat))
-		for _, item := range perSeat {
-			seatTiles = append(seatTiles, &clusterv1.SeatTiles{
-				SeatIndex: item.GetSeatIndex(),
-				Tiles:     append([]string(nil), item.GetTiles()...),
-			})
-		}
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone{
-			ExchangeThreeDone: &clusterv1.ExchangeThreeDoneEvent{
-				SeatTiles:         seatTiles,
-				YourExchangedAway: append([]string(nil), env.GetExchangeThreeDone().GetYourExchangedAway()...),
-				Phase:             clientPhaseToCluster(env.GetExchangeThreeDone().GetPhase()),
-				Step:              env.GetExchangeThreeDone().GetStep(),
-				ActingSeats:       append([]int32(nil), env.GetExchangeThreeDone().GetActingSeats()...),
-				Direction:         env.GetExchangeThreeDone().GetDirection(),
-				PhaseUpdate:       clientPhaseUpdateToCluster(env.GetExchangeThreeDone().GetPhaseUpdate()),
-			},
-		}
-	case roomsvc.KindQueMenDone:
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_QueMenDone{
-			QueMenDone: &clusterv1.QueMenDoneEvent{
-				QueSuitBySeat: append([]int32(nil), env.GetQueMenDone().GetQueSuitBySeat()...),
-				Phase:         clientPhaseToCluster(env.GetQueMenDone().GetPhase()),
-				Step:          env.GetQueMenDone().GetStep(),
-				ActingSeats:   append([]int32(nil), env.GetQueMenDone().GetActingSeats()...),
-				PhaseUpdate:   clientPhaseUpdateToCluster(env.GetQueMenDone().GetPhaseUpdate()),
-			},
+	case roomsvc.KindOpeningDone:
+		done := env.GetOpeningDone()
+		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+			OpeningDone: clientOpeningDoneToCluster(done),
 		}
 	case roomsvc.KindStartGame:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_StartGame{

@@ -1,4 +1,4 @@
-// Package wall 负责 108 张序数牌牌墙的构建、洗牌与摸牌，支持注入随机源以便测试复现。
+// Package wall 负责麻将牌墙的构建、洗牌与摸牌，支持注入随机源以便测试复现。
 package wall
 
 import (
@@ -24,6 +24,30 @@ func NewFull108() *Wall {
 				tiles = append(tiles, t)
 			}
 		}
+	}
+	return &Wall{tiles: tiles, pos: 0}
+}
+
+// NewFull136 构造含字牌的 136 张牌墙（不含花牌）。
+func NewFull136() *Wall {
+	tiles := make([]tile.Tile, 0, 136)
+	tiles = append(tiles, NewFull108().tiles...)
+	for r := 1; r <= 7; r++ {
+		t, _ := tile.New(tile.SuitHonor, r)
+		for k := 0; k < 4; k++ {
+			tiles = append(tiles, t)
+		}
+	}
+	return &Wall{tiles: tiles, pos: 0}
+}
+
+// NewFull144 构造含字牌与花牌的 144 张牌墙。花牌各 1 张。
+func NewFull144() *Wall {
+	tiles := make([]tile.Tile, 0, 144)
+	tiles = append(tiles, NewFull136().tiles...)
+	for r := 1; r <= 8; r++ {
+		t, _ := tile.New(tile.SuitFlower, r)
+		tiles = append(tiles, t)
 	}
 	return &Wall{tiles: tiles, pos: 0}
 }

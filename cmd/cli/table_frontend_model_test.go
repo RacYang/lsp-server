@@ -146,3 +146,19 @@ func TestBuildTableFrontendModelHuedSelfCannotDiscard(t *testing.T) {
 	require.Equal(t, "你已胡牌，等待本局结束", model.Prompt)
 	require.Equal(t, CursorModeNone, DeriveCursorMode(view))
 }
+
+func TestBuildTableFrontendModelSettlementOverridesHuedWaitingPrompt(t *testing.T) {
+	view := RoomView{
+		Phase:          phaseTable,
+		SeatIndex:      0,
+		RoomState:      "settling",
+		LastSettlement: &clientv1.SettlementNotify{RoomId: "r1"},
+	}
+	view.Players[0] = PlayerView{Hued: true}
+
+	model := BuildTableFrontendModel(view, TableLocalUI{}, time.Unix(0, 0))
+	require.Equal(t, TableScreenSettlement, model.ScreenPhase)
+	require.Empty(t, model.DisabledReason)
+	require.Equal(t, "本局结束", model.Prompt)
+	require.Equal(t, "本局结束：r 再开一桌　l 离桌　Enter 停留", model.KeyHint)
+}

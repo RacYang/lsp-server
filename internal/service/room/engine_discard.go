@@ -136,16 +136,20 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		return nil, fmt.Errorf("hu already done")
 	}
 	var (
-		winTile      tile.Tile
-		source       = rules.HuSourceTsumo
-		nextTurnFrom Seat
-		payer        = SeatInvalid
+		winTile          tile.Tile
+		source           = rules.HuSourceTsumo
+		nextTurnFrom     Seat
+		payer            = SeatInvalid
+		claimHu          bool
+		acceptedPriority int
 	)
 	switch {
 	case rs.claimWindowOpen && rs.hasClaimAction(seat, "hu"):
 		if !rs.isTopClaimSeat(seat) {
 			return nil, fmt.Errorf("hu not allowed")
 		}
+		claimHu = true
+		acceptedPriority = rs.claimPriorityForSeat(seat)
 		winTile = rs.lastDiscard
 		source = rules.HuSourceDiscard
 		if rs.qiangGangWindow {
@@ -167,9 +171,13 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	if rs.wall != nil {
 		wallRemaining = rs.wall.Remaining()
 	}
-	breakdown := rs.rule.ScoreFans(result, rules.ScoreContext{
+	rs.ensureRuleRuntime()
+	scoringPolicy := rs.caps.Scoring
+	breakdown, scoreEvents, ok := scoringPolicy.ScoreWin(result, rules.ScoreContext{
 		HuSeat:               seat,
 		DealerSeat:           rs.dealerSeat,
+		WinningTile:          winTile,
+		SeatGenTiles:         cloneTileMatrix(rs.flowers),
 		GangRecords:          append([]rules.GangRecord(nil), rs.gangRecords...),
 		IsTsumo:              source == rules.HuSourceTsumo,
 		IsOpeningDraw:        rs.isOpeningDrawHu(seat, source),
@@ -177,23 +185,31 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		IsHaiDi:              rs.isHaiDi(),
 		IsGangShangHua:       source == rules.HuSourceTsumo && rs.lastGangFollowUp,
 		IsGangShangPao:       source != rules.HuSourceTsumo && rs.lastDiscardAfterGang,
-		Que:                  append([]tile.Suit(nil), queSuits(rs.queBySeat)...),
 		Melds:                rs.meldContexts(seat),
 		ResponsibleSeat:      payer,
 		WallRemaining:        wallRemaining,
+		ActiveSeats:          rs.activeSeats(),
+		Step:                 rs.step,
 	})
-	appendHuEntries(rs, seat, breakdown.Total, source, payer, breakdown)
+	if !ok || breakdown.Total <= 0 {
+		return nil, fmt.Errorf("hu score below rule minimum")
+	}
+	fanNames := fanLabels(breakdown)
+	rs.scoreEvents = append(rs.scoreEvents, scoreEvents...)
 	if source == rules.HuSourceQiangGang && rs.pendingGangSeat.Valid() && rs.pendingGangTile != 0 {
 		_ = rs.hands[rs.pendingGangSeat].Remove(rs.pendingGangTile)
 	}
-	rs.markHued(seat)
+	rs.recordWin(seat, source, winTile, payer, int32(breakdown.Total), fanNames) //nolint:gosec // 番数很小
 	rs.pendingDraw = 0
 	rs.currentDraw = 0
 	rs.lastGangFollowUp = false
 	rs.lastDiscardAfterGang = false
 	rs.closeOpeningHuWindow(source)
-	rs.clearClaimWindow()
-	rs.enterPhase(ReasonNone)
+	if claimHu {
+		rs.removeClaimCandidate(seat)
+	} else {
+		rs.clearClaimWindow()
+	}
 	if source != rules.HuSourceTsumo {
 		metrics.ClaimWindowTotal.WithLabelValues("hu").Inc()
 	}
@@ -231,6 +247,15 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 		}
 		return append(out, settlement), nil
 	}
+	if claimHu && rs.hasRemainingHuClaimAtPriority(acceptedPriority) {
+		rs.enterPhase(ReasonClaimWindow)
+		prompts, err := rs.claimPromptNotifications(winTile)
+		if err != nil {
+			return nil, err
+		}
+		return append(out, prompts...), nil
+	}
+	rs.clearClaimWindow()
 	rs.turn = rs.nextActiveSeat(nextTurnFrom)
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {
@@ -279,7 +304,7 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	}
 	turn := rs.turn
 	reqID := fmt.Sprintf("draw-%d", rs.step)
-	drawn, err := rs.wall.Draw()
+	drawn, err := e.drawNextPlayableTile(rs, turn)
 	if err != nil {
 		return nil, err
 	}
@@ -346,6 +371,32 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	return out, nil
 }
 
+func (e *Engine) drawNextPlayableTile(rs *RoundState, seat Seat) (tile.Tile, error) {
+	if rs == nil || rs.wall == nil {
+		return 0, fmt.Errorf("missing wall")
+	}
+	for {
+		drawn, err := rs.wall.Draw()
+		if err != nil {
+			return 0, err
+		}
+		if !drawn.IsFlower() {
+			return drawn, nil
+		}
+		rs.recordFlower(seat, drawn)
+	}
+}
+
+func (rs *RoundState) recordFlower(seat Seat, drawn tile.Tile) {
+	if rs == nil || seat < 0 || seat > 3 || !drawn.IsFlower() {
+		return
+	}
+	if len(rs.flowers) < 4 {
+		rs.flowers = make([][]tile.Tile, 4)
+	}
+	rs.flowers[seat] = append(rs.flowers[seat], drawn)
+}
+
 func drawTilePayload(reqID string, seatIndex int32, tileText string, progress RoundProgress, visible bool) ([]byte, error) {
 	if !visible {
 		tileText = ""
@@ -367,42 +418,55 @@ func (rs *RoundState) isHaiDi() bool {
 	return rs != nil && rs.wall != nil && rs.wall.Remaining() == 0
 }
 
-func queSuits(raw []int32) []tile.Suit {
-	out := make([]tile.Suit, 0, len(raw))
-	for _, suit := range raw {
-		if suit >= 0 && suit <= 2 {
-			out = append(out, tile.Suit(suit))
+func (rs *RoundState) activeSeats() []Seat {
+	if rs == nil {
+		return nil
+	}
+	out := make([]Seat, 0, SeatCount)
+	for seat := Seat(0); seat < SeatCount; seat++ {
+		if !rs.isSeatOutAfterHu(seat) && !rs.isSurrendered(seat) {
+			out = append(out, seat)
 		}
 	}
 	return out
 }
 
 func (rs *RoundState) isHued(seat Seat) bool {
-	return rs != nil && seat >= 0 && int(seat) < len(rs.huedSeats) && rs.huedSeats[seat]
+	if rs == nil || seat < 0 || seat > 3 {
+		return false
+	}
+	for _, event := range rs.winEvents {
+		if Seat(event.Seat) == seat {
+			return true
+		}
+	}
+	return false
 }
 
-func (rs *RoundState) markHued(seat Seat) {
+func (rs *RoundState) recordWin(seat Seat, source rules.HuSource, winTile tile.Tile, payer Seat, fanTotal int32, fanNames []string) {
 	if rs == nil || seat < 0 || seat > 3 || rs.isHued(seat) {
 		return
 	}
-	for len(rs.huedSeats) < 4 {
-		rs.huedSeats = append(rs.huedSeats, false)
-	}
-	rs.huedSeats[seat] = true
-	rs.winnerSeats = append(rs.winnerSeats, seat)
+	rs.winEvents = append(rs.winEvents, rules.WinEvent{
+		Seat:     seat,
+		Source:   source,
+		Tile:     winTile,
+		FromSeat: payer,
+		Step:     rs.step,
+		TotalFan: fanTotal,
+		FanNames: append([]string(nil), fanNames...),
+	})
 }
 
-func (rs *RoundState) huedCount() int {
+func (rs *RoundState) huedSeatContinues() bool {
 	if rs == nil {
-		return 0
+		return false
 	}
-	n := 0
-	for _, hued := range rs.huedSeats {
-		if hued {
-			n++
-		}
-	}
-	return n
+	return rs.caps.Turn.HuedSeatContinues()
+}
+
+func (rs *RoundState) isSeatOutAfterHu(seat Seat) bool {
+	return rs != nil && rs.isHued(seat) && !rs.huedSeatContinues()
 }
 
 func (rs *RoundState) nextActiveSeat(from Seat) Seat {
@@ -411,7 +475,7 @@ func (rs *RoundState) nextActiveSeat(from Seat) Seat {
 	}
 	for offset := 1; offset <= 4; offset++ {
 		seat := Seat((int(from) + offset) % 4)
-		if !rs.isHued(seat) && !rs.isSurrendered(seat) {
+		if !rs.isSeatOutAfterHu(seat) && !rs.isSurrendered(seat) {
 			return seat
 		}
 	}
@@ -425,7 +489,7 @@ func (rs *RoundState) activeCount() int {
 	n := 0
 	for seat := 0; seat < 4; seat++ {
 		s := Seat(seat)
-		if !rs.isHued(s) && !rs.isSurrendered(s) {
+		if !rs.isSeatOutAfterHu(s) && !rs.isSurrendered(s) {
 			n++
 		}
 	}
@@ -436,7 +500,14 @@ func (rs *RoundState) shouldFinishRound() bool {
 	if rs == nil {
 		return true
 	}
-	return rs.rule.GameOver(rules.GameState{HuedPlayers: rs.huedCount(), WallRemaining: rs.wall.Remaining()})
+	rs.ensureRuleRuntime()
+	termination := rs.caps.Termination
+	return termination.GameOver(rules.TerminationContext{
+		WallRemaining: rs.wall.Remaining(),
+		WinEvents:     append([]rules.WinEvent(nil), rs.winEvents...),
+		ActiveSeats:   rs.activeSeats(),
+		RuleState:     rs.ruleState,
+	})
 }
 
 func (rs *RoundState) waitingKind() string {
@@ -444,10 +515,11 @@ func (rs *RoundState) waitingKind() string {
 		return "none"
 	}
 	switch {
-	case rs.waitingExchange:
-		return "exchange_three"
-	case rs.waitingQueMen:
-		return "que_men"
+	case rs.waitingOpening:
+		if step, ok := rs.currentOpeningStep(); ok {
+			return step.Action
+		}
+		return "opening"
 	case rs.claimWindowOpen:
 		return "claim_window"
 	case rs.waitingTsumo:

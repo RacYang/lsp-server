@@ -43,8 +43,7 @@ func TestOutboundMsgIDMappings(t *testing.T) {
 		want uint16
 	}{
 		{roomsvc.KindInitialDeal, msgid.InitialDealNotify},
-		{roomsvc.KindExchangeThreeDone, msgid.ExchangeThreeDone},
-		{roomsvc.KindQueMenDone, msgid.QueMenDone},
+		{roomsvc.KindOpeningDone, msgid.OpeningDone},
 		{roomsvc.KindStartGame, msgid.StartGame},
 		{roomsvc.KindDrawTile, msgid.DrawTile},
 		{roomsvc.KindAction, msgid.ActionNotify},
@@ -90,11 +89,8 @@ func TestActionErrEnvelopeShapes(t *testing.T) {
 		{"pong", pongErrEnvelope, func(e *clientv1.Envelope) clientv1.ErrorCode { return e.GetPongResp().GetErrorCode() }},
 		{"gang", gangErrEnvelope, func(e *clientv1.Envelope) clientv1.ErrorCode { return e.GetGangResp().GetErrorCode() }},
 		{"hu", huErrEnvelope, func(e *clientv1.Envelope) clientv1.ErrorCode { return e.GetHuResp().GetErrorCode() }},
-		{"exchangeThree", exchangeThreeErrEnvelope, func(e *clientv1.Envelope) clientv1.ErrorCode {
-			return e.GetExchangeThreeResp().GetErrorCode()
-		}},
-		{"queMen", queMenErrEnvelope, func(e *clientv1.Envelope) clientv1.ErrorCode {
-			return e.GetQueMenResp().GetErrorCode()
+		{"openingAction", openingActionErrEnvelope, func(e *clientv1.Envelope) clientv1.ErrorCode {
+			return e.GetOpeningActionResp().GetErrorCode()
 		}},
 	}
 	for _, c := range cases {

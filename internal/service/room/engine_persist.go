@@ -7,12 +7,11 @@ import (
 
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
 
-const roundPersistSchemaVersion = 4
+const roundPersistSchemaVersion = 7
 
 // ProjectRoundState 返回当前局面面向协议、快照和 bot 的统一事实投影。
 func ProjectRoundState(rs *RoundState) RoundProjection {
@@ -45,8 +44,8 @@ func ProjectRoundState(rs *RoundState) RoundProjection {
 			MeldsBySeat:     cloneStringMatrix(rs.melds),
 			MeldInfosBySeat: rs.meldInfosBySeat(),
 			PlayerIDs:       rs.playerIDs,
-			QueBySeat:       append([]int32(nil), rs.queBySeat...),
-			HuedSeats:       append([]bool(nil), rs.huedSeats...),
+			QueBySeat:       append([]int32(nil), rs.missingSuitBySeat()...),
+			HuedSeats:       rs.huedSeats(),
 			Closed:          rs.closed,
 			LastAction:      rs.lastAction,
 			RoundIndex:      0,
@@ -66,31 +65,30 @@ func (rs *RoundState) SnapshotView() RoundView {
 	progress := projection.Progress
 	facts := projection.Facts
 	return RoundView{
-		ActingSeat:        progress.ActingSeat,
-		ActingSeats:       append([]int32(nil), progress.ActingSeats...),
-		WaitingAction:     progress.WaitingAction,
-		Phase:             progress.Phase,
-		LastStep:          progress.Step,
-		PendingTile:       progress.PendingTile,
-		AvailableActions:  append([]string(nil), progress.AvailableActions...),
-		ClaimCandidates:   append([]RoundClaimCandidate(nil), progress.ClaimCandidates...),
-		HandsBySeat:       facts.HandsBySeat,
-		DiscardsBySeat:    facts.DiscardsBySeat,
-		MeldsBySeat:       facts.MeldsBySeat,
-		MeldInfosBySeat:   facts.MeldInfosBySeat,
-		PlayerIDs:         facts.PlayerIDs,
-		QueBySeat:         facts.QueBySeat,
-		HuedSeats:         facts.HuedSeats,
-		ExchangeSubmitted: append([]bool(nil), rs.exchangeSubmitted...),
-		QueSubmitted:      append([]bool(nil), rs.queSubmitted...),
-		Closed:            facts.Closed,
-		LastAction:        facts.LastAction,
-		WallRemaining:     progress.WallRemaining,
-		DeadlineUnixMs:    progress.DeadlineUnixMs,
-		RoundIndex:        facts.RoundIndex,
-		HandIndex:         facts.HandIndex,
-		TotalScores:       facts.TotalScores,
-		RuleMeta:          facts.RuleMeta,
+		ActingSeat:       progress.ActingSeat,
+		ActingSeats:      append([]int32(nil), progress.ActingSeats...),
+		WaitingAction:    progress.WaitingAction,
+		Phase:            progress.Phase,
+		LastStep:         progress.Step,
+		PendingTile:      progress.PendingTile,
+		AvailableActions: append([]string(nil), progress.AvailableActions...),
+		ClaimCandidates:  append([]RoundClaimCandidate(nil), progress.ClaimCandidates...),
+		HandsBySeat:      facts.HandsBySeat,
+		DiscardsBySeat:   facts.DiscardsBySeat,
+		MeldsBySeat:      facts.MeldsBySeat,
+		MeldInfosBySeat:  facts.MeldInfosBySeat,
+		PlayerIDs:        facts.PlayerIDs,
+		QueBySeat:        facts.QueBySeat,
+		HuedSeats:        facts.HuedSeats,
+		OpeningSubmitted: rs.openingSubmittedByAction(),
+		Closed:           facts.Closed,
+		LastAction:       facts.LastAction,
+		WallRemaining:    progress.WallRemaining,
+		DeadlineUnixMs:   progress.DeadlineUnixMs,
+		RoundIndex:       facts.RoundIndex,
+		HandIndex:        facts.HandIndex,
+		TotalScores:      facts.TotalScores,
+		RuleMeta:         facts.RuleMeta,
 	}
 }
 
@@ -150,6 +148,14 @@ func cloneStringMatrix(in [][]string) [][]string {
 	return out
 }
 
+func cloneTileMatrix(in [][]tile.Tile) [][]tile.Tile {
+	out := make([][]tile.Tile, 4)
+	for i := 0; i < len(out) && i < len(in); i++ {
+		out[i] = append([]tile.Tile(nil), in[i]...)
+	}
+	return out
+}
+
 func (rs *RoundState) roundClaimCandidates() []RoundClaimCandidate {
 	if rs == nil || !rs.claimWindowOpen {
 		return nil
@@ -168,17 +174,14 @@ func (rs *RoundState) snapshotWaiting() (int32, string, string, []string) {
 	if rs == nil {
 		return -1, "", "", nil
 	}
-	if rs.waitingExchange {
-		for seat, done := range rs.exchangeSubmitted {
-			if !done && !rs.isSurrendered(Seat(seat)) {
-				return Seat(seat).Proto(), "exchange_three", "", []string{"exchange_three"}
-			}
+	if rs.waitingOpening {
+		step, ok := rs.currentOpeningStep()
+		if !ok {
+			return -1, "opening", "", nil
 		}
-	}
-	if rs.waitingQueMen {
-		for seat, done := range rs.queSubmitted {
+		for seat, done := range rs.openingSubmitted(step.Action) {
 			if !done && !rs.isSurrendered(Seat(seat)) {
-				return Seat(seat).Proto(), "que_men", "", []string{"que_men"}
+				return Seat(seat).Proto(), step.Action, "", []string{step.Action}
 			}
 		}
 	}
@@ -231,12 +234,7 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		SchemaVersion:          roundPersistSchemaVersion,
 		RuleID:                 rs.ruleID,
 		PlayerIDs:              rs.playerIDs,
-		QueBySeat:              append([]int32(nil), rs.queBySeat...),
-		WaitingExchange:        rs.waitingExchange,
-		ExchangeDir:            rs.exchangeDirection,
-		WaitingQueMen:          rs.waitingQueMen,
-		ExchangeDone:           append([]bool(nil), rs.exchangeSubmitted...),
-		QueDone:                append([]bool(nil), rs.queSubmitted...),
+		WaitingOpening:         rs.waitingOpening,
 		Turn:                   int(rs.turn),
 		Step:                   rs.step,
 		DealerSeat:             int(rs.dealerSeat),
@@ -247,17 +245,17 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		ClaimWindowOpen:        rs.claimWindowOpen,
 		QiangGangWindow:        rs.qiangGangWindow,
 		PendingGangSeat:        int(rs.pendingGangSeat),
-		WinnerSeats:            seatsToPersist(rs.winnerSeats),
-		HuedSeats:              append([]bool(nil), rs.huedSeats...),
+		RuleState:              rs.ruleState,
+		WinEvents:              append([]rules.WinEvent(nil), rs.winEvents...),
+		ScoreEvents:            append([]rules.ScoreEvent(nil), rs.scoreEvents...),
 		SurrenderedSeats:       append([]bool(nil), rs.surrendered...),
-		Ledger:                 append([]xuezhandaodi.ScoreEntry(nil), rs.ledger...),
 		GangRecords:            append([]rules.GangRecord(nil), rs.gangRecords...),
 		LastGangFollowUp:       rs.lastGangFollowUp,
 		LastDiscardAfterGang:   rs.lastDiscardAfterGang,
 		Hands:                  make([][]string, 4),
 		Discards:               make([][]string, 4),
+		Flowers:                make([][]string, 4),
 		Melds:                  make([][]string, 4),
-		ExchangeTiles:          make([][]string, 4),
 		PhaseReason:            int(rs.phaseReason),
 		PhaseStartUnixMs:       rs.phaseStartUnixMs,
 	}
@@ -293,11 +291,11 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 		if seat < len(rs.discards) {
 			rp.Discards[seat] = tilesToStrings(rs.discards[seat])
 		}
+		if seat < len(rs.flowers) {
+			rp.Flowers[seat] = tilesToStrings(rs.flowers[seat])
+		}
 		if seat < len(rs.melds) {
 			rp.Melds[seat] = append([]string(nil), rs.melds[seat]...)
-		}
-		if seat < len(rs.exchangeSelection) {
-			rp.ExchangeTiles[seat] = tilesToStrings(rs.exchangeSelection[seat])
 		}
 	}
 	if rs.wall != nil {
@@ -306,10 +304,7 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 	return json.Marshal(rp)
 }
 
-// RestoreRoundFromPersistJSON 从 JSON 恢复进行中牌局的最小运行态。
-//
-// 流程：解析 JSON → 把旧 schema 升级为当前版本（schema 兼容逻辑集中于 engine_persist_migrate.go）
-// → 解析牌墙 / 手牌 / 弃牌等具象字段并填到 RoundState → 修复运行时不变量。
+// RestoreRoundFromPersistJSON 从当前 schema JSON 恢复进行中牌局的最小运行态。
 func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error) {
 	if roomID == "" {
 		return nil, fmt.Errorf("empty room_id")
@@ -321,11 +316,9 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 	if err := json.Unmarshal(data, &rp); err != nil {
 		return nil, fmt.Errorf("unmarshal round json: %w", err)
 	}
-	if rp.SchemaVersion > roundPersistSchemaVersion {
+	if rp.SchemaVersion != roundPersistSchemaVersion {
 		return nil, fmt.Errorf("%w: %d", ErrRoundPersistUnsupportedSchema, rp.SchemaVersion)
 	}
-
-	migratePersistToCurrent(&rp)
 
 	rs, err := buildRoundStateFromPersist(roomID, &rp)
 	if err != nil {
@@ -337,10 +330,10 @@ func RestoreRoundFromPersistJSON(roomID string, data []byte) (*RoundState, error
 	if err := decodeDiscardsIntoRound(rs, &rp); err != nil {
 		return nil, err
 	}
-	if err := decodeClaimCandidatesIntoRound(rs, &rp); err != nil {
+	if err := decodeFlowersIntoRound(rs, &rp); err != nil {
 		return nil, err
 	}
-	if err := decodeExchangeTilesIntoRound(rs, &rp); err != nil {
+	if err := decodeClaimCandidatesIntoRound(rs, &rp); err != nil {
 		return nil, err
 	}
 	finalizeRoundInvariants(rs)
@@ -389,14 +382,10 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		wall:                   wall.NewFromOrderedTiles(wallTiles),
 		hands:                  hands,
 		discards:               make([][]tile.Tile, 4),
+		flowers:                make([][]tile.Tile, 4),
 		melds:                  cloneStringMatrix(rp.Melds),
-		queBySeat:              append([]int32(nil), rp.QueBySeat...),
-		waitingExchange:        rp.WaitingExchange,
-		waitingQueMen:          rp.WaitingQueMen,
-		exchangeSubmitted:      append([]bool(nil), rp.ExchangeDone...),
-		exchangeDirection:      rp.ExchangeDir,
-		exchangeSelection:      make([][]tile.Tile, 4),
-		queSubmitted:           append([]bool(nil), rp.QueDone...),
+		ruleState:              restoreRuleState(caps, rp),
+		waitingOpening:         rp.WaitingOpening,
 		waitingDiscard:         rp.WaitingDiscard,
 		waitingTsumo:           rp.WaitingTsumo,
 		claimWindowOpen:        rp.ClaimWindowOpen,
@@ -407,10 +396,9 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		dealerSeat:             SeatFromInt(rp.DealerSeat),
 		openingDrawSeat:        SeatFromInt(rp.OpeningDrawSeat),
 		dealerFirstDiscardOpen: rp.DealerFirstDiscardOpen,
-		winnerSeats:            seatsFromPersist(rp.WinnerSeats),
-		huedSeats:              append([]bool(nil), rp.HuedSeats...),
 		surrendered:            append([]bool(nil), rp.SurrenderedSeats...),
-		ledger:                 append([]xuezhandaodi.ScoreEntry(nil), rp.Ledger...),
+		winEvents:              restoreWinEvents(rp),
+		scoreEvents:            restoreScoreEvents(rp),
 		gangRecords:            append([]rules.GangRecord(nil), rp.GangRecords...),
 		lastGangFollowUp:       rp.LastGangFollowUp,
 		lastDiscardAfterGang:   rp.LastDiscardAfterGang,
@@ -475,6 +463,22 @@ func decodeDiscardsIntoRound(rs *RoundState, rp *roundPersist) error {
 	return nil
 }
 
+func decodeFlowersIntoRound(rs *RoundState, rp *roundPersist) error {
+	if rs == nil || rp == nil {
+		return nil
+	}
+	for seat := 0; seat < len(rp.Flowers) && seat < 4; seat++ {
+		for _, raw := range rp.Flowers[seat] {
+			t, err := tile.Parse(raw)
+			if err != nil {
+				return fmt.Errorf("parse flower tile %q: %w", raw, err)
+			}
+			rs.recordFlower(Seat(seat), t)
+		}
+	}
+	return nil
+}
+
 // decodeClaimCandidatesIntoRound 重建抢答候选列表，并校验座位与动作合法性。
 func decodeClaimCandidatesIntoRound(rs *RoundState, rp *roundPersist) error {
 	for _, candidate := range rp.ClaimCandidates {
@@ -494,7 +498,7 @@ func decodeClaimCandidatesIntoRound(rs *RoundState, rp *roundPersist) error {
 			rs.claimCandidates = append(rs.claimCandidates, claimCandidate{
 				seat:         Seat(candidate.Seat),
 				actions:      actions,
-				priority:     legacyClaimPriority(actions),
+				priority:     claimPriority(actions),
 				choiceAction: claimCandidate{actions: actions}.claimChoiceAction(),
 			})
 		}
@@ -505,40 +509,22 @@ func decodeClaimCandidatesIntoRound(rs *RoundState, rp *roundPersist) error {
 	return nil
 }
 
-// decodeExchangeTilesIntoRound 还原换三张选牌；旧快照在该窗口已关闭时该字段为空。
-func decodeExchangeTilesIntoRound(rs *RoundState, rp *roundPersist) error {
-	for seat := 0; seat < len(rp.ExchangeTiles) && seat < 4; seat++ {
-		for _, raw := range rp.ExchangeTiles[seat] {
-			t, err := tile.Parse(raw)
-			if err != nil {
-				return fmt.Errorf("parse exchange tile %q: %w", raw, err)
-			}
-			rs.exchangeSelection[seat] = append(rs.exchangeSelection[seat], t)
-		}
-	}
-	return nil
+func restoreRuleState(caps rules.CapabilitySet, rp *roundPersist) rules.RuleState {
+	state := rp.RuleState
+	return caps.State.NormalizeRuleState(state)
 }
 
-// finalizeRoundInvariants 把切片字段补齐到固定长度，并与 winnerSeats 同步 huedSeats。
+func restoreScoreEvents(rp *roundPersist) []rules.ScoreEvent {
+	return append([]rules.ScoreEvent(nil), rp.ScoreEvents...)
+}
+
+func restoreWinEvents(rp *roundPersist) []rules.WinEvent {
+	return append([]rules.WinEvent(nil), rp.WinEvents...)
+}
+
+// finalizeRoundInvariants 把切片字段补齐到固定长度，并恢复运行时派生状态。
 func finalizeRoundInvariants(rs *RoundState) {
-	for len(rs.queBySeat) < 4 {
-		rs.queBySeat = append(rs.queBySeat, 0)
-	}
-	for len(rs.exchangeSubmitted) < 4 {
-		rs.exchangeSubmitted = append(rs.exchangeSubmitted, false)
-	}
-	if rs.exchangeDirection == 0 {
-		rs.exchangeDirection = -1
-	}
-	for len(rs.exchangeSelection) < 4 {
-		rs.exchangeSelection = append(rs.exchangeSelection, nil)
-	}
-	for len(rs.queSubmitted) < 4 {
-		rs.queSubmitted = append(rs.queSubmitted, false)
-	}
-	for len(rs.huedSeats) < 4 {
-		rs.huedSeats = append(rs.huedSeats, false)
-	}
+	rs.normalizeRuleState()
 	for len(rs.surrendered) < 4 {
 		rs.surrendered = append(rs.surrendered, false)
 	}
@@ -551,19 +537,14 @@ func finalizeRoundInvariants(rs *RoundState) {
 	if !rs.pendingGangSeat.Valid() && rs.qiangGangWindow {
 		rs.pendingGangSeat = rs.lastDiscardSeat
 	}
-	for _, seat := range rs.winnerSeats {
-		if seat >= 0 && seat < 4 {
-			rs.huedSeats[seat] = true
-		}
-	}
-	// 兼容老快照：未持久化 PhaseReason 时由 waiting 标志派生，保证 enterPhase 不变量与 Deadline()
+	// 当前 schema 持久化 PhaseReason；这里保留不变量兜底，保证 enterPhase 与 Deadline()
 	// 在恢复后保持自洽（详见 ADR-0045）。
 	if rs.phaseReason == ReasonNone {
 		switch {
-		case rs.waitingExchange:
-			rs.phaseReason = ReasonExchangeThree
-		case rs.waitingQueMen:
-			rs.phaseReason = ReasonQueMen
+		case rs.waitingOpening:
+			if _, ok := rs.currentOpeningStep(); ok {
+				rs.phaseReason = ReasonOpening
+			}
 		case rs.claimWindowOpen:
 			rs.phaseReason = ReasonClaimWindow
 		case rs.waitingTsumo:
@@ -574,26 +555,11 @@ func finalizeRoundInvariants(rs *RoundState) {
 	}
 }
 
-// RoundViewFromPersistJSON 直接从持久化 JSON 还原等待态摘要，供快照 fallback 使用。
+// RoundViewFromPersistJSON 从当前 schema 持久化 JSON 投影等待态摘要。
 func RoundViewFromPersistJSON(roomID string, data []byte) (RoundView, error) {
 	rs, err := RestoreRoundFromPersistJSON(roomID, data)
 	if err != nil {
 		return RoundView{}, err
 	}
 	return rs.SnapshotView(), nil
-}
-
-// QueSuitsFromPersistJSON 直接从持久化 JSON 读取定缺结果，供本地重连快照复用。
-func QueSuitsFromPersistJSON(data []byte) ([]int32, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("empty round json")
-	}
-	var rp roundPersist
-	if err := json.Unmarshal(data, &rp); err != nil {
-		return nil, fmt.Errorf("unmarshal round json: %w", err)
-	}
-	if rp.SchemaVersion > roundPersistSchemaVersion {
-		return nil, fmt.Errorf("%w: %d", ErrRoundPersistUnsupportedSchema, rp.SchemaVersion)
-	}
-	return append([]int32(nil), rp.QueBySeat...), nil
 }

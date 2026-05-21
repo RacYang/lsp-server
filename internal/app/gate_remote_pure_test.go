@@ -161,24 +161,30 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			wantID: msgid.Settlement,
 		},
 		{
-			name: "exchange_three_done",
+			name: "opening_done_exchange",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
-				Body: &clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone{
-					ExchangeThreeDone: &clusterv1.ExchangeThreeDoneEvent{
-						SeatTiles: []*clusterv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"1m"}}},
+				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+					OpeningDone: &clusterv1.OpeningDoneEvent{
+						Action:    "exchange_three",
+						Kind:      "exchange_done",
+						SeatTiles: []*clusterv1.OpeningSeatTiles{{Key: "received", Seats: []*clusterv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"1m"}}}}},
 					},
 				},
 			},
-			wantID: msgid.ExchangeThreeDone,
+			wantID: msgid.OpeningDone,
 		},
 		{
-			name: "que_men_done",
+			name: "opening_done_que",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
-				Body: &clusterv1.RoomServiceStreamEventsResponse_QueMenDone{
-					QueMenDone: &clusterv1.QueMenDoneEvent{QueSuitBySeat: []int32{0, 1, 2, 0}},
+				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+					OpeningDone: &clusterv1.OpeningDoneEvent{
+						Action:   "que_men",
+						Kind:     "missing_suit_done",
+						SeatInts: []*clusterv1.OpeningSeatInts{{Key: "que_suit", Values: []int32{0, 1, 2, 0}}},
+					},
 				},
 			},
-			wantID: msgid.QueMenDone,
+			wantID: msgid.OpeningDone,
 		},
 		{
 			name: "route_redirect",
@@ -293,21 +299,23 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-progress",
 				Cursor: "r-progress:13",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_ExchangeThreeDone{
-					ExchangeThreeDone: &clusterv1.ExchangeThreeDoneEvent{
-						Phase:       clusterv1.Phase_PHASE_QUE_MEN,
+				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+					OpeningDone: &clusterv1.OpeningDoneEvent{
+						Action:      "exchange_three",
+						Kind:        "exchange_done",
+						Params:      map[string]string{"direction": "3"},
+						Phase:       clusterv1.Phase_PHASE_OPENING,
 						Step:        13,
 						ActingSeats: []int32{0, 1, 2, 3},
-						Direction:   3,
 					},
 				},
 			},
 			assert: func(t *testing.T, env *clientv1.Envelope) {
 				t.Helper()
-				require.Equal(t, clientv1.Phase_PHASE_QUE_MEN, env.GetExchangeThreeDone().GetPhase())
-				require.EqualValues(t, 13, env.GetExchangeThreeDone().GetStep())
-				require.Equal(t, []int32{0, 1, 2, 3}, env.GetExchangeThreeDone().GetActingSeats())
-				require.EqualValues(t, 3, env.GetExchangeThreeDone().GetDirection())
+				require.Equal(t, clientv1.Phase_PHASE_OPENING, env.GetOpeningDone().GetPhase())
+				require.EqualValues(t, 13, env.GetOpeningDone().GetStep())
+				require.Equal(t, []int32{0, 1, 2, 3}, env.GetOpeningDone().GetActingSeats())
+				require.Equal(t, "3", env.GetOpeningDone().GetParams()["direction"])
 			},
 		},
 		{
@@ -315,8 +323,10 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-progress",
 				Cursor: "r-progress:14",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_QueMenDone{
-					QueMenDone: &clusterv1.QueMenDoneEvent{
+				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+					OpeningDone: &clusterv1.OpeningDoneEvent{
+						Action:      "que_men",
+						Kind:        "missing_suit_done",
 						Phase:       clusterv1.Phase_PHASE_DRAW,
 						Step:        14,
 						ActingSeats: []int32{0},
@@ -325,9 +335,9 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 			},
 			assert: func(t *testing.T, env *clientv1.Envelope) {
 				t.Helper()
-				require.Equal(t, clientv1.Phase_PHASE_DRAW, env.GetQueMenDone().GetPhase())
-				require.EqualValues(t, 14, env.GetQueMenDone().GetStep())
-				require.Equal(t, []int32{0}, env.GetQueMenDone().GetActingSeats())
+				require.Equal(t, clientv1.Phase_PHASE_DRAW, env.GetOpeningDone().GetPhase())
+				require.EqualValues(t, 14, env.GetOpeningDone().GetStep())
+				require.Equal(t, []int32{0}, env.GetOpeningDone().GetActingSeats())
 			},
 		},
 	}
@@ -462,9 +472,9 @@ func TestRemoteRoomGatewayNilReceiverMethods(t *testing.T) {
 	require.Error(t, err)
 	_, err = g.Hu(ctx, "room", "user", nil)
 	require.Error(t, err)
-	_, err = g.ExchangeThree(ctx, "room", "user", []string{"m1", "m2", "m3"}, 1, nil)
+	_, err = g.OpeningAction(ctx, "room", "user", "exchange_three", []string{"m1", "m2", "m3"}, 1, 0, nil, nil)
 	require.Error(t, err)
-	_, err = g.QueMen(ctx, "room", "user", 0, nil)
+	_, err = g.OpeningAction(ctx, "room", "user", "que_men", nil, 0, 0, nil, nil)
 	require.Error(t, err)
 	_, _, err = g.ListRooms(ctx, 20, "")
 	require.Error(t, err)

@@ -70,8 +70,8 @@ func TestBotSupervisorAllBotsCompleteARound(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	view, _, _ := svc.RoundView(ctx, roomID)
-	t.Fatalf("supervisor 卡在 exchange/que_men 阶段：waiting=%s exchange_done=%v que_done=%v",
-		view.WaitingAction, view.ExchangeSubmitted, view.QueSubmitted)
+	t.Fatalf("supervisor 卡在 opening 阶段：waiting=%s submitted=%v",
+		view.WaitingAction, view.OpeningSubmitted)
 }
 
 // TestBotSupervisorMixedHumanWaitsAfterExchange 验证混人混 bot 时：
@@ -111,14 +111,14 @@ func TestBotSupervisorMixedHumanWaitsAfterExchange(t *testing.T) {
 		switch view.WaitingAction {
 		case "exchange_three":
 			if !humanExchanged && len(view.HandsBySeat) > 0 && len(view.HandsBySeat[0]) >= 3 {
-				_, err := svc.ExchangeThree(ctx, roomID, humanID, view.HandsBySeat[0][:3], 3, nil)
+				_, err := svc.OpeningAction(ctx, roomID, humanID, "exchange_three", view.HandsBySeat[0][:3], 3, 0, nil, nil)
 				if err == nil {
 					humanExchanged = true
 				}
 			}
 		case "que_men":
 			if !humanQueDone {
-				_, err := svc.QueMen(ctx, roomID, humanID, 0, nil)
+				_, err := svc.OpeningAction(ctx, roomID, humanID, "que_men", nil, 0, 0, nil, nil)
 				if err == nil {
 					humanQueDone = true
 				}
@@ -150,7 +150,7 @@ func TestBotSupervisorMixedHumanWaitsAfterExchange(t *testing.T) {
 	if !humanExchanged {
 		t.Skip("真人未能在 deadline 内提交换三张；策略时间窗口不稳定，跳过")
 	}
-	for seat, done := range view.ExchangeSubmitted {
+	for seat, done := range view.OpeningSubmitted["exchange_three"] {
 		if seat == 0 {
 			continue
 		}

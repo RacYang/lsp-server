@@ -7,6 +7,10 @@ allow:
 excludeFiles:
   - "^.*_test\\.go$"
 components:
+  mahjong_builtin:
+    in: internal/mahjong/builtin/**
+  mahjong_guobiao:
+    in: internal/mahjong/guobiao/jingji/**
   mahjong_xuezhandaodi:
     in: internal/mahjong/sichuan/xuezhandaodi/**
   mahjong_rules:
@@ -56,8 +60,28 @@ components:
   apigen:
     in: api/gen/**
 deps:
+  mahjong_builtin:
+    mayDependOn:
+      - mahjong_guobiao
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen
+  mahjong_guobiao:
+    anyProjectDeps: true
   mahjong_xuezhandaodi:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
@@ -72,6 +96,8 @@ deps:
       - apigen
   mahjong_rules:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_tile
       - mahjong_wall
@@ -86,6 +112,8 @@ deps:
       - apigen
   mahjong_tile:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_wall
@@ -100,6 +128,8 @@ deps:
       - apigen
   mahjong_wall:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
@@ -114,6 +144,8 @@ deps:
       - apigen
   mahjong_hand:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
@@ -128,6 +160,8 @@ deps:
       - apigen
   mahjong_hu:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
@@ -142,6 +176,8 @@ deps:
       - apigen
   mahjong_fan:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
@@ -156,6 +192,8 @@ deps:
       - apigen
   mahjong_analysis:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
@@ -172,6 +210,8 @@ deps:
     anyProjectDeps: true
   domain:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
@@ -193,6 +233,8 @@ deps:
     anyProjectDeps: true
   handler:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
@@ -219,6 +261,8 @@ deps:
     anyProjectDeps: true
   service:
     mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile

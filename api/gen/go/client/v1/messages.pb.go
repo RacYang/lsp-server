@@ -104,41 +104,38 @@ type Phase int32
 const (
 	Phase_PHASE_UNSPECIFIED Phase = 0
 	Phase_PHASE_LOBBY       Phase = 1
-	Phase_PHASE_EXCHANGE    Phase = 2
-	Phase_PHASE_QUE_MEN     Phase = 3
 	Phase_PHASE_DRAW        Phase = 4
 	Phase_PHASE_DISCARD     Phase = 5
 	Phase_PHASE_CLAIM       Phase = 6
 	Phase_PHASE_TSUMO       Phase = 7
 	Phase_PHASE_SETTLE      Phase = 8
 	Phase_PHASE_CLOSED      Phase = 9
+	Phase_PHASE_OPENING     Phase = 10
 )
 
 // Enum value maps for Phase.
 var (
 	Phase_name = map[int32]string{
-		0: "PHASE_UNSPECIFIED",
-		1: "PHASE_LOBBY",
-		2: "PHASE_EXCHANGE",
-		3: "PHASE_QUE_MEN",
-		4: "PHASE_DRAW",
-		5: "PHASE_DISCARD",
-		6: "PHASE_CLAIM",
-		7: "PHASE_TSUMO",
-		8: "PHASE_SETTLE",
-		9: "PHASE_CLOSED",
+		0:  "PHASE_UNSPECIFIED",
+		1:  "PHASE_LOBBY",
+		4:  "PHASE_DRAW",
+		5:  "PHASE_DISCARD",
+		6:  "PHASE_CLAIM",
+		7:  "PHASE_TSUMO",
+		8:  "PHASE_SETTLE",
+		9:  "PHASE_CLOSED",
+		10: "PHASE_OPENING",
 	}
 	Phase_value = map[string]int32{
 		"PHASE_UNSPECIFIED": 0,
 		"PHASE_LOBBY":       1,
-		"PHASE_EXCHANGE":    2,
-		"PHASE_QUE_MEN":     3,
 		"PHASE_DRAW":        4,
 		"PHASE_DISCARD":     5,
 		"PHASE_CLAIM":       6,
 		"PHASE_TSUMO":       7,
 		"PHASE_SETTLE":      8,
 		"PHASE_CLOSED":      9,
+		"PHASE_OPENING":     10,
 	}
 )
 
@@ -169,20 +166,18 @@ func (Phase) EnumDescriptor() ([]byte, []int) {
 	return file_client_v1_messages_proto_rawDescGZIP(), []int{1}
 }
 
-// WaitingReason 表示服务端当前等待的玩家动作类型；deadline 与之绑定。
-// 与 RoundState 等待标志严格一一对应：waitingExchange / waitingQueMen / claimWindowOpen /
-// waitingTsumo / waitingDiscard，以及托管缩短时长的 surrender 路径。
+// WaitingReason 表示服务端当前等待的通用动作窗口；deadline 与之绑定。
+// 具体可提交动作由 PhaseUpdate.available_actions / waiting_action 投影表达。
 type WaitingReason int32
 
 const (
-	WaitingReason_WAITING_REASON_UNSPECIFIED    WaitingReason = 0
-	WaitingReason_WAITING_REASON_NONE           WaitingReason = 1
-	WaitingReason_WAITING_REASON_EXCHANGE_THREE WaitingReason = 2
-	WaitingReason_WAITING_REASON_QUE_MEN        WaitingReason = 3
-	WaitingReason_WAITING_REASON_CLAIM_WINDOW   WaitingReason = 4
-	WaitingReason_WAITING_REASON_TSUMO          WaitingReason = 5
-	WaitingReason_WAITING_REASON_DISCARD        WaitingReason = 6
-	WaitingReason_WAITING_REASON_SURRENDER      WaitingReason = 7
+	WaitingReason_WAITING_REASON_UNSPECIFIED  WaitingReason = 0
+	WaitingReason_WAITING_REASON_NONE         WaitingReason = 1
+	WaitingReason_WAITING_REASON_OPENING      WaitingReason = 2
+	WaitingReason_WAITING_REASON_CLAIM_WINDOW WaitingReason = 4
+	WaitingReason_WAITING_REASON_TSUMO        WaitingReason = 5
+	WaitingReason_WAITING_REASON_DISCARD      WaitingReason = 6
+	WaitingReason_WAITING_REASON_SURRENDER    WaitingReason = 7
 )
 
 // Enum value maps for WaitingReason.
@@ -190,22 +185,20 @@ var (
 	WaitingReason_name = map[int32]string{
 		0: "WAITING_REASON_UNSPECIFIED",
 		1: "WAITING_REASON_NONE",
-		2: "WAITING_REASON_EXCHANGE_THREE",
-		3: "WAITING_REASON_QUE_MEN",
+		2: "WAITING_REASON_OPENING",
 		4: "WAITING_REASON_CLAIM_WINDOW",
 		5: "WAITING_REASON_TSUMO",
 		6: "WAITING_REASON_DISCARD",
 		7: "WAITING_REASON_SURRENDER",
 	}
 	WaitingReason_value = map[string]int32{
-		"WAITING_REASON_UNSPECIFIED":    0,
-		"WAITING_REASON_NONE":           1,
-		"WAITING_REASON_EXCHANGE_THREE": 2,
-		"WAITING_REASON_QUE_MEN":        3,
-		"WAITING_REASON_CLAIM_WINDOW":   4,
-		"WAITING_REASON_TSUMO":          5,
-		"WAITING_REASON_DISCARD":        6,
-		"WAITING_REASON_SURRENDER":      7,
+		"WAITING_REASON_UNSPECIFIED":  0,
+		"WAITING_REASON_NONE":         1,
+		"WAITING_REASON_OPENING":      2,
+		"WAITING_REASON_CLAIM_WINDOW": 4,
+		"WAITING_REASON_TSUMO":        5,
+		"WAITING_REASON_DISCARD":      6,
+		"WAITING_REASON_SURRENDER":    7,
 	}
 )
 
@@ -414,12 +407,6 @@ type Envelope struct {
 	//	*Envelope_LeaveRoomReq
 	//	*Envelope_LeaveRoomResp
 	//	*Envelope_RouteRedirect
-	//	*Envelope_ExchangeThreeReq
-	//	*Envelope_ExchangeThreeResp
-	//	*Envelope_ExchangeThreeDone
-	//	*Envelope_QueMenReq
-	//	*Envelope_QueMenResp
-	//	*Envelope_QueMenDone
 	//	*Envelope_Snapshot
 	//	*Envelope_PongResp
 	//	*Envelope_GangResp
@@ -441,6 +428,9 @@ type Envelope struct {
 	//	*Envelope_ListRulesResp
 	//	*Envelope_ChiReq
 	//	*Envelope_ChiResp
+	//	*Envelope_OpeningActionReq
+	//	*Envelope_OpeningActionResp
+	//	*Envelope_OpeningDone
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -677,60 +667,6 @@ func (x *Envelope) GetRouteRedirect() *RouteRedirectNotify {
 	return nil
 }
 
-func (x *Envelope) GetExchangeThreeReq() *ExchangeThreeRequest {
-	if x != nil {
-		if x, ok := x.Body.(*Envelope_ExchangeThreeReq); ok {
-			return x.ExchangeThreeReq
-		}
-	}
-	return nil
-}
-
-func (x *Envelope) GetExchangeThreeResp() *ExchangeThreeResponse {
-	if x != nil {
-		if x, ok := x.Body.(*Envelope_ExchangeThreeResp); ok {
-			return x.ExchangeThreeResp
-		}
-	}
-	return nil
-}
-
-func (x *Envelope) GetExchangeThreeDone() *ExchangeThreeDoneNotify {
-	if x != nil {
-		if x, ok := x.Body.(*Envelope_ExchangeThreeDone); ok {
-			return x.ExchangeThreeDone
-		}
-	}
-	return nil
-}
-
-func (x *Envelope) GetQueMenReq() *QueMenRequest {
-	if x != nil {
-		if x, ok := x.Body.(*Envelope_QueMenReq); ok {
-			return x.QueMenReq
-		}
-	}
-	return nil
-}
-
-func (x *Envelope) GetQueMenResp() *QueMenResponse {
-	if x != nil {
-		if x, ok := x.Body.(*Envelope_QueMenResp); ok {
-			return x.QueMenResp
-		}
-	}
-	return nil
-}
-
-func (x *Envelope) GetQueMenDone() *QueMenDoneNotify {
-	if x != nil {
-		if x, ok := x.Body.(*Envelope_QueMenDone); ok {
-			return x.QueMenDone
-		}
-	}
-	return nil
-}
-
 func (x *Envelope) GetSnapshot() *SnapshotNotify {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_Snapshot); ok {
@@ -920,6 +856,33 @@ func (x *Envelope) GetChiResp() *ChiResponse {
 	return nil
 }
 
+func (x *Envelope) GetOpeningActionReq() *OpeningActionRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_OpeningActionReq); ok {
+			return x.OpeningActionReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetOpeningActionResp() *OpeningActionResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_OpeningActionResp); ok {
+			return x.OpeningActionResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetOpeningDone() *OpeningDoneNotify {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_OpeningDone); ok {
+			return x.OpeningDone
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1003,30 +966,6 @@ type Envelope_LeaveRoomResp struct {
 
 type Envelope_RouteRedirect struct {
 	RouteRedirect *RouteRedirectNotify `protobuf:"bytes,21,opt,name=route_redirect,json=routeRedirect,proto3,oneof"`
-}
-
-type Envelope_ExchangeThreeReq struct {
-	ExchangeThreeReq *ExchangeThreeRequest `protobuf:"bytes,22,opt,name=exchange_three_req,json=exchangeThreeReq,proto3,oneof"`
-}
-
-type Envelope_ExchangeThreeResp struct {
-	ExchangeThreeResp *ExchangeThreeResponse `protobuf:"bytes,23,opt,name=exchange_three_resp,json=exchangeThreeResp,proto3,oneof"`
-}
-
-type Envelope_ExchangeThreeDone struct {
-	ExchangeThreeDone *ExchangeThreeDoneNotify `protobuf:"bytes,24,opt,name=exchange_three_done,json=exchangeThreeDone,proto3,oneof"`
-}
-
-type Envelope_QueMenReq struct {
-	QueMenReq *QueMenRequest `protobuf:"bytes,25,opt,name=que_men_req,json=queMenReq,proto3,oneof"`
-}
-
-type Envelope_QueMenResp struct {
-	QueMenResp *QueMenResponse `protobuf:"bytes,26,opt,name=que_men_resp,json=queMenResp,proto3,oneof"`
-}
-
-type Envelope_QueMenDone struct {
-	QueMenDone *QueMenDoneNotify `protobuf:"bytes,27,opt,name=que_men_done,json=queMenDone,proto3,oneof"`
 }
 
 type Envelope_Snapshot struct {
@@ -1118,6 +1057,18 @@ type Envelope_ChiResp struct {
 	ChiResp *ChiResponse `protobuf:"bytes,49,opt,name=chi_resp,json=chiResp,proto3,oneof"`
 }
 
+type Envelope_OpeningActionReq struct {
+	OpeningActionReq *OpeningActionRequest `protobuf:"bytes,50,opt,name=opening_action_req,json=openingActionReq,proto3,oneof"`
+}
+
+type Envelope_OpeningActionResp struct {
+	OpeningActionResp *OpeningActionResponse `protobuf:"bytes,51,opt,name=opening_action_resp,json=openingActionResp,proto3,oneof"`
+}
+
+type Envelope_OpeningDone struct {
+	OpeningDone *OpeningDoneNotify `protobuf:"bytes,52,opt,name=opening_done,json=openingDone,proto3,oneof"`
+}
+
 func (*Envelope_LoginReq) isEnvelope_Body() {}
 
 func (*Envelope_LoginResp) isEnvelope_Body() {}
@@ -1157,18 +1108,6 @@ func (*Envelope_LeaveRoomReq) isEnvelope_Body() {}
 func (*Envelope_LeaveRoomResp) isEnvelope_Body() {}
 
 func (*Envelope_RouteRedirect) isEnvelope_Body() {}
-
-func (*Envelope_ExchangeThreeReq) isEnvelope_Body() {}
-
-func (*Envelope_ExchangeThreeResp) isEnvelope_Body() {}
-
-func (*Envelope_ExchangeThreeDone) isEnvelope_Body() {}
-
-func (*Envelope_QueMenReq) isEnvelope_Body() {}
-
-func (*Envelope_QueMenResp) isEnvelope_Body() {}
-
-func (*Envelope_QueMenDone) isEnvelope_Body() {}
 
 func (*Envelope_Snapshot) isEnvelope_Body() {}
 
@@ -1211,6 +1150,12 @@ func (*Envelope_ListRulesResp) isEnvelope_Body() {}
 func (*Envelope_ChiReq) isEnvelope_Body() {}
 
 func (*Envelope_ChiResp) isEnvelope_Body() {}
+
+func (*Envelope_OpeningActionReq) isEnvelope_Body() {}
+
+func (*Envelope_OpeningActionResp) isEnvelope_Body() {}
+
+func (*Envelope_OpeningDone) isEnvelope_Body() {}
 
 type LoginRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -4575,223 +4520,6 @@ func (x *RouteRedirectNotify) GetReason() string {
 	return ""
 }
 
-// ExchangeThreeRequest 换三张：提交要交出的三张牌（字符串编码同 tile 名称）。
-type ExchangeThreeRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Tiles []string               `protobuf:"bytes,1,rep,name=tiles,proto3" json:"tiles,omitempty"`
-	// 1=顺时针 2=对家 3=逆时针；服务端以首个有效 hint 解析为本局权威方向。
-	Direction     int32       `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
-	PhaseToken    *PhaseToken `protobuf:"bytes,10,opt,name=phase_token,json=phaseToken,proto3" json:"phase_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ExchangeThreeRequest) Reset() {
-	*x = ExchangeThreeRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[53]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ExchangeThreeRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ExchangeThreeRequest) ProtoMessage() {}
-
-func (x *ExchangeThreeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[53]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ExchangeThreeRequest.ProtoReflect.Descriptor instead.
-func (*ExchangeThreeRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{53}
-}
-
-func (x *ExchangeThreeRequest) GetTiles() []string {
-	if x != nil {
-		return x.Tiles
-	}
-	return nil
-}
-
-func (x *ExchangeThreeRequest) GetDirection() int32 {
-	if x != nil {
-		return x.Direction
-	}
-	return 0
-}
-
-func (x *ExchangeThreeRequest) GetPhaseToken() *PhaseToken {
-	if x != nil {
-		return x.PhaseToken
-	}
-	return nil
-}
-
-type ExchangeThreeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ErrorCode     ErrorCode              `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
-	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	PhaseUpdate   *PhaseUpdate           `protobuf:"bytes,3,opt,name=phase_update,json=phaseUpdate,proto3" json:"phase_update,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ExchangeThreeResponse) Reset() {
-	*x = ExchangeThreeResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[54]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ExchangeThreeResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ExchangeThreeResponse) ProtoMessage() {}
-
-func (x *ExchangeThreeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[54]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ExchangeThreeResponse.ProtoReflect.Descriptor instead.
-func (*ExchangeThreeResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{54}
-}
-
-func (x *ExchangeThreeResponse) GetErrorCode() ErrorCode {
-	if x != nil {
-		return x.ErrorCode
-	}
-	return ErrorCode_ERROR_CODE_UNSPECIFIED
-}
-
-func (x *ExchangeThreeResponse) GetErrorMessage() string {
-	if x != nil {
-		return x.ErrorMessage
-	}
-	return ""
-}
-
-func (x *ExchangeThreeResponse) GetPhaseUpdate() *PhaseUpdate {
-	if x != nil {
-		return x.PhaseUpdate
-	}
-	return nil
-}
-
-// ExchangeThreeDoneNotify 服务器广播换三张完成、即将进入定缺。
-type ExchangeThreeDoneNotify struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 每座位实际换入的三张，按座位索引排列；不展示他人手牌时可为空并仅靠日志回放。
-	PerSeat     []*SeatTiles `protobuf:"bytes,1,rep,name=per_seat,json=perSeat,proto3" json:"per_seat,omitempty"`
-	Direction   int32        `protobuf:"varint,2,opt,name=direction,proto3" json:"direction,omitempty"`
-	Phase       Phase        `protobuf:"varint,3,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
-	Step        int64        `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
-	ActingSeats []int32      `protobuf:"varint,5,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
-	// 当前连接所属座位实际交出的三张牌；用于客户端在广播完成时校正本地手牌。
-	YourExchangedAway []string     `protobuf:"bytes,6,rep,name=your_exchanged_away,json=yourExchangedAway,proto3" json:"your_exchanged_away,omitempty"`
-	PhaseUpdate       *PhaseUpdate `protobuf:"bytes,7,opt,name=phase_update,json=phaseUpdate,proto3" json:"phase_update,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
-
-func (x *ExchangeThreeDoneNotify) Reset() {
-	*x = ExchangeThreeDoneNotify{}
-	mi := &file_client_v1_messages_proto_msgTypes[55]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ExchangeThreeDoneNotify) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ExchangeThreeDoneNotify) ProtoMessage() {}
-
-func (x *ExchangeThreeDoneNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[55]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ExchangeThreeDoneNotify.ProtoReflect.Descriptor instead.
-func (*ExchangeThreeDoneNotify) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{55}
-}
-
-func (x *ExchangeThreeDoneNotify) GetPerSeat() []*SeatTiles {
-	if x != nil {
-		return x.PerSeat
-	}
-	return nil
-}
-
-func (x *ExchangeThreeDoneNotify) GetDirection() int32 {
-	if x != nil {
-		return x.Direction
-	}
-	return 0
-}
-
-func (x *ExchangeThreeDoneNotify) GetPhase() Phase {
-	if x != nil {
-		return x.Phase
-	}
-	return Phase_PHASE_UNSPECIFIED
-}
-
-func (x *ExchangeThreeDoneNotify) GetStep() int64 {
-	if x != nil {
-		return x.Step
-	}
-	return 0
-}
-
-func (x *ExchangeThreeDoneNotify) GetActingSeats() []int32 {
-	if x != nil {
-		return x.ActingSeats
-	}
-	return nil
-}
-
-func (x *ExchangeThreeDoneNotify) GetYourExchangedAway() []string {
-	if x != nil {
-		return x.YourExchangedAway
-	}
-	return nil
-}
-
-func (x *ExchangeThreeDoneNotify) GetPhaseUpdate() *PhaseUpdate {
-	if x != nil {
-		return x.PhaseUpdate
-	}
-	return nil
-}
-
 type SeatTiles struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SeatIndex     int32                  `protobuf:"varint,1,opt,name=seat_index,json=seatIndex,proto3" json:"seat_index,omitempty"`
@@ -4802,7 +4530,7 @@ type SeatTiles struct {
 
 func (x *SeatTiles) Reset() {
 	*x = SeatTiles{}
-	mi := &file_client_v1_messages_proto_msgTypes[56]
+	mi := &file_client_v1_messages_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4814,7 +4542,7 @@ func (x *SeatTiles) String() string {
 func (*SeatTiles) ProtoMessage() {}
 
 func (x *SeatTiles) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[56]
+	mi := &file_client_v1_messages_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4827,7 +4555,7 @@ func (x *SeatTiles) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeatTiles.ProtoReflect.Descriptor instead.
 func (*SeatTiles) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{56}
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *SeatTiles) GetSeatIndex() int32 {
@@ -4844,31 +4572,34 @@ func (x *SeatTiles) GetTiles() []string {
 	return nil
 }
 
-// QueMenRequest/Notify 定缺：玩家声明一门为缺门。
-type QueMenRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 0=万 1=筒 2=条（与服务器 tile 包 SuitCharacters/SuitDots/SuitBamboo 约定一致）
-	Suit          int32       `protobuf:"varint,1,opt,name=suit,proto3" json:"suit,omitempty"`
-	PhaseToken    *PhaseToken `protobuf:"bytes,10,opt,name=phase_token,json=phaseToken,proto3" json:"phase_token,omitempty"`
+// OpeningActionRequest 是所有规则开局动作的统一提交入口。
+type OpeningActionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Action        string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
+	Tiles         []string               `protobuf:"bytes,2,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	Direction     int32                  `protobuf:"varint,3,opt,name=direction,proto3" json:"direction,omitempty"`
+	Suit          int32                  `protobuf:"varint,4,opt,name=suit,proto3" json:"suit,omitempty"`
+	Params        map[string]string      `protobuf:"bytes,5,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	PhaseToken    *PhaseToken            `protobuf:"bytes,10,opt,name=phase_token,json=phaseToken,proto3" json:"phase_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *QueMenRequest) Reset() {
-	*x = QueMenRequest{}
-	mi := &file_client_v1_messages_proto_msgTypes[57]
+func (x *OpeningActionRequest) Reset() {
+	*x = OpeningActionRequest{}
+	mi := &file_client_v1_messages_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *QueMenRequest) String() string {
+func (x *OpeningActionRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*QueMenRequest) ProtoMessage() {}
+func (*OpeningActionRequest) ProtoMessage() {}
 
-func (x *QueMenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[57]
+func (x *OpeningActionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4879,26 +4610,54 @@ func (x *QueMenRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use QueMenRequest.ProtoReflect.Descriptor instead.
-func (*QueMenRequest) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{57}
+// Deprecated: Use OpeningActionRequest.ProtoReflect.Descriptor instead.
+func (*OpeningActionRequest) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{54}
 }
 
-func (x *QueMenRequest) GetSuit() int32 {
+func (x *OpeningActionRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *OpeningActionRequest) GetTiles() []string {
+	if x != nil {
+		return x.Tiles
+	}
+	return nil
+}
+
+func (x *OpeningActionRequest) GetDirection() int32 {
+	if x != nil {
+		return x.Direction
+	}
+	return 0
+}
+
+func (x *OpeningActionRequest) GetSuit() int32 {
 	if x != nil {
 		return x.Suit
 	}
 	return 0
 }
 
-func (x *QueMenRequest) GetPhaseToken() *PhaseToken {
+func (x *OpeningActionRequest) GetParams() map[string]string {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+func (x *OpeningActionRequest) GetPhaseToken() *PhaseToken {
 	if x != nil {
 		return x.PhaseToken
 	}
 	return nil
 }
 
-type QueMenResponse struct {
+type OpeningActionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ErrorCode     ErrorCode              `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3,enum=client.v1.ErrorCode" json:"error_code,omitempty"`
 	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
@@ -4907,21 +4666,21 @@ type QueMenResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *QueMenResponse) Reset() {
-	*x = QueMenResponse{}
-	mi := &file_client_v1_messages_proto_msgTypes[58]
+func (x *OpeningActionResponse) Reset() {
+	*x = OpeningActionResponse{}
+	mi := &file_client_v1_messages_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *QueMenResponse) String() string {
+func (x *OpeningActionResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*QueMenResponse) ProtoMessage() {}
+func (*OpeningActionResponse) ProtoMessage() {}
 
-func (x *QueMenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v1_messages_proto_msgTypes[58]
+func (x *OpeningActionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4932,59 +4691,220 @@ func (x *QueMenResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use QueMenResponse.ProtoReflect.Descriptor instead.
-func (*QueMenResponse) Descriptor() ([]byte, []int) {
-	return file_client_v1_messages_proto_rawDescGZIP(), []int{58}
+// Deprecated: Use OpeningActionResponse.ProtoReflect.Descriptor instead.
+func (*OpeningActionResponse) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{55}
 }
 
-func (x *QueMenResponse) GetErrorCode() ErrorCode {
+func (x *OpeningActionResponse) GetErrorCode() ErrorCode {
 	if x != nil {
 		return x.ErrorCode
 	}
 	return ErrorCode_ERROR_CODE_UNSPECIFIED
 }
 
-func (x *QueMenResponse) GetErrorMessage() string {
+func (x *OpeningActionResponse) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
 	}
 	return ""
 }
 
-func (x *QueMenResponse) GetPhaseUpdate() *PhaseUpdate {
+func (x *OpeningActionResponse) GetPhaseUpdate() *PhaseUpdate {
 	if x != nil {
 		return x.PhaseUpdate
 	}
 	return nil
 }
 
-// QueMenDoneNotify 广播四人已定缺，进入开局打牌。
-type QueMenDoneNotify struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 每座位缺门花色，-1 表示未公开
-	QueSuitBySeat []int32      `protobuf:"varint,1,rep,packed,name=que_suit_by_seat,json=queSuitBySeat,proto3" json:"que_suit_by_seat,omitempty"`
-	Phase         Phase        `protobuf:"varint,2,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
-	Step          int64        `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
-	ActingSeats   []int32      `protobuf:"varint,4,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
-	PhaseUpdate   *PhaseUpdate `protobuf:"bytes,5,opt,name=phase_update,json=phaseUpdate,proto3" json:"phase_update,omitempty"`
+type OpeningSeatTiles struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Seats         []*SeatTiles           `protobuf:"bytes,2,rep,name=seats,proto3" json:"seats,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *QueMenDoneNotify) Reset() {
-	*x = QueMenDoneNotify{}
+func (x *OpeningSeatTiles) Reset() {
+	*x = OpeningSeatTiles{}
+	mi := &file_client_v1_messages_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpeningSeatTiles) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpeningSeatTiles) ProtoMessage() {}
+
+func (x *OpeningSeatTiles) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpeningSeatTiles.ProtoReflect.Descriptor instead.
+func (*OpeningSeatTiles) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *OpeningSeatTiles) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *OpeningSeatTiles) GetSeats() []*SeatTiles {
+	if x != nil {
+		return x.Seats
+	}
+	return nil
+}
+
+type OpeningSeatInts struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Values        []int32                `protobuf:"varint,2,rep,packed,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpeningSeatInts) Reset() {
+	*x = OpeningSeatInts{}
+	mi := &file_client_v1_messages_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpeningSeatInts) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpeningSeatInts) ProtoMessage() {}
+
+func (x *OpeningSeatInts) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpeningSeatInts.ProtoReflect.Descriptor instead.
+func (*OpeningSeatInts) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *OpeningSeatInts) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *OpeningSeatInts) GetValues() []int32 {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+type OpeningLocalTiles struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Tiles         []string               `protobuf:"bytes,2,rep,name=tiles,proto3" json:"tiles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpeningLocalTiles) Reset() {
+	*x = OpeningLocalTiles{}
+	mi := &file_client_v1_messages_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpeningLocalTiles) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpeningLocalTiles) ProtoMessage() {}
+
+func (x *OpeningLocalTiles) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v1_messages_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpeningLocalTiles.ProtoReflect.Descriptor instead.
+func (*OpeningLocalTiles) Descriptor() ([]byte, []int) {
+	return file_client_v1_messages_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *OpeningLocalTiles) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *OpeningLocalTiles) GetTiles() []string {
+	if x != nil {
+		return x.Tiles
+	}
+	return nil
+}
+
+// OpeningDoneNotify 是所有规则开局步骤完成后的统一投影。
+type OpeningDoneNotify struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Action        string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
+	StepId        string                 `protobuf:"bytes,2,opt,name=step_id,json=stepId,proto3" json:"step_id,omitempty"`
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Params        map[string]string      `protobuf:"bytes,4,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	SeatTiles     []*OpeningSeatTiles    `protobuf:"bytes,5,rep,name=seat_tiles,json=seatTiles,proto3" json:"seat_tiles,omitempty"`
+	SeatInts      []*OpeningSeatInts     `protobuf:"bytes,6,rep,name=seat_ints,json=seatInts,proto3" json:"seat_ints,omitempty"`
+	LocalTiles    []*OpeningLocalTiles   `protobuf:"bytes,7,rep,name=local_tiles,json=localTiles,proto3" json:"local_tiles,omitempty"`
+	Phase         Phase                  `protobuf:"varint,8,opt,name=phase,proto3,enum=client.v1.Phase" json:"phase,omitempty"`
+	Step          int64                  `protobuf:"varint,9,opt,name=step,proto3" json:"step,omitempty"`
+	ActingSeats   []int32                `protobuf:"varint,10,rep,packed,name=acting_seats,json=actingSeats,proto3" json:"acting_seats,omitempty"`
+	PhaseUpdate   *PhaseUpdate           `protobuf:"bytes,11,opt,name=phase_update,json=phaseUpdate,proto3" json:"phase_update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpeningDoneNotify) Reset() {
+	*x = OpeningDoneNotify{}
 	mi := &file_client_v1_messages_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *QueMenDoneNotify) String() string {
+func (x *OpeningDoneNotify) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*QueMenDoneNotify) ProtoMessage() {}
+func (*OpeningDoneNotify) ProtoMessage() {}
 
-func (x *QueMenDoneNotify) ProtoReflect() protoreflect.Message {
+func (x *OpeningDoneNotify) ProtoReflect() protoreflect.Message {
 	mi := &file_client_v1_messages_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4996,40 +4916,82 @@ func (x *QueMenDoneNotify) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use QueMenDoneNotify.ProtoReflect.Descriptor instead.
-func (*QueMenDoneNotify) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpeningDoneNotify.ProtoReflect.Descriptor instead.
+func (*OpeningDoneNotify) Descriptor() ([]byte, []int) {
 	return file_client_v1_messages_proto_rawDescGZIP(), []int{59}
 }
 
-func (x *QueMenDoneNotify) GetQueSuitBySeat() []int32 {
+func (x *OpeningDoneNotify) GetAction() string {
 	if x != nil {
-		return x.QueSuitBySeat
+		return x.Action
+	}
+	return ""
+}
+
+func (x *OpeningDoneNotify) GetStepId() string {
+	if x != nil {
+		return x.StepId
+	}
+	return ""
+}
+
+func (x *OpeningDoneNotify) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *OpeningDoneNotify) GetParams() map[string]string {
+	if x != nil {
+		return x.Params
 	}
 	return nil
 }
 
-func (x *QueMenDoneNotify) GetPhase() Phase {
+func (x *OpeningDoneNotify) GetSeatTiles() []*OpeningSeatTiles {
+	if x != nil {
+		return x.SeatTiles
+	}
+	return nil
+}
+
+func (x *OpeningDoneNotify) GetSeatInts() []*OpeningSeatInts {
+	if x != nil {
+		return x.SeatInts
+	}
+	return nil
+}
+
+func (x *OpeningDoneNotify) GetLocalTiles() []*OpeningLocalTiles {
+	if x != nil {
+		return x.LocalTiles
+	}
+	return nil
+}
+
+func (x *OpeningDoneNotify) GetPhase() Phase {
 	if x != nil {
 		return x.Phase
 	}
 	return Phase_PHASE_UNSPECIFIED
 }
 
-func (x *QueMenDoneNotify) GetStep() int64 {
+func (x *OpeningDoneNotify) GetStep() int64 {
 	if x != nil {
 		return x.Step
 	}
 	return 0
 }
 
-func (x *QueMenDoneNotify) GetActingSeats() []int32 {
+func (x *OpeningDoneNotify) GetActingSeats() []int32 {
 	if x != nil {
 		return x.ActingSeats
 	}
 	return nil
 }
 
-func (x *QueMenDoneNotify) GetPhaseUpdate() *PhaseUpdate {
+func (x *OpeningDoneNotify) GetPhaseUpdate() *PhaseUpdate {
 	if x != nil {
 		return x.PhaseUpdate
 	}
@@ -5357,7 +5319,7 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\n" +
 	"PhaseToken\x12\x12\n" +
 	"\x04step\x18\x01 \x01(\x03R\x04step\x120\n" +
-	"\x06reason\x18\x02 \x01(\x0e2\x18.client.v1.WaitingReasonR\x06reason\"\xf8\x17\n" +
+	"\x06reason\x18\x02 \x01(\x0e2\x18.client.v1.WaitingReasonR\x06reason\"\x96\x17\n" +
 	"\bEnvelope\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\tR\x05reqId\x12'\n" +
 	"\x0fidempotency_key\x18  \x01(\tR\x0eidempotencyKey\x126\n" +
@@ -5387,15 +5349,7 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x0eheartbeat_resp\x18\x12 \x01(\v2\x1c.client.v1.HeartbeatResponseH\x00R\rheartbeatResp\x12C\n" +
 	"\x0eleave_room_req\x18\x13 \x01(\v2\x1b.client.v1.LeaveRoomRequestH\x00R\fleaveRoomReq\x12F\n" +
 	"\x0fleave_room_resp\x18\x14 \x01(\v2\x1c.client.v1.LeaveRoomResponseH\x00R\rleaveRoomResp\x12G\n" +
-	"\x0eroute_redirect\x18\x15 \x01(\v2\x1e.client.v1.RouteRedirectNotifyH\x00R\rrouteRedirect\x12O\n" +
-	"\x12exchange_three_req\x18\x16 \x01(\v2\x1f.client.v1.ExchangeThreeRequestH\x00R\x10exchangeThreeReq\x12R\n" +
-	"\x13exchange_three_resp\x18\x17 \x01(\v2 .client.v1.ExchangeThreeResponseH\x00R\x11exchangeThreeResp\x12T\n" +
-	"\x13exchange_three_done\x18\x18 \x01(\v2\".client.v1.ExchangeThreeDoneNotifyH\x00R\x11exchangeThreeDone\x12:\n" +
-	"\vque_men_req\x18\x19 \x01(\v2\x18.client.v1.QueMenRequestH\x00R\tqueMenReq\x12=\n" +
-	"\fque_men_resp\x18\x1a \x01(\v2\x19.client.v1.QueMenResponseH\x00R\n" +
-	"queMenResp\x12?\n" +
-	"\fque_men_done\x18\x1b \x01(\v2\x1b.client.v1.QueMenDoneNotifyH\x00R\n" +
-	"queMenDone\x127\n" +
+	"\x0eroute_redirect\x18\x15 \x01(\v2\x1e.client.v1.RouteRedirectNotifyH\x00R\rrouteRedirect\x127\n" +
 	"\bsnapshot\x18\x1c \x01(\v2\x19.client.v1.SnapshotNotifyH\x00R\bsnapshot\x126\n" +
 	"\tpong_resp\x18\x1d \x01(\v2\x17.client.v1.PongResponseH\x00R\bpongResp\x126\n" +
 	"\tgang_resp\x18\x1e \x01(\v2\x17.client.v1.GangResponseH\x00R\bgangResp\x120\n" +
@@ -5419,8 +5373,11 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x0elist_rules_req\x18. \x01(\v2\x1b.client.v1.ListRulesRequestH\x00R\flistRulesReq\x12F\n" +
 	"\x0flist_rules_resp\x18/ \x01(\v2\x1c.client.v1.ListRulesResponseH\x00R\rlistRulesResp\x120\n" +
 	"\achi_req\x180 \x01(\v2\x15.client.v1.ChiRequestH\x00R\x06chiReq\x123\n" +
-	"\bchi_resp\x181 \x01(\v2\x16.client.v1.ChiResponseH\x00R\achiRespB\x06\n" +
-	"\x04body\"O\n" +
+	"\bchi_resp\x181 \x01(\v2\x16.client.v1.ChiResponseH\x00R\achiResp\x12O\n" +
+	"\x12opening_action_req\x182 \x01(\v2\x1f.client.v1.OpeningActionRequestH\x00R\x10openingActionReq\x12R\n" +
+	"\x13opening_action_resp\x183 \x01(\v2 .client.v1.OpeningActionResponseH\x00R\x11openingActionResp\x12A\n" +
+	"\fopening_done\x184 \x01(\v2\x1c.client.v1.OpeningDoneNotifyH\x00R\vopeningDoneB\x06\n" +
+	"\x04bodyJ\x04\b\x16\x10\x1cR\x12exchange_three_reqR\x13exchange_three_respR\x13exchange_three_doneR\vque_men_reqR\fque_men_respR\fque_men_done\"O\n" +
 	"\fLoginRequest\x12\x1a\n" +
 	"\bnickname\x18\x01 \x01(\tR\bnickname\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\"\xe6\x01\n" +
@@ -5728,46 +5685,55 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x13RouteRedirectNotify\x12\x15\n" +
 	"\x06ws_url\x18\x01 \x01(\tR\x05wsUrl\x12\x17\n" +
 	"\aroom_id\x18\x02 \x01(\tR\x06roomId\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x82\x01\n" +
-	"\x14ExchangeThreeRequest\x12\x14\n" +
-	"\x05tiles\x18\x01 \x03(\tR\x05tiles\x12\x1c\n" +
-	"\tdirection\x18\x02 \x01(\x05R\tdirection\x126\n" +
-	"\vphase_token\x18\n" +
-	" \x01(\v2\x15.client.v1.PhaseTokenR\n" +
-	"phaseToken\"\xac\x01\n" +
-	"\x15ExchangeThreeResponse\x123\n" +
-	"\n" +
-	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x129\n" +
-	"\fphase_update\x18\x03 \x01(\v2\x16.client.v1.PhaseUpdateR\vphaseUpdate\"\xb2\x02\n" +
-	"\x17ExchangeThreeDoneNotify\x12/\n" +
-	"\bper_seat\x18\x01 \x03(\v2\x14.client.v1.SeatTilesR\aperSeat\x12\x1c\n" +
-	"\tdirection\x18\x02 \x01(\x05R\tdirection\x12&\n" +
-	"\x05phase\x18\x03 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
-	"\x04step\x18\x04 \x01(\x03R\x04step\x12!\n" +
-	"\facting_seats\x18\x05 \x03(\x05R\vactingSeats\x12.\n" +
-	"\x13your_exchanged_away\x18\x06 \x03(\tR\x11yourExchangedAway\x129\n" +
-	"\fphase_update\x18\a \x01(\v2\x16.client.v1.PhaseUpdateR\vphaseUpdate\"@\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"@\n" +
 	"\tSeatTiles\x12\x1d\n" +
 	"\n" +
 	"seat_index\x18\x01 \x01(\x05R\tseatIndex\x12\x14\n" +
-	"\x05tiles\x18\x02 \x03(\tR\x05tiles\"[\n" +
-	"\rQueMenRequest\x12\x12\n" +
-	"\x04suit\x18\x01 \x01(\x05R\x04suit\x126\n" +
+	"\x05tiles\x18\x02 \x03(\tR\x05tiles\"\xae\x02\n" +
+	"\x14OpeningActionRequest\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12\x14\n" +
+	"\x05tiles\x18\x02 \x03(\tR\x05tiles\x12\x1c\n" +
+	"\tdirection\x18\x03 \x01(\x05R\tdirection\x12\x12\n" +
+	"\x04suit\x18\x04 \x01(\x05R\x04suit\x12C\n" +
+	"\x06params\x18\x05 \x03(\v2+.client.v1.OpeningActionRequest.ParamsEntryR\x06params\x126\n" +
 	"\vphase_token\x18\n" +
 	" \x01(\v2\x15.client.v1.PhaseTokenR\n" +
-	"phaseToken\"\xa5\x01\n" +
-	"\x0eQueMenResponse\x123\n" +
+	"phaseToken\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xac\x01\n" +
+	"\x15OpeningActionResponse\x123\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\x0e2\x14.client.v1.ErrorCodeR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x129\n" +
-	"\fphase_update\x18\x03 \x01(\v2\x16.client.v1.PhaseUpdateR\vphaseUpdate\"\xd5\x01\n" +
-	"\x10QueMenDoneNotify\x12'\n" +
-	"\x10que_suit_by_seat\x18\x01 \x03(\x05R\rqueSuitBySeat\x12&\n" +
-	"\x05phase\x18\x02 \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
-	"\x04step\x18\x03 \x01(\x03R\x04step\x12!\n" +
-	"\facting_seats\x18\x04 \x03(\x05R\vactingSeats\x129\n" +
-	"\fphase_update\x18\x05 \x01(\v2\x16.client.v1.PhaseUpdateR\vphaseUpdate\"\xec\b\n" +
+	"\fphase_update\x18\x03 \x01(\v2\x16.client.v1.PhaseUpdateR\vphaseUpdate\"P\n" +
+	"\x10OpeningSeatTiles\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12*\n" +
+	"\x05seats\x18\x02 \x03(\v2\x14.client.v1.SeatTilesR\x05seats\";\n" +
+	"\x0fOpeningSeatInts\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
+	"\x06values\x18\x02 \x03(\x05R\x06values\";\n" +
+	"\x11OpeningLocalTiles\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05tiles\x18\x02 \x03(\tR\x05tiles\"\xa3\x04\n" +
+	"\x11OpeningDoneNotify\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12\x17\n" +
+	"\astep_id\x18\x02 \x01(\tR\x06stepId\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12@\n" +
+	"\x06params\x18\x04 \x03(\v2(.client.v1.OpeningDoneNotify.ParamsEntryR\x06params\x12:\n" +
+	"\n" +
+	"seat_tiles\x18\x05 \x03(\v2\x1b.client.v1.OpeningSeatTilesR\tseatTiles\x127\n" +
+	"\tseat_ints\x18\x06 \x03(\v2\x1a.client.v1.OpeningSeatIntsR\bseatInts\x12=\n" +
+	"\vlocal_tiles\x18\a \x03(\v2\x1c.client.v1.OpeningLocalTilesR\n" +
+	"localTiles\x12&\n" +
+	"\x05phase\x18\b \x01(\x0e2\x10.client.v1.PhaseR\x05phase\x12\x12\n" +
+	"\x04step\x18\t \x01(\x03R\x04step\x12!\n" +
+	"\facting_seats\x18\n" +
+	" \x03(\x05R\vactingSeats\x129\n" +
+	"\fphase_update\x18\v \x01(\v2\x16.client.v1.PhaseUpdateR\vphaseUpdate\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xec\b\n" +
 	"\x0eSnapshotNotify\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12!\n" +
 	"\n" +
@@ -5817,28 +5783,27 @@ const file_client_v1_messages_proto_rawDesc = "" +
 	"\x17ERROR_CODE_RECONNECTING\x10\b\x12\x1f\n" +
 	"\x1bERROR_CODE_FEATURE_DISABLED\x10\t\x12\x1c\n" +
 	"\x18ERROR_CODE_PHASE_DRIFTED\x10\n" +
-	"*\xbf\x01\n" +
+	"*\xd6\x01\n" +
 	"\x05Phase\x12\x15\n" +
 	"\x11PHASE_UNSPECIFIED\x10\x00\x12\x0f\n" +
-	"\vPHASE_LOBBY\x10\x01\x12\x12\n" +
-	"\x0ePHASE_EXCHANGE\x10\x02\x12\x11\n" +
-	"\rPHASE_QUE_MEN\x10\x03\x12\x0e\n" +
+	"\vPHASE_LOBBY\x10\x01\x12\x0e\n" +
 	"\n" +
 	"PHASE_DRAW\x10\x04\x12\x11\n" +
 	"\rPHASE_DISCARD\x10\x05\x12\x0f\n" +
 	"\vPHASE_CLAIM\x10\x06\x12\x0f\n" +
 	"\vPHASE_TSUMO\x10\a\x12\x10\n" +
 	"\fPHASE_SETTLE\x10\b\x12\x10\n" +
-	"\fPHASE_CLOSED\x10\t*\xfc\x01\n" +
+	"\fPHASE_CLOSED\x10\t\x12\x11\n" +
+	"\rPHASE_OPENING\x10\n" +
+	"\"\x04\b\x02\x10\x02\"\x04\b\x03\x10\x03*\x0ePHASE_EXCHANGE*\rPHASE_QUE_MEN*\x96\x02\n" +
 	"\rWaitingReason\x12\x1e\n" +
 	"\x1aWAITING_REASON_UNSPECIFIED\x10\x00\x12\x17\n" +
-	"\x13WAITING_REASON_NONE\x10\x01\x12!\n" +
-	"\x1dWAITING_REASON_EXCHANGE_THREE\x10\x02\x12\x1a\n" +
-	"\x16WAITING_REASON_QUE_MEN\x10\x03\x12\x1f\n" +
+	"\x13WAITING_REASON_NONE\x10\x01\x12\x1a\n" +
+	"\x16WAITING_REASON_OPENING\x10\x02\x12\x1f\n" +
 	"\x1bWAITING_REASON_CLAIM_WINDOW\x10\x04\x12\x18\n" +
 	"\x14WAITING_REASON_TSUMO\x10\x05\x12\x1a\n" +
 	"\x16WAITING_REASON_DISCARD\x10\x06\x12\x1c\n" +
-	"\x18WAITING_REASON_SURRENDER\x10\aB,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
+	"\x18WAITING_REASON_SURRENDER\x10\a\"\x04\b\x03\x10\x03*\x1dWAITING_REASON_EXCHANGE_THREE*\x16WAITING_REASON_QUE_MENB,Z*racoo.cn/lsp/api/gen/go/client/v1;clientv1b\x06proto3"
 
 var (
 	file_client_v1_messages_proto_rawDescOnce sync.Once
@@ -5853,73 +5818,75 @@ func file_client_v1_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v1_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
+var file_client_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
 var file_client_v1_messages_proto_goTypes = []any{
-	(ErrorCode)(0),                  // 0: client.v1.ErrorCode
-	(Phase)(0),                      // 1: client.v1.Phase
-	(WaitingReason)(0),              // 2: client.v1.WaitingReason
-	(*PhaseUpdate)(nil),             // 3: client.v1.PhaseUpdate
-	(*PhaseToken)(nil),              // 4: client.v1.PhaseToken
-	(*Envelope)(nil),                // 5: client.v1.Envelope
-	(*LoginRequest)(nil),            // 6: client.v1.LoginRequest
-	(*LoginResponse)(nil),           // 7: client.v1.LoginResponse
-	(*JoinRoomRequest)(nil),         // 8: client.v1.JoinRoomRequest
-	(*JoinRoomResponse)(nil),        // 9: client.v1.JoinRoomResponse
-	(*SeatInfo)(nil),                // 10: client.v1.SeatInfo
-	(*RoomMeta)(nil),                // 11: client.v1.RoomMeta
-	(*RuleMeta)(nil),                // 12: client.v1.RuleMeta
-	(*ListRulesRequest)(nil),        // 13: client.v1.ListRulesRequest
-	(*ListRulesResponse)(nil),       // 14: client.v1.ListRulesResponse
-	(*ListRoomsRequest)(nil),        // 15: client.v1.ListRoomsRequest
-	(*ListRoomsResponse)(nil),       // 16: client.v1.ListRoomsResponse
-	(*AutoMatchRequest)(nil),        // 17: client.v1.AutoMatchRequest
-	(*AutoMatchResponse)(nil),       // 18: client.v1.AutoMatchResponse
-	(*CreateRoomRequest)(nil),       // 19: client.v1.CreateRoomRequest
-	(*CreateRoomResponse)(nil),      // 20: client.v1.CreateRoomResponse
-	(*ReadyRequest)(nil),            // 21: client.v1.ReadyRequest
-	(*ReadyResponse)(nil),           // 22: client.v1.ReadyResponse
-	(*DiscardRequest)(nil),          // 23: client.v1.DiscardRequest
-	(*DiscardResponse)(nil),         // 24: client.v1.DiscardResponse
-	(*PongRequest)(nil),             // 25: client.v1.PongRequest
-	(*PongResponse)(nil),            // 26: client.v1.PongResponse
-	(*ChiRequest)(nil),              // 27: client.v1.ChiRequest
-	(*ChiResponse)(nil),             // 28: client.v1.ChiResponse
-	(*GangRequest)(nil),             // 29: client.v1.GangRequest
-	(*GangResponse)(nil),            // 30: client.v1.GangResponse
-	(*HuRequest)(nil),               // 31: client.v1.HuRequest
-	(*HuResponse)(nil),              // 32: client.v1.HuResponse
-	(*PassRequest)(nil),             // 33: client.v1.PassRequest
-	(*PassResponse)(nil),            // 34: client.v1.PassResponse
-	(*RenameRequest)(nil),           // 35: client.v1.RenameRequest
-	(*RenameResponse)(nil),          // 36: client.v1.RenameResponse
-	(*AddBotRequest)(nil),           // 37: client.v1.AddBotRequest
-	(*AddBotResponse)(nil),          // 38: client.v1.AddBotResponse
-	(*StartGameNotify)(nil),         // 39: client.v1.StartGameNotify
-	(*InitialDealNotify)(nil),       // 40: client.v1.InitialDealNotify
-	(*DrawTileNotify)(nil),          // 41: client.v1.DrawTileNotify
-	(*ActionNotify)(nil),            // 42: client.v1.ActionNotify
-	(*ActionDetail)(nil),            // 43: client.v1.ActionDetail
-	(*LastActionInfo)(nil),          // 44: client.v1.LastActionInfo
-	(*MeldInfo)(nil),                // 45: client.v1.MeldInfo
-	(*SeatMelds)(nil),               // 46: client.v1.SeatMelds
-	(*SettlementNotify)(nil),        // 47: client.v1.SettlementNotify
-	(*SeatScore)(nil),               // 48: client.v1.SeatScore
-	(*PenaltyItem)(nil),             // 49: client.v1.PenaltyItem
-	(*WinnerBreakdown)(nil),         // 50: client.v1.WinnerBreakdown
-	(*HeartbeatRequest)(nil),        // 51: client.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),       // 52: client.v1.HeartbeatResponse
-	(*LeaveRoomRequest)(nil),        // 53: client.v1.LeaveRoomRequest
-	(*LeaveRoomResponse)(nil),       // 54: client.v1.LeaveRoomResponse
-	(*RouteRedirectNotify)(nil),     // 55: client.v1.RouteRedirectNotify
-	(*ExchangeThreeRequest)(nil),    // 56: client.v1.ExchangeThreeRequest
-	(*ExchangeThreeResponse)(nil),   // 57: client.v1.ExchangeThreeResponse
-	(*ExchangeThreeDoneNotify)(nil), // 58: client.v1.ExchangeThreeDoneNotify
-	(*SeatTiles)(nil),               // 59: client.v1.SeatTiles
-	(*QueMenRequest)(nil),           // 60: client.v1.QueMenRequest
-	(*QueMenResponse)(nil),          // 61: client.v1.QueMenResponse
-	(*QueMenDoneNotify)(nil),        // 62: client.v1.QueMenDoneNotify
-	(*SnapshotNotify)(nil),          // 63: client.v1.SnapshotNotify
-	(*ClaimCandidate)(nil),          // 64: client.v1.ClaimCandidate
+	(ErrorCode)(0),                // 0: client.v1.ErrorCode
+	(Phase)(0),                    // 1: client.v1.Phase
+	(WaitingReason)(0),            // 2: client.v1.WaitingReason
+	(*PhaseUpdate)(nil),           // 3: client.v1.PhaseUpdate
+	(*PhaseToken)(nil),            // 4: client.v1.PhaseToken
+	(*Envelope)(nil),              // 5: client.v1.Envelope
+	(*LoginRequest)(nil),          // 6: client.v1.LoginRequest
+	(*LoginResponse)(nil),         // 7: client.v1.LoginResponse
+	(*JoinRoomRequest)(nil),       // 8: client.v1.JoinRoomRequest
+	(*JoinRoomResponse)(nil),      // 9: client.v1.JoinRoomResponse
+	(*SeatInfo)(nil),              // 10: client.v1.SeatInfo
+	(*RoomMeta)(nil),              // 11: client.v1.RoomMeta
+	(*RuleMeta)(nil),              // 12: client.v1.RuleMeta
+	(*ListRulesRequest)(nil),      // 13: client.v1.ListRulesRequest
+	(*ListRulesResponse)(nil),     // 14: client.v1.ListRulesResponse
+	(*ListRoomsRequest)(nil),      // 15: client.v1.ListRoomsRequest
+	(*ListRoomsResponse)(nil),     // 16: client.v1.ListRoomsResponse
+	(*AutoMatchRequest)(nil),      // 17: client.v1.AutoMatchRequest
+	(*AutoMatchResponse)(nil),     // 18: client.v1.AutoMatchResponse
+	(*CreateRoomRequest)(nil),     // 19: client.v1.CreateRoomRequest
+	(*CreateRoomResponse)(nil),    // 20: client.v1.CreateRoomResponse
+	(*ReadyRequest)(nil),          // 21: client.v1.ReadyRequest
+	(*ReadyResponse)(nil),         // 22: client.v1.ReadyResponse
+	(*DiscardRequest)(nil),        // 23: client.v1.DiscardRequest
+	(*DiscardResponse)(nil),       // 24: client.v1.DiscardResponse
+	(*PongRequest)(nil),           // 25: client.v1.PongRequest
+	(*PongResponse)(nil),          // 26: client.v1.PongResponse
+	(*ChiRequest)(nil),            // 27: client.v1.ChiRequest
+	(*ChiResponse)(nil),           // 28: client.v1.ChiResponse
+	(*GangRequest)(nil),           // 29: client.v1.GangRequest
+	(*GangResponse)(nil),          // 30: client.v1.GangResponse
+	(*HuRequest)(nil),             // 31: client.v1.HuRequest
+	(*HuResponse)(nil),            // 32: client.v1.HuResponse
+	(*PassRequest)(nil),           // 33: client.v1.PassRequest
+	(*PassResponse)(nil),          // 34: client.v1.PassResponse
+	(*RenameRequest)(nil),         // 35: client.v1.RenameRequest
+	(*RenameResponse)(nil),        // 36: client.v1.RenameResponse
+	(*AddBotRequest)(nil),         // 37: client.v1.AddBotRequest
+	(*AddBotResponse)(nil),        // 38: client.v1.AddBotResponse
+	(*StartGameNotify)(nil),       // 39: client.v1.StartGameNotify
+	(*InitialDealNotify)(nil),     // 40: client.v1.InitialDealNotify
+	(*DrawTileNotify)(nil),        // 41: client.v1.DrawTileNotify
+	(*ActionNotify)(nil),          // 42: client.v1.ActionNotify
+	(*ActionDetail)(nil),          // 43: client.v1.ActionDetail
+	(*LastActionInfo)(nil),        // 44: client.v1.LastActionInfo
+	(*MeldInfo)(nil),              // 45: client.v1.MeldInfo
+	(*SeatMelds)(nil),             // 46: client.v1.SeatMelds
+	(*SettlementNotify)(nil),      // 47: client.v1.SettlementNotify
+	(*SeatScore)(nil),             // 48: client.v1.SeatScore
+	(*PenaltyItem)(nil),           // 49: client.v1.PenaltyItem
+	(*WinnerBreakdown)(nil),       // 50: client.v1.WinnerBreakdown
+	(*HeartbeatRequest)(nil),      // 51: client.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),     // 52: client.v1.HeartbeatResponse
+	(*LeaveRoomRequest)(nil),      // 53: client.v1.LeaveRoomRequest
+	(*LeaveRoomResponse)(nil),     // 54: client.v1.LeaveRoomResponse
+	(*RouteRedirectNotify)(nil),   // 55: client.v1.RouteRedirectNotify
+	(*SeatTiles)(nil),             // 56: client.v1.SeatTiles
+	(*OpeningActionRequest)(nil),  // 57: client.v1.OpeningActionRequest
+	(*OpeningActionResponse)(nil), // 58: client.v1.OpeningActionResponse
+	(*OpeningSeatTiles)(nil),      // 59: client.v1.OpeningSeatTiles
+	(*OpeningSeatInts)(nil),       // 60: client.v1.OpeningSeatInts
+	(*OpeningLocalTiles)(nil),     // 61: client.v1.OpeningLocalTiles
+	(*OpeningDoneNotify)(nil),     // 62: client.v1.OpeningDoneNotify
+	(*SnapshotNotify)(nil),        // 63: client.v1.SnapshotNotify
+	(*ClaimCandidate)(nil),        // 64: client.v1.ClaimCandidate
+	nil,                           // 65: client.v1.OpeningActionRequest.ParamsEntry
+	nil,                           // 66: client.v1.OpeningDoneNotify.ParamsEntry
 }
 var file_client_v1_messages_proto_depIdxs = []int32{
 	1,   // 0: client.v1.PhaseUpdate.phase:type_name -> client.v1.Phase
@@ -5945,109 +5912,106 @@ var file_client_v1_messages_proto_depIdxs = []int32{
 	53,  // 20: client.v1.Envelope.leave_room_req:type_name -> client.v1.LeaveRoomRequest
 	54,  // 21: client.v1.Envelope.leave_room_resp:type_name -> client.v1.LeaveRoomResponse
 	55,  // 22: client.v1.Envelope.route_redirect:type_name -> client.v1.RouteRedirectNotify
-	56,  // 23: client.v1.Envelope.exchange_three_req:type_name -> client.v1.ExchangeThreeRequest
-	57,  // 24: client.v1.Envelope.exchange_three_resp:type_name -> client.v1.ExchangeThreeResponse
-	58,  // 25: client.v1.Envelope.exchange_three_done:type_name -> client.v1.ExchangeThreeDoneNotify
-	60,  // 26: client.v1.Envelope.que_men_req:type_name -> client.v1.QueMenRequest
-	61,  // 27: client.v1.Envelope.que_men_resp:type_name -> client.v1.QueMenResponse
-	62,  // 28: client.v1.Envelope.que_men_done:type_name -> client.v1.QueMenDoneNotify
-	63,  // 29: client.v1.Envelope.snapshot:type_name -> client.v1.SnapshotNotify
-	26,  // 30: client.v1.Envelope.pong_resp:type_name -> client.v1.PongResponse
-	30,  // 31: client.v1.Envelope.gang_resp:type_name -> client.v1.GangResponse
-	32,  // 32: client.v1.Envelope.hu_resp:type_name -> client.v1.HuResponse
-	40,  // 33: client.v1.Envelope.initial_deal:type_name -> client.v1.InitialDealNotify
-	15,  // 34: client.v1.Envelope.list_rooms_req:type_name -> client.v1.ListRoomsRequest
-	16,  // 35: client.v1.Envelope.list_rooms_resp:type_name -> client.v1.ListRoomsResponse
-	17,  // 36: client.v1.Envelope.auto_match_req:type_name -> client.v1.AutoMatchRequest
-	18,  // 37: client.v1.Envelope.auto_match_resp:type_name -> client.v1.AutoMatchResponse
-	19,  // 38: client.v1.Envelope.create_room_req:type_name -> client.v1.CreateRoomRequest
-	20,  // 39: client.v1.Envelope.create_room_resp:type_name -> client.v1.CreateRoomResponse
-	33,  // 40: client.v1.Envelope.pass_req:type_name -> client.v1.PassRequest
-	34,  // 41: client.v1.Envelope.pass_resp:type_name -> client.v1.PassResponse
-	35,  // 42: client.v1.Envelope.rename_req:type_name -> client.v1.RenameRequest
-	36,  // 43: client.v1.Envelope.rename_resp:type_name -> client.v1.RenameResponse
-	37,  // 44: client.v1.Envelope.add_bot_req:type_name -> client.v1.AddBotRequest
-	38,  // 45: client.v1.Envelope.add_bot_resp:type_name -> client.v1.AddBotResponse
-	13,  // 46: client.v1.Envelope.list_rules_req:type_name -> client.v1.ListRulesRequest
-	14,  // 47: client.v1.Envelope.list_rules_resp:type_name -> client.v1.ListRulesResponse
-	27,  // 48: client.v1.Envelope.chi_req:type_name -> client.v1.ChiRequest
-	28,  // 49: client.v1.Envelope.chi_resp:type_name -> client.v1.ChiResponse
-	0,   // 50: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
-	0,   // 51: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	10,  // 52: client.v1.JoinRoomResponse.seats:type_name -> client.v1.SeatInfo
-	12,  // 53: client.v1.RoomMeta.rule_meta:type_name -> client.v1.RuleMeta
-	12,  // 54: client.v1.ListRulesResponse.rules:type_name -> client.v1.RuleMeta
-	0,   // 55: client.v1.ListRulesResponse.error_code:type_name -> client.v1.ErrorCode
-	11,  // 56: client.v1.ListRoomsResponse.rooms:type_name -> client.v1.RoomMeta
-	0,   // 57: client.v1.ListRoomsResponse.error_code:type_name -> client.v1.ErrorCode
-	0,   // 58: client.v1.AutoMatchResponse.error_code:type_name -> client.v1.ErrorCode
-	10,  // 59: client.v1.AutoMatchResponse.seats:type_name -> client.v1.SeatInfo
-	0,   // 60: client.v1.CreateRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	10,  // 61: client.v1.CreateRoomResponse.seats:type_name -> client.v1.SeatInfo
-	0,   // 62: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 63: client.v1.ReadyResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	4,   // 64: client.v1.DiscardRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 65: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 66: client.v1.DiscardResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	4,   // 67: client.v1.PongRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 68: client.v1.PongResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 69: client.v1.PongResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	4,   // 70: client.v1.ChiRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 71: client.v1.ChiResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 72: client.v1.ChiResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	4,   // 73: client.v1.GangRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 74: client.v1.GangResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 75: client.v1.GangResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	4,   // 76: client.v1.HuRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 77: client.v1.HuResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 78: client.v1.HuResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	4,   // 79: client.v1.PassRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 80: client.v1.PassResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 81: client.v1.PassResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	0,   // 82: client.v1.RenameResponse.error_code:type_name -> client.v1.ErrorCode
-	10,  // 83: client.v1.AddBotResponse.added:type_name -> client.v1.SeatInfo
-	0,   // 84: client.v1.AddBotResponse.error_code:type_name -> client.v1.ErrorCode
-	1,   // 85: client.v1.StartGameNotify.phase:type_name -> client.v1.Phase
-	12,  // 86: client.v1.StartGameNotify.rule_meta:type_name -> client.v1.RuleMeta
-	3,   // 87: client.v1.StartGameNotify.phase_update:type_name -> client.v1.PhaseUpdate
-	1,   // 88: client.v1.DrawTileNotify.phase:type_name -> client.v1.Phase
-	3,   // 89: client.v1.DrawTileNotify.phase_update:type_name -> client.v1.PhaseUpdate
-	1,   // 90: client.v1.ActionNotify.phase:type_name -> client.v1.Phase
-	43,  // 91: client.v1.ActionNotify.detail:type_name -> client.v1.ActionDetail
-	3,   // 92: client.v1.ActionNotify.phase_update:type_name -> client.v1.PhaseUpdate
-	45,  // 93: client.v1.SeatMelds.melds:type_name -> client.v1.MeldInfo
-	48,  // 94: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
-	49,  // 95: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
-	50,  // 96: client.v1.SettlementNotify.per_winner_breakdown:type_name -> client.v1.WinnerBreakdown
-	48,  // 97: client.v1.SettlementNotify.total_scores:type_name -> client.v1.SeatScore
-	3,   // 98: client.v1.SettlementNotify.phase_update:type_name -> client.v1.PhaseUpdate
-	0,   // 99: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
-	4,   // 100: client.v1.ExchangeThreeRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 101: client.v1.ExchangeThreeResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 102: client.v1.ExchangeThreeResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	59,  // 103: client.v1.ExchangeThreeDoneNotify.per_seat:type_name -> client.v1.SeatTiles
-	1,   // 104: client.v1.ExchangeThreeDoneNotify.phase:type_name -> client.v1.Phase
-	3,   // 105: client.v1.ExchangeThreeDoneNotify.phase_update:type_name -> client.v1.PhaseUpdate
-	4,   // 106: client.v1.QueMenRequest.phase_token:type_name -> client.v1.PhaseToken
-	0,   // 107: client.v1.QueMenResponse.error_code:type_name -> client.v1.ErrorCode
-	3,   // 108: client.v1.QueMenResponse.phase_update:type_name -> client.v1.PhaseUpdate
-	1,   // 109: client.v1.QueMenDoneNotify.phase:type_name -> client.v1.Phase
-	3,   // 110: client.v1.QueMenDoneNotify.phase_update:type_name -> client.v1.PhaseUpdate
-	64,  // 111: client.v1.SnapshotNotify.claim_candidates:type_name -> client.v1.ClaimCandidate
-	59,  // 112: client.v1.SnapshotNotify.discards_by_seat:type_name -> client.v1.SeatTiles
-	59,  // 113: client.v1.SnapshotNotify.melds_by_seat:type_name -> client.v1.SeatTiles
-	10,  // 114: client.v1.SnapshotNotify.seats:type_name -> client.v1.SeatInfo
-	1,   // 115: client.v1.SnapshotNotify.phase:type_name -> client.v1.Phase
-	44,  // 116: client.v1.SnapshotNotify.last_action:type_name -> client.v1.LastActionInfo
-	46,  // 117: client.v1.SnapshotNotify.meld_infos_by_seat:type_name -> client.v1.SeatMelds
-	48,  // 118: client.v1.SnapshotNotify.total_scores:type_name -> client.v1.SeatScore
-	12,  // 119: client.v1.SnapshotNotify.rule_meta:type_name -> client.v1.RuleMeta
-	3,   // 120: client.v1.SnapshotNotify.phase_update:type_name -> client.v1.PhaseUpdate
-	121, // [121:121] is the sub-list for method output_type
-	121, // [121:121] is the sub-list for method input_type
-	121, // [121:121] is the sub-list for extension type_name
-	121, // [121:121] is the sub-list for extension extendee
-	0,   // [0:121] is the sub-list for field type_name
+	63,  // 23: client.v1.Envelope.snapshot:type_name -> client.v1.SnapshotNotify
+	26,  // 24: client.v1.Envelope.pong_resp:type_name -> client.v1.PongResponse
+	30,  // 25: client.v1.Envelope.gang_resp:type_name -> client.v1.GangResponse
+	32,  // 26: client.v1.Envelope.hu_resp:type_name -> client.v1.HuResponse
+	40,  // 27: client.v1.Envelope.initial_deal:type_name -> client.v1.InitialDealNotify
+	15,  // 28: client.v1.Envelope.list_rooms_req:type_name -> client.v1.ListRoomsRequest
+	16,  // 29: client.v1.Envelope.list_rooms_resp:type_name -> client.v1.ListRoomsResponse
+	17,  // 30: client.v1.Envelope.auto_match_req:type_name -> client.v1.AutoMatchRequest
+	18,  // 31: client.v1.Envelope.auto_match_resp:type_name -> client.v1.AutoMatchResponse
+	19,  // 32: client.v1.Envelope.create_room_req:type_name -> client.v1.CreateRoomRequest
+	20,  // 33: client.v1.Envelope.create_room_resp:type_name -> client.v1.CreateRoomResponse
+	33,  // 34: client.v1.Envelope.pass_req:type_name -> client.v1.PassRequest
+	34,  // 35: client.v1.Envelope.pass_resp:type_name -> client.v1.PassResponse
+	35,  // 36: client.v1.Envelope.rename_req:type_name -> client.v1.RenameRequest
+	36,  // 37: client.v1.Envelope.rename_resp:type_name -> client.v1.RenameResponse
+	37,  // 38: client.v1.Envelope.add_bot_req:type_name -> client.v1.AddBotRequest
+	38,  // 39: client.v1.Envelope.add_bot_resp:type_name -> client.v1.AddBotResponse
+	13,  // 40: client.v1.Envelope.list_rules_req:type_name -> client.v1.ListRulesRequest
+	14,  // 41: client.v1.Envelope.list_rules_resp:type_name -> client.v1.ListRulesResponse
+	27,  // 42: client.v1.Envelope.chi_req:type_name -> client.v1.ChiRequest
+	28,  // 43: client.v1.Envelope.chi_resp:type_name -> client.v1.ChiResponse
+	57,  // 44: client.v1.Envelope.opening_action_req:type_name -> client.v1.OpeningActionRequest
+	58,  // 45: client.v1.Envelope.opening_action_resp:type_name -> client.v1.OpeningActionResponse
+	62,  // 46: client.v1.Envelope.opening_done:type_name -> client.v1.OpeningDoneNotify
+	0,   // 47: client.v1.LoginResponse.error_code:type_name -> client.v1.ErrorCode
+	0,   // 48: client.v1.JoinRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	10,  // 49: client.v1.JoinRoomResponse.seats:type_name -> client.v1.SeatInfo
+	12,  // 50: client.v1.RoomMeta.rule_meta:type_name -> client.v1.RuleMeta
+	12,  // 51: client.v1.ListRulesResponse.rules:type_name -> client.v1.RuleMeta
+	0,   // 52: client.v1.ListRulesResponse.error_code:type_name -> client.v1.ErrorCode
+	11,  // 53: client.v1.ListRoomsResponse.rooms:type_name -> client.v1.RoomMeta
+	0,   // 54: client.v1.ListRoomsResponse.error_code:type_name -> client.v1.ErrorCode
+	0,   // 55: client.v1.AutoMatchResponse.error_code:type_name -> client.v1.ErrorCode
+	10,  // 56: client.v1.AutoMatchResponse.seats:type_name -> client.v1.SeatInfo
+	0,   // 57: client.v1.CreateRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	10,  // 58: client.v1.CreateRoomResponse.seats:type_name -> client.v1.SeatInfo
+	0,   // 59: client.v1.ReadyResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 60: client.v1.ReadyResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	4,   // 61: client.v1.DiscardRequest.phase_token:type_name -> client.v1.PhaseToken
+	0,   // 62: client.v1.DiscardResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 63: client.v1.DiscardResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	4,   // 64: client.v1.PongRequest.phase_token:type_name -> client.v1.PhaseToken
+	0,   // 65: client.v1.PongResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 66: client.v1.PongResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	4,   // 67: client.v1.ChiRequest.phase_token:type_name -> client.v1.PhaseToken
+	0,   // 68: client.v1.ChiResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 69: client.v1.ChiResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	4,   // 70: client.v1.GangRequest.phase_token:type_name -> client.v1.PhaseToken
+	0,   // 71: client.v1.GangResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 72: client.v1.GangResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	4,   // 73: client.v1.HuRequest.phase_token:type_name -> client.v1.PhaseToken
+	0,   // 74: client.v1.HuResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 75: client.v1.HuResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	4,   // 76: client.v1.PassRequest.phase_token:type_name -> client.v1.PhaseToken
+	0,   // 77: client.v1.PassResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 78: client.v1.PassResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	0,   // 79: client.v1.RenameResponse.error_code:type_name -> client.v1.ErrorCode
+	10,  // 80: client.v1.AddBotResponse.added:type_name -> client.v1.SeatInfo
+	0,   // 81: client.v1.AddBotResponse.error_code:type_name -> client.v1.ErrorCode
+	1,   // 82: client.v1.StartGameNotify.phase:type_name -> client.v1.Phase
+	12,  // 83: client.v1.StartGameNotify.rule_meta:type_name -> client.v1.RuleMeta
+	3,   // 84: client.v1.StartGameNotify.phase_update:type_name -> client.v1.PhaseUpdate
+	1,   // 85: client.v1.DrawTileNotify.phase:type_name -> client.v1.Phase
+	3,   // 86: client.v1.DrawTileNotify.phase_update:type_name -> client.v1.PhaseUpdate
+	1,   // 87: client.v1.ActionNotify.phase:type_name -> client.v1.Phase
+	43,  // 88: client.v1.ActionNotify.detail:type_name -> client.v1.ActionDetail
+	3,   // 89: client.v1.ActionNotify.phase_update:type_name -> client.v1.PhaseUpdate
+	45,  // 90: client.v1.SeatMelds.melds:type_name -> client.v1.MeldInfo
+	48,  // 91: client.v1.SettlementNotify.seat_scores:type_name -> client.v1.SeatScore
+	49,  // 92: client.v1.SettlementNotify.penalties:type_name -> client.v1.PenaltyItem
+	50,  // 93: client.v1.SettlementNotify.per_winner_breakdown:type_name -> client.v1.WinnerBreakdown
+	48,  // 94: client.v1.SettlementNotify.total_scores:type_name -> client.v1.SeatScore
+	3,   // 95: client.v1.SettlementNotify.phase_update:type_name -> client.v1.PhaseUpdate
+	0,   // 96: client.v1.LeaveRoomResponse.error_code:type_name -> client.v1.ErrorCode
+	65,  // 97: client.v1.OpeningActionRequest.params:type_name -> client.v1.OpeningActionRequest.ParamsEntry
+	4,   // 98: client.v1.OpeningActionRequest.phase_token:type_name -> client.v1.PhaseToken
+	0,   // 99: client.v1.OpeningActionResponse.error_code:type_name -> client.v1.ErrorCode
+	3,   // 100: client.v1.OpeningActionResponse.phase_update:type_name -> client.v1.PhaseUpdate
+	56,  // 101: client.v1.OpeningSeatTiles.seats:type_name -> client.v1.SeatTiles
+	66,  // 102: client.v1.OpeningDoneNotify.params:type_name -> client.v1.OpeningDoneNotify.ParamsEntry
+	59,  // 103: client.v1.OpeningDoneNotify.seat_tiles:type_name -> client.v1.OpeningSeatTiles
+	60,  // 104: client.v1.OpeningDoneNotify.seat_ints:type_name -> client.v1.OpeningSeatInts
+	61,  // 105: client.v1.OpeningDoneNotify.local_tiles:type_name -> client.v1.OpeningLocalTiles
+	1,   // 106: client.v1.OpeningDoneNotify.phase:type_name -> client.v1.Phase
+	3,   // 107: client.v1.OpeningDoneNotify.phase_update:type_name -> client.v1.PhaseUpdate
+	64,  // 108: client.v1.SnapshotNotify.claim_candidates:type_name -> client.v1.ClaimCandidate
+	56,  // 109: client.v1.SnapshotNotify.discards_by_seat:type_name -> client.v1.SeatTiles
+	56,  // 110: client.v1.SnapshotNotify.melds_by_seat:type_name -> client.v1.SeatTiles
+	10,  // 111: client.v1.SnapshotNotify.seats:type_name -> client.v1.SeatInfo
+	1,   // 112: client.v1.SnapshotNotify.phase:type_name -> client.v1.Phase
+	44,  // 113: client.v1.SnapshotNotify.last_action:type_name -> client.v1.LastActionInfo
+	46,  // 114: client.v1.SnapshotNotify.meld_infos_by_seat:type_name -> client.v1.SeatMelds
+	48,  // 115: client.v1.SnapshotNotify.total_scores:type_name -> client.v1.SeatScore
+	12,  // 116: client.v1.SnapshotNotify.rule_meta:type_name -> client.v1.RuleMeta
+	3,   // 117: client.v1.SnapshotNotify.phase_update:type_name -> client.v1.PhaseUpdate
+	118, // [118:118] is the sub-list for method output_type
+	118, // [118:118] is the sub-list for method input_type
+	118, // [118:118] is the sub-list for extension type_name
+	118, // [118:118] is the sub-list for extension extendee
+	0,   // [0:118] is the sub-list for field type_name
 }
 
 func init() { file_client_v1_messages_proto_init() }
@@ -6076,12 +6040,6 @@ func file_client_v1_messages_proto_init() {
 		(*Envelope_LeaveRoomReq)(nil),
 		(*Envelope_LeaveRoomResp)(nil),
 		(*Envelope_RouteRedirect)(nil),
-		(*Envelope_ExchangeThreeReq)(nil),
-		(*Envelope_ExchangeThreeResp)(nil),
-		(*Envelope_ExchangeThreeDone)(nil),
-		(*Envelope_QueMenReq)(nil),
-		(*Envelope_QueMenResp)(nil),
-		(*Envelope_QueMenDone)(nil),
 		(*Envelope_Snapshot)(nil),
 		(*Envelope_PongResp)(nil),
 		(*Envelope_GangResp)(nil),
@@ -6103,6 +6061,9 @@ func file_client_v1_messages_proto_init() {
 		(*Envelope_ListRulesResp)(nil),
 		(*Envelope_ChiReq)(nil),
 		(*Envelope_ChiResp)(nil),
+		(*Envelope_OpeningActionReq)(nil),
+		(*Envelope_OpeningActionResp)(nil),
+		(*Envelope_OpeningDone)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -6110,7 +6071,7 @@ func file_client_v1_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v1_messages_proto_rawDesc), len(file_client_v1_messages_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   62,
+			NumMessages:   64,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

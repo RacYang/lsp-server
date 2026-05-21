@@ -12,7 +12,6 @@ import (
 	"racoo.cn/lsp/internal/clock"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
-	"racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
 )
@@ -24,13 +23,12 @@ var ErrRoundPersistUnsupportedSchema = errors.New("unsupported round persist sch
 type Kind string
 
 const (
-	KindInitialDeal       Kind = "initial_deal"
-	KindExchangeThreeDone Kind = "exchange_three_done"
-	KindQueMenDone        Kind = "que_men_done"
-	KindStartGame         Kind = "start_game"
-	KindDrawTile          Kind = "draw_tile"
-	KindAction            Kind = "action"
-	KindSettlement        Kind = "settlement"
+	KindInitialDeal Kind = "initial_deal"
+	KindOpeningDone Kind = "opening_done"
+	KindStartGame   Kind = "start_game"
+	KindDrawTile    Kind = "draw_tile"
+	KindAction      Kind = "action"
+	KindSettlement  Kind = "settlement"
 )
 
 const defaultExchangeDirection int32 = 3
@@ -75,17 +73,13 @@ type RoundState struct {
 	caps        rules.CapabilitySet
 	wall        *wall.Wall
 	hands       []*hand.Hand
-	queBySeat   []int32
+	ruleState   rules.RuleState
 	discards    [][]tile.Tile
+	flowers     [][]tile.Tile
 	melds       [][]string
 	lastAction  *clientv1.LastActionInfo
 
-	waitingExchange        bool
-	exchangeDirection      int32
-	waitingQueMen          bool
-	exchangeSubmitted      []bool
-	exchangeSelection      [][]tile.Tile
-	queSubmitted           []bool
+	waitingOpening         bool
 	waitingDiscard         bool
 	waitingTsumo           bool
 	pendingDraw            tile.Tile
@@ -102,9 +96,8 @@ type RoundState struct {
 	dealerSeat             Seat
 	openingDrawSeat        Seat
 	dealerFirstDiscardOpen bool
-	huedSeats              []bool
-	winnerSeats            []Seat
-	ledger                 []xuezhandaodi.ScoreEntry
+	winEvents              []rules.WinEvent
+	scoreEvents            []rules.ScoreEvent
 	gangRecords            []rules.GangRecord
 	lastGangFollowUp       bool
 	lastDiscardAfterGang   bool
@@ -133,45 +126,38 @@ type claimCandidatePersist struct {
 }
 
 type roundPersist struct {
-	SchemaVersion          int                       `json:"schema_version,omitempty"`
-	RuleID                 string                    `json:"rule_id"`
-	PlayerIDs              [4]string                 `json:"player_ids"`
-	QueBySeat              []int32                   `json:"que_by_seat"`
-	WaitingExchange        bool                      `json:"waiting_exchange"`
-	ExchangeDir            int32                     `json:"exchange_dir,omitempty"`
-	WaitingQueMen          bool                      `json:"waiting_que_men"`
-	ExchangeDone           []bool                    `json:"exchange_done,omitempty"`
-	ExchangeTiles          [][]string                `json:"exchange_tiles,omitempty"`
-	QueDone                []bool                    `json:"que_done,omitempty"`
-	Turn                   int                       `json:"turn"`
-	Step                   int                       `json:"step"`
-	DealerSeat             int                       `json:"dealer_seat,omitempty"`
-	OpeningDrawSeat        int                       `json:"opening_draw_seat"`
-	DealerFirstDiscardOpen bool                      `json:"dealer_first_discard_open,omitempty"`
-	WaitingDiscard         bool                      `json:"waiting_discard"`
-	WaitingTsumo           bool                      `json:"waiting_tsumo"`
-	PendingDraw            string                    `json:"pending_draw,omitempty"`
-	CurrentDraw            string                    `json:"current_draw,omitempty"`
-	LastDiscard            string                    `json:"last_discard,omitempty"`
-	LastDiscardSeat        int                       `json:"last_discard_seat"`
-	ClaimWindowOpen        bool                      `json:"claim_window_open,omitempty"`
-	ClaimCandidates        []claimCandidatePersist   `json:"claim_candidates,omitempty"`
-	QiangGangWindow        bool                      `json:"qiang_gang_window,omitempty"`
-	PendingGangSeat        int                       `json:"pending_gang_seat,omitempty"`
-	PendingGangTile        string                    `json:"pending_gang_tile,omitempty"`
-	WinnerSeat             int                       `json:"winner_seat,omitempty"` // 兼容 schema_version=0/1 的单赢家快照
-	WinnerSeats            []int                     `json:"winner_seats,omitempty"`
-	HuedSeats              []bool                    `json:"hued_seats,omitempty"`
-	SurrenderedSeats       []bool                    `json:"surrendered_seats,omitempty"`
-	TotalFanBySeat         []int32                   `json:"total_fan_by_seat,omitempty"` // 兼容 schema_version=0/1
-	Ledger                 []xuezhandaodi.ScoreEntry `json:"ledger,omitempty"`
-	GangRecords            []rules.GangRecord        `json:"gang_records,omitempty"`
-	LastGangFollowUp       bool                      `json:"last_gang_follow_up,omitempty"`
-	LastDiscardAfterGang   bool                      `json:"last_discard_after_gang,omitempty"`
-	Hands                  [][]string                `json:"hands"`
-	Discards               [][]string                `json:"discards,omitempty"`
-	Melds                  [][]string                `json:"melds,omitempty"`
-	WallRemaining          []string                  `json:"wall_remaining"`
+	SchemaVersion          int                     `json:"schema_version,omitempty"`
+	RuleID                 string                  `json:"rule_id"`
+	PlayerIDs              [4]string               `json:"player_ids"`
+	WaitingOpening         bool                    `json:"waiting_opening,omitempty"`
+	Turn                   int                     `json:"turn"`
+	Step                   int                     `json:"step"`
+	DealerSeat             int                     `json:"dealer_seat,omitempty"`
+	OpeningDrawSeat        int                     `json:"opening_draw_seat"`
+	DealerFirstDiscardOpen bool                    `json:"dealer_first_discard_open,omitempty"`
+	WaitingDiscard         bool                    `json:"waiting_discard"`
+	WaitingTsumo           bool                    `json:"waiting_tsumo"`
+	PendingDraw            string                  `json:"pending_draw,omitempty"`
+	CurrentDraw            string                  `json:"current_draw,omitempty"`
+	LastDiscard            string                  `json:"last_discard,omitempty"`
+	LastDiscardSeat        int                     `json:"last_discard_seat"`
+	ClaimWindowOpen        bool                    `json:"claim_window_open,omitempty"`
+	ClaimCandidates        []claimCandidatePersist `json:"claim_candidates,omitempty"`
+	QiangGangWindow        bool                    `json:"qiang_gang_window,omitempty"`
+	PendingGangSeat        int                     `json:"pending_gang_seat,omitempty"`
+	PendingGangTile        string                  `json:"pending_gang_tile,omitempty"`
+	SurrenderedSeats       []bool                  `json:"surrendered_seats,omitempty"`
+	RuleState              rules.RuleState         `json:"rule_state,omitempty"`
+	WinEvents              []rules.WinEvent        `json:"win_events,omitempty"`
+	ScoreEvents            []rules.ScoreEvent      `json:"score_events,omitempty"`
+	GangRecords            []rules.GangRecord      `json:"gang_records,omitempty"`
+	LastGangFollowUp       bool                    `json:"last_gang_follow_up,omitempty"`
+	LastDiscardAfterGang   bool                    `json:"last_discard_after_gang,omitempty"`
+	Hands                  [][]string              `json:"hands"`
+	Discards               [][]string              `json:"discards,omitempty"`
+	Flowers                [][]string              `json:"flowers,omitempty"`
+	Melds                  [][]string              `json:"melds,omitempty"`
+	WallRemaining          []string                `json:"wall_remaining"`
 	// PhaseReason 与 PhaseStartUnixMs 由 ADR-0045 引入；为 schema v3 兼容增量字段。
 	// 老快照该两字段为零；恢复路径在 finalizeRoundInvariants 中由 waiting flags 派生 PhaseReason，
 	// PhaseStartUnixMs=0 表示无锚点，scheduler.armUntil 触发立即超时（cmdAutoTimeout）。
@@ -194,19 +180,18 @@ type RoundView struct {
 	MeldsBySeat      [][]string
 	MeldInfosBySeat  []*clientv1.SeatMelds
 	// 以下字段供 BotSupervisor 与重连快照重建 bot 视图使用，对老调用方可零值兼容。
-	QueBySeat         []int32
-	PlayerIDs         [4]string
-	HuedSeats         []bool
-	Closed            bool
-	ExchangeSubmitted []bool
-	QueSubmitted      []bool
-	LastAction        *clientv1.LastActionInfo
-	WallRemaining     int32
-	DeadlineUnixMs    int64
-	RoundIndex        int32
-	HandIndex         int32
-	TotalScores       []*clientv1.SeatScore
-	RuleMeta          *clientv1.RuleMeta
+	QueBySeat        []int32
+	PlayerIDs        [4]string
+	HuedSeats        []bool
+	Closed           bool
+	OpeningSubmitted map[string][]bool
+	LastAction       *clientv1.LastActionInfo
+	WallRemaining    int32
+	DeadlineUnixMs   int64
+	RoundIndex       int32
+	HandIndex        int32
+	TotalScores      []*clientv1.SeatScore
+	RuleMeta         *clientv1.RuleMeta
 }
 
 // RoundProgress 是局内进度的权威投影，不承载房间生命周期或 UI 文案。
@@ -279,6 +264,24 @@ func NewEngine(ruleID string) *Engine {
 	return &Engine{ruleID: ruleID, clk: clock.NewReal(), tmo: DefaultTimeoutConfig()}
 }
 
+func (rs *RoundState) ensureRuleRuntime() {
+	if rs == nil {
+		return
+	}
+	if rs.rule == nil {
+		ruleID := rs.ruleID
+		if ruleID == "" {
+			ruleID = "sichuan_xuezhandaodi_huansanzhang"
+		}
+		rs.rule = rules.MustGet(ruleID)
+		rs.ruleID = ruleID
+	}
+	if rs.caps.TileSet == nil && rs.caps.Claims == nil && rs.caps.Win == nil && rs.caps.Scoring == nil && rs.caps.Termination == nil {
+		rs.caps = rules.CapabilitiesOf(rs.rule)
+	}
+	rs.normalizeRuleState()
+}
+
 // SetClock 注入引擎使用的时钟源，影响 enterPhase 写入的 phaseStartUnixMs。
 func (e *Engine) SetClock(clk clock.Clock) {
 	if e == nil || clk == nil {
@@ -303,37 +306,33 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 	rule := rules.MustGet(e.ruleID)
 	caps := rules.CapabilitiesOf(rule)
 	rs := &RoundState{
-		roomID:            roomID,
-		ruleID:            e.ruleID,
-		playerIDs:         playerIDs,
-		surrendered:       make([]bool, 4),
-		rule:              rule,
-		caps:              caps,
-		wall:              rule.BuildWall(ctx, int64(seedFromRoomID(roomID)&0x7fff_ffff_ffff_ffff)), //nolint:gosec // 已清零最高位
-		hands:             make([]*hand.Hand, 4),
-		discards:          make([][]tile.Tile, 4),
-		melds:             make([][]string, 4),
-		queBySeat:         make([]int32, 4),
-		exchangeSubmitted: make([]bool, 4),
-		exchangeDirection: -1,
-		exchangeSelection: make([][]tile.Tile, 4),
-		queSubmitted:      make([]bool, 4),
-		lastDiscardSeat:   -1,
-		dealerSeat:        0,
-		openingDrawSeat:   0,
-		huedSeats:         make([]bool, 4),
-		winnerSeats:       make([]Seat, 0, 3),
-		ledger:            make([]xuezhandaodi.ScoreEntry, 0, 16),
-		clk:               e.clk,
-		tmo:               e.tmo,
-		phaseReason:       ReasonNone,
+		roomID:          roomID,
+		ruleID:          e.ruleID,
+		playerIDs:       playerIDs,
+		surrendered:     make([]bool, 4),
+		rule:            rule,
+		caps:            caps,
+		wall:            caps.TileSet.BuildWall(ctx, int64(seedFromRoomID(roomID)&0x7fff_ffff_ffff_ffff)), //nolint:gosec // 已清零最高位
+		hands:           make([]*hand.Hand, 4),
+		ruleState:       newInitialRuleState(caps),
+		discards:        make([][]tile.Tile, 4),
+		flowers:         make([][]tile.Tile, 4),
+		melds:           make([][]string, 4),
+		lastDiscardSeat: -1,
+		dealerSeat:      0,
+		openingDrawSeat: 0,
+		winEvents:       make([]rules.WinEvent, 0, 3),
+		scoreEvents:     make([]rules.ScoreEvent, 0, 16),
+		clk:             e.clk,
+		tmo:             e.tmo,
+		phaseReason:     ReasonNone,
 	}
 	for i := range rs.hands {
 		rs.hands[i] = hand.New()
 	}
 	for round := 0; round < 13; round++ {
 		for seat := 0; seat < 4; seat++ {
-			t, err := rs.wall.Draw()
+			t, err := e.drawNextPlayableTile(rs, Seat(seat))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -345,7 +344,7 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 	if err != nil {
 		return nil, nil, err
 	}
-	out, err := rs.initRoundNotifications()
+	out, err := e.initRoundNotifications(ctx, rs)
 	if err != nil {
 		return nil, nil, err
 	}
