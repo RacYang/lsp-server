@@ -10,7 +10,7 @@
 4. 麻将规则逻辑与传输、会话、存储、集群和 app 层保持隔离。
 5. 查问题和修问题必须根因优先；拒绝只屏蔽症状的补丁式修复。
 6. 每条可执行约束必须有独立 ADR + enforcer + 负例三元组。
-7. `.claude` 与 `.codex` 治理资产长期并存；任意一侧修改后必须运行 `make sync-agent-governance` 或显式反向同步，并通过 `make verify-agent-governance-sync`。
+7. `.claude` 是治理事实源，`.codex` 是其镜像（供 Codex/Cursor 等工具使用），`AGENTS.md` 是第三方 AI 工具适配入口；任意一侧修改后必须运行 `make sync-agent-governance` 或显式反向同步，并通过 `make verify-agent-governance-sync`。
 
 ## 任务路由
 

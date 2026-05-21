@@ -16,6 +16,7 @@ import (
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // roomGRPCServer 将 room 节点事件流暴露为 cluster.v1.RoomService。
@@ -43,7 +44,9 @@ func newRoomGRPCServer(rooms *roomsvc.Service, ev *postgres.RoomEventStore, gs *
 	}
 	if rooms != nil {
 		rooms.SetAutoTimeoutHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
-			_ = srv.persistPublishAndFinalize(ctx, roomID, "", notifications)
+			if err := srv.persistPublishAndFinalize(ctx, roomID, "", notifications); err != nil {
+				logx.Error(logx.WithRoomID(ctx, roomID), "超时回调持久化失败", "err", err.Error())
+			}
 		})
 	}
 	srv.ready.Store(true)
@@ -145,12 +148,14 @@ func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID strin
 	if s.gs != nil {
 		players, _, _, ok := s.rooms.RoomSnapshot(roomID)
 		if ok && len(players) > 0 {
-			_ = s.gs.CreateGameSummary(ctx, roomID, s.rooms.RuleID(), append([]string(nil), players...))
+			if err := s.gs.CreateGameSummary(ctx, roomID, s.rooms.RuleID(), append([]string(nil), players...)); err != nil {
+				logx.Error(logx.WithRoomID(ctx, roomID), "创建对局摘要失败", "err", err.Error())
+			}
 		}
 	}
 	if notification.Kind == roomsvc.KindSettlement && s.st != nil && evt.GetSettlement() != nil {
 		st := evt.GetSettlement()
-		_ = s.st.AppendSettlement(ctx, &clientv1.SettlementNotify{
+		if err := s.st.AppendSettlement(ctx, &clientv1.SettlementNotify{
 			RoomId:        roomID,
 			WinnerUserIds: append([]string(nil), st.GetWinnerUserIds()...),
 			TotalFan:      st.GetTotalFan(),
@@ -163,10 +168,14 @@ func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID strin
 			RoundIndex:  st.GetRoundIndex(),
 			HandIndex:   st.GetHandIndex(),
 			TotalScores: clusterSeatScoresToClient(st.GetTotalScores()),
-		})
+		}); err != nil {
+			logx.Error(logx.WithRoomID(ctx, roomID), "结算数据持久化失败", "err", err.Error())
+		}
 	}
 	if notification.Kind == roomsvc.KindSettlement && s.gs != nil {
-		_ = s.gs.EndGameSummary(ctx, roomID, time.Now().UTC())
+		if err := s.gs.EndGameSummary(ctx, roomID, time.Now().UTC()); err != nil {
+			logx.Error(logx.WithRoomID(ctx, roomID), "结束对局摘要失败", "err", err.Error())
+		}
 	}
 }
 
@@ -201,7 +210,9 @@ func (s *roomGRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq
 	if roundJSON, err := s.rooms.RoundPersistSnapshot(ctx, roomID); err == nil && len(roundJSON) > 0 {
 		meta.RoundJSON = string(roundJSON)
 	}
-	_ = s.rdb.PutRoomSnapMeta(ctx, roomID, meta, 0)
+	if err := s.rdb.PutRoomSnapMeta(ctx, roomID, meta, 0); err != nil {
+		logx.Warn(logx.WithRoomID(ctx, roomID), "房间快照元数据写入 Redis 失败", "err", err.Error())
+	}
 }
 
 func queSuitsFromNotification(n roomsvc.Notification) []int32 {
