@@ -1,10 +1,26 @@
-coverage.out
+# === 构建产物 ===
 dist/
-.DS_Store
-bench/runs/
-deploy/compose/.env
-.claude/settings.local.json
+coverage.out
+
+# 在项目根目录执行 go build ./cmd/<name> 时产生的临时二进制
+# 正式构建输出到 dist/，此处仅防止本地调试产物被意外跟踪
+/all
+/bot
 /cli
+/gate
+/loadgen
+/lobby
 /room
+
+# === 开发环境 ===
 tmp/
 .cache/
+.DS_Store
+
+# === 本地配置（不入库）===
+deploy/compose/.env
+.claude/settings.local.json
+
+# === 测试与压测产物 ===
+bench/runs/
+*.test
