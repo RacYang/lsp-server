@@ -124,7 +124,9 @@ func handleLeaveRoom(
 		deps.Hub.Unregister(state.userID, oldRoomID)
 	}
 	if deps.Session != nil {
-		_ = deps.Session.UnbindRoom(ctx, state.userID)
+		if err := deps.Session.UnbindRoom(ctx, state.userID); err != nil {
+			logx.Warn(logx.WithRoomID(logx.WithUserID(ctx, state.userID), oldRoomID), "退房后解绑 session 房间字段失败", "err", err.Error())
+		}
 	}
 	resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LeaveRoomResp{LeaveRoomResp: &clientv1.LeaveRoomResponse{}}}
 	b, _ := proto.Marshal(resp)

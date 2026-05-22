@@ -79,6 +79,9 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 	if g == nil || g.lobby == nil || g.rooms == nil {
 		return "", -1, fmt.Errorf("nil local lobby gateway")
 	}
+	if padWithBots {
+		logx.Warn(logx.WithUserID(ctx, userID), "本地网关不支持机器人填充，padWithBots 已忽略")
+	}
 	rooms, _, err := g.lobby.ListRooms(ctx, 100, "")
 	if err != nil {
 		return "", -1, err
@@ -110,7 +113,6 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 			}
 			continue
 		}
-		_ = padWithBots
 		return room.RoomID, int(seat), nil
 	}
 	roomID, _, err := g.lobby.CreateRoomWithMeta(ctx, ruleID, "", false, userID)
@@ -125,7 +127,6 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 		}
 		return "", -1, err
 	}
-	_ = padWithBots
 	return roomID, seat, nil
 }
 

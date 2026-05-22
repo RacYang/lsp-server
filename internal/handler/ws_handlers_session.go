@@ -121,7 +121,9 @@ func handleLoginIssue(
 	state.userID = roomsvc.NewUserID()
 	nickname := sanitizeNickname(env.GetLoginReq().GetNickname())
 	if deps.Users != nil {
-		_ = deps.Users.Set(ctx, state.userID, session.UserProfile{Nickname: nickname})
+		if err := deps.Users.Set(ctx, state.userID, session.UserProfile{Nickname: nickname}); err != nil {
+			logx.Warn(logx.WithUserID(ctx, state.userID), "写入用户 profile 失败", "err", err.Error())
+		}
 	}
 	var plainTok string
 	if deps.Session != nil {
