@@ -104,7 +104,8 @@ lint:
       log: internal/log/**
       cmd: cmd/**
       pkg: pkg/**
-      apigen: api/gen/**
+      apigen_client: api/gen/go/client/v1/**
+      apigen_cluster: api/gen/go/cluster/v1/**
     deny:
       - from: mahjong_builtin
         to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
@@ -156,8 +157,37 @@ lint:
           - metrics
           - log
           - cmd
-          - apigen
-      - from: apigen
+          - apigen_client
+          - apigen_cluster
+      - from: apigen_client
+        to:
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - bot
+          - domain
+          - app
+          - net
+          - cluster
+          - handler
+          - store
+          - service
+          - session
+          - config
+          - clock
+          - metrics
+          - log
+          - cmd
+          - pkg
+          - apigen_cluster
+      - from: apigen_cluster
         to:
           - mahjong_builtin
           - mahjong_guobiao

@@ -9,6 +9,7 @@ package clusterv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	v1 "racoo.cn/lsp/api/gen/go/client/v1"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -485,107 +486,6 @@ func (x *GetRoomResponse) GetError() string {
 	return ""
 }
 
-// RoomMeta 是 lobby 对外提供的公开房间摘要。
-type RoomMeta struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RoomId        string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
-	RuleId        string                 `protobuf:"bytes,2,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	SeatCount     int32                  `protobuf:"varint,4,opt,name=seat_count,json=seatCount,proto3" json:"seat_count,omitempty"`
-	MaxSeats      int32                  `protobuf:"varint,5,opt,name=max_seats,json=maxSeats,proto3" json:"max_seats,omitempty"`
-	CreatedAtMs   int64                  `protobuf:"varint,6,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
-	Stage         string                 `protobuf:"bytes,7,opt,name=stage,proto3" json:"stage,omitempty"`
-	RuleMeta      *RuleMeta              `protobuf:"bytes,8,opt,name=rule_meta,json=ruleMeta,proto3" json:"rule_meta,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RoomMeta) Reset() {
-	*x = RoomMeta{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RoomMeta) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RoomMeta) ProtoMessage() {}
-
-func (x *RoomMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RoomMeta.ProtoReflect.Descriptor instead.
-func (*RoomMeta) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *RoomMeta) GetRoomId() string {
-	if x != nil {
-		return x.RoomId
-	}
-	return ""
-}
-
-func (x *RoomMeta) GetRuleId() string {
-	if x != nil {
-		return x.RuleId
-	}
-	return ""
-}
-
-func (x *RoomMeta) GetDisplayName() string {
-	if x != nil {
-		return x.DisplayName
-	}
-	return ""
-}
-
-func (x *RoomMeta) GetSeatCount() int32 {
-	if x != nil {
-		return x.SeatCount
-	}
-	return 0
-}
-
-func (x *RoomMeta) GetMaxSeats() int32 {
-	if x != nil {
-		return x.MaxSeats
-	}
-	return 0
-}
-
-func (x *RoomMeta) GetCreatedAtMs() int64 {
-	if x != nil {
-		return x.CreatedAtMs
-	}
-	return 0
-}
-
-func (x *RoomMeta) GetStage() string {
-	if x != nil {
-		return x.Stage
-	}
-	return ""
-}
-
-func (x *RoomMeta) GetRuleMeta() *RuleMeta {
-	if x != nil {
-		return x.RuleMeta
-	}
-	return nil
-}
-
 type ListRoomsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
@@ -596,7 +496,7 @@ type ListRoomsRequest struct {
 
 func (x *ListRoomsRequest) Reset() {
 	*x = ListRoomsRequest{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[9]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -608,7 +508,7 @@ func (x *ListRoomsRequest) String() string {
 func (*ListRoomsRequest) ProtoMessage() {}
 
 func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[9]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -621,7 +521,7 @@ func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsRequest.ProtoReflect.Descriptor instead.
 func (*ListRoomsRequest) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{9}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListRoomsRequest) GetPageSize() int32 {
@@ -638,9 +538,10 @@ func (x *ListRoomsRequest) GetPageToken() string {
 	return ""
 }
 
+// ListRoomsResponse 使用 client.v1.RoomMeta，gate 可直接透传不做转译。
 type ListRoomsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Rooms         []*RoomMeta            `protobuf:"bytes,1,rep,name=rooms,proto3" json:"rooms,omitempty"`
+	Rooms         []*v1.RoomMeta         `protobuf:"bytes,1,rep,name=rooms,proto3" json:"rooms,omitempty"`
 	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -649,7 +550,7 @@ type ListRoomsResponse struct {
 
 func (x *ListRoomsResponse) Reset() {
 	*x = ListRoomsResponse{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[10]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -661,7 +562,7 @@ func (x *ListRoomsResponse) String() string {
 func (*ListRoomsResponse) ProtoMessage() {}
 
 func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[10]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -674,10 +575,10 @@ func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsResponse.ProtoReflect.Descriptor instead.
 func (*ListRoomsResponse) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{10}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *ListRoomsResponse) GetRooms() []*RoomMeta {
+func (x *ListRoomsResponse) GetRooms() []*v1.RoomMeta {
 	if x != nil {
 		return x.Rooms
 	}
@@ -706,7 +607,7 @@ type ListRulesRequest struct {
 
 func (x *ListRulesRequest) Reset() {
 	*x = ListRulesRequest{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[11]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -718,7 +619,7 @@ func (x *ListRulesRequest) String() string {
 func (*ListRulesRequest) ProtoMessage() {}
 
 func (x *ListRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[11]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -731,12 +632,13 @@ func (x *ListRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRulesRequest.ProtoReflect.Descriptor instead.
 func (*ListRulesRequest) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{11}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{10}
 }
 
+// ListRulesResponse 使用 client.v1.RuleMeta，gate 可直接透传不做转译。
 type ListRulesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Rules         []*RuleMeta            `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
+	Rules         []*v1.RuleMeta         `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
 	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -744,7 +646,7 @@ type ListRulesResponse struct {
 
 func (x *ListRulesResponse) Reset() {
 	*x = ListRulesResponse{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[12]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -756,7 +658,7 @@ func (x *ListRulesResponse) String() string {
 func (*ListRulesResponse) ProtoMessage() {}
 
 func (x *ListRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[12]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -769,10 +671,10 @@ func (x *ListRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRulesResponse.ProtoReflect.Descriptor instead.
 func (*ListRulesResponse) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{12}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *ListRulesResponse) GetRules() []*RuleMeta {
+func (x *ListRulesResponse) GetRules() []*v1.RuleMeta {
 	if x != nil {
 		return x.Rules
 	}
@@ -797,7 +699,7 @@ type AutoMatchRequest struct {
 
 func (x *AutoMatchRequest) Reset() {
 	*x = AutoMatchRequest{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[13]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +711,7 @@ func (x *AutoMatchRequest) String() string {
 func (*AutoMatchRequest) ProtoMessage() {}
 
 func (x *AutoMatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[13]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +724,7 @@ func (x *AutoMatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AutoMatchRequest.ProtoReflect.Descriptor instead.
 func (*AutoMatchRequest) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{13}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AutoMatchRequest) GetRuleId() string {
@@ -858,7 +760,7 @@ type AutoMatchResponse struct {
 
 func (x *AutoMatchResponse) Reset() {
 	*x = AutoMatchResponse{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[14]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -870,7 +772,7 @@ func (x *AutoMatchResponse) String() string {
 func (*AutoMatchResponse) ProtoMessage() {}
 
 func (x *AutoMatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[14]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -883,7 +785,7 @@ func (x *AutoMatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AutoMatchResponse.ProtoReflect.Descriptor instead.
 func (*AutoMatchResponse) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{14}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AutoMatchResponse) GetRoomId() string {
@@ -927,7 +829,7 @@ type AddBotRequest struct {
 
 func (x *AddBotRequest) Reset() {
 	*x = AddBotRequest{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[15]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -939,7 +841,7 @@ func (x *AddBotRequest) String() string {
 func (*AddBotRequest) ProtoMessage() {}
 
 func (x *AddBotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[15]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -952,7 +854,7 @@ func (x *AddBotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBotRequest.ProtoReflect.Descriptor instead.
 func (*AddBotRequest) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{15}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AddBotRequest) GetRoomId() string {
@@ -990,9 +892,10 @@ func (x *AddBotRequest) GetOpId() string {
 	return ""
 }
 
+// AddBotResponse 使用 client.v1.SeatInfo，gate 可直接透传不做转译。
 type AddBotResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Added         []*SeatInfo            `protobuf:"bytes,1,rep,name=added,proto3" json:"added,omitempty"`
+	Added         []*v1.SeatInfo         `protobuf:"bytes,1,rep,name=added,proto3" json:"added,omitempty"`
 	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1000,7 +903,7 @@ type AddBotResponse struct {
 
 func (x *AddBotResponse) Reset() {
 	*x = AddBotResponse{}
-	mi := &file_cluster_v1_lobby_proto_msgTypes[16]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1012,7 +915,7 @@ func (x *AddBotResponse) String() string {
 func (*AddBotResponse) ProtoMessage() {}
 
 func (x *AddBotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cluster_v1_lobby_proto_msgTypes[16]
+	mi := &file_cluster_v1_lobby_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1025,10 +928,10 @@ func (x *AddBotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBotResponse.ProtoReflect.Descriptor instead.
 func (*AddBotResponse) Descriptor() ([]byte, []int) {
-	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{16}
+	return file_cluster_v1_lobby_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *AddBotResponse) GetAdded() []*SeatInfo {
+func (x *AddBotResponse) GetAdded() []*v1.SeatInfo {
 	if x != nil {
 		return x.Added
 	}
@@ -1047,7 +950,7 @@ var File_cluster_v1_lobby_proto protoreflect.FileDescriptor
 const file_cluster_v1_lobby_proto_rawDesc = "" +
 	"\n" +
 	"\x16cluster/v1/lobby.proto\x12\n" +
-	"cluster.v1\x1a\x15cluster/v1/room.proto\"\xd3\x01\n" +
+	"cluster.v1\x1a\x18client/v1/messages.proto\"\xd3\x01\n" +
 	"\x11CreateRoomRequest\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x17\n" +
 	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12'\n" +
@@ -1081,28 +984,18 @@ const file_cluster_v1_lobby_proto_rawDesc = "" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12 \n" +
 	"\froom_node_id\x18\x02 \x01(\tR\n" +
 	"roomNodeId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\x88\x02\n" +
-	"\bRoomMeta\x12\x17\n" +
-	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x17\n" +
-	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12!\n" +
-	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12\x1d\n" +
-	"\n" +
-	"seat_count\x18\x04 \x01(\x05R\tseatCount\x12\x1b\n" +
-	"\tmax_seats\x18\x05 \x01(\x05R\bmaxSeats\x12\"\n" +
-	"\rcreated_at_ms\x18\x06 \x01(\x03R\vcreatedAtMs\x12\x14\n" +
-	"\x05stage\x18\a \x01(\tR\x05stage\x121\n" +
-	"\trule_meta\x18\b \x01(\v2\x14.cluster.v1.RuleMetaR\bruleMeta\"N\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"N\n" +
 	"\x10ListRoomsRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x02 \x01(\tR\tpageToken\"}\n" +
-	"\x11ListRoomsResponse\x12*\n" +
-	"\x05rooms\x18\x01 \x03(\v2\x14.cluster.v1.RoomMetaR\x05rooms\x12&\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\"|\n" +
+	"\x11ListRoomsResponse\x12)\n" +
+	"\x05rooms\x18\x01 \x03(\v2\x13.client.v1.RoomMetaR\x05rooms\x12&\n" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\"\x12\n" +
-	"\x10ListRulesRequest\"U\n" +
-	"\x11ListRulesResponse\x12*\n" +
-	"\x05rules\x18\x01 \x03(\v2\x14.cluster.v1.RuleMetaR\x05rules\x12\x14\n" +
+	"\x10ListRulesRequest\"T\n" +
+	"\x11ListRulesResponse\x12)\n" +
+	"\x05rules\x18\x01 \x03(\v2\x13.client.v1.RuleMetaR\x05rules\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"h\n" +
 	"\x10AutoMatchRequest\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x17\n" +
@@ -1122,9 +1015,9 @@ const file_cluster_v1_lobby_proto_rawDesc = "" +
 	"\n" +
 	"difficulty\x18\x04 \x01(\tR\n" +
 	"difficulty\x12\x13\n" +
-	"\x05op_id\x18\x05 \x01(\tR\x04opId\"R\n" +
-	"\x0eAddBotResponse\x12*\n" +
-	"\x05added\x18\x01 \x03(\v2\x14.cluster.v1.SeatInfoR\x05added\x12\x14\n" +
+	"\x05op_id\x18\x05 \x01(\tR\x04opId\"Q\n" +
+	"\x0eAddBotResponse\x12)\n" +
+	"\x05added\x18\x01 \x03(\v2\x13.client.v1.SeatInfoR\x05added\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error2\xcf\x04\n" +
 	"\fLobbyService\x12K\n" +
 	"\n" +
@@ -1149,7 +1042,7 @@ func file_cluster_v1_lobby_proto_rawDescGZIP() []byte {
 	return file_cluster_v1_lobby_proto_rawDescData
 }
 
-var file_cluster_v1_lobby_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_cluster_v1_lobby_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_cluster_v1_lobby_proto_goTypes = []any{
 	(*CreateRoomRequest)(nil),  // 0: cluster.v1.CreateRoomRequest
 	(*CreateRoomResponse)(nil), // 1: cluster.v1.CreateRoomResponse
@@ -1159,44 +1052,43 @@ var file_cluster_v1_lobby_proto_goTypes = []any{
 	(*LeaveRoomResponse)(nil),  // 5: cluster.v1.LeaveRoomResponse
 	(*GetRoomRequest)(nil),     // 6: cluster.v1.GetRoomRequest
 	(*GetRoomResponse)(nil),    // 7: cluster.v1.GetRoomResponse
-	(*RoomMeta)(nil),           // 8: cluster.v1.RoomMeta
-	(*ListRoomsRequest)(nil),   // 9: cluster.v1.ListRoomsRequest
-	(*ListRoomsResponse)(nil),  // 10: cluster.v1.ListRoomsResponse
-	(*ListRulesRequest)(nil),   // 11: cluster.v1.ListRulesRequest
-	(*ListRulesResponse)(nil),  // 12: cluster.v1.ListRulesResponse
-	(*AutoMatchRequest)(nil),   // 13: cluster.v1.AutoMatchRequest
-	(*AutoMatchResponse)(nil),  // 14: cluster.v1.AutoMatchResponse
-	(*AddBotRequest)(nil),      // 15: cluster.v1.AddBotRequest
-	(*AddBotResponse)(nil),     // 16: cluster.v1.AddBotResponse
-	(*RuleMeta)(nil),           // 17: cluster.v1.RuleMeta
-	(*SeatInfo)(nil),           // 18: cluster.v1.SeatInfo
+	(*ListRoomsRequest)(nil),   // 8: cluster.v1.ListRoomsRequest
+	(*ListRoomsResponse)(nil),  // 9: cluster.v1.ListRoomsResponse
+	(*ListRulesRequest)(nil),   // 10: cluster.v1.ListRulesRequest
+	(*ListRulesResponse)(nil),  // 11: cluster.v1.ListRulesResponse
+	(*AutoMatchRequest)(nil),   // 12: cluster.v1.AutoMatchRequest
+	(*AutoMatchResponse)(nil),  // 13: cluster.v1.AutoMatchResponse
+	(*AddBotRequest)(nil),      // 14: cluster.v1.AddBotRequest
+	(*AddBotResponse)(nil),     // 15: cluster.v1.AddBotResponse
+	(*v1.RoomMeta)(nil),        // 16: client.v1.RoomMeta
+	(*v1.RuleMeta)(nil),        // 17: client.v1.RuleMeta
+	(*v1.SeatInfo)(nil),        // 18: client.v1.SeatInfo
 }
 var file_cluster_v1_lobby_proto_depIdxs = []int32{
-	17, // 0: cluster.v1.RoomMeta.rule_meta:type_name -> cluster.v1.RuleMeta
-	8,  // 1: cluster.v1.ListRoomsResponse.rooms:type_name -> cluster.v1.RoomMeta
-	17, // 2: cluster.v1.ListRulesResponse.rules:type_name -> cluster.v1.RuleMeta
-	18, // 3: cluster.v1.AddBotResponse.added:type_name -> cluster.v1.SeatInfo
-	0,  // 4: cluster.v1.LobbyService.CreateRoom:input_type -> cluster.v1.CreateRoomRequest
-	2,  // 5: cluster.v1.LobbyService.JoinRoom:input_type -> cluster.v1.JoinRoomRequest
-	6,  // 6: cluster.v1.LobbyService.GetRoom:input_type -> cluster.v1.GetRoomRequest
-	9,  // 7: cluster.v1.LobbyService.ListRooms:input_type -> cluster.v1.ListRoomsRequest
-	11, // 8: cluster.v1.LobbyService.ListRules:input_type -> cluster.v1.ListRulesRequest
-	13, // 9: cluster.v1.LobbyService.AutoMatch:input_type -> cluster.v1.AutoMatchRequest
-	4,  // 10: cluster.v1.LobbyService.LeaveRoom:input_type -> cluster.v1.LeaveRoomRequest
-	15, // 11: cluster.v1.LobbyService.AddBot:input_type -> cluster.v1.AddBotRequest
-	1,  // 12: cluster.v1.LobbyService.CreateRoom:output_type -> cluster.v1.CreateRoomResponse
-	3,  // 13: cluster.v1.LobbyService.JoinRoom:output_type -> cluster.v1.JoinRoomResponse
-	7,  // 14: cluster.v1.LobbyService.GetRoom:output_type -> cluster.v1.GetRoomResponse
-	10, // 15: cluster.v1.LobbyService.ListRooms:output_type -> cluster.v1.ListRoomsResponse
-	12, // 16: cluster.v1.LobbyService.ListRules:output_type -> cluster.v1.ListRulesResponse
-	14, // 17: cluster.v1.LobbyService.AutoMatch:output_type -> cluster.v1.AutoMatchResponse
-	5,  // 18: cluster.v1.LobbyService.LeaveRoom:output_type -> cluster.v1.LeaveRoomResponse
-	16, // 19: cluster.v1.LobbyService.AddBot:output_type -> cluster.v1.AddBotResponse
-	12, // [12:20] is the sub-list for method output_type
-	4,  // [4:12] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	16, // 0: cluster.v1.ListRoomsResponse.rooms:type_name -> client.v1.RoomMeta
+	17, // 1: cluster.v1.ListRulesResponse.rules:type_name -> client.v1.RuleMeta
+	18, // 2: cluster.v1.AddBotResponse.added:type_name -> client.v1.SeatInfo
+	0,  // 3: cluster.v1.LobbyService.CreateRoom:input_type -> cluster.v1.CreateRoomRequest
+	2,  // 4: cluster.v1.LobbyService.JoinRoom:input_type -> cluster.v1.JoinRoomRequest
+	6,  // 5: cluster.v1.LobbyService.GetRoom:input_type -> cluster.v1.GetRoomRequest
+	8,  // 6: cluster.v1.LobbyService.ListRooms:input_type -> cluster.v1.ListRoomsRequest
+	10, // 7: cluster.v1.LobbyService.ListRules:input_type -> cluster.v1.ListRulesRequest
+	12, // 8: cluster.v1.LobbyService.AutoMatch:input_type -> cluster.v1.AutoMatchRequest
+	4,  // 9: cluster.v1.LobbyService.LeaveRoom:input_type -> cluster.v1.LeaveRoomRequest
+	14, // 10: cluster.v1.LobbyService.AddBot:input_type -> cluster.v1.AddBotRequest
+	1,  // 11: cluster.v1.LobbyService.CreateRoom:output_type -> cluster.v1.CreateRoomResponse
+	3,  // 12: cluster.v1.LobbyService.JoinRoom:output_type -> cluster.v1.JoinRoomResponse
+	7,  // 13: cluster.v1.LobbyService.GetRoom:output_type -> cluster.v1.GetRoomResponse
+	9,  // 14: cluster.v1.LobbyService.ListRooms:output_type -> cluster.v1.ListRoomsResponse
+	11, // 15: cluster.v1.LobbyService.ListRules:output_type -> cluster.v1.ListRulesResponse
+	13, // 16: cluster.v1.LobbyService.AutoMatch:output_type -> cluster.v1.AutoMatchResponse
+	5,  // 17: cluster.v1.LobbyService.LeaveRoom:output_type -> cluster.v1.LeaveRoomResponse
+	15, // 18: cluster.v1.LobbyService.AddBot:output_type -> cluster.v1.AddBotResponse
+	11, // [11:19] is the sub-list for method output_type
+	3,  // [3:11] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_cluster_v1_lobby_proto_init() }
@@ -1204,14 +1096,13 @@ func file_cluster_v1_lobby_proto_init() {
 	if File_cluster_v1_lobby_proto != nil {
 		return
 	}
-	file_cluster_v1_room_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cluster_v1_lobby_proto_rawDesc), len(file_cluster_v1_lobby_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

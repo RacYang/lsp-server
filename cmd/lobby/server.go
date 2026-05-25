@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
 	"racoo.cn/lsp/internal/cluster/router"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
@@ -121,9 +122,9 @@ func (s *lobbyGRPCServer) AddBot(ctx context.Context, req *clusterv1.AddBotReque
 	if err != nil {
 		return &clusterv1.AddBotResponse{Error: err.Error()}, nil
 	}
-	out := make([]*clusterv1.SeatInfo, 0, len(added))
+	out := make([]*clientv1.SeatInfo, 0, len(added))
 	for _, bot := range added {
-		out = append(out, &clusterv1.SeatInfo{
+		out = append(out, &clientv1.SeatInfo{
 			SeatIndex: bot.SeatIndex,
 			UserId:    bot.UserID,
 			Nickname:  "机器人",
@@ -300,10 +301,12 @@ func lobbyAddBotHandler(srv interface{}, ctx context.Context, dec func(interface
 	return interceptor(ctx, in, info, handler)
 }
 
-func lobbyRoomMetasToCluster(rooms []lobbysvc.RoomMeta) []*clusterv1.RoomMeta {
-	out := make([]*clusterv1.RoomMeta, 0, len(rooms))
+// lobbyRoomMetasToCluster 把大厅内部 RoomMeta 投影为 client.v1.RoomMeta；
+// proto 统一后 ListRoomsResponse.rooms 直接使用客户端类型，无须 cluster 层中转。
+func lobbyRoomMetasToCluster(rooms []lobbysvc.RoomMeta) []*clientv1.RoomMeta {
+	out := make([]*clientv1.RoomMeta, 0, len(rooms))
 	for _, room := range rooms {
-		out = append(out, &clusterv1.RoomMeta{
+		out = append(out, &clientv1.RoomMeta{
 			RoomId:      room.RoomID,
 			RuleId:      room.RuleID,
 			DisplayName: room.DisplayName,
@@ -317,19 +320,21 @@ func lobbyRoomMetasToCluster(rooms []lobbysvc.RoomMeta) []*clusterv1.RoomMeta {
 	return out
 }
 
-func lobbyRuleMetasToCluster(rules []lobbysvc.RuleMeta) []*clusterv1.RuleMeta {
-	out := make([]*clusterv1.RuleMeta, 0, len(rules))
+// lobbyRuleMetasToCluster 批量投影规则摘要为 client.v1.RuleMeta。
+func lobbyRuleMetasToCluster(rules []lobbysvc.RuleMeta) []*clientv1.RuleMeta {
+	out := make([]*clientv1.RuleMeta, 0, len(rules))
 	for _, rule := range rules {
 		out = append(out, lobbyRuleMetaToCluster(rule))
 	}
 	return out
 }
 
-func lobbyRuleMetaToCluster(meta lobbysvc.RuleMeta) *clusterv1.RuleMeta {
+// lobbyRuleMetaToCluster 投影单条规则摘要；字段为空时返回 nil。
+func lobbyRuleMetaToCluster(meta lobbysvc.RuleMeta) *clientv1.RuleMeta {
 	if meta.RuleID == "" && meta.DisplayName == "" {
 		return nil
 	}
-	return &clusterv1.RuleMeta{
+	return &clientv1.RuleMeta{
 		RuleId:          meta.RuleID,
 		DisplayName:     meta.DisplayName,
 		ShortDesc:       meta.ShortDesc,

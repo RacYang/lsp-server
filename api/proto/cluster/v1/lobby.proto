@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package cluster.v1;
 
-import "cluster/v1/room.proto";
+import "client/v1/messages.proto";
 
 option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
 
@@ -64,33 +64,23 @@ message GetRoomResponse {
   string error = 3;
 }
 
-// RoomMeta 是 lobby 对外提供的公开房间摘要。
-message RoomMeta {
-  string room_id = 1;
-  string rule_id = 2;
-  string display_name = 3;
-  int32 seat_count = 4;
-  int32 max_seats = 5;
-  int64 created_at_ms = 6;
-  string stage = 7;
-  RuleMeta rule_meta = 8;
-}
-
 message ListRoomsRequest {
   int32 page_size = 1;
   string page_token = 2;
 }
 
+// ListRoomsResponse 使用 client.v1.RoomMeta，gate 可直接透传不做转译。
 message ListRoomsResponse {
-  repeated RoomMeta rooms = 1;
+  repeated client.v1.RoomMeta rooms = 1;
   string next_page_token = 2;
   string error = 3;
 }
 
 message ListRulesRequest {}
 
+// ListRulesResponse 使用 client.v1.RuleMeta，gate 可直接透传不做转译。
 message ListRulesResponse {
-  repeated RuleMeta rules = 1;
+  repeated client.v1.RuleMeta rules = 1;
   string error = 2;
 }
 
@@ -115,7 +105,8 @@ message AddBotRequest {
   string op_id = 5;
 }
 
+// AddBotResponse 使用 client.v1.SeatInfo，gate 可直接透传不做转译。
 message AddBotResponse {
-  repeated SeatInfo added = 1;
+  repeated client.v1.SeatInfo added = 1;
   string error = 2;
 }

@@ -31,8 +31,10 @@ const (
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC）。
 type RoomServiceClient interface {
 	ApplyEvent(ctx context.Context, in *ApplyEventRequest, opts ...grpc.CallOption) (*ApplyEventResponse, error)
+	// StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
+	// 本 RPC 仅在迁移期间供旧客户端使用。
 	StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RoomServiceStreamEventsResponse], error)
-	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在 StreamEvents 前对齐切点。
+	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
 	SnapshotRoom(ctx context.Context, in *SnapshotRoomRequest, opts ...grpc.CallOption) (*SnapshotRoomResponse, error)
 }
 
@@ -90,8 +92,10 @@ func (c *roomServiceClient) SnapshotRoom(ctx context.Context, in *SnapshotRoomRe
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC）。
 type RoomServiceServer interface {
 	ApplyEvent(context.Context, *ApplyEventRequest) (*ApplyEventResponse, error)
+	// StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
+	// 本 RPC 仅在迁移期间供旧客户端使用。
 	StreamEvents(*StreamEventsRequest, grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]) error
-	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在 StreamEvents 前对齐切点。
+	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
 	SnapshotRoom(context.Context, *SnapshotRoomRequest) (*SnapshotRoomResponse, error)
 	mustEmbedUnimplementedRoomServiceServer()
 }

@@ -45,40 +45,34 @@ func TestWithOutgoingTrace(t *testing.T) {
 	require.Equal(t, []string{"trace-pure"}, md.Get("racoo-trace-id"))
 }
 
-// TestClusterToClientConverters 同时验证四个 cluster->client 转换器：均能逐字段透传，nil 输入返回空切片。
-func TestClusterToClientConverters(t *testing.T) {
+// TestProtoTypesDirectPassthrough 验证 proto 统一后 client.v1 类型可以直接使用，无须 cluster 层中转。
+// proto 统一前存在 clusterXxxToClient 系列转换函数；统一后两侧类型合并为 client.v1，转换函数已删除。
+func TestProtoTypesDirectPassthrough(t *testing.T) {
 	t.Parallel()
 
-	require.Empty(t, clusterClaimCandidatesToClient(nil))
-	require.Empty(t, clusterSeatScoresToClient(nil))
-	require.Empty(t, clusterPenaltiesToClient(nil))
-	require.Empty(t, clusterWinnerBreakdownsToClient(nil))
-	require.Empty(t, clusterRoomMetasToClient(nil))
+	// ClaimCandidate：直接构造 client.v1 类型，字段完整透传。
+	candidates := []*clientv1.ClaimCandidate{{SeatIndex: 1, Actions: []string{"pong", "gang"}}}
+	require.Equal(t, int32(1), candidates[0].GetSeatIndex())
+	require.Equal(t, []string{"pong", "gang"}, candidates[0].GetActions())
 
-	candidates := []*clusterv1.ClaimCandidate{{SeatIndex: 1, Actions: []string{"pong", "gang"}}}
-	got := clusterClaimCandidatesToClient(candidates)
-	require.Len(t, got, 1)
-	require.Equal(t, int32(1), got[0].GetSeatIndex())
-	require.Equal(t, []string{"pong", "gang"}, got[0].GetActions())
+	// SeatScore：TotalFan、Skipped 等字段直接可用。
+	seatScores := []*clientv1.SeatScore{{SeatIndex: 2, UserId: "u", TotalFan: 10, Skipped: true}}
+	require.Equal(t, "u", seatScores[0].GetUserId())
+	require.Equal(t, int32(10), seatScores[0].GetTotalFan())
+	require.True(t, seatScores[0].GetSkipped())
 
-	seatScores := []*clusterv1.SeatScore{{SeatIndex: 2, UserId: "u", TotalFan: 10, Skipped: true}}
-	gotScores := clusterSeatScoresToClient(seatScores)
-	require.Equal(t, "u", gotScores[0].GetUserId())
-	require.Equal(t, int32(10), gotScores[0].GetTotalFan())
-	require.True(t, gotScores[0].GetSkipped())
+	// PenaltyItem：Amount 字段直接可用。
+	penalties := []*clientv1.PenaltyItem{{Reason: "miss", FromSeat: 0, ToSeat: 1, Amount: 4}}
+	require.Equal(t, int32(4), penalties[0].GetAmount())
 
-	penalties := []*clusterv1.PenaltyItem{{Reason: "miss", FromSeat: 0, ToSeat: 1, Amount: 4}}
-	gotPenalties := clusterPenaltiesToClient(penalties)
-	require.Equal(t, int32(4), gotPenalties[0].GetAmount())
+	// WinnerBreakdown：FanNames 切片直接可用。
+	breakdowns := []*clientv1.WinnerBreakdown{{SeatIndex: 3, UserId: "w", Fan: 6, FanNames: []string{"清一色"}}}
+	require.Equal(t, []string{"清一色"}, breakdowns[0].GetFanNames())
 
-	breakdowns := []*clusterv1.WinnerBreakdown{{SeatIndex: 3, UserId: "w", Fan: 6, FanNames: []string{"清一色"}}}
-	gotBreakdowns := clusterWinnerBreakdownsToClient(breakdowns)
-	require.Equal(t, []string{"清一色"}, gotBreakdowns[0].GetFanNames())
-
-	rooms := []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", DisplayName: "公开桌", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}
-	gotRooms := clusterRoomMetasToClient(rooms)
-	require.Equal(t, "ROOM01", gotRooms[0].GetRoomId())
-	require.Equal(t, int32(1), gotRooms[0].GetSeatCount())
+	// RoomMeta：RoomId、SeatCount 等字段直接可用。
+	rooms := []*clientv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", DisplayName: "公开桌", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}
+	require.Equal(t, "ROOM01", rooms[0].GetRoomId())
+	require.Equal(t, int32(1), rooms[0].GetSeatCount())
 }
 
 // TestMarshalClientEnvelope 校验 marshal 失败与成功两条路径；空 envelope 不会引发错误。
@@ -111,7 +105,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				Cursor: "deal-0",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_InitialDeal{
-					InitialDeal: &clusterv1.InitialDealEvent{SeatIndex: 0, Tiles: []string{"m1", "m2"}},
+					InitialDeal: &clientv1.InitialDealNotify{SeatIndex: 0, Tiles: []string{"m1", "m2"}},
 				},
 			},
 			wantID: msgid.InitialDealNotify,
@@ -122,7 +116,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 				RoomId: "r1",
 				Cursor: "1",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_StartGame{
-					StartGame: &clusterv1.StartGameEvent{DealerSeat: 2},
+					StartGame: &clientv1.StartGameNotify{DealerSeat: 2},
 				},
 			},
 			wantID: msgid.StartGame,
@@ -131,7 +125,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			name: "draw_tile",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				Body: &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
-					DrawTile: &clusterv1.DrawTileEvent{SeatIndex: 1, Tile: "1m"},
+					DrawTile: &clientv1.DrawTileNotify{SeatIndex: 1, Tile: "1m"},
 				},
 			},
 			wantID: msgid.DrawTile,
@@ -140,7 +134,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			name: "action",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				Body: &clusterv1.RoomServiceStreamEventsResponse_Action{
-					Action: &clusterv1.ActionEvent{SeatIndex: 0, Action: "pong", Tile: "5w"},
+					Action: &clientv1.ActionNotify{SeatIndex: 0, Action: "pong", Tile: "5w"},
 				},
 			},
 			wantID: msgid.ActionNotify,
@@ -150,11 +144,11 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-set",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_Settlement{
-					Settlement: &clusterv1.SettlementEvent{
+					Settlement: &clientv1.SettlementNotify{
 						WinnerUserIds: []string{"u1"},
 						TotalFan:      4,
-						SeatScores:    []*clusterv1.SeatScore{{SeatIndex: 0}},
-						Penalties:     []*clusterv1.PenaltyItem{{Reason: "x"}},
+						SeatScores:    []*clientv1.SeatScore{{SeatIndex: 0}},
+						Penalties:     []*clientv1.PenaltyItem{{Reason: "x"}},
 					},
 				},
 			},
@@ -164,10 +158,10 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			name: "opening_done_exchange",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
-					OpeningDone: &clusterv1.OpeningDoneEvent{
+					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:    "exchange_three",
 						Kind:      "exchange_done",
-						SeatTiles: []*clusterv1.OpeningSeatTiles{{Key: "received", Seats: []*clusterv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"1m"}}}}},
+						SeatTiles: []*clientv1.OpeningSeatTiles{{Key: "received", Seats: []*clientv1.SeatTiles{{SeatIndex: 0, Tiles: []string{"1m"}}}}},
 					},
 				},
 			},
@@ -177,10 +171,10 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			name: "opening_done_que",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
-					OpeningDone: &clusterv1.OpeningDoneEvent{
+					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:   "que_men",
 						Kind:     "missing_suit_done",
-						SeatInts: []*clusterv1.OpeningSeatInts{{Key: "que_suit", Values: []int32{0, 1, 2, 0}}},
+						SeatInts: []*clientv1.OpeningSeatInts{{Key: "que_suit", Values: []int32{0, 1, 2, 0}}},
 					},
 				},
 			},
@@ -190,7 +184,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 			name: "route_redirect",
 			evt: &clusterv1.RoomServiceStreamEventsResponse{
 				Body: &clusterv1.RoomServiceStreamEventsResponse_RouteRedirect{
-					RouteRedirect: &clusterv1.RouteRedirectEvent{WsUrl: "ws://x", Reason: "moved"},
+					RouteRedirect: &clientv1.RouteRedirectNotify{WsUrl: "ws://x", Reason: "moved"},
 				},
 			},
 			wantID: msgid.RouteRedirectNotify,
@@ -228,9 +222,9 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 				RoomId: "r-progress",
 				Cursor: "r-progress:10",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_StartGame{
-					StartGame: &clusterv1.StartGameEvent{
+					StartGame: &clientv1.StartGameNotify{
 						DealerSeat:    0,
-						Phase:         clusterv1.Phase_PHASE_DRAW,
+						Phase:         clientv1.Phase_PHASE_DRAW,
 						Step:          10,
 						ActingSeats:   []int32{0},
 						WallRemaining: 55,
@@ -251,10 +245,10 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 				RoomId: "r-progress",
 				Cursor: "r-progress:11",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
-					DrawTile: &clusterv1.DrawTileEvent{
+					DrawTile: &clientv1.DrawTileNotify{
 						SeatIndex:      1,
 						Tile:           "p9",
-						Phase:          clusterv1.Phase_PHASE_DISCARD,
+						Phase:          clientv1.Phase_PHASE_DISCARD,
 						Step:           11,
 						ActingSeats:    []int32{1},
 						WallRemaining:  54,
@@ -277,11 +271,11 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 				RoomId: "r-progress",
 				Cursor: "r-progress:12",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_Action{
-					Action: &clusterv1.ActionEvent{
+					Action: &clientv1.ActionNotify{
 						SeatIndex:   1,
 						Action:      "discard",
 						Tile:        "p9",
-						Phase:       clusterv1.Phase_PHASE_DRAW,
+						Phase:       clientv1.Phase_PHASE_DRAW,
 						Step:        12,
 						ActingSeats: []int32{2},
 					},
@@ -300,11 +294,11 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 				RoomId: "r-progress",
 				Cursor: "r-progress:13",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
-					OpeningDone: &clusterv1.OpeningDoneEvent{
+					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:      "exchange_three",
 						Kind:        "exchange_done",
 						Params:      map[string]string{"direction": "3"},
-						Phase:       clusterv1.Phase_PHASE_OPENING,
+						Phase:       clientv1.Phase_PHASE_OPENING,
 						Step:        13,
 						ActingSeats: []int32{0, 1, 2, 3},
 					},
@@ -324,10 +318,10 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 				RoomId: "r-progress",
 				Cursor: "r-progress:14",
 				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
-					OpeningDone: &clusterv1.OpeningDoneEvent{
+					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:      "que_men",
 						Kind:        "missing_suit_done",
-						Phase:       clusterv1.Phase_PHASE_DRAW,
+						Phase:       clientv1.Phase_PHASE_DRAW,
 						Step:        14,
 						ActingSeats: []int32{0},
 					},
@@ -353,15 +347,17 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 	}
 }
 
-func TestClusterSeatInfoCarriesHandCount(t *testing.T) {
+// TestClientSeatInfoHandCount 验证 proto 统一后 client.v1.SeatInfo 直接携带 HandCount 字段，无须转换。
+func TestClientSeatInfoHandCount(t *testing.T) {
 	t.Parallel()
 
-	seats := clusterSeatsToClient([]*clusterv1.SeatInfo{{
+	// proto 统一后 cluster/v1 不再有独立的 SeatInfo，直接使用 client.v1.SeatInfo。
+	seats := []*clientv1.SeatInfo{{
 		SeatIndex: 1,
 		UserId:    "bot:r1:1",
 		Status:    "ready",
 		HandCount: 13,
-	}})
+	}}
 
 	require.Len(t, seats, 1)
 	require.EqualValues(t, 13, seats[0].GetHandCount())
@@ -428,14 +424,14 @@ func TestRemoteRoomGatewaySeatMemoryAndSeatTiles(t *testing.T) {
 	got, ok = g.userForSeat("r2", 0)
 	require.True(t, ok)
 	require.Equal(t, "u0-new", got, "旧版空 player_ids 快照不能清空已有定向映射")
-	g.rememberRoomSeatInfos("r2", []*clusterv1.SeatInfo{{SeatIndex: 2, UserId: "u2-seat"}})
+	g.rememberRoomSeatInfos("r2", []*clientv1.SeatInfo{{SeatIndex: 2, UserId: "u2-seat"}})
 	got, ok = g.userForSeat("r2", 2)
 	require.True(t, ok)
 	require.Equal(t, "u2-seat", got)
 	got, ok = g.userForSeat("r2", 0)
 	require.True(t, ok)
 	require.Equal(t, "u0-new", got, "room 进程部分快照不能清掉 lobby 已知座位")
-	g.rememberRoomSeatInfos("r2", []*clusterv1.SeatInfo{
+	g.rememberRoomSeatInfos("r2", []*clientv1.SeatInfo{
 		{SeatIndex: 1, UserId: "u1-final"},
 		{SeatIndex: 2, UserId: "u2-final"},
 		{SeatIndex: 3, UserId: "u3-final"},
@@ -446,7 +442,8 @@ func TestRemoteRoomGatewaySeatMemoryAndSeatTiles(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "u3-final", got)
 
-	items := clusterSeatTilesToClient([]*clusterv1.SeatTiles{{SeatIndex: 1, Tiles: []string{"m1", "p2"}}})
+	// proto 统一后 SeatTiles 直接使用 client.v1 类型，无须 clusterSeatTilesToClient 转换。
+	items := []*clientv1.SeatTiles{{SeatIndex: 1, Tiles: []string{"m1", "p2"}}}
 	require.Len(t, items, 1)
 	require.Equal(t, int32(1), items[0].GetSeatIndex())
 	require.Equal(t, []string{"m1", "p2"}, items[0].GetTiles())
@@ -589,7 +586,7 @@ func (f *fakeAutoMatchLobby) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequ
 }
 
 func (f *fakeAutoMatchLobby) ListRooms(_ context.Context, _ *clusterv1.ListRoomsRequest, _ ...grpc.CallOption) (*clusterv1.ListRoomsResponse, error) {
-	return &clusterv1.ListRoomsResponse{Rooms: []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}}, nil
+	return &clusterv1.ListRoomsResponse{Rooms: []*clientv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}}, nil
 }
 
 func (f *fakeAutoMatchLobby) ListRules(_ context.Context, _ *clusterv1.ListRulesRequest, _ ...grpc.CallOption) (*clusterv1.ListRulesResponse, error) {
@@ -639,13 +636,13 @@ func (f *fakeLobbyClient) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequest
 
 func (f *fakeLobbyClient) ListRooms(_ context.Context, _ *clusterv1.ListRoomsRequest, _ ...grpc.CallOption) (*clusterv1.ListRoomsResponse, error) {
 	return &clusterv1.ListRoomsResponse{
-		Rooms:         []*clusterv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}},
+		Rooms:         []*clientv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}},
 		NextPageToken: "next",
 	}, nil
 }
 
 func (f *fakeLobbyClient) ListRules(_ context.Context, _ *clusterv1.ListRulesRequest, _ ...grpc.CallOption) (*clusterv1.ListRulesResponse, error) {
-	return &clusterv1.ListRulesResponse{Rules: []*clusterv1.RuleMeta{{RuleId: "sichuan_xuezhandaodi_huansanzhang"}}}, nil
+	return &clusterv1.ListRulesResponse{Rules: []*clientv1.RuleMeta{{RuleId: "sichuan_xuezhandaodi_huansanzhang"}}}, nil
 }
 
 func (f *fakeLobbyClient) AutoMatch(_ context.Context, _ *clusterv1.AutoMatchRequest, _ ...grpc.CallOption) (*clusterv1.AutoMatchResponse, error) {

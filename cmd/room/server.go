@@ -154,21 +154,8 @@ func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID strin
 		}
 	}
 	if notification.Kind == roomsvc.KindSettlement && s.st != nil && evt.GetSettlement() != nil {
-		st := evt.GetSettlement()
-		if err := s.st.AppendSettlement(ctx, &clientv1.SettlementNotify{
-			RoomId:        roomID,
-			WinnerUserIds: append([]string(nil), st.GetWinnerUserIds()...),
-			TotalFan:      st.GetTotalFan(),
-			SeatScores:    clusterSeatScoresToClient(st.GetSeatScores()),
-			Penalties:     clusterPenaltiesToClient(st.GetPenalties()),
-			DetailText:    st.GetDetailText(),
-			PerWinnerBreakdown: clusterWinnerBreakdownsToClient(
-				st.GetPerWinnerBreakdown(),
-			),
-			RoundIndex:  st.GetRoundIndex(),
-			HandIndex:   st.GetHandIndex(),
-			TotalScores: clusterSeatScoresToClient(st.GetTotalScores()),
-		}); err != nil {
+		// evt.GetSettlement() 已是 *clientv1.SettlementNotify，直接持久化。
+		if err := s.st.AppendSettlement(ctx, evt.GetSettlement()); err != nil {
 			logx.Error(logx.WithRoomID(ctx, roomID), "结算数据持久化失败", "err", err.Error())
 		}
 	}
@@ -238,67 +225,6 @@ func openingSeatInts(done *clientv1.OpeningDoneNotify, key string) []int32 {
 	return nil
 }
 
-func clientOpeningDoneToCluster(done *clientv1.OpeningDoneNotify) *clusterv1.OpeningDoneEvent {
-	if done == nil {
-		return nil
-	}
-	return &clusterv1.OpeningDoneEvent{
-		Action:      done.GetAction(),
-		StepId:      done.GetStepId(),
-		Kind:        done.GetKind(),
-		Params:      cloneStringMap(done.GetParams()),
-		SeatTiles:   clientOpeningSeatTilesToCluster(done.GetSeatTiles()),
-		SeatInts:    clientOpeningSeatIntsToCluster(done.GetSeatInts()),
-		LocalTiles:  clientOpeningLocalTilesToCluster(done.GetLocalTiles()),
-		Phase:       clientPhaseToCluster(done.GetPhase()),
-		Step:        done.GetStep(),
-		ActingSeats: append([]int32(nil), done.GetActingSeats()...),
-		PhaseUpdate: clientPhaseUpdateToCluster(done.GetPhaseUpdate()),
-	}
-}
-
-func clientOpeningSeatTilesToCluster(in []*clientv1.OpeningSeatTiles) []*clusterv1.OpeningSeatTiles {
-	out := make([]*clusterv1.OpeningSeatTiles, 0, len(in))
-	for _, group := range in {
-		seats := make([]*clusterv1.SeatTiles, 0, len(group.GetSeats()))
-		for _, item := range group.GetSeats() {
-			seats = append(seats, &clusterv1.SeatTiles{
-				SeatIndex: item.GetSeatIndex(),
-				Tiles:     append([]string(nil), item.GetTiles()...),
-			})
-		}
-		out = append(out, &clusterv1.OpeningSeatTiles{Key: group.GetKey(), Seats: seats})
-	}
-	return out
-}
-
-func clientOpeningSeatIntsToCluster(in []*clientv1.OpeningSeatInts) []*clusterv1.OpeningSeatInts {
-	out := make([]*clusterv1.OpeningSeatInts, 0, len(in))
-	for _, group := range in {
-		out = append(out, &clusterv1.OpeningSeatInts{Key: group.GetKey(), Values: append([]int32(nil), group.GetValues()...)})
-	}
-	return out
-}
-
-func clientOpeningLocalTilesToCluster(in []*clientv1.OpeningLocalTiles) []*clusterv1.OpeningLocalTiles {
-	out := make([]*clusterv1.OpeningLocalTiles, 0, len(in))
-	for _, group := range in {
-		out = append(out, &clusterv1.OpeningLocalTiles{Key: group.GetKey(), Tiles: append([]string(nil), group.GetTiles()...)})
-	}
-	return out
-}
-
-func cloneStringMap(in map[string]string) map[string]string {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
 // SnapshotRoom - 返回快照游标与房间摘要；无持久化时退化为内存视图。
 func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.SnapshotRoomRequest) (*clusterv1.SnapshotRoomResponse, error) {
 	if s == nil || s.rooms == nil {
@@ -328,8 +254,8 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					}
 				}
 				mySeat := seatIndexForUser(meta.PlayerIDs, req.GetUserId())
-				seats := clusterSeatsFromPlayerIDs(meta.PlayerIDs, [4]bool{}, meta.State)
-				applyHandCountsToClusterSeats(seats, view.HandsBySeat)
+				seats := clientSeatsFromPlayerIDs(meta.PlayerIDs, [4]bool{}, meta.State)
+				applyHandCountsToClientSeats(seats, view.HandsBySeat)
 				return &clusterv1.SnapshotRoomResponse{
 					Cursor:           cur,
 					PlayerIds:        append([]string(nil), meta.PlayerIDs...),
@@ -338,24 +264,24 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 					State:            meta.State,
 					ActingSeat:       view.ActingSeat,
 					WaitingAction:    view.WaitingAction,
-					Phase:            clientPhaseToCluster(view.Phase),
+					Phase:            view.Phase,
 					ActingSeats:      append([]int32(nil), view.ActingSeats...),
 					LastStep:         view.LastStep,
 					PendingTile:      view.PendingTile,
 					AvailableActions: append([]string(nil), view.AvailableActions...),
-					ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
+					ClaimCandidates:  clientClaimCandidates(view.ClaimCandidates),
 					YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
-					DiscardsBySeat:   stringMatrixToClusterSeatTiles(view.DiscardsBySeat),
-					MeldsBySeat:      stringMatrixToClusterSeatTiles(view.MeldsBySeat),
-					MeldInfosBySeat:  clientSeatMeldsToCluster(view.MeldInfosBySeat),
-					LastAction:       clientLastActionToCluster(view.LastAction),
+					DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
+					MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
+					MeldInfosBySeat:  view.MeldInfosBySeat,
+					LastAction:       view.LastAction,
 					WallRemaining:    view.WallRemaining,
 					DeadlineUnixMs:   view.DeadlineUnixMs,
 					PhaseUpdate:      phaseUpdateFromRoundView(view),
 					RoundIndex:       view.RoundIndex,
 					HandIndex:        view.HandIndex,
-					TotalScores:      clientSeatScoresToCluster(view.TotalScores),
-					RuleMeta:         clientRuleMetaToCluster(view.RuleMeta),
+					TotalScores:      view.TotalScores,
+					RuleMeta:         view.RuleMeta,
 				}, nil
 			}
 		}
@@ -374,8 +300,8 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	qs := pickLastQueSuits(ctx, s, roomID)
 	view, _, _ := s.rooms.RoundView(ctx, roomID)
 	mySeat := seatIndexForUser(players, req.GetUserId())
-	seats := clusterSeatsFromPlayerIDs(players, ready, state)
-	applyHandCountsToClusterSeats(seats, view.HandsBySeat)
+	seats := clientSeatsFromPlayerIDs(players, ready, state)
+	applyHandCountsToClientSeats(seats, view.HandsBySeat)
 	return &clusterv1.SnapshotRoomResponse{
 		Cursor:           cur,
 		PlayerIds:        players,
@@ -384,24 +310,24 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 		State:            state,
 		ActingSeat:       view.ActingSeat,
 		WaitingAction:    view.WaitingAction,
-		Phase:            clientPhaseToCluster(view.Phase),
+		Phase:            view.Phase,
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
 		LastStep:         view.LastStep,
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),
-		ClaimCandidates:  roomClaimCandidatesToCluster(view.ClaimCandidates),
+		ClaimCandidates:  clientClaimCandidates(view.ClaimCandidates),
 		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
-		DiscardsBySeat:   stringMatrixToClusterSeatTiles(view.DiscardsBySeat),
-		MeldsBySeat:      stringMatrixToClusterSeatTiles(view.MeldsBySeat),
-		MeldInfosBySeat:  clientSeatMeldsToCluster(view.MeldInfosBySeat),
-		LastAction:       clientLastActionToCluster(view.LastAction),
+		DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
+		MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
+		MeldInfosBySeat:  view.MeldInfosBySeat,
+		LastAction:       view.LastAction,
 		WallRemaining:    view.WallRemaining,
 		DeadlineUnixMs:   view.DeadlineUnixMs,
 		PhaseUpdate:      phaseUpdateFromRoundView(view),
 		RoundIndex:       view.RoundIndex,
 		HandIndex:        view.HandIndex,
-		TotalScores:      clientSeatScoresToCluster(view.TotalScores),
-		RuleMeta:         clientRuleMetaToCluster(view.RuleMeta),
+		TotalScores:      view.TotalScores,
+		RuleMeta:         view.RuleMeta,
 	}, nil
 }
 
@@ -421,30 +347,13 @@ func handForSeat(hands [][]string, seat int) []string {
 	return append([]string(nil), hands[seat]...)
 }
 
-func clientPhaseToCluster(phase clientv1.Phase) clusterv1.Phase {
-	return clusterv1.Phase(phase.Number())
-}
-
-func clientPhaseUpdateToCluster(pu *clientv1.PhaseUpdate) *clusterv1.PhaseUpdate {
-	if pu == nil {
-		return nil
-	}
-	return &clusterv1.PhaseUpdate{
-		Phase:            clientPhaseToCluster(pu.GetPhase()),
-		Step:             pu.GetStep(),
-		Reason:           clientWaitingReasonToCluster(pu.GetReason()),
-		DeadlineUnixMs:   pu.GetDeadlineUnixMs(),
-		ServerNowUnixMs:  pu.GetServerNowUnixMs(),
-		ActingSeats:      append([]int32(nil), pu.GetActingSeats()...),
-		AvailableActions: append([]string(nil), pu.GetAvailableActions()...),
-	}
-}
-
-func phaseUpdateFromRoundView(view roomsvc.RoundView) *clusterv1.PhaseUpdate {
-	return &clusterv1.PhaseUpdate{
-		Phase:            clientPhaseToCluster(view.Phase),
+// phaseUpdateFromRoundView 从 RoundView 派生 PhaseUpdate；
+// view.Phase 与 waitingReasonFromRoundView 均返回 clientv1 类型，无须转译。
+func phaseUpdateFromRoundView(view roomsvc.RoundView) *clientv1.PhaseUpdate {
+	return &clientv1.PhaseUpdate{
+		Phase:            view.Phase,
 		Step:             view.LastStep,
-		Reason:           clientWaitingReasonToCluster(waitingReasonFromRoundView(view)),
+		Reason:           waitingReasonFromRoundView(view),
 		DeadlineUnixMs:   view.DeadlineUnixMs,
 		ServerNowUnixMs:  time.Now().UnixMilli(),
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
@@ -468,27 +377,11 @@ func waitingReasonFromRoundView(view roomsvc.RoundView) clientv1.WaitingReason {
 	}
 }
 
-func clientWaitingReasonToCluster(reason clientv1.WaitingReason) clusterv1.WaitingReason {
-	switch reason {
-	case clientv1.WaitingReason_WAITING_REASON_OPENING:
-		return clusterv1.WaitingReason_WAITING_REASON_OPENING
-	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
-		return clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
-	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
-		return clusterv1.WaitingReason_WAITING_REASON_TSUMO
-	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
-		return clusterv1.WaitingReason_WAITING_REASON_DISCARD
-	case clientv1.WaitingReason_WAITING_REASON_SURRENDER:
-		return clusterv1.WaitingReason_WAITING_REASON_SURRENDER
-	default:
-		return clusterv1.WaitingReason_WAITING_REASON_NONE
-	}
-}
-
-func clusterSeatsFromPlayerIDs(players []string, ready [4]bool, fsmState string) []*clusterv1.SeatInfo {
-	seats := make([]*clusterv1.SeatInfo, 0, 4)
+// clientSeatsFromPlayerIDs 将玩家列表映射为座位信息切片，供快照响应使用；空座位填占位结构。
+func clientSeatsFromPlayerIDs(players []string, ready [4]bool, fsmState string) []*clientv1.SeatInfo {
+	seats := make([]*clientv1.SeatInfo, 0, 4)
 	for i := 0; i < 4; i++ {
-		info := &clusterv1.SeatInfo{SeatIndex: int32(i), Status: "empty"} //nolint:gosec // 固定座位范围 0..3
+		info := &clientv1.SeatInfo{SeatIndex: int32(i), Status: "empty"} //nolint:gosec // 固定座位范围 0..3
 		if i < len(players) {
 			info.UserId = players[i]
 			if players[i] != "" {
@@ -504,7 +397,7 @@ func clusterSeatsFromPlayerIDs(players []string, ready [4]bool, fsmState string)
 	return seats
 }
 
-func applyHandCountsToClusterSeats(seats []*clusterv1.SeatInfo, hands [][]string) {
+func applyHandCountsToClientSeats(seats []*clientv1.SeatInfo, hands [][]string) {
 	for _, seat := range seats {
 		idx := int(seat.GetSeatIndex())
 		if idx >= 0 && idx < len(hands) {
@@ -513,14 +406,14 @@ func applyHandCountsToClusterSeats(seats []*clusterv1.SeatInfo, hands [][]string
 	}
 }
 
-func stringMatrixToClusterSeatTiles(items [][]string) []*clusterv1.SeatTiles {
-	out := make([]*clusterv1.SeatTiles, 0, 4)
+func stringMatrixToClientSeatTiles(items [][]string) []*clientv1.SeatTiles {
+	out := make([]*clientv1.SeatTiles, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		var tiles []string
 		if seat < len(items) {
 			tiles = append([]string(nil), items[seat]...)
 		}
-		out = append(out, &clusterv1.SeatTiles{
+		out = append(out, &clientv1.SeatTiles{
 			SeatIndex: int32(seat), //nolint:gosec // 座位范围固定
 			Tiles:     tiles,
 		})
@@ -680,7 +573,8 @@ func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*clusterv1.RoomS
 	return mapNotificationToEvent(roomID, cur, n)
 }
 
-// mapNotificationToEvent 将 room worker 产出的 client 通知翻译为 cluster 抽象事件。
+// mapNotificationToEvent 将 room worker 产出的通知封装为流式事件帧；
+// proto 统一后 body 字段直接使用客户端消息类型，无须字段转译。
 func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.Notification) (*clusterv1.RoomServiceStreamEventsResponse, error) {
 	var env clientv1.Envelope
 	if err := proto.Unmarshal(notification.Payload, &env); err != nil {
@@ -694,74 +588,27 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 	switch notification.Kind {
 	case roomsvc.KindInitialDeal:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_InitialDeal{
-			InitialDeal: &clusterv1.InitialDealEvent{
-				SeatIndex: env.GetInitialDeal().GetSeatIndex(),
-				Tiles:     append([]string(nil), env.GetInitialDeal().GetTiles()...),
-				Step:      env.GetInitialDeal().GetStep(),
-			},
+			InitialDeal: env.GetInitialDeal(),
 		}
 	case roomsvc.KindOpeningDone:
-		done := env.GetOpeningDone()
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
-			OpeningDone: clientOpeningDoneToCluster(done),
+			OpeningDone: env.GetOpeningDone(),
 		}
 	case roomsvc.KindStartGame:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_StartGame{
-			StartGame: &clusterv1.StartGameEvent{
-				DealerSeat:    env.GetStartGame().GetDealerSeat(),
-				Phase:         clientPhaseToCluster(env.GetStartGame().GetPhase()),
-				Step:          env.GetStartGame().GetStep(),
-				ActingSeats:   append([]int32(nil), env.GetStartGame().GetActingSeats()...),
-				WallRemaining: env.GetStartGame().GetWallRemaining(),
-				RoundIndex:    env.GetStartGame().GetRoundIndex(),
-				HandIndex:     env.GetStartGame().GetHandIndex(),
-				RuleMeta:      clientRuleMetaToCluster(env.GetStartGame().GetRuleMeta()),
-				PhaseUpdate:   clientPhaseUpdateToCluster(env.GetStartGame().GetPhaseUpdate()),
-			},
+			StartGame: env.GetStartGame(),
 		}
 	case roomsvc.KindDrawTile:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
-			DrawTile: &clusterv1.DrawTileEvent{
-				SeatIndex:      env.GetDrawTile().GetSeatIndex(),
-				Tile:           env.GetDrawTile().GetTile(),
-				WallRemaining:  env.GetDrawTile().GetWallRemaining(),
-				DeadlineUnixMs: env.GetDrawTile().GetDeadlineUnixMs(),
-				Phase:          clientPhaseToCluster(env.GetDrawTile().GetPhase()),
-				Step:           env.GetDrawTile().GetStep(),
-				ActingSeats:    append([]int32(nil), env.GetDrawTile().GetActingSeats()...),
-				PhaseUpdate:    clientPhaseUpdateToCluster(env.GetDrawTile().GetPhaseUpdate()),
-			},
+			DrawTile: env.GetDrawTile(),
 		}
 	case roomsvc.KindAction:
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_Action{
-			Action: &clusterv1.ActionEvent{
-				SeatIndex:      env.GetAction().GetSeatIndex(),
-				Action:         env.GetAction().GetAction(),
-				Tile:           env.GetAction().GetTile(),
-				Detail:         clientActionDetailToCluster(env.GetAction().GetDetail()),
-				WallRemaining:  env.GetAction().GetWallRemaining(),
-				DeadlineUnixMs: env.GetAction().GetDeadlineUnixMs(),
-				Phase:          clientPhaseToCluster(env.GetAction().GetPhase()),
-				Step:           env.GetAction().GetStep(),
-				ActingSeats:    append([]int32(nil), env.GetAction().GetActingSeats()...),
-				PhaseUpdate:    clientPhaseUpdateToCluster(env.GetAction().GetPhaseUpdate()),
-			},
+			Action: env.GetAction(),
 		}
 	case roomsvc.KindSettlement:
-		settlement := env.GetSettlement()
 		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_Settlement{
-			Settlement: &clusterv1.SettlementEvent{
-				WinnerUserIds:      append([]string(nil), settlement.GetWinnerUserIds()...),
-				TotalFan:           settlement.GetTotalFan(),
-				DetailText:         settlement.GetDetailText(),
-				SeatScores:         clientSeatScoresToCluster(settlement.GetSeatScores()),
-				Penalties:          clientPenaltiesToCluster(settlement.GetPenalties()),
-				PerWinnerBreakdown: clientWinnerBreakdownsToCluster(settlement.GetPerWinnerBreakdown()),
-				RoundIndex:         settlement.GetRoundIndex(),
-				HandIndex:          settlement.GetHandIndex(),
-				TotalScores:        clientSeatScoresToCluster(settlement.GetTotalScores()),
-				PhaseUpdate:        clientPhaseUpdateToCluster(settlement.GetPhaseUpdate()),
-			},
+			Settlement: env.GetSettlement(),
 		}
 	default:
 		return nil, fmt.Errorf("unsupported notification kind: %s", notification.Kind)
@@ -769,152 +616,13 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 	return resp, nil
 }
 
-func roomClaimCandidatesToCluster(candidates []roomsvc.RoundClaimCandidate) []*clusterv1.ClaimCandidate {
-	out := make([]*clusterv1.ClaimCandidate, 0, len(candidates))
+// clientClaimCandidates 把当前回合可碰/杠/胡的候选列表转换为协议格式。
+func clientClaimCandidates(candidates []roomsvc.RoundClaimCandidate) []*clientv1.ClaimCandidate {
+	out := make([]*clientv1.ClaimCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		out = append(out, &clusterv1.ClaimCandidate{
+		out = append(out, &clientv1.ClaimCandidate{
 			SeatIndex: candidate.Seat,
 			Actions:   append([]string(nil), candidate.Actions...),
-		})
-	}
-	return out
-}
-
-func clientSeatScoresToCluster(scores []*clientv1.SeatScore) []*clusterv1.SeatScore {
-	out := make([]*clusterv1.SeatScore, 0, len(scores))
-	for _, score := range scores {
-		out = append(out, &clusterv1.SeatScore{
-			SeatIndex: score.GetSeatIndex(),
-			UserId:    score.GetUserId(),
-			TotalFan:  score.GetTotalFan(),
-			Skipped:   score.GetSkipped(),
-		})
-	}
-	return out
-}
-
-func clientRuleMetaToCluster(meta *clientv1.RuleMeta) *clusterv1.RuleMeta {
-	if meta == nil {
-		return nil
-	}
-	return &clusterv1.RuleMeta{
-		RuleId:          meta.GetRuleId(),
-		DisplayName:     meta.GetDisplayName(),
-		ShortDesc:       meta.GetShortDesc(),
-		EnabledFeatures: append([]string(nil), meta.GetEnabledFeatures()...),
-		MaxHands:        meta.GetMaxHands(),
-	}
-}
-
-func clientActionDetailToCluster(detail *clientv1.ActionDetail) *clusterv1.ActionDetail {
-	if detail == nil {
-		return nil
-	}
-	return &clusterv1.ActionDetail{
-		Step:        detail.GetStep(),
-		ActorSeat:   detail.GetActorSeat(),
-		Action:      detail.GetAction(),
-		Tile:        detail.GetTile(),
-		TargetSeat:  detail.GetTargetSeat(),
-		SourceSeat:  detail.GetSourceSeat(),
-		CreatedAtMs: detail.GetCreatedAtMs(),
-	}
-}
-
-func clientLastActionToCluster(action *clientv1.LastActionInfo) *clusterv1.LastActionInfo {
-	if action == nil {
-		return nil
-	}
-	return &clusterv1.LastActionInfo{
-		Step:        action.GetStep(),
-		ActorSeat:   action.GetActorSeat(),
-		Action:      action.GetAction(),
-		Tile:        action.GetTile(),
-		TargetSeat:  action.GetTargetSeat(),
-		SourceSeat:  action.GetSourceSeat(),
-		CreatedAtMs: action.GetCreatedAtMs(),
-	}
-}
-
-func clientSeatMeldsToCluster(items []*clientv1.SeatMelds) []*clusterv1.SeatMelds {
-	out := make([]*clusterv1.SeatMelds, 0, len(items))
-	for _, item := range items {
-		melds := make([]*clusterv1.MeldInfo, 0, len(item.GetMelds()))
-		for _, meld := range item.GetMelds() {
-			melds = append(melds, &clusterv1.MeldInfo{
-				SeatIndex:       meld.GetSeatIndex(),
-				Kind:            meld.GetKind(),
-				Tiles:           append([]string(nil), meld.GetTiles()...),
-				ClaimedFromSeat: meld.GetClaimedFromSeat(),
-				Concealed:       meld.GetConcealed(),
-				Step:            meld.GetStep(),
-			})
-		}
-		out = append(out, &clusterv1.SeatMelds{SeatIndex: item.GetSeatIndex(), Melds: melds})
-	}
-	return out
-}
-
-func clusterSeatScoresToClient(scores []*clusterv1.SeatScore) []*clientv1.SeatScore {
-	out := make([]*clientv1.SeatScore, 0, len(scores))
-	for _, score := range scores {
-		out = append(out, &clientv1.SeatScore{
-			SeatIndex: score.GetSeatIndex(),
-			UserId:    score.GetUserId(),
-			TotalFan:  score.GetTotalFan(),
-			Skipped:   score.GetSkipped(),
-		})
-	}
-	return out
-}
-
-func clientPenaltiesToCluster(penalties []*clientv1.PenaltyItem) []*clusterv1.PenaltyItem {
-	out := make([]*clusterv1.PenaltyItem, 0, len(penalties))
-	for _, penalty := range penalties {
-		out = append(out, &clusterv1.PenaltyItem{
-			Reason:   penalty.GetReason(),
-			FromSeat: penalty.GetFromSeat(),
-			ToSeat:   penalty.GetToSeat(),
-			Amount:   penalty.GetAmount(),
-		})
-	}
-	return out
-}
-
-func clusterPenaltiesToClient(penalties []*clusterv1.PenaltyItem) []*clientv1.PenaltyItem {
-	out := make([]*clientv1.PenaltyItem, 0, len(penalties))
-	for _, penalty := range penalties {
-		out = append(out, &clientv1.PenaltyItem{
-			Reason:   penalty.GetReason(),
-			FromSeat: penalty.GetFromSeat(),
-			ToSeat:   penalty.GetToSeat(),
-			Amount:   penalty.GetAmount(),
-		})
-	}
-	return out
-}
-
-func clientWinnerBreakdownsToCluster(items []*clientv1.WinnerBreakdown) []*clusterv1.WinnerBreakdown {
-	out := make([]*clusterv1.WinnerBreakdown, 0, len(items))
-	for _, item := range items {
-		out = append(out, &clusterv1.WinnerBreakdown{
-			SeatIndex: item.GetSeatIndex(),
-			UserId:    item.GetUserId(),
-			Fan:       item.GetFan(),
-			FanNames:  append([]string(nil), item.GetFanNames()...),
-		})
-	}
-	return out
-}
-
-func clusterWinnerBreakdownsToClient(items []*clusterv1.WinnerBreakdown) []*clientv1.WinnerBreakdown {
-	out := make([]*clientv1.WinnerBreakdown, 0, len(items))
-	for _, item := range items {
-		out = append(out, &clientv1.WinnerBreakdown{
-			SeatIndex: item.GetSeatIndex(),
-			UserId:    item.GetUserId(),
-			Fan:       item.GetFan(),
-			FanNames:  append([]string(nil), item.GetFanNames()...),
 		})
 	}
 	return out

@@ -200,15 +200,19 @@ func TestSnapshotRoomIncludesRoundView(t *testing.T) {
 	require.Contains(t, snap.GetAvailableActions(), "exchange_three")
 }
 
-func TestClusterToClientConverters(t *testing.T) {
+// TestProtoTypesDirectUsageInRoom 验证 proto 统一后，结算相关消息类型可在 room 侧直接构造与读取，
+// 不再需要 cluster 层的冗余转换函数。
+func TestProtoTypesDirectUsageInRoom(t *testing.T) {
 	t.Parallel()
 
-	scores := clusterSeatScoresToClient([]*clusterv1.SeatScore{{SeatIndex: 1, UserId: "u1", TotalFan: 8, Skipped: true}})
+	// 座位分数：直接构造客户端类型，字段完整可读。
+	scores := []*clientv1.SeatScore{{SeatIndex: 1, UserId: "u1", TotalFan: 8, Skipped: true}}
 	require.Equal(t, "u1", scores[0].GetUserId())
 	require.EqualValues(t, 8, scores[0].GetTotalFan())
 	require.True(t, scores[0].GetSkipped())
 
-	penalties := clusterPenaltiesToClient([]*clusterv1.PenaltyItem{{Reason: "查大叫", FromSeat: 0, ToSeat: 2, Amount: 16}})
+	// 罚分条目：直接构造客户端类型，字段完整可读。
+	penalties := []*clientv1.PenaltyItem{{Reason: "查大叫", FromSeat: 0, ToSeat: 2, Amount: 16}}
 	require.Equal(t, "查大叫", penalties[0].GetReason())
 	require.EqualValues(t, 16, penalties[0].GetAmount())
 }
@@ -247,7 +251,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetStartGame().GetPhase())
+				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetStartGame().GetPhase())
 				require.EqualValues(t, 10, evt.GetStartGame().GetStep())
 				require.Equal(t, []int32{0}, evt.GetStartGame().GetActingSeats())
 				require.EqualValues(t, 55, evt.GetStartGame().GetWallRemaining())
@@ -265,7 +269,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clusterv1.Phase_PHASE_DISCARD, evt.GetDrawTile().GetPhase())
+				require.Equal(t, clientv1.Phase_PHASE_DISCARD, evt.GetDrawTile().GetPhase())
 				require.EqualValues(t, 11, evt.GetDrawTile().GetStep())
 				require.Equal(t, []int32{1}, evt.GetDrawTile().GetActingSeats())
 				require.EqualValues(t, 54, evt.GetDrawTile().GetWallRemaining())
@@ -285,7 +289,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetAction().GetPhase())
+				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetAction().GetPhase())
 				require.EqualValues(t, 12, evt.GetAction().GetStep())
 				require.Equal(t, []int32{2}, evt.GetAction().GetActingSeats())
 			},
@@ -303,7 +307,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clusterv1.Phase_PHASE_OPENING, evt.GetOpeningDone().GetPhase())
+				require.Equal(t, clientv1.Phase_PHASE_OPENING, evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 13, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0, 1, 2, 3}, evt.GetOpeningDone().GetActingSeats())
 				require.Equal(t, "3", evt.GetOpeningDone().GetParams()["direction"])
@@ -321,7 +325,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clusterv1.Phase_PHASE_DRAW, evt.GetOpeningDone().GetPhase())
+				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 14, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0}, evt.GetOpeningDone().GetActingSeats())
 			},

@@ -180,7 +180,7 @@ func (g *remoteRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageT
 	if resp.GetError() != "" {
 		return nil, "", errors.New(resp.GetError())
 	}
-	return clusterRoomMetasToClient(resp.GetRooms()), resp.GetNextPageToken(), nil
+	return resp.GetRooms(), resp.GetNextPageToken(), nil
 }
 
 func (g *remoteRoomGateway) ListRules(ctx context.Context) ([]*clientv1.RuleMeta, error) {
@@ -199,7 +199,7 @@ func (g *remoteRoomGateway) ListRules(ctx context.Context) ([]*clientv1.RuleMeta
 	if resp.GetError() != "" {
 		return nil, errors.New(resp.GetError())
 	}
-	return clusterRuleMetasToClient(resp.GetRules()), nil
+	return resp.GetRules(), nil
 }
 
 func (g *remoteRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error) {
@@ -316,7 +316,7 @@ func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, c
 	if resp.GetError() != "" {
 		return nil, nil, errors.New(resp.GetError())
 	}
-	added := clusterSeatsToClient(resp.GetAdded())
+	added := resp.GetAdded()
 	after := func() {
 		for _, seat := range resp.GetAdded() {
 			if seat.GetUserId() == "" {
@@ -504,7 +504,7 @@ func (g *remoteRoomGateway) Discard(ctx context.Context, roomID, userID, tile st
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
+		PhaseToken: tok,
 		Body:       &clusterv1.ApplyEventRequest_Discard{Discard: &clusterv1.DiscardEvent{Tile: tile}},
 	})
 }
@@ -514,7 +514,7 @@ func (g *remoteRoomGateway) Pong(ctx context.Context, roomID, userID string, tok
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
+		PhaseToken: tok,
 		Body:       &clusterv1.ApplyEventRequest_Pong{Pong: &clusterv1.PongEvent{}},
 	})
 }
@@ -524,7 +524,7 @@ func (g *remoteRoomGateway) Chi(ctx context.Context, roomID, userID string, tile
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
+		PhaseToken: tok,
 		Body:       &clusterv1.ApplyEventRequest_Chi{Chi: &clusterv1.ChiEvent{Tiles: append([]string(nil), tiles...)}},
 	})
 }
@@ -534,7 +534,7 @@ func (g *remoteRoomGateway) Gang(ctx context.Context, roomID, userID, tile strin
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
+		PhaseToken: tok,
 		Body:       &clusterv1.ApplyEventRequest_Gang{Gang: &clusterv1.GangEvent{Tile: tile}},
 	})
 }
@@ -544,7 +544,7 @@ func (g *remoteRoomGateway) Hu(ctx context.Context, roomID, userID string, tok *
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
+		PhaseToken: tok,
 		Body:       &clusterv1.ApplyEventRequest_Hu{Hu: &clusterv1.HuEvent{}},
 	})
 }
@@ -553,7 +553,7 @@ func (g *remoteRoomGateway) Pass(ctx context.Context, roomID, userID string, tok
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
+		PhaseToken: tok,
 		Body:       &clusterv1.ApplyEventRequest_Pass{Pass: &clusterv1.PassEvent{}},
 	})
 }
@@ -562,7 +562,7 @@ func (g *remoteRoomGateway) OpeningAction(ctx context.Context, roomID, userID, a
 	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
-		PhaseToken: clientPhaseTokToCluster(tok),
+		PhaseToken: tok,
 		Body: &clusterv1.ApplyEventRequest_OpeningAction{OpeningAction: &clusterv1.OpeningActionEvent{
 			Action:    action,
 			Tiles:     append([]string(nil), tiles...),
@@ -571,30 +571,6 @@ func (g *remoteRoomGateway) OpeningAction(ctx context.Context, roomID, userID, a
 			Params:    cloneStringMap(params),
 		}},
 	})
-}
-
-// clientPhaseTokToCluster 把客户端透传过来的 PhaseToken 镜像到集群层；nil 时透传 nil。
-// 两侧 WaitingReason 枚举数值不一致，需逐项映射；详见 ADR-0045。
-func clientPhaseTokToCluster(tok *clientv1.PhaseToken) *clusterv1.PhaseToken {
-	if tok == nil {
-		return nil
-	}
-	var reason clusterv1.WaitingReason
-	switch tok.GetReason() {
-	case clientv1.WaitingReason_WAITING_REASON_OPENING:
-		reason = clusterv1.WaitingReason_WAITING_REASON_OPENING
-	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
-		reason = clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
-	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
-		reason = clusterv1.WaitingReason_WAITING_REASON_TSUMO
-	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
-		reason = clusterv1.WaitingReason_WAITING_REASON_DISCARD
-	case clientv1.WaitingReason_WAITING_REASON_SURRENDER:
-		reason = clusterv1.WaitingReason_WAITING_REASON_SURRENDER
-	default:
-		reason = clusterv1.WaitingReason_WAITING_REASON_NONE
-	}
-	return &clusterv1.PhaseToken{Step: tok.GetStep(), Reason: reason}
 }
 
 func (g *remoteRoomGateway) applyRoomEvent(ctx context.Context, req *clusterv1.ApplyEventRequest) (func(), error) {
@@ -732,10 +708,11 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		}
 		return nil, &handler.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: snapResp.GetError()}
 	}
+	// SnapshotRoomResponse 所有字段已与 client.v1 类型统一，无须转译。
 	snap := &clientv1.SnapshotNotify{
 		RoomId:           srec.RoomID,
 		PlayerIds:        append([]string(nil), snapResp.GetPlayerIds()...),
-		Seats:            clusterSeatsToClient(snapResp.GetSeats()),
+		Seats:            snapResp.GetSeats(),
 		QueSuitBySeat:    append([]int32(nil), snapResp.GetQueSuitBySeat()...),
 		Cursor:           snapResp.GetCursor(),
 		State:            snapResp.GetState(),
@@ -743,22 +720,22 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		WaitingAction:    snapResp.GetWaitingAction(),
 		PendingTile:      snapResp.GetPendingTile(),
 		AvailableActions: append([]string(nil), snapResp.GetAvailableActions()...),
-		ClaimCandidates:  clusterClaimCandidatesToClient(snapResp.GetClaimCandidates()),
+		ClaimCandidates:  snapResp.GetClaimCandidates(),
 		YourHandTiles:    append([]string(nil), snapResp.GetYourHandTiles()...),
-		DiscardsBySeat:   clusterSeatTilesToClient(snapResp.GetDiscardsBySeat()),
-		MeldsBySeat:      clusterSeatTilesToClient(snapResp.GetMeldsBySeat()),
-		MeldInfosBySeat:  clusterSeatMeldsToClient(snapResp.GetMeldInfosBySeat()),
-		LastAction:       clusterLastActionToClient(snapResp.GetLastAction()),
+		DiscardsBySeat:   snapResp.GetDiscardsBySeat(),
+		MeldsBySeat:      snapResp.GetMeldsBySeat(),
+		MeldInfosBySeat:  snapResp.GetMeldInfosBySeat(),
+		LastAction:       snapResp.GetLastAction(),
 		WallRemaining:    snapResp.GetWallRemaining(),
 		DeadlineUnixMs:   snapResp.GetDeadlineUnixMs(),
 		RoundIndex:       snapResp.GetRoundIndex(),
 		HandIndex:        snapResp.GetHandIndex(),
-		TotalScores:      clusterSeatScoresToClient(snapResp.GetTotalScores()),
-		RuleMeta:         clusterRuleMetaToClient(snapResp.GetRuleMeta()),
-		Phase:            clusterPhaseToClient(snapResp.GetPhase()),
+		TotalScores:      snapResp.GetTotalScores(),
+		RuleMeta:         snapResp.GetRuleMeta(),
+		Phase:            snapResp.GetPhase(),
 		ActingSeats:      append([]int32(nil), snapResp.GetActingSeats()...),
 		LastStep:         snapResp.GetLastStep(),
-		PhaseUpdate:      clusterPhaseUpdateToClient(snapResp.GetPhaseUpdate()),
+		PhaseUpdate:      snapResp.GetPhaseUpdate(),
 	}
 	if len(snapResp.GetSeats()) > 0 {
 		g.rememberRoomSeatInfos(srec.RoomID, snapResp.GetSeats())
@@ -813,7 +790,7 @@ func (g *remoteRoomGateway) rememberRoomPlayers(roomID string, players []string)
 	g.roomSeats[roomID] = next
 }
 
-func (g *remoteRoomGateway) rememberRoomSeatInfos(roomID string, seats []*clusterv1.SeatInfo) {
+func (g *remoteRoomGateway) rememberRoomSeatInfos(roomID string, seats []*clientv1.SeatInfo) {
 	if g == nil || roomID == "" || len(seats) == 0 {
 		return
 	}
@@ -848,210 +825,6 @@ func (g *remoteRoomGateway) userForSeat(roomID string, seat int32) (string, bool
 	defer g.seatMu.Unlock()
 	userID := g.roomSeats[roomID][seat]
 	return userID, userID != ""
-}
-
-func clusterClaimCandidatesToClient(candidates []*clusterv1.ClaimCandidate) []*clientv1.ClaimCandidate {
-	out := make([]*clientv1.ClaimCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		out = append(out, &clientv1.ClaimCandidate{
-			SeatIndex: candidate.GetSeatIndex(),
-			Actions:   append([]string(nil), candidate.GetActions()...),
-		})
-	}
-	return out
-}
-
-func clusterSeatTilesToClient(items []*clusterv1.SeatTiles) []*clientv1.SeatTiles {
-	out := make([]*clientv1.SeatTiles, 0, len(items))
-	for _, item := range items {
-		out = append(out, &clientv1.SeatTiles{
-			SeatIndex: item.GetSeatIndex(),
-			Tiles:     append([]string(nil), item.GetTiles()...),
-		})
-	}
-	return out
-}
-
-func clusterSeatsToClient(items []*clusterv1.SeatInfo) []*clientv1.SeatInfo {
-	out := make([]*clientv1.SeatInfo, 0, len(items))
-	for _, item := range items {
-		out = append(out, &clientv1.SeatInfo{
-			SeatIndex:        item.GetSeatIndex(),
-			UserId:           item.GetUserId(),
-			Nickname:         item.GetNickname(),
-			IsBot:            item.GetIsBot(),
-			Surrendered:      item.GetSurrendered(),
-			Online:           item.GetOnline(),
-			AutoPlay:         item.GetAutoPlay(),
-			DisconnectedAtMs: item.GetDisconnectedAtMs(),
-			Status:           item.GetStatus(),
-			TotalScore:       item.GetTotalScore(),
-			HandCount:        item.GetHandCount(),
-		})
-	}
-	return out
-}
-
-func clusterPhaseToClient(phase clusterv1.Phase) clientv1.Phase {
-	return clientv1.Phase(phase.Number())
-}
-
-func clusterPhaseUpdateToClient(pu *clusterv1.PhaseUpdate) *clientv1.PhaseUpdate {
-	if pu == nil {
-		return nil
-	}
-	return &clientv1.PhaseUpdate{
-		Phase:            clusterPhaseToClient(pu.GetPhase()),
-		Step:             pu.GetStep(),
-		Reason:           clusterWaitingReasonToClient(pu.GetReason()),
-		DeadlineUnixMs:   pu.GetDeadlineUnixMs(),
-		ServerNowUnixMs:  pu.GetServerNowUnixMs(),
-		ActingSeats:      append([]int32(nil), pu.GetActingSeats()...),
-		AvailableActions: append([]string(nil), pu.GetAvailableActions()...),
-	}
-}
-
-func clusterWaitingReasonToClient(reason clusterv1.WaitingReason) clientv1.WaitingReason {
-	switch reason {
-	case clusterv1.WaitingReason_WAITING_REASON_OPENING:
-		return clientv1.WaitingReason_WAITING_REASON_OPENING
-	case clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
-		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
-	case clusterv1.WaitingReason_WAITING_REASON_TSUMO:
-		return clientv1.WaitingReason_WAITING_REASON_TSUMO
-	case clusterv1.WaitingReason_WAITING_REASON_DISCARD:
-		return clientv1.WaitingReason_WAITING_REASON_DISCARD
-	case clusterv1.WaitingReason_WAITING_REASON_SURRENDER:
-		return clientv1.WaitingReason_WAITING_REASON_SURRENDER
-	default:
-		return clientv1.WaitingReason_WAITING_REASON_NONE
-	}
-}
-
-func clusterRoomMetasToClient(rooms []*clusterv1.RoomMeta) []*clientv1.RoomMeta {
-	out := make([]*clientv1.RoomMeta, 0, len(rooms))
-	for _, room := range rooms {
-		out = append(out, &clientv1.RoomMeta{
-			RoomId:      room.GetRoomId(),
-			RuleId:      room.GetRuleId(),
-			DisplayName: room.GetDisplayName(),
-			SeatCount:   room.GetSeatCount(),
-			MaxSeats:    room.GetMaxSeats(),
-			CreatedAtMs: room.GetCreatedAtMs(),
-			Stage:       room.GetStage(),
-			RuleMeta:    clusterRuleMetaToClient(room.GetRuleMeta()),
-		})
-	}
-	return out
-}
-
-func clusterRuleMetasToClient(rules []*clusterv1.RuleMeta) []*clientv1.RuleMeta {
-	out := make([]*clientv1.RuleMeta, 0, len(rules))
-	for _, rule := range rules {
-		out = append(out, clusterRuleMetaToClient(rule))
-	}
-	return out
-}
-
-func clusterSeatScoresToClient(scores []*clusterv1.SeatScore) []*clientv1.SeatScore {
-	out := make([]*clientv1.SeatScore, 0, len(scores))
-	for _, score := range scores {
-		out = append(out, &clientv1.SeatScore{
-			SeatIndex: score.GetSeatIndex(),
-			UserId:    score.GetUserId(),
-			TotalFan:  score.GetTotalFan(),
-			Skipped:   score.GetSkipped(),
-		})
-	}
-	return out
-}
-
-func clusterRuleMetaToClient(meta *clusterv1.RuleMeta) *clientv1.RuleMeta {
-	if meta == nil {
-		return nil
-	}
-	return &clientv1.RuleMeta{
-		RuleId:          meta.GetRuleId(),
-		DisplayName:     meta.GetDisplayName(),
-		ShortDesc:       meta.GetShortDesc(),
-		EnabledFeatures: append([]string(nil), meta.GetEnabledFeatures()...),
-		MaxHands:        meta.GetMaxHands(),
-	}
-}
-
-func clusterActionDetailToClient(detail *clusterv1.ActionDetail) *clientv1.ActionDetail {
-	if detail == nil {
-		return nil
-	}
-	return &clientv1.ActionDetail{
-		Step:        detail.GetStep(),
-		ActorSeat:   detail.GetActorSeat(),
-		Action:      detail.GetAction(),
-		Tile:        detail.GetTile(),
-		TargetSeat:  detail.GetTargetSeat(),
-		SourceSeat:  detail.GetSourceSeat(),
-		CreatedAtMs: detail.GetCreatedAtMs(),
-	}
-}
-
-func clusterLastActionToClient(action *clusterv1.LastActionInfo) *clientv1.LastActionInfo {
-	if action == nil {
-		return nil
-	}
-	return &clientv1.LastActionInfo{
-		Step:        action.GetStep(),
-		ActorSeat:   action.GetActorSeat(),
-		Action:      action.GetAction(),
-		Tile:        action.GetTile(),
-		TargetSeat:  action.GetTargetSeat(),
-		SourceSeat:  action.GetSourceSeat(),
-		CreatedAtMs: action.GetCreatedAtMs(),
-	}
-}
-
-func clusterSeatMeldsToClient(items []*clusterv1.SeatMelds) []*clientv1.SeatMelds {
-	out := make([]*clientv1.SeatMelds, 0, len(items))
-	for _, item := range items {
-		melds := make([]*clientv1.MeldInfo, 0, len(item.GetMelds()))
-		for _, meld := range item.GetMelds() {
-			melds = append(melds, &clientv1.MeldInfo{
-				SeatIndex:       meld.GetSeatIndex(),
-				Kind:            meld.GetKind(),
-				Tiles:           append([]string(nil), meld.GetTiles()...),
-				ClaimedFromSeat: meld.GetClaimedFromSeat(),
-				Concealed:       meld.GetConcealed(),
-				Step:            meld.GetStep(),
-			})
-		}
-		out = append(out, &clientv1.SeatMelds{SeatIndex: item.GetSeatIndex(), Melds: melds})
-	}
-	return out
-}
-
-func clusterPenaltiesToClient(penalties []*clusterv1.PenaltyItem) []*clientv1.PenaltyItem {
-	out := make([]*clientv1.PenaltyItem, 0, len(penalties))
-	for _, penalty := range penalties {
-		out = append(out, &clientv1.PenaltyItem{
-			Reason:   penalty.GetReason(),
-			FromSeat: penalty.GetFromSeat(),
-			ToSeat:   penalty.GetToSeat(),
-			Amount:   penalty.GetAmount(),
-		})
-	}
-	return out
-}
-
-func clusterWinnerBreakdownsToClient(items []*clusterv1.WinnerBreakdown) []*clientv1.WinnerBreakdown {
-	out := make([]*clientv1.WinnerBreakdown, 0, len(items))
-	for _, item := range items {
-		out = append(out, &clientv1.WinnerBreakdown{
-			SeatIndex: item.GetSeatIndex(),
-			UserId:    item.GetUserId(),
-			Fan:       item.GetFan(),
-			FanNames:  append([]string(nil), item.GetFanNames()...),
-		})
-	}
-	return out
 }
 
 func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
@@ -1234,6 +1007,8 @@ func retryGRPC(ctx context.Context, fn func(context.Context) error) error {
 	return lastErr
 }
 
+// encodeClusterRoomEvent 将 RoomServiceStreamEventsResponse 编码为帧；
+// 由于 body 字段已直接使用 client.v1 类型，无须字段级转译，只需封装 Envelope。
 func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uint16, []byte, error) {
 	if evt == nil {
 		return 0, nil, fmt.Errorf("nil room event")
@@ -1242,99 +1017,37 @@ func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uin
 	case *clusterv1.RoomServiceStreamEventsResponse_InitialDeal:
 		return marshalClientEnvelope(msgid.InitialDealNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_InitialDeal{InitialDeal: &clientv1.InitialDealNotify{
-				SeatIndex: body.InitialDeal.GetSeatIndex(),
-				Tiles:     append([]string(nil), body.InitialDeal.GetTiles()...),
-				Step:      body.InitialDeal.GetStep(),
-			}},
+			Body:  &clientv1.Envelope_InitialDeal{InitialDeal: body.InitialDeal},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_StartGame:
 		return marshalClientEnvelope(msgid.StartGame, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
-				RoomId:        evt.GetRoomId(),
-				DealerSeat:    body.StartGame.GetDealerSeat(),
-				Phase:         clusterPhaseToClient(body.StartGame.GetPhase()),
-				Step:          body.StartGame.GetStep(),
-				ActingSeats:   append([]int32(nil), body.StartGame.GetActingSeats()...),
-				WallRemaining: body.StartGame.GetWallRemaining(),
-				RoundIndex:    body.StartGame.GetRoundIndex(),
-				HandIndex:     body.StartGame.GetHandIndex(),
-				RuleMeta:      clusterRuleMetaToClient(body.StartGame.GetRuleMeta()),
-				PhaseUpdate:   clusterPhaseUpdateToClient(body.StartGame.GetPhaseUpdate()),
-			}},
+			Body:  &clientv1.Envelope_StartGame{StartGame: body.StartGame},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_DrawTile:
 		return marshalClientEnvelope(msgid.DrawTile, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
-				SeatIndex:      body.DrawTile.GetSeatIndex(),
-				Tile:           body.DrawTile.GetTile(),
-				Phase:          clusterPhaseToClient(body.DrawTile.GetPhase()),
-				Step:           body.DrawTile.GetStep(),
-				ActingSeats:    append([]int32(nil), body.DrawTile.GetActingSeats()...),
-				WallRemaining:  body.DrawTile.GetWallRemaining(),
-				DeadlineUnixMs: body.DrawTile.GetDeadlineUnixMs(),
-				PhaseUpdate:    clusterPhaseUpdateToClient(body.DrawTile.GetPhaseUpdate()),
-			}},
+			Body:  &clientv1.Envelope_DrawTile{DrawTile: body.DrawTile},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_Action:
 		return marshalClientEnvelope(msgid.ActionNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
-				SeatIndex:      body.Action.GetSeatIndex(),
-				Action:         body.Action.GetAction(),
-				Tile:           body.Action.GetTile(),
-				Phase:          clusterPhaseToClient(body.Action.GetPhase()),
-				Step:           body.Action.GetStep(),
-				ActingSeats:    append([]int32(nil), body.Action.GetActingSeats()...),
-				Detail:         clusterActionDetailToClient(body.Action.GetDetail()),
-				WallRemaining:  body.Action.GetWallRemaining(),
-				DeadlineUnixMs: body.Action.GetDeadlineUnixMs(),
-				PhaseUpdate:    clusterPhaseUpdateToClient(body.Action.GetPhaseUpdate()),
-			}},
+			Body:  &clientv1.Envelope_Action{Action: body.Action},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_Settlement:
 		return marshalClientEnvelope(msgid.Settlement, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_Settlement{Settlement: &clientv1.SettlementNotify{
-				RoomId:             evt.GetRoomId(),
-				WinnerUserIds:      append([]string(nil), body.Settlement.GetWinnerUserIds()...),
-				TotalFan:           body.Settlement.GetTotalFan(),
-				SeatScores:         clusterSeatScoresToClient(body.Settlement.GetSeatScores()),
-				Penalties:          clusterPenaltiesToClient(body.Settlement.GetPenalties()),
-				DetailText:         body.Settlement.GetDetailText(),
-				PerWinnerBreakdown: clusterWinnerBreakdownsToClient(body.Settlement.GetPerWinnerBreakdown()),
-				RoundIndex:         body.Settlement.GetRoundIndex(),
-				HandIndex:          body.Settlement.GetHandIndex(),
-				TotalScores:        clusterSeatScoresToClient(body.Settlement.GetTotalScores()),
-				PhaseUpdate:        clusterPhaseUpdateToClient(body.Settlement.GetPhaseUpdate()),
-			}},
+			Body:  &clientv1.Envelope_Settlement{Settlement: body.Settlement},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_OpeningDone:
 		return marshalClientEnvelope(msgid.OpeningDone, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
-				Action:      body.OpeningDone.GetAction(),
-				StepId:      body.OpeningDone.GetStepId(),
-				Kind:        body.OpeningDone.GetKind(),
-				Params:      cloneStringMap(body.OpeningDone.GetParams()),
-				SeatTiles:   clusterOpeningSeatTilesToClient(body.OpeningDone.GetSeatTiles()),
-				SeatInts:    clusterOpeningSeatIntsToClient(body.OpeningDone.GetSeatInts()),
-				LocalTiles:  clusterOpeningLocalTilesToClient(body.OpeningDone.GetLocalTiles()),
-				Phase:       clusterPhaseToClient(body.OpeningDone.GetPhase()),
-				Step:        body.OpeningDone.GetStep(),
-				ActingSeats: append([]int32(nil), body.OpeningDone.GetActingSeats()...),
-				PhaseUpdate: clusterPhaseUpdateToClient(body.OpeningDone.GetPhaseUpdate()),
-			}},
+			Body:  &clientv1.Envelope_OpeningDone{OpeningDone: body.OpeningDone},
 		})
 	case *clusterv1.RoomServiceStreamEventsResponse_RouteRedirect:
 		return marshalClientEnvelope(msgid.RouteRedirectNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
-			Body: &clientv1.Envelope_RouteRedirect{RouteRedirect: &clientv1.RouteRedirectNotify{
-				WsUrl:  body.RouteRedirect.GetWsUrl(),
-				Reason: body.RouteRedirect.GetReason(),
-			}},
+			Body:  &clientv1.Envelope_RouteRedirect{RouteRedirect: body.RouteRedirect},
 		})
 	default:
 		return 0, nil, fmt.Errorf("unknown room event body")
@@ -1356,37 +1069,6 @@ func cloneStringMap(in map[string]string) map[string]string {
 	out := make(map[string]string, len(in))
 	for k, v := range in {
 		out[k] = v
-	}
-	return out
-}
-
-func clusterOpeningSeatTilesToClient(in []*clusterv1.OpeningSeatTiles) []*clientv1.OpeningSeatTiles {
-	out := make([]*clientv1.OpeningSeatTiles, 0, len(in))
-	for _, group := range in {
-		seats := make([]*clientv1.SeatTiles, 0, len(group.GetSeats()))
-		for _, item := range group.GetSeats() {
-			seats = append(seats, &clientv1.SeatTiles{
-				SeatIndex: item.GetSeatIndex(),
-				Tiles:     append([]string(nil), item.GetTiles()...),
-			})
-		}
-		out = append(out, &clientv1.OpeningSeatTiles{Key: group.GetKey(), Seats: seats})
-	}
-	return out
-}
-
-func clusterOpeningSeatIntsToClient(in []*clusterv1.OpeningSeatInts) []*clientv1.OpeningSeatInts {
-	out := make([]*clientv1.OpeningSeatInts, 0, len(in))
-	for _, group := range in {
-		out = append(out, &clientv1.OpeningSeatInts{Key: group.GetKey(), Values: append([]int32(nil), group.GetValues()...)})
-	}
-	return out
-}
-
-func clusterOpeningLocalTilesToClient(in []*clusterv1.OpeningLocalTiles) []*clientv1.OpeningLocalTiles {
-	out := make([]*clientv1.OpeningLocalTiles, 0, len(in))
-	for _, group := range in {
-		out = append(out, &clientv1.OpeningLocalTiles{Key: group.GetKey(), Tiles: append([]string(nil), group.GetTiles()...)})
 	}
 	return out
 }

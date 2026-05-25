@@ -2,58 +2,17 @@ syntax = "proto3";
 
 package cluster.v1;
 
+import "client/v1/messages.proto";
+
 option go_package = "racoo.cn/lsp/api/gen/go/cluster/v1;clusterv1";
-
-// Phase 与 client.v1.Phase 保持同编号语义，用于保证本地与集群下行等价。
-enum Phase {
-  PHASE_UNSPECIFIED = 0;
-  PHASE_LOBBY = 1;
-  reserved 2, 3;
-  reserved "PHASE_EXCHANGE", "PHASE_QUE_MEN";
-  PHASE_DRAW = 4;
-  PHASE_DISCARD = 5;
-  PHASE_CLAIM = 6;
-  PHASE_TSUMO = 7;
-  PHASE_SETTLE = 8;
-  PHASE_CLOSED = 9;
-  PHASE_OPENING = 10;
-}
-
-// WaitingReason 与 client.v1.WaitingReason 保持同编号；详见 ADR-0045。
-enum WaitingReason {
-  WAITING_REASON_UNSPECIFIED = 0;
-  WAITING_REASON_NONE = 1;
-  WAITING_REASON_OPENING = 2;
-  reserved 3;
-  reserved "WAITING_REASON_EXCHANGE_THREE", "WAITING_REASON_QUE_MEN";
-  WAITING_REASON_CLAIM_WINDOW = 4;
-  WAITING_REASON_TSUMO = 5;
-  WAITING_REASON_DISCARD = 6;
-  WAITING_REASON_SURRENDER = 7;
-}
-
-// PhaseUpdate 与 client.v1.PhaseUpdate 镜像；gate 透传，不重组业务事实。
-message PhaseUpdate {
-  Phase phase = 1;
-  int64 step = 2;
-  WaitingReason reason = 3;
-  int64 deadline_unix_ms = 4;
-  int64 server_now_unix_ms = 5;
-  repeated int32 acting_seats = 6;
-  repeated string available_actions = 7;
-}
-
-// PhaseToken 与 client.v1.PhaseToken 镜像；ApplyEventRequest 透传客户端令牌。
-message PhaseToken {
-  int64 step = 1;
-  WaitingReason reason = 2;
-}
 
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC）。
 service RoomService {
   rpc ApplyEvent(ApplyEventRequest) returns (ApplyEventResponse);
+  // StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
+  // 本 RPC 仅在迁移期间供旧客户端使用。
   rpc StreamEvents(StreamEventsRequest) returns (stream RoomServiceStreamEventsResponse);
-  // SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在 StreamEvents 前对齐切点。
+  // SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
   rpc SnapshotRoom(SnapshotRoomRequest) returns (SnapshotRoomResponse);
 }
 
@@ -76,7 +35,7 @@ message ApplyEventRequest {
   string idempotency_key = 9;
   string user_id = 10;
   // phase_token 透传客户端发起请求时的 (step, reason)，房间 actor 在入口校验。
-  PhaseToken phase_token = 13;
+  client.v1.PhaseToken phase_token = 13;
 }
 
 message ApplyEventResponse {
@@ -84,7 +43,7 @@ message ApplyEventResponse {
   string error = 2;
   // error_code 枚举值与 client.v1.ErrorCode 保持同编号；用于回传 PHASE_DRIFTED 等。
   int32 error_code = 3;
-  PhaseUpdate phase_update = 4;
+  client.v1.PhaseUpdate phase_update = 4;
 }
 
 message LeaveEvent {}
@@ -114,52 +73,39 @@ message SnapshotRoomResponse {
   string waiting_action = 7;
   string pending_tile = 8;
   repeated string available_actions = 9;
-  repeated ClaimCandidate claim_candidates = 10;
+  repeated client.v1.ClaimCandidate claim_candidates = 10;
   repeated string your_hand_tiles = 11;
-  repeated SeatTiles discards_by_seat = 12;
-  repeated SeatTiles melds_by_seat = 13;
-  repeated SeatInfo seats = 14;
-  LastActionInfo last_action = 15;
+  repeated client.v1.SeatTiles discards_by_seat = 12;
+  repeated client.v1.SeatTiles melds_by_seat = 13;
+  repeated client.v1.SeatInfo seats = 14;
+  client.v1.LastActionInfo last_action = 15;
   int32 wall_remaining = 16;
   int64 deadline_unix_ms = 17;
-  repeated SeatMelds meld_infos_by_seat = 18;
+  repeated client.v1.SeatMelds meld_infos_by_seat = 18;
   int32 round_index = 19;
   int32 hand_index = 20;
-  repeated SeatScore total_scores = 21;
-  RuleMeta rule_meta = 22;
-  Phase phase = 23;
+  repeated client.v1.SeatScore total_scores = 21;
+  client.v1.RuleMeta rule_meta = 22;
+  client.v1.Phase phase = 23;
   repeated int32 acting_seats = 24;
   int64 last_step = 25;
-  PhaseUpdate phase_update = 26;
+  client.v1.PhaseUpdate phase_update = 26;
 }
 
-message SeatInfo {
-  int32 seat_index = 1;
-  string user_id = 2;
-  string nickname = 3;
-  bool is_bot = 4;
-  bool surrendered = 5;
-  bool online = 6;
-  bool auto_play = 7;
-  int64 disconnected_at_ms = 8;
-  string status = 9;
-  int32 total_score = 10;
-  int32 hand_count = 11;
-}
-
-// RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件，由 gate 映射为 client.v1 帧。
+// RoomServiceStreamEventsResponse 为房间向接入层推送的抽象事件；
+// body 直接携带 client.v1 消息类型，gate 可不做转译直接封装 Envelope 下发。
 message RoomServiceStreamEventsResponse {
   string room_id = 1;
   reserved 6, 7;
   reserved "exchange_three_done", "que_men_done";
   oneof body {
-    StartGameEvent start_game = 2;
-    DrawTileEvent draw_tile = 3;
-    ActionEvent action = 4;
-    SettlementEvent settlement = 5;
-    RouteRedirectEvent route_redirect = 8;
-    InitialDealEvent initial_deal = 10;
-    OpeningDoneEvent opening_done = 12;
+    client.v1.StartGameNotify start_game = 2;
+    client.v1.DrawTileNotify draw_tile = 3;
+    client.v1.ActionNotify action = 4;
+    client.v1.SettlementNotify settlement = 5;
+    client.v1.RouteRedirectNotify route_redirect = 8;
+    client.v1.InitialDealNotify initial_deal = 10;
+    client.v1.OpeningDoneNotify opening_done = 12;
   }
   string cursor = 9;
   // target_seat 为 -1 时广播；0..3 时仅发送给指定座位。
@@ -192,167 +138,4 @@ message OpeningActionEvent {
   int32 direction = 3;
   int32 suit = 4;
   map<string, string> params = 5;
-}
-
-message StartGameEvent {
-  int32 dealer_seat = 1;
-  Phase phase = 2;
-  int64 step = 3;
-  repeated int32 acting_seats = 4;
-  int32 wall_remaining = 5;
-  int32 round_index = 6;
-  int32 hand_index = 7;
-  RuleMeta rule_meta = 8;
-  PhaseUpdate phase_update = 9;
-}
-
-message InitialDealEvent {
-  int32 seat_index = 1;
-  repeated string tiles = 2;
-  int64 step = 3;
-}
-
-message DrawTileEvent {
-  int32 seat_index = 1;
-  string tile = 2;
-  int32 wall_remaining = 3;
-  int64 deadline_unix_ms = 4;
-  Phase phase = 5;
-  int64 step = 6;
-  repeated int32 acting_seats = 7;
-  PhaseUpdate phase_update = 8;
-}
-
-message ActionEvent {
-  int32 seat_index = 1;
-  string action = 2;
-  string tile = 3;
-  ActionDetail detail = 4;
-  int32 wall_remaining = 5;
-  int64 deadline_unix_ms = 6;
-  Phase phase = 7;
-  int64 step = 8;
-  repeated int32 acting_seats = 9;
-  PhaseUpdate phase_update = 10;
-}
-
-message SettlementEvent {
-  repeated string winner_user_ids = 1;
-  int32 total_fan = 2;
-  string detail_text = 3;
-  repeated SeatScore seat_scores = 4;
-  repeated PenaltyItem penalties = 5;
-  repeated WinnerBreakdown per_winner_breakdown = 6;
-  int32 round_index = 7;
-  int32 hand_index = 8;
-  repeated SeatScore total_scores = 9;
-  PhaseUpdate phase_update = 10;
-}
-
-message OpeningSeatTiles {
-  string key = 1;
-  repeated SeatTiles seats = 2;
-}
-
-message OpeningSeatInts {
-  string key = 1;
-  repeated int32 values = 2;
-}
-
-message OpeningLocalTiles {
-  string key = 1;
-  repeated string tiles = 2;
-}
-
-message OpeningDoneEvent {
-  string action = 1;
-  string step_id = 2;
-  string kind = 3;
-  map<string, string> params = 4;
-  repeated OpeningSeatTiles seat_tiles = 5;
-  repeated OpeningSeatInts seat_ints = 6;
-  repeated OpeningLocalTiles local_tiles = 7;
-  Phase phase = 8;
-  int64 step = 9;
-  repeated int32 acting_seats = 10;
-  PhaseUpdate phase_update = 11;
-}
-
-message RouteRedirectEvent {
-  // ws_url 必须是客户端可直接拨号的完整 WebSocket URL；同集群 gate 副本间不应下发。
-  string ws_url = 1;
-  string reason = 2;
-}
-
-message SeatTiles {
-  int32 seat_index = 1;
-  repeated string tiles = 2;
-}
-
-message RuleMeta {
-  string rule_id = 1;
-  string display_name = 2;
-  string short_desc = 3;
-  repeated string enabled_features = 4;
-  int32 max_hands = 5;
-}
-
-message ActionDetail {
-  int64 step = 1;
-  int32 actor_seat = 2;
-  string action = 3;
-  string tile = 4;
-  int32 target_seat = 5;
-  int32 source_seat = 6;
-  int64 created_at_ms = 7;
-}
-
-message LastActionInfo {
-  int64 step = 1;
-  int32 actor_seat = 2;
-  string action = 3;
-  string tile = 4;
-  int32 target_seat = 5;
-  int32 source_seat = 6;
-  int64 created_at_ms = 7;
-}
-
-message MeldInfo {
-  int32 seat_index = 1;
-  string kind = 2;
-  repeated string tiles = 3;
-  int32 claimed_from_seat = 4;
-  bool concealed = 5;
-  int64 step = 6;
-}
-
-message SeatMelds {
-  int32 seat_index = 1;
-  repeated MeldInfo melds = 2;
-}
-
-message ClaimCandidate {
-  int32 seat_index = 1;
-  repeated string actions = 2;
-}
-
-message SeatScore {
-  int32 seat_index = 1;
-  string user_id = 2;
-  int32 total_fan = 3;
-  bool skipped = 4;
-}
-
-message PenaltyItem {
-  string reason = 1;
-  int32 from_seat = 2;
-  int32 to_seat = 3;
-  int32 amount = 4;
-}
-
-message WinnerBreakdown {
-  int32 seat_index = 1;
-  string user_id = 2;
-  int32 fan = 3;
-  repeated string fan_names = 4;
 }

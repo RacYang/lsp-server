@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/redis"
@@ -92,23 +93,23 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 	}
 }
 
-// clusterPhaseTokToRoom 把集群层 PhaseToken 映射到 room.PhaseToken；nil 时透传 nil。
-// 集群与客户端两份枚举/消息按 ADR-0045 设计为 wire 同构镜像，这里只做值翻译。
-func clusterPhaseTokToRoom(tok *clusterv1.PhaseToken) *roomsvc.PhaseToken {
+// clusterPhaseTokToRoom 把 client.v1.PhaseToken 映射到 room.PhaseToken；nil 时透传 nil。
+// proto 统一后 ApplyEventRequest.phase_token 直接使用 client.v1.PhaseToken，无须 cluster 层中转。
+func clusterPhaseTokToRoom(tok *clientv1.PhaseToken) *roomsvc.PhaseToken {
 	if tok == nil {
 		return nil
 	}
 	var reason roomsvc.WaitingReason
 	switch tok.GetReason() {
-	case clusterv1.WaitingReason_WAITING_REASON_OPENING:
+	case clientv1.WaitingReason_WAITING_REASON_OPENING:
 		reason = roomsvc.ReasonOpening
-	case clusterv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
+	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
 		reason = roomsvc.ReasonClaimWindow
-	case clusterv1.WaitingReason_WAITING_REASON_TSUMO:
+	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
 		reason = roomsvc.ReasonTsumo
-	case clusterv1.WaitingReason_WAITING_REASON_DISCARD:
+	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
 		reason = roomsvc.ReasonDiscard
-	case clusterv1.WaitingReason_WAITING_REASON_SURRENDER:
+	case clientv1.WaitingReason_WAITING_REASON_SURRENDER:
 		reason = roomsvc.ReasonSurrender
 	default:
 		reason = roomsvc.ReasonNone
