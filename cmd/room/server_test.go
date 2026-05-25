@@ -217,6 +217,114 @@ func TestProtoTypesDirectUsageInRoom(t *testing.T) {
 	require.EqualValues(t, 16, penalties[0].GetAmount())
 }
 
+func TestClusterPhaseTokToRoom(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc       string
+		input      *clientv1.PhaseToken
+		wantNil    bool
+		wantReason roomsvc.WaitingReason
+		wantStep   int64
+	}{
+		{desc: "nil 透传 nil", input: nil, wantNil: true},
+		{
+			desc:       "开局阶段",
+			input:      &clientv1.PhaseToken{Step: 1, Reason: clientv1.WaitingReason_WAITING_REASON_OPENING},
+			wantReason: roomsvc.ReasonOpening,
+			wantStep:   1,
+		},
+		{
+			desc:       "抢杠窗口",
+			input:      &clientv1.PhaseToken{Step: 2, Reason: clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW},
+			wantReason: roomsvc.ReasonClaimWindow,
+			wantStep:   2,
+		},
+		{
+			desc:       "摸牌自摸",
+			input:      &clientv1.PhaseToken{Step: 3, Reason: clientv1.WaitingReason_WAITING_REASON_TSUMO},
+			wantReason: roomsvc.ReasonTsumo,
+			wantStep:   3,
+		},
+		{
+			desc:       "弃牌阶段",
+			input:      &clientv1.PhaseToken{Step: 4, Reason: clientv1.WaitingReason_WAITING_REASON_DISCARD},
+			wantReason: roomsvc.ReasonDiscard,
+			wantStep:   4,
+		},
+		{
+			desc:       "投降阶段",
+			input:      &clientv1.PhaseToken{Step: 5, Reason: clientv1.WaitingReason_WAITING_REASON_SURRENDER},
+			wantReason: roomsvc.ReasonSurrender,
+			wantStep:   5,
+		},
+		{
+			desc:       "未知原因回退 None",
+			input:      &clientv1.PhaseToken{Step: 6, Reason: clientv1.WaitingReason_WAITING_REASON_NONE},
+			wantReason: roomsvc.ReasonNone,
+			wantStep:   6,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+			got := clusterPhaseTokToRoom(tc.input)
+			if tc.wantNil {
+				require.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			require.Equal(t, tc.wantReason, got.Reason)
+			require.Equal(t, tc.wantStep, got.Step)
+		})
+	}
+}
+
+func TestWaitingReasonFromRoundView(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc string
+		view roomsvc.RoundView
+		want clientv1.WaitingReason
+	}{
+		{
+			desc: "开局阶段映射",
+			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_OPENING},
+			want: clientv1.WaitingReason_WAITING_REASON_OPENING,
+		},
+		{
+			desc: "吃碰杠抢窗口映射",
+			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_CLAIM, WaitingAction: "claim_window"},
+			want: clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW,
+		},
+		{
+			desc: "自摸窗口映射",
+			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_TSUMO, WaitingAction: "tsumo_window"},
+			want: clientv1.WaitingReason_WAITING_REASON_TSUMO,
+		},
+		{
+			desc: "弃牌映射",
+			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_DISCARD, WaitingAction: "discard"},
+			want: clientv1.WaitingReason_WAITING_REASON_DISCARD,
+		},
+		{
+			desc: "其它动作回退 None",
+			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_DRAW, WaitingAction: "unknown"},
+			want: clientv1.WaitingReason_WAITING_REASON_NONE,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+			got := waitingReasonFromRoundView(tc.view)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func TestMapPGRowToEvent(t *testing.T) {
 	t.Parallel()
 
