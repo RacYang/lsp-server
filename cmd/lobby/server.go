@@ -7,12 +7,12 @@ import (
 
 	"google.golang.org/grpc"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	"racoo.cn/lsp/internal/cluster/router"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 )
 
-// lobbyGRPCServer 将 lobby 业务服务适配为 cluster.v1.LobbyService。
+// lobbyGRPCServer 将 lobby 业务服务适配为 v1.LobbyService。
 type lobbyGRPCServer struct {
 	svc        *lobbysvc.Service
 	claimer    *router.Etcd
@@ -34,93 +34,93 @@ func (s *lobbyGRPCServer) ensureClaim(ctx context.Context, roomID string) error 
 }
 
 // CreateRoom 将 gRPC 请求翻译为大厅服务创建房间调用。
-func (s *lobbyGRPCServer) CreateRoom(ctx context.Context, req *clusterv1.CreateRoomRequest) (*clusterv1.CreateRoomResponse, error) {
+func (s *lobbyGRPCServer) CreateRoom(ctx context.Context, req *svcv1.CreateRoomRequest) (*svcv1.CreateRoomResponse, error) {
 	if req.GetCreatorUserId() != "" || req.GetRoomId() == "" {
 		roomID, seat, err := s.svc.CreateRoomWithMeta(ctx, req.GetRuleId(), req.GetDisplayName(), req.GetPrivate(), req.GetCreatorUserId())
 		if err != nil {
-			return &clusterv1.CreateRoomResponse{Error: err.Error()}, nil
+			return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 		}
 		if err := s.ensureClaim(ctx, roomID); err != nil {
-			return &clusterv1.CreateRoomResponse{Error: err.Error()}, nil
+			return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 		}
-		return &clusterv1.CreateRoomResponse{RoomId: roomID, RoomNodeId: s.roomNodeIDOrLocal(), SeatIndex: seat}, nil
+		return &svcv1.CreateRoomResponse{RoomId: roomID, RoomNodeId: s.roomNodeIDOrLocal(), SeatIndex: seat}, nil
 	}
 	nodeID, err := s.svc.CreateRoom(ctx, req.GetRoomId())
 	if err != nil {
-		return &clusterv1.CreateRoomResponse{Error: err.Error()}, nil
+		return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 	}
 	if err := s.ensureClaim(ctx, req.GetRoomId()); err != nil {
-		return &clusterv1.CreateRoomResponse{Error: err.Error()}, nil
+		return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 	}
-	return &clusterv1.CreateRoomResponse{RoomId: req.GetRoomId(), RoomNodeId: nodeID}, nil
+	return &svcv1.CreateRoomResponse{RoomId: req.GetRoomId(), RoomNodeId: nodeID}, nil
 }
 
 // JoinRoom 在基线阶段返回本地座位分配结果，后续再替换为真实跨进程调度。
-func (s *lobbyGRPCServer) JoinRoom(ctx context.Context, req *clusterv1.JoinRoomRequest) (*clusterv1.JoinRoomResponse, error) {
+func (s *lobbyGRPCServer) JoinRoom(ctx context.Context, req *svcv1.JoinRoomRequest) (*svcv1.JoinRoomResponse, error) {
 	seat, err := s.svc.JoinRoom(ctx, req.GetRoomId(), req.GetUserId())
 	if err != nil {
-		return &clusterv1.JoinRoomResponse{Error: err.Error()}, nil
+		return &svcv1.JoinRoomResponse{Error: err.Error()}, nil
 	}
 	if err := s.ensureClaim(ctx, req.GetRoomId()); err != nil {
-		return &clusterv1.JoinRoomResponse{Error: err.Error()}, nil
+		return &svcv1.JoinRoomResponse{Error: err.Error()}, nil
 	}
-	return &clusterv1.JoinRoomResponse{SeatIndex: seat}, nil
+	return &svcv1.JoinRoomResponse{SeatIndex: seat}, nil
 }
 
 // LeaveRoom 立即清理大厅座位索引，让玩家离桌后可立刻加入新房。
-func (s *lobbyGRPCServer) LeaveRoom(ctx context.Context, req *clusterv1.LeaveRoomRequest) (*clusterv1.LeaveRoomResponse, error) {
+func (s *lobbyGRPCServer) LeaveRoom(ctx context.Context, req *svcv1.LeaveRoomRequest) (*svcv1.LeaveRoomResponse, error) {
 	if err := s.svc.LeaveRoom(ctx, req.GetRoomId(), req.GetUserId()); err != nil {
-		return &clusterv1.LeaveRoomResponse{Error: err.Error()}, nil
+		return &svcv1.LeaveRoomResponse{Error: err.Error()}, nil
 	}
-	return &clusterv1.LeaveRoomResponse{}, nil
+	return &svcv1.LeaveRoomResponse{}, nil
 }
 
 // GetRoom 查询房间当前归属的 room 节点。
-func (s *lobbyGRPCServer) GetRoom(ctx context.Context, req *clusterv1.GetRoomRequest) (*clusterv1.GetRoomResponse, error) {
+func (s *lobbyGRPCServer) GetRoom(ctx context.Context, req *svcv1.GetRoomRequest) (*svcv1.GetRoomResponse, error) {
 	nodeID, err := s.svc.GetRoom(ctx, req.GetRoomId())
 	if err != nil {
 		if errors.Is(err, lobbysvc.ErrRoomNotFound) {
-			return &clusterv1.GetRoomResponse{Error: err.Error()}, nil
+			return &svcv1.GetRoomResponse{Error: err.Error()}, nil
 		}
 		return nil, err
 	}
-	return &clusterv1.GetRoomResponse{RoomId: req.GetRoomId(), RoomNodeId: nodeID}, nil
+	return &svcv1.GetRoomResponse{RoomId: req.GetRoomId(), RoomNodeId: nodeID}, nil
 }
 
 // ListRooms 返回可加入的公开等待房间摘要。
-func (s *lobbyGRPCServer) ListRooms(ctx context.Context, req *clusterv1.ListRoomsRequest) (*clusterv1.ListRoomsResponse, error) {
+func (s *lobbyGRPCServer) ListRooms(ctx context.Context, req *svcv1.ListRoomsRequest) (*svcv1.ListRoomsResponse, error) {
 	rooms, next, err := s.svc.ListRooms(ctx, req.GetPageSize(), req.GetPageToken())
 	if err != nil {
-		return &clusterv1.ListRoomsResponse{Error: err.Error()}, nil
+		return &svcv1.ListRoomsResponse{Error: err.Error()}, nil
 	}
-	return &clusterv1.ListRoomsResponse{Rooms: lobbyRoomMetasToCluster(rooms), NextPageToken: next}, nil
+	return &svcv1.ListRoomsResponse{Rooms: lobbyRoomMetasToCluster(rooms), NextPageToken: next}, nil
 }
 
 // ListRules 返回当前后端可创建的规则清单。
-func (s *lobbyGRPCServer) ListRules(ctx context.Context, _ *clusterv1.ListRulesRequest) (*clusterv1.ListRulesResponse, error) {
+func (s *lobbyGRPCServer) ListRules(ctx context.Context, _ *svcv1.ListRulesRequest) (*svcv1.ListRulesResponse, error) {
 	rules, err := s.svc.ListRules(ctx)
 	if err != nil {
-		return &clusterv1.ListRulesResponse{Error: err.Error()}, nil
+		return &svcv1.ListRulesResponse{Error: err.Error()}, nil
 	}
-	return &clusterv1.ListRulesResponse{Rules: lobbyRuleMetasToCluster(rules)}, nil
+	return &svcv1.ListRulesResponse{Rules: lobbyRuleMetasToCluster(rules)}, nil
 }
 
 // AutoMatch 选择一个公开未满房，或在无候选时创建新公开房。
-func (s *lobbyGRPCServer) AutoMatch(ctx context.Context, req *clusterv1.AutoMatchRequest) (*clusterv1.AutoMatchResponse, error) {
+func (s *lobbyGRPCServer) AutoMatch(ctx context.Context, req *svcv1.AutoMatchRequest) (*svcv1.AutoMatchResponse, error) {
 	roomID, seat, err := s.svc.AutoMatch(ctx, req.GetRuleId(), req.GetUserId())
 	if err != nil {
-		return &clusterv1.AutoMatchResponse{Error: err.Error()}, nil
+		return &svcv1.AutoMatchResponse{Error: err.Error()}, nil
 	}
 	if err := s.ensureClaim(ctx, roomID); err != nil {
-		return &clusterv1.AutoMatchResponse{Error: err.Error()}, nil
+		return &svcv1.AutoMatchResponse{Error: err.Error()}, nil
 	}
-	return &clusterv1.AutoMatchResponse{RoomId: roomID, RoomNodeId: s.roomNodeIDOrLocal(), SeatIndex: seat}, nil
+	return &svcv1.AutoMatchResponse{RoomId: roomID, RoomNodeId: s.roomNodeIDOrLocal(), SeatIndex: seat}, nil
 }
 
-func (s *lobbyGRPCServer) AddBot(ctx context.Context, req *clusterv1.AddBotRequest) (*clusterv1.AddBotResponse, error) {
+func (s *lobbyGRPCServer) AddBot(ctx context.Context, req *svcv1.AddBotRequest) (*svcv1.AddBotResponse, error) {
 	added, err := s.svc.AddBot(ctx, req.GetRoomId(), req.GetCount(), 3)
 	if err != nil {
-		return &clusterv1.AddBotResponse{Error: err.Error()}, nil
+		return &svcv1.AddBotResponse{Error: err.Error()}, nil
 	}
 	out := make([]*clientv1.SeatInfo, 0, len(added))
 	for _, bot := range added {
@@ -134,7 +134,7 @@ func (s *lobbyGRPCServer) AddBot(ctx context.Context, req *clusterv1.AddBotReque
 			Status:    "online",
 		})
 	}
-	return &clusterv1.AddBotResponse{Added: out}, nil
+	return &svcv1.AddBotResponse{Added: out}, nil
 }
 
 func (s *lobbyGRPCServer) roomNodeIDOrLocal() string {
@@ -145,20 +145,20 @@ func (s *lobbyGRPCServer) roomNodeIDOrLocal() string {
 }
 
 type lobbyService interface {
-	CreateRoom(context.Context, *clusterv1.CreateRoomRequest) (*clusterv1.CreateRoomResponse, error)
-	JoinRoom(context.Context, *clusterv1.JoinRoomRequest) (*clusterv1.JoinRoomResponse, error)
-	GetRoom(context.Context, *clusterv1.GetRoomRequest) (*clusterv1.GetRoomResponse, error)
-	ListRooms(context.Context, *clusterv1.ListRoomsRequest) (*clusterv1.ListRoomsResponse, error)
-	ListRules(context.Context, *clusterv1.ListRulesRequest) (*clusterv1.ListRulesResponse, error)
-	AutoMatch(context.Context, *clusterv1.AutoMatchRequest) (*clusterv1.AutoMatchResponse, error)
-	LeaveRoom(context.Context, *clusterv1.LeaveRoomRequest) (*clusterv1.LeaveRoomResponse, error)
-	AddBot(context.Context, *clusterv1.AddBotRequest) (*clusterv1.AddBotResponse, error)
+	CreateRoom(context.Context, *svcv1.CreateRoomRequest) (*svcv1.CreateRoomResponse, error)
+	JoinRoom(context.Context, *svcv1.JoinRoomRequest) (*svcv1.JoinRoomResponse, error)
+	GetRoom(context.Context, *svcv1.GetRoomRequest) (*svcv1.GetRoomResponse, error)
+	ListRooms(context.Context, *svcv1.ListRoomsRequest) (*svcv1.ListRoomsResponse, error)
+	ListRules(context.Context, *svcv1.ListRulesRequest) (*svcv1.ListRulesResponse, error)
+	AutoMatch(context.Context, *svcv1.AutoMatchRequest) (*svcv1.AutoMatchResponse, error)
+	LeaveRoom(context.Context, *svcv1.LeaveRoomRequest) (*svcv1.LeaveRoomResponse, error)
+	AddBot(context.Context, *svcv1.AddBotRequest) (*svcv1.AddBotResponse, error)
 }
 
 // registerLobbyService 手工注册 ServiceDesc，避免命令层直接绑定生成的 server 接口。
 func registerLobbyService(s grpc.ServiceRegistrar, srv lobbyService) {
 	s.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "cluster.v1.LobbyService",
+		ServiceName: "v1.LobbyService",
 		HandlerType: (*lobbyService)(nil),
 		Methods: []grpc.MethodDesc{
 			{MethodName: "CreateRoom", Handler: lobbyCreateRoomHandler},
@@ -171,132 +171,132 @@ func registerLobbyService(s grpc.ServiceRegistrar, srv lobbyService) {
 			{MethodName: "AddBot", Handler: lobbyAddBotHandler},
 		},
 		Streams:  []grpc.StreamDesc{},
-		Metadata: "cluster/v1/lobby.proto",
+		Metadata: "v1/service.proto",
 	}, srv)
 }
 
 // lobbyCreateRoomHandler 为 unary RPC 解包并透传到本地服务接口。
 func lobbyCreateRoomHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.CreateRoomRequest)
+	in := new(svcv1.CreateRoomRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).CreateRoom(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/CreateRoom"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/CreateRoom"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).CreateRoom(ctx, req.(*clusterv1.CreateRoomRequest))
+		return srv.(lobbyService).CreateRoom(ctx, req.(*svcv1.CreateRoomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 // lobbyJoinRoomHandler 为加入房间 RPC 提供统一的解码与拦截器桥接。
 func lobbyJoinRoomHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.JoinRoomRequest)
+	in := new(svcv1.JoinRoomRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).JoinRoom(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/JoinRoom"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/JoinRoom"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).JoinRoom(ctx, req.(*clusterv1.JoinRoomRequest))
+		return srv.(lobbyService).JoinRoom(ctx, req.(*svcv1.JoinRoomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 // lobbyGetRoomHandler 为查询房间路由 RPC 提供统一桥接。
 func lobbyGetRoomHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.GetRoomRequest)
+	in := new(svcv1.GetRoomRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).GetRoom(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/GetRoom"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/GetRoom"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).GetRoom(ctx, req.(*clusterv1.GetRoomRequest))
+		return srv.(lobbyService).GetRoom(ctx, req.(*svcv1.GetRoomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 // lobbyListRoomsHandler 为大厅房间列表 RPC 提供统一桥接。
 func lobbyListRoomsHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.ListRoomsRequest)
+	in := new(svcv1.ListRoomsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).ListRooms(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/ListRooms"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/ListRooms"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).ListRooms(ctx, req.(*clusterv1.ListRoomsRequest))
+		return srv.(lobbyService).ListRooms(ctx, req.(*svcv1.ListRoomsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 // lobbyListRulesHandler 为规则列表 RPC 提供统一桥接。
 func lobbyListRulesHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.ListRulesRequest)
+	in := new(svcv1.ListRulesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).ListRules(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/ListRules"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/ListRules"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).ListRules(ctx, req.(*clusterv1.ListRulesRequest))
+		return srv.(lobbyService).ListRules(ctx, req.(*svcv1.ListRulesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 // lobbyAutoMatchHandler 为自动匹配 RPC 提供统一桥接。
 func lobbyAutoMatchHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.AutoMatchRequest)
+	in := new(svcv1.AutoMatchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).AutoMatch(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/AutoMatch"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/AutoMatch"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).AutoMatch(ctx, req.(*clusterv1.AutoMatchRequest))
+		return srv.(lobbyService).AutoMatch(ctx, req.(*svcv1.AutoMatchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func lobbyLeaveRoomHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.LeaveRoomRequest)
+	in := new(svcv1.LeaveRoomRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).LeaveRoom(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/LeaveRoom"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/LeaveRoom"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).LeaveRoom(ctx, req.(*clusterv1.LeaveRoomRequest))
+		return srv.(lobbyService).LeaveRoom(ctx, req.(*svcv1.LeaveRoomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func lobbyAddBotHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.AddBotRequest)
+	in := new(svcv1.AddBotRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(lobbyService).AddBot(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.LobbyService/AddBot"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.LobbyService/AddBot"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(lobbyService).AddBot(ctx, req.(*clusterv1.AddBotRequest))
+		return srv.(lobbyService).AddBot(ctx, req.(*svcv1.AddBotRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

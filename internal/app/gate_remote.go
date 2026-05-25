@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	"racoo.cn/lsp/internal/cluster/discovery"
 	"racoo.cn/lsp/internal/cluster/nodeid"
 	"racoo.cn/lsp/internal/cluster/router"
@@ -45,9 +45,9 @@ type roomStreamHandle struct {
 }
 
 type remoteRoomGateway struct {
-	lobby             clusterv1.LobbyServiceClient
+	lobby             svcv1.LobbyServiceClient
 	defaultRoomAddr   string
-	defaultRoomClient clusterv1.RoomServiceClient
+	defaultRoomClient svcv1.RoomServiceClient
 	hub               *session.Hub
 	sess              *session.Manager
 	routeCache        *redis.Client
@@ -64,7 +64,7 @@ type remoteRoomGateway struct {
 
 	connMu      sync.Mutex
 	roomConnMap map[string]*grpc.ClientConn
-	roomClients map[string]clusterv1.RoomServiceClient
+	roomClients map[string]svcv1.RoomServiceClient
 }
 
 func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache *redis.Client, settlementStore *postgres.SettlementStore) (handler.RoomGateway, func(), error) {
@@ -97,9 +97,9 @@ func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Man
 	}
 	streamCtx, cancel := context.WithCancel(context.Background())
 	gateway := &remoteRoomGateway{
-		lobby:                 clusterv1.NewLobbyServiceClient(lobbyConn),
+		lobby:                 svcv1.NewLobbyServiceClient(lobbyConn),
 		defaultRoomAddr:       cfg.ClusterRoomAddr,
-		defaultRoomClient:     clusterv1.NewRoomServiceClient(roomConn),
+		defaultRoomClient:     svcv1.NewRoomServiceClient(roomConn),
 		hub:                   hub,
 		sess:                  sess,
 		routeCache:            routeCache,
@@ -111,7 +111,7 @@ func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Man
 		roomStreams:           make(map[string]*roomStreamHandle),
 		roomSeats:             make(map[string]map[int32]string),
 		roomConnMap:           map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
-		roomClients:           map[string]clusterv1.RoomServiceClient{cfg.ClusterRoomAddr: clusterv1.NewRoomServiceClient(roomConn)},
+		roomClients:           map[string]svcv1.RoomServiceClient{cfg.ClusterRoomAddr: svcv1.NewRoomServiceClient(roomConn)},
 	}
 	cleanup := func() {
 		cancel()
@@ -138,10 +138,10 @@ func (g *remoteRoomGateway) Join(ctx context.Context, roomID, userID string) (in
 	if g == nil {
 		return -1, fmt.Errorf("nil remote room gateway")
 	}
-	var resp *clusterv1.JoinRoomResponse
+	var resp *svcv1.JoinRoomResponse
 	err := retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
-		resp, callErr = g.lobby.JoinRoom(withOutgoingTrace(callCtx), &clusterv1.JoinRoomRequest{
+		resp, callErr = g.lobby.JoinRoom(withOutgoingTrace(callCtx), &svcv1.JoinRoomRequest{
 			RoomId: roomID,
 			UserId: userID,
 		})
@@ -165,10 +165,10 @@ func (g *remoteRoomGateway) ListRooms(ctx context.Context, pageSize int32, pageT
 	if g == nil {
 		return nil, "", fmt.Errorf("nil remote room gateway")
 	}
-	var resp *clusterv1.ListRoomsResponse
+	var resp *svcv1.ListRoomsResponse
 	err := retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
-		resp, callErr = g.lobby.ListRooms(withOutgoingTrace(callCtx), &clusterv1.ListRoomsRequest{
+		resp, callErr = g.lobby.ListRooms(withOutgoingTrace(callCtx), &svcv1.ListRoomsRequest{
 			PageSize:  pageSize,
 			PageToken: pageToken,
 		})
@@ -187,10 +187,10 @@ func (g *remoteRoomGateway) ListRules(ctx context.Context) ([]*clientv1.RuleMeta
 	if g == nil {
 		return nil, fmt.Errorf("nil remote room gateway")
 	}
-	var resp *clusterv1.ListRulesResponse
+	var resp *svcv1.ListRulesResponse
 	err := retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
-		resp, callErr = g.lobby.ListRules(withOutgoingTrace(callCtx), &clusterv1.ListRulesRequest{})
+		resp, callErr = g.lobby.ListRules(withOutgoingTrace(callCtx), &svcv1.ListRulesRequest{})
 		return callErr
 	})
 	if err != nil {
@@ -250,10 +250,10 @@ func matchRuleID(want, got string) bool {
 }
 
 func (g *remoteRoomGateway) joinLobbyRoom(ctx context.Context, roomID, userID string) (int, error) {
-	var resp *clusterv1.JoinRoomResponse
+	var resp *svcv1.JoinRoomResponse
 	err := retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
-		resp, callErr = g.lobby.JoinRoom(withOutgoingTrace(callCtx), &clusterv1.JoinRoomRequest{RoomId: roomID, UserId: userID})
+		resp, callErr = g.lobby.JoinRoom(withOutgoingTrace(callCtx), &svcv1.JoinRoomRequest{RoomId: roomID, UserId: userID})
 		return callErr
 	})
 	if err != nil {
@@ -266,7 +266,7 @@ func (g *remoteRoomGateway) joinLobbyRoom(ctx context.Context, roomID, userID st
 }
 
 func (g *remoteRoomGateway) leaveLobbyRoom(ctx context.Context, roomID, userID string) error {
-	resp, err := g.lobby.LeaveRoom(withOutgoingTrace(ctx), &clusterv1.LeaveRoomRequest{RoomId: roomID, UserId: userID})
+	resp, err := g.lobby.LeaveRoom(withOutgoingTrace(ctx), &svcv1.LeaveRoomRequest{RoomId: roomID, UserId: userID})
 	if err != nil {
 		return err
 	}
@@ -281,7 +281,7 @@ func (g *remoteRoomGateway) roomAcceptsAutoMatch(ctx context.Context, roomID str
 	if err != nil {
 		return false, err
 	}
-	resp, err := roomClient.SnapshotRoom(withOutgoingTrace(ctx), &clusterv1.SnapshotRoomRequest{RoomId: roomID})
+	resp, err := roomClient.SnapshotRoom(withOutgoingTrace(ctx), &svcv1.SnapshotRoomRequest{RoomId: roomID})
 	if err != nil {
 		return false, err
 	}
@@ -303,7 +303,7 @@ func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, c
 	if g == nil {
 		return nil, nil, fmt.Errorf("nil remote room gateway")
 	}
-	resp, err := g.lobby.AddBot(withOutgoingTrace(ctx), &clusterv1.AddBotRequest{
+	resp, err := g.lobby.AddBot(withOutgoingTrace(ctx), &svcv1.AddBotRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		Count:      count,
@@ -336,10 +336,10 @@ func (g *remoteRoomGateway) CreateRoom(ctx context.Context, ruleID, displayName 
 	if g == nil {
 		return "", -1, fmt.Errorf("nil remote room gateway")
 	}
-	var resp *clusterv1.CreateRoomResponse
+	var resp *svcv1.CreateRoomResponse
 	err := retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
-		resp, callErr = g.lobby.CreateRoom(withOutgoingTrace(callCtx), &clusterv1.CreateRoomRequest{
+		resp, callErr = g.lobby.CreateRoom(withOutgoingTrace(callCtx), &svcv1.CreateRoomRequest{
 			RuleId:        ruleID,
 			DisplayName:   displayName,
 			Private:       private,
@@ -374,10 +374,10 @@ func (g *remoteRoomGateway) joinRoomService(ctx context.Context, roomID, userID 
 	if err != nil {
 		return err
 	}
-	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &clusterv1.ApplyEventRequest{
+	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &svcv1.ApplyEventRequest{
 		RoomId: roomID,
 		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Join{Join: &clusterv1.JoinEvent{}},
+		Body:   &svcv1.ApplyEventRequest_Join{Join: &svcv1.JoinEvent{}},
 	})
 	if err != nil {
 		return err
@@ -404,10 +404,10 @@ func (g *remoteRoomGateway) Ready(ctx context.Context, roomID, userID string) (f
 	if err != nil {
 		return nil, err
 	}
-	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &clusterv1.ApplyEventRequest{
+	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &svcv1.ApplyEventRequest{
 		RoomId: roomID,
 		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Ready{Ready: &clusterv1.ReadyEvent{}},
+		Body:   &svcv1.ApplyEventRequest_Ready{Ready: &svcv1.ReadyEvent{}},
 	})
 	if err != nil {
 		return nil, err
@@ -428,7 +428,7 @@ func (g *remoteRoomGateway) Leave(ctx context.Context, roomID, userID string) (f
 	if roomID == "" || userID == "" {
 		return nil, fmt.Errorf("empty room_id or user_id")
 	}
-	lobbyResp, err := g.lobby.LeaveRoom(withOutgoingTrace(ctx), &clusterv1.LeaveRoomRequest{RoomId: roomID, UserId: userID})
+	lobbyResp, err := g.lobby.LeaveRoom(withOutgoingTrace(ctx), &svcv1.LeaveRoomRequest{RoomId: roomID, UserId: userID})
 	if err != nil {
 		return nil, err
 	}
@@ -439,10 +439,10 @@ func (g *remoteRoomGateway) Leave(ctx context.Context, roomID, userID string) (f
 	if err != nil {
 		return nil, err
 	}
-	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &clusterv1.ApplyEventRequest{
+	resp, err := roomClient.ApplyEvent(withOutgoingTrace(ctx), &svcv1.ApplyEventRequest{
 		RoomId: roomID,
 		UserId: userID,
-		Body:   &clusterv1.ApplyEventRequest_Leave{Leave: &clusterv1.LeaveEvent{}},
+		Body:   &svcv1.ApplyEventRequest_Leave{Leave: &svcv1.LeaveEvent{}},
 	})
 	if err != nil {
 		return nil, err
@@ -487,10 +487,10 @@ func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID 
 			logx.Warn(logCtx, "离线投降获取 room client 失败", "err", err.Error())
 			return
 		}
-		if _, applyErr := roomClient.ApplyEvent(context.Background(), &clusterv1.ApplyEventRequest{
+		if _, applyErr := roomClient.ApplyEvent(context.Background(), &svcv1.ApplyEventRequest{
 			RoomId: roomID,
 			UserId: userID,
-			Body:   &clusterv1.ApplyEventRequest_Leave{Leave: &clusterv1.LeaveEvent{}},
+			Body:   &svcv1.ApplyEventRequest_Leave{Leave: &svcv1.LeaveEvent{}},
 		}); applyErr != nil {
 			logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), userID), roomID)
 			logx.Warn(logCtx, "离线超时投降事件发送失败", "err", applyErr.Error())
@@ -501,69 +501,69 @@ func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID 
 
 // Discard 将当前轮次出牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
 func (g *remoteRoomGateway) Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+	return g.applyRoomEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: tok,
-		Body:       &clusterv1.ApplyEventRequest_Discard{Discard: &clusterv1.DiscardEvent{Tile: tile}},
+		Body:       &svcv1.ApplyEventRequest_Discard{Discard: &svcv1.DiscardEvent{Tile: tile}},
 	})
 }
 
 // Pong 将碰牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
 func (g *remoteRoomGateway) Pong(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+	return g.applyRoomEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: tok,
-		Body:       &clusterv1.ApplyEventRequest_Pong{Pong: &clusterv1.PongEvent{}},
+		Body:       &svcv1.ApplyEventRequest_Pong{Pong: &svcv1.PongEvent{}},
 	})
 }
 
 // Chi 将吃牌命令发给 RoomService；四川血战默认规则不会开放该动作。
 func (g *remoteRoomGateway) Chi(ctx context.Context, roomID, userID string, tiles []string, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+	return g.applyRoomEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: tok,
-		Body:       &clusterv1.ApplyEventRequest_Chi{Chi: &clusterv1.ChiEvent{Tiles: append([]string(nil), tiles...)}},
+		Body:       &svcv1.ApplyEventRequest_Chi{Chi: &svcv1.ChiEvent{Tiles: append([]string(nil), tiles...)}},
 	})
 }
 
 // Gang 将杠牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
 func (g *remoteRoomGateway) Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+	return g.applyRoomEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: tok,
-		Body:       &clusterv1.ApplyEventRequest_Gang{Gang: &clusterv1.GangEvent{Tile: tile}},
+		Body:       &svcv1.ApplyEventRequest_Gang{Gang: &svcv1.GangEvent{Tile: tile}},
 	})
 }
 
 // Hu 将胡牌命令发给 RoomService；实际推送由后台事件流转发到客户端。
 func (g *remoteRoomGateway) Hu(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+	return g.applyRoomEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: tok,
-		Body:       &clusterv1.ApplyEventRequest_Hu{Hu: &clusterv1.HuEvent{}},
+		Body:       &svcv1.ApplyEventRequest_Hu{Hu: &svcv1.HuEvent{}},
 	})
 }
 
 func (g *remoteRoomGateway) Pass(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+	return g.applyRoomEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: tok,
-		Body:       &clusterv1.ApplyEventRequest_Pass{Pass: &clusterv1.PassEvent{}},
+		Body:       &svcv1.ApplyEventRequest_Pass{Pass: &svcv1.PassEvent{}},
 	})
 }
 
 func (g *remoteRoomGateway) OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *clientv1.PhaseToken) (func(), error) {
-	return g.applyRoomEvent(ctx, &clusterv1.ApplyEventRequest{
+	return g.applyRoomEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:     roomID,
 		UserId:     userID,
 		PhaseToken: tok,
-		Body: &clusterv1.ApplyEventRequest_OpeningAction{OpeningAction: &clusterv1.OpeningActionEvent{
+		Body: &svcv1.ApplyEventRequest_OpeningAction{OpeningAction: &svcv1.OpeningActionEvent{
 			Action:    action,
 			Tiles:     append([]string(nil), tiles...),
 			Direction: direction,
@@ -573,7 +573,7 @@ func (g *remoteRoomGateway) OpeningAction(ctx context.Context, roomID, userID, a
 	})
 }
 
-func (g *remoteRoomGateway) applyRoomEvent(ctx context.Context, req *clusterv1.ApplyEventRequest) (func(), error) {
+func (g *remoteRoomGateway) applyRoomEvent(ctx context.Context, req *svcv1.ApplyEventRequest) (func(), error) {
 	if g == nil {
 		return nil, fmt.Errorf("nil remote room gateway")
 	}
@@ -635,10 +635,10 @@ func (g *remoteRoomGateway) ensureRoomStream(ctx context.Context, roomID, sinceC
 	g.roomStreams[roomID] = handle
 	g.streamMu.Unlock()
 
-	var stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse]
+	var stream grpc.ServerStreamingClient[svcv1.RoomServiceStreamEventsResponse]
 	var err error
 	for attempt := 0; attempt < 8; attempt++ {
-		stream, err = roomClient.StreamEvents(subCtx, &clusterv1.StreamEventsRequest{RoomId: roomID, SinceCursor: sinceCursor})
+		stream, err = roomClient.StreamEvents(subCtx, &svcv1.StreamEventsRequest{RoomId: roomID, SinceCursor: sinceCursor})
 		if err == nil {
 			break
 		}
@@ -686,10 +686,10 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 	if err != nil {
 		return nil, &handler.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: err.Error()}
 	}
-	var snapResp *clusterv1.SnapshotRoomResponse
+	var snapResp *svcv1.SnapshotRoomResponse
 	err = retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
-		snapResp, callErr = roomClient.SnapshotRoom(withOutgoingTrace(callCtx), &clusterv1.SnapshotRoomRequest{RoomId: srec.RoomID, UserId: uid})
+		snapResp, callErr = roomClient.SnapshotRoom(withOutgoingTrace(callCtx), &svcv1.SnapshotRoomRequest{RoomId: srec.RoomID, UserId: uid})
 		return callErr
 	})
 	if err != nil {
@@ -827,7 +827,7 @@ func (g *remoteRoomGateway) userForSeat(roomID string, seat int32) (string, bool
 	return userID, userID != ""
 }
 
-func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID string, stream grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
+func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID string, stream grpc.ServerStreamingClient[svcv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
 	defer func() {
 		_ = stream.CloseSend()
 		g.streamMu.Lock()
@@ -889,7 +889,7 @@ func (g *remoteRoomGateway) loadSettlementFallback(ctx context.Context, userID, 
 	}, true, nil
 }
 
-func (g *remoteRoomGateway) roomClientForRoom(ctx context.Context, roomID string) (clusterv1.RoomServiceClient, string, error) {
+func (g *remoteRoomGateway) roomClientForRoom(ctx context.Context, roomID string) (svcv1.RoomServiceClient, string, error) {
 	if g == nil {
 		return nil, "", fmt.Errorf("nil remote room gateway")
 	}
@@ -951,7 +951,7 @@ func (g *remoteRoomGateway) roomAddressForRoom(ctx context.Context, roomID strin
 	return nodeInfo.Meta.AdvertiseAddr, nil
 }
 
-func (g *remoteRoomGateway) roomClientForAddr(addr string) (clusterv1.RoomServiceClient, error) {
+func (g *remoteRoomGateway) roomClientForAddr(addr string) (svcv1.RoomServiceClient, error) {
 	g.connMu.Lock()
 	defer g.connMu.Unlock()
 	if client, ok := g.roomClients[addr]; ok && client != nil {
@@ -961,7 +961,7 @@ func (g *remoteRoomGateway) roomClientForAddr(addr string) (clusterv1.RoomServic
 	if err != nil {
 		return nil, fmt.Errorf("dial room grpc %s: %w", addr, err)
 	}
-	client := clusterv1.NewRoomServiceClient(conn)
+	client := svcv1.NewRoomServiceClient(conn)
 	g.roomConnMap[addr] = conn
 	g.roomClients[addr] = client
 	return client, nil
@@ -1009,42 +1009,42 @@ func retryGRPC(ctx context.Context, fn func(context.Context) error) error {
 
 // encodeClusterRoomEvent 将 RoomServiceStreamEventsResponse 编码为帧；
 // 由于 body 字段已直接使用 client.v1 类型，无须字段级转译，只需封装 Envelope。
-func encodeClusterRoomEvent(evt *clusterv1.RoomServiceStreamEventsResponse) (uint16, []byte, error) {
+func encodeClusterRoomEvent(evt *svcv1.RoomServiceStreamEventsResponse) (uint16, []byte, error) {
 	if evt == nil {
 		return 0, nil, fmt.Errorf("nil room event")
 	}
 	switch body := evt.Body.(type) {
-	case *clusterv1.RoomServiceStreamEventsResponse_InitialDeal:
+	case *svcv1.RoomServiceStreamEventsResponse_InitialDeal:
 		return marshalClientEnvelope(msgid.InitialDealNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_InitialDeal{InitialDeal: body.InitialDeal},
 		})
-	case *clusterv1.RoomServiceStreamEventsResponse_StartGame:
+	case *svcv1.RoomServiceStreamEventsResponse_StartGame:
 		return marshalClientEnvelope(msgid.StartGame, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_StartGame{StartGame: body.StartGame},
 		})
-	case *clusterv1.RoomServiceStreamEventsResponse_DrawTile:
+	case *svcv1.RoomServiceStreamEventsResponse_DrawTile:
 		return marshalClientEnvelope(msgid.DrawTile, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_DrawTile{DrawTile: body.DrawTile},
 		})
-	case *clusterv1.RoomServiceStreamEventsResponse_Action:
+	case *svcv1.RoomServiceStreamEventsResponse_Action:
 		return marshalClientEnvelope(msgid.ActionNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_Action{Action: body.Action},
 		})
-	case *clusterv1.RoomServiceStreamEventsResponse_Settlement:
+	case *svcv1.RoomServiceStreamEventsResponse_Settlement:
 		return marshalClientEnvelope(msgid.Settlement, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_Settlement{Settlement: body.Settlement},
 		})
-	case *clusterv1.RoomServiceStreamEventsResponse_OpeningDone:
+	case *svcv1.RoomServiceStreamEventsResponse_OpeningDone:
 		return marshalClientEnvelope(msgid.OpeningDone, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_OpeningDone{OpeningDone: body.OpeningDone},
 		})
-	case *clusterv1.RoomServiceStreamEventsResponse_RouteRedirect:
+	case *svcv1.RoomServiceStreamEventsResponse_RouteRedirect:
 		return marshalClientEnvelope(msgid.RouteRedirectNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_RouteRedirect{RouteRedirect: body.RouteRedirect},

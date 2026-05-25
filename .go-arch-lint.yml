@@ -59,8 +59,8 @@ components:
     in: pkg/**
   apigen_client:
     in: api/gen/go/client/v1/**
-  apigen_cluster:
-    in: api/gen/go/cluster/v1/**
+  apigen_v1:
+    in: api/gen/go/v1/**
 deps:
   mahjong_builtin:
     mayDependOn:
@@ -78,7 +78,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_guobiao:
     anyProjectDeps: true
   mahjong_xuezhandaodi:
@@ -97,7 +97,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_rules:
     mayDependOn:
       - mahjong_builtin
@@ -114,7 +114,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_tile:
     mayDependOn:
       - mahjong_builtin
@@ -131,7 +131,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_wall:
     mayDependOn:
       - mahjong_builtin
@@ -148,7 +148,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_hand:
     mayDependOn:
       - mahjong_builtin
@@ -165,7 +165,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_hu:
     mayDependOn:
       - mahjong_builtin
@@ -182,7 +182,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_fan:
     mayDependOn:
       - mahjong_builtin
@@ -199,7 +199,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   mahjong_analysis:
     mayDependOn:
       - mahjong_builtin
@@ -216,7 +216,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   bot:
     anyProjectDeps: true
   domain:
@@ -236,7 +236,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   app:
     anyProjectDeps: true
   net:
@@ -269,7 +269,7 @@ deps:
       - cmd
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   store:
     anyProjectDeps: true
   service:
@@ -294,7 +294,7 @@ deps:
       - log
       - pkg
       - apigen_client
-      - apigen_cluster
+      - apigen_v1
   session:
     anyProjectDeps: true
   config:
@@ -311,6 +311,6 @@ deps:
     anyVendorDeps: true
   apigen_client:
     anyVendorDeps: true
-  apigen_cluster:
+  apigen_v1:
     mayDependOn:
       - apigen_client

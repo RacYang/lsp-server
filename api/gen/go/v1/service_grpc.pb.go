@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             (unknown)
-// source: cluster/v1/lobby.proto
+// source: v1/service.proto
 
-package clusterv1
+package v1
 
 import (
 	context "context"
@@ -19,14 +19,206 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LobbyService_CreateRoom_FullMethodName = "/cluster.v1.LobbyService/CreateRoom"
-	LobbyService_JoinRoom_FullMethodName   = "/cluster.v1.LobbyService/JoinRoom"
-	LobbyService_GetRoom_FullMethodName    = "/cluster.v1.LobbyService/GetRoom"
-	LobbyService_ListRooms_FullMethodName  = "/cluster.v1.LobbyService/ListRooms"
-	LobbyService_ListRules_FullMethodName  = "/cluster.v1.LobbyService/ListRules"
-	LobbyService_AutoMatch_FullMethodName  = "/cluster.v1.LobbyService/AutoMatch"
-	LobbyService_LeaveRoom_FullMethodName  = "/cluster.v1.LobbyService/LeaveRoom"
-	LobbyService_AddBot_FullMethodName     = "/cluster.v1.LobbyService/AddBot"
+	RoomService_ApplyEvent_FullMethodName   = "/v1.RoomService/ApplyEvent"
+	RoomService_StreamEvents_FullMethodName = "/v1.RoomService/StreamEvents"
+	RoomService_SnapshotRoom_FullMethodName = "/v1.RoomService/SnapshotRoom"
+)
+
+// RoomServiceClient is the client API for RoomService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RoomService 在房间归属节点上执行局内事件（集群内 gRPC，非客户端直连）。
+type RoomServiceClient interface {
+	ApplyEvent(ctx context.Context, in *ApplyEventRequest, opts ...grpc.CallOption) (*ApplyEventResponse, error)
+	// StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
+	// 本 RPC 仅在迁移期间供旧客户端使用。
+	StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RoomServiceStreamEventsResponse], error)
+	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
+	SnapshotRoom(ctx context.Context, in *SnapshotRoomRequest, opts ...grpc.CallOption) (*SnapshotRoomResponse, error)
+}
+
+type roomServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRoomServiceClient(cc grpc.ClientConnInterface) RoomServiceClient {
+	return &roomServiceClient{cc}
+}
+
+func (c *roomServiceClient) ApplyEvent(ctx context.Context, in *ApplyEventRequest, opts ...grpc.CallOption) (*ApplyEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplyEventResponse)
+	err := c.cc.Invoke(ctx, RoomService_ApplyEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roomServiceClient) StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RoomServiceStreamEventsResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &RoomService_ServiceDesc.Streams[0], RoomService_StreamEvents_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamEventsRequest, RoomServiceStreamEventsResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type RoomService_StreamEventsClient = grpc.ServerStreamingClient[RoomServiceStreamEventsResponse]
+
+func (c *roomServiceClient) SnapshotRoom(ctx context.Context, in *SnapshotRoomRequest, opts ...grpc.CallOption) (*SnapshotRoomResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SnapshotRoomResponse)
+	err := c.cc.Invoke(ctx, RoomService_SnapshotRoom_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RoomServiceServer is the server API for RoomService service.
+// All implementations must embed UnimplementedRoomServiceServer
+// for forward compatibility.
+//
+// RoomService 在房间归属节点上执行局内事件（集群内 gRPC，非客户端直连）。
+type RoomServiceServer interface {
+	ApplyEvent(context.Context, *ApplyEventRequest) (*ApplyEventResponse, error)
+	// StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
+	// 本 RPC 仅在迁移期间供旧客户端使用。
+	StreamEvents(*StreamEventsRequest, grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]) error
+	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
+	SnapshotRoom(context.Context, *SnapshotRoomRequest) (*SnapshotRoomResponse, error)
+	mustEmbedUnimplementedRoomServiceServer()
+}
+
+// UnimplementedRoomServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRoomServiceServer struct{}
+
+func (UnimplementedRoomServiceServer) ApplyEvent(context.Context, *ApplyEventRequest) (*ApplyEventResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyEvent not implemented")
+}
+func (UnimplementedRoomServiceServer) StreamEvents(*StreamEventsRequest, grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method StreamEvents not implemented")
+}
+func (UnimplementedRoomServiceServer) SnapshotRoom(context.Context, *SnapshotRoomRequest) (*SnapshotRoomResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SnapshotRoom not implemented")
+}
+func (UnimplementedRoomServiceServer) mustEmbedUnimplementedRoomServiceServer() {}
+func (UnimplementedRoomServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeRoomServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RoomServiceServer will
+// result in compilation errors.
+type UnsafeRoomServiceServer interface {
+	mustEmbedUnimplementedRoomServiceServer()
+}
+
+func RegisterRoomServiceServer(s grpc.ServiceRegistrar, srv RoomServiceServer) {
+	// If the following call pancis, it indicates UnimplementedRoomServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RoomService_ServiceDesc, srv)
+}
+
+func _RoomService_ApplyEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoomServiceServer).ApplyEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoomService_ApplyEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoomServiceServer).ApplyEvent(ctx, req.(*ApplyEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoomService_StreamEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(RoomServiceServer).StreamEvents(m, &grpc.GenericServerStream[StreamEventsRequest, RoomServiceStreamEventsResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type RoomService_StreamEventsServer = grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]
+
+func _RoomService_SnapshotRoom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SnapshotRoomRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoomServiceServer).SnapshotRoom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoomService_SnapshotRoom_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoomServiceServer).SnapshotRoom(ctx, req.(*SnapshotRoomRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RoomService_ServiceDesc is the grpc.ServiceDesc for RoomService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RoomService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "v1.RoomService",
+	HandlerType: (*RoomServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ApplyEvent",
+			Handler:    _RoomService_ApplyEvent_Handler,
+		},
+		{
+			MethodName: "SnapshotRoom",
+			Handler:    _RoomService_SnapshotRoom_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamEvents",
+			Handler:       _RoomService_StreamEvents_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "v1/service.proto",
+}
+
+const (
+	LobbyService_CreateRoom_FullMethodName = "/v1.LobbyService/CreateRoom"
+	LobbyService_JoinRoom_FullMethodName   = "/v1.LobbyService/JoinRoom"
+	LobbyService_GetRoom_FullMethodName    = "/v1.LobbyService/GetRoom"
+	LobbyService_ListRooms_FullMethodName  = "/v1.LobbyService/ListRooms"
+	LobbyService_ListRules_FullMethodName  = "/v1.LobbyService/ListRules"
+	LobbyService_AutoMatch_FullMethodName  = "/v1.LobbyService/AutoMatch"
+	LobbyService_LeaveRoom_FullMethodName  = "/v1.LobbyService/LeaveRoom"
+	LobbyService_AddBot_FullMethodName     = "/v1.LobbyService/AddBot"
 )
 
 // LobbyServiceClient is the client API for LobbyService service.
@@ -350,7 +542,7 @@ func _LobbyService_AddBot_Handler(srv interface{}, ctx context.Context, dec func
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var LobbyService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "cluster.v1.LobbyService",
+	ServiceName: "v1.LobbyService",
 	HandlerType: (*LobbyServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -387,5 +579,5 @@ var LobbyService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "cluster/v1/lobby.proto",
+	Metadata: "v1/service.proto",
 }

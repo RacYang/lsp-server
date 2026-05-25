@@ -12,14 +12,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
 )
 
-// roomGRPCServer 将 room 节点事件流暴露为 cluster.v1.RoomService。
+// roomGRPCServer 将 room 节点事件流暴露为 v1.RoomService。
 type roomGRPCServer struct {
 	rooms          *roomsvc.Service
 	ev             *postgres.RoomEventStore
@@ -30,7 +30,7 @@ type roomGRPCServer struct {
 
 	ready   atomic.Bool
 	mu      sync.Mutex
-	streams map[string][]chan *clusterv1.RoomServiceStreamEventsResponse
+	streams map[string][]chan *svcv1.RoomServiceStreamEventsResponse
 }
 
 func newRoomGRPCServer(rooms *roomsvc.Service, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, st *postgres.SettlementStore, rdb *redis.Client) *roomGRPCServer {
@@ -40,7 +40,7 @@ func newRoomGRPCServer(rooms *roomsvc.Service, ev *postgres.RoomEventStore, gs *
 		gs:      gs,
 		st:      st,
 		rdb:     rdb,
-		streams: make(map[string][]chan *clusterv1.RoomServiceStreamEventsResponse),
+		streams: make(map[string][]chan *svcv1.RoomServiceStreamEventsResponse),
 	}
 	if rooms != nil {
 		rooms.SetAutoTimeoutHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
@@ -83,7 +83,7 @@ func (s *roomGRPCServer) persistPublishAndFinalize(ctx context.Context, roomID, 
 
 type persistedEvent struct {
 	cursor string
-	evt    *clusterv1.RoomServiceStreamEventsResponse
+	evt    *svcv1.RoomServiceStreamEventsResponse
 }
 
 func (s *roomGRPCServer) persistNotifications(ctx context.Context, roomID string, notifications []roomsvc.Notification) ([]persistedEvent, error) {
@@ -143,7 +143,7 @@ func expandPerSeatNotifications(notifications []roomsvc.Notification) []roomsvc.
 	return out
 }
 
-func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification roomsvc.Notification, evt *clusterv1.RoomServiceStreamEventsResponse, cursor string) {
+func (s *roomGRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification roomsvc.Notification, evt *svcv1.RoomServiceStreamEventsResponse, cursor string) {
 	s.persistRoomMeta(ctx, roomID, parseSinceSeq(roomID, cursor), &notification)
 	if s.gs != nil {
 		players, _, _, ok := s.rooms.RoomSnapshot(roomID)
@@ -226,16 +226,16 @@ func openingSeatInts(done *clientv1.OpeningDoneNotify, key string) []int32 {
 }
 
 // SnapshotRoom - 返回快照游标与房间摘要；无持久化时退化为内存视图。
-func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.SnapshotRoomRequest) (*clusterv1.SnapshotRoomResponse, error) {
+func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRequest) (*svcv1.SnapshotRoomResponse, error) {
 	if s == nil || s.rooms == nil {
 		return nil, fmt.Errorf("nil room grpc server")
 	}
 	if !s.ready.Load() {
-		return &clusterv1.SnapshotRoomResponse{Error: "recovering"}, nil
+		return &svcv1.SnapshotRoomResponse{Error: "recovering"}, nil
 	}
 	roomID := req.GetRoomId()
 	if roomID == "" {
-		return &clusterv1.SnapshotRoomResponse{Error: "empty room_id"}, nil
+		return &svcv1.SnapshotRoomResponse{Error: "empty room_id"}, nil
 	}
 	players, state, ready, ok := s.rooms.RoomSnapshot(roomID)
 	if !ok {
@@ -256,7 +256,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 				mySeat := seatIndexForUser(meta.PlayerIDs, req.GetUserId())
 				seats := clientSeatsFromPlayerIDs(meta.PlayerIDs, [4]bool{}, meta.State)
 				applyHandCountsToClientSeats(seats, view.HandsBySeat)
-				return &clusterv1.SnapshotRoomResponse{
+				return &svcv1.SnapshotRoomResponse{
 					Cursor:           cur,
 					PlayerIds:        append([]string(nil), meta.PlayerIDs...),
 					Seats:            seats,
@@ -285,7 +285,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 				}, nil
 			}
 		}
-		return &clusterv1.SnapshotRoomResponse{Error: "room not found"}, nil
+		return &svcv1.SnapshotRoomResponse{Error: "room not found"}, nil
 	}
 	var maxSeq int64
 	if s.ev != nil {
@@ -302,7 +302,7 @@ func (s *roomGRPCServer) SnapshotRoom(ctx context.Context, req *clusterv1.Snapsh
 	mySeat := seatIndexForUser(players, req.GetUserId())
 	seats := clientSeatsFromPlayerIDs(players, ready, state)
 	applyHandCountsToClientSeats(seats, view.HandsBySeat)
-	return &clusterv1.SnapshotRoomResponse{
+	return &svcv1.SnapshotRoomResponse{
 		Cursor:           cur,
 		PlayerIds:        players,
 		Seats:            seats,
@@ -445,7 +445,7 @@ func pickLastQueSuits(ctx context.Context, s *roomGRPCServer, roomID string) []i
 }
 
 // StreamEvents 先按游标从 PostgreSQL 重放，再订阅实时通道。
-func (s *roomGRPCServer) StreamEvents(req *clusterv1.StreamEventsRequest, stream clusterv1.RoomService_StreamEventsServer) error {
+func (s *roomGRPCServer) StreamEvents(req *svcv1.StreamEventsRequest, stream svcv1.RoomService_StreamEventsServer) error {
 	if s == nil {
 		return fmt.Errorf("nil room grpc server")
 	}
@@ -455,7 +455,7 @@ func (s *roomGRPCServer) StreamEvents(req *clusterv1.StreamEventsRequest, stream
 	roomID := req.GetRoomId()
 	ctx := stream.Context()
 	sinceSeq := parseSinceSeq(roomID, req.GetSinceCursor())
-	ch := make(chan *clusterv1.RoomServiceStreamEventsResponse, 128)
+	ch := make(chan *svcv1.RoomServiceStreamEventsResponse, 128)
 	s.mu.Lock()
 	s.streams[roomID] = append(s.streams[roomID], ch)
 	s.mu.Unlock()
@@ -540,9 +540,9 @@ func parseSinceSeq(roomID, since string) int64 {
 }
 
 // publish 对恢复链路采用阻塞投递，避免 snapshot/replay cutover 后静默丢帧。
-func (s *roomGRPCServer) publish(roomID string, evt *clusterv1.RoomServiceStreamEventsResponse) {
+func (s *roomGRPCServer) publish(roomID string, evt *svcv1.RoomServiceStreamEventsResponse) {
 	s.mu.Lock()
-	subs := append([]chan *clusterv1.RoomServiceStreamEventsResponse(nil), s.streams[roomID]...)
+	subs := append([]chan *svcv1.RoomServiceStreamEventsResponse(nil), s.streams[roomID]...)
 	s.mu.Unlock()
 	for _, ch := range subs {
 		ch <- evt
@@ -550,7 +550,7 @@ func (s *roomGRPCServer) publish(roomID string, evt *clusterv1.RoomServiceStream
 }
 
 // removeStream 在客户端断开后回收订阅槽位。
-func (s *roomGRPCServer) removeStream(roomID string, target chan *clusterv1.RoomServiceStreamEventsResponse) {
+func (s *roomGRPCServer) removeStream(roomID string, target chan *svcv1.RoomServiceStreamEventsResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cur := s.streams[roomID]
@@ -567,7 +567,7 @@ func (s *roomGRPCServer) removeStream(roomID string, target chan *clusterv1.Room
 	s.streams[roomID] = out
 }
 
-func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*clusterv1.RoomServiceStreamEventsResponse, error) {
+func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*svcv1.RoomServiceStreamEventsResponse, error) {
 	n := roomsvc.Notification{Kind: roomsvc.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...), TargetSeat: roomsvc.Seat(row.TargetSeat)}
 	cur := fmt.Sprintf("%s:%d", roomID, row.Seq)
 	return mapNotificationToEvent(roomID, cur, n)
@@ -575,39 +575,39 @@ func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*clusterv1.RoomS
 
 // mapNotificationToEvent 将 room worker 产出的通知封装为流式事件帧；
 // proto 统一后 body 字段直接使用客户端消息类型，无须字段转译。
-func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.Notification) (*clusterv1.RoomServiceStreamEventsResponse, error) {
+func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.Notification) (*svcv1.RoomServiceStreamEventsResponse, error) {
 	var env clientv1.Envelope
 	if err := proto.Unmarshal(notification.Payload, &env); err != nil {
 		return nil, fmt.Errorf("unmarshal room notification: %w", err)
 	}
-	resp := &clusterv1.RoomServiceStreamEventsResponse{
+	resp := &svcv1.RoomServiceStreamEventsResponse{
 		RoomId:     roomID,
 		Cursor:     cursor,
 		TargetSeat: notification.TargetSeat.Proto(),
 	}
 	switch notification.Kind {
 	case roomsvc.KindInitialDeal:
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_InitialDeal{
+		resp.Body = &svcv1.RoomServiceStreamEventsResponse_InitialDeal{
 			InitialDeal: env.GetInitialDeal(),
 		}
 	case roomsvc.KindOpeningDone:
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+		resp.Body = &svcv1.RoomServiceStreamEventsResponse_OpeningDone{
 			OpeningDone: env.GetOpeningDone(),
 		}
 	case roomsvc.KindStartGame:
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_StartGame{
+		resp.Body = &svcv1.RoomServiceStreamEventsResponse_StartGame{
 			StartGame: env.GetStartGame(),
 		}
 	case roomsvc.KindDrawTile:
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
+		resp.Body = &svcv1.RoomServiceStreamEventsResponse_DrawTile{
 			DrawTile: env.GetDrawTile(),
 		}
 	case roomsvc.KindAction:
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_Action{
+		resp.Body = &svcv1.RoomServiceStreamEventsResponse_Action{
 			Action: env.GetAction(),
 		}
 	case roomsvc.KindSettlement:
-		resp.Body = &clusterv1.RoomServiceStreamEventsResponse_Settlement{
+		resp.Body = &svcv1.RoomServiceStreamEventsResponse_Settlement{
 			Settlement: env.GetSettlement(),
 		}
 	default:
@@ -629,15 +629,15 @@ func clientClaimCandidates(candidates []roomsvc.RoundClaimCandidate) []*clientv1
 }
 
 type roomService interface {
-	ApplyEvent(context.Context, *clusterv1.ApplyEventRequest) (*clusterv1.ApplyEventResponse, error)
-	StreamEvents(*clusterv1.StreamEventsRequest, grpc.ServerStreamingServer[clusterv1.RoomServiceStreamEventsResponse]) error
-	SnapshotRoom(context.Context, *clusterv1.SnapshotRoomRequest) (*clusterv1.SnapshotRoomResponse, error)
+	ApplyEvent(context.Context, *svcv1.ApplyEventRequest) (*svcv1.ApplyEventResponse, error)
+	StreamEvents(*svcv1.StreamEventsRequest, grpc.ServerStreamingServer[svcv1.RoomServiceStreamEventsResponse]) error
+	SnapshotRoom(context.Context, *svcv1.SnapshotRoomRequest) (*svcv1.SnapshotRoomResponse, error)
 }
 
 // registerRoomService 手工注册 ServiceDesc，避免命令层直接依赖生成 server 接口。
 func registerRoomService(s grpc.ServiceRegistrar, srv roomService) {
 	s.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "cluster.v1.RoomService",
+		ServiceName: "v1.RoomService",
 		HandlerType: (*roomService)(nil),
 		Methods: []grpc.MethodDesc{
 			{MethodName: "ApplyEvent", Handler: roomApplyEventHandler},
@@ -652,40 +652,40 @@ func registerRoomService(s grpc.ServiceRegistrar, srv roomService) {
 
 // roomApplyEventHandler 为 unary ApplyEvent 做统一解包与拦截器桥接。
 func roomApplyEventHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.ApplyEventRequest)
+	in := new(svcv1.ApplyEventRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(roomService).ApplyEvent(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.RoomService/ApplyEvent"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.RoomService/ApplyEvent"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(roomService).ApplyEvent(ctx, req.(*clusterv1.ApplyEventRequest))
+		return srv.(roomService).ApplyEvent(ctx, req.(*svcv1.ApplyEventRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func roomSnapshotRoomHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(clusterv1.SnapshotRoomRequest)
+	in := new(svcv1.SnapshotRoomRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
 		return srv.(roomService).SnapshotRoom(ctx, in)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/cluster.v1.RoomService/SnapshotRoom"}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.RoomService/SnapshotRoom"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(roomService).SnapshotRoom(ctx, req.(*clusterv1.SnapshotRoomRequest))
+		return srv.(roomService).SnapshotRoom(ctx, req.(*svcv1.SnapshotRoomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 // roomStreamEventsHandler 为服务端流式订阅建立请求与 stream 桥接。
 func roomStreamEventsHandler(srv interface{}, stream grpc.ServerStream) error {
-	in := new(clusterv1.StreamEventsRequest)
+	in := new(svcv1.StreamEventsRequest)
 	if err := stream.RecvMsg(in); err != nil {
 		return err
 	}
-	return srv.(roomService).StreamEvents(in, &grpc.GenericServerStream[clusterv1.StreamEventsRequest, clusterv1.RoomServiceStreamEventsResponse]{ServerStream: stream})
+	return srv.(roomService).StreamEvents(in, &grpc.GenericServerStream[svcv1.StreamEventsRequest, svcv1.RoomServiceStreamEventsResponse]{ServerStream: stream})
 }

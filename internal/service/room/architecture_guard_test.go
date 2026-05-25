@@ -176,7 +176,8 @@ func TestOpeningLegacyProtocolDefinitionsRemoved(t *testing.T) {
 			},
 		},
 		{
-			path: "api/proto/cluster/v1/room.proto",
+			// 已由集群 proto 合并为统一服务 proto（地基一重构）
+			path: "api/proto/v1/service.proto",
 			forbid: []string{
 				"PHASE_EXCHANGE =",
 				"PHASE_QUE_MEN =",

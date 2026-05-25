@@ -14,14 +14,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
-	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 )
 
 // startBufLobbyServer 启动一个真实的本地 gRPC 服务并把 lobby 业务注册上去，
 // 这样测试可以通过真实的 RPC 通道驱动 ServiceDesc 中所有 method handler，而不是直接调用 Go 函数。
 // 用真实通道才能覆盖到 register 路径与拦截器链路，bufconn 与单测桩都做不到这一点。
-func startBufLobbyServer(t *testing.T) (clusterv1.LobbyServiceClient, func()) {
+func startBufLobbyServer(t *testing.T) (svcv1.LobbyServiceClient, func()) {
 	t.Helper()
 	var lc net.ListenConfig
 	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
@@ -45,7 +45,7 @@ func startBufLobbyServer(t *testing.T) (clusterv1.LobbyServiceClient, func()) {
 
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
-	cli := clusterv1.NewLobbyServiceClient(conn)
+	cli := svcv1.NewLobbyServiceClient(conn)
 	cleanup := func() {
 		_ = conn.Close()
 		srv.GracefulStop()
@@ -62,44 +62,44 @@ func TestRegisterLobbyService_RoundTrip(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	ctx := context.Background()
-	createResp, err := cli.CreateRoom(ctx, &clusterv1.CreateRoomRequest{RoomId: "r-grpc"})
+	createResp, err := cli.CreateRoom(ctx, &svcv1.CreateRoomRequest{RoomId: "r-grpc"})
 	require.NoError(t, err)
 	require.NotEmpty(t, createResp.GetRoomNodeId())
 
-	joinResp, err := cli.JoinRoom(ctx, &clusterv1.JoinRoomRequest{RoomId: "r-grpc", UserId: "u1"})
+	joinResp, err := cli.JoinRoom(ctx, &svcv1.JoinRoomRequest{RoomId: "r-grpc", UserId: "u1"})
 	require.NoError(t, err)
 	require.EqualValues(t, 0, joinResp.GetSeatIndex())
 
-	getResp, err := cli.GetRoom(ctx, &clusterv1.GetRoomRequest{RoomId: "r-grpc"})
+	getResp, err := cli.GetRoom(ctx, &svcv1.GetRoomRequest{RoomId: "r-grpc"})
 	require.NoError(t, err)
 	require.NotEmpty(t, getResp.GetRoomNodeId())
 
-	missing, err := cli.GetRoom(ctx, &clusterv1.GetRoomRequest{RoomId: "missing"})
+	missing, err := cli.GetRoom(ctx, &svcv1.GetRoomRequest{RoomId: "missing"})
 	require.NoError(t, err)
 	require.NotEmpty(t, missing.GetError(), "未知房间应返回业务错误而非 RPC 错误")
 
-	createdLobbyRoom, err := cli.CreateRoom(ctx, &clusterv1.CreateRoomRequest{CreatorUserId: "u2", DisplayName: "大厅桌"})
+	createdLobbyRoom, err := cli.CreateRoom(ctx, &svcv1.CreateRoomRequest{CreatorUserId: "u2", DisplayName: "大厅桌"})
 	require.NoError(t, err)
 	require.NotEmpty(t, createdLobbyRoom.GetRoomId())
-	listResp, err := cli.ListRooms(ctx, &clusterv1.ListRoomsRequest{PageSize: 20})
+	listResp, err := cli.ListRooms(ctx, &svcv1.ListRoomsRequest{PageSize: 20})
 	require.NoError(t, err)
 	require.NotEmpty(t, listResp.GetRooms())
-	rulesResp, err := cli.ListRules(ctx, &clusterv1.ListRulesRequest{})
+	rulesResp, err := cli.ListRules(ctx, &svcv1.ListRulesRequest{})
 	require.NoError(t, err)
 	require.Len(t, rulesResp.GetRules(), 3)
 	require.Equal(t, "guobiao_jingji_biaozhun", rulesResp.GetRules()[0].GetRuleId())
-	matchResp, err := cli.AutoMatch(ctx, &clusterv1.AutoMatchRequest{UserId: "u3"})
+	matchResp, err := cli.AutoMatch(ctx, &svcv1.AutoMatchRequest{UserId: "u3"})
 	require.NoError(t, err)
 	require.NotEmpty(t, matchResp.GetRoomId())
 
-	addResp, err := cli.AddBot(ctx, &clusterv1.AddBotRequest{RoomId: "r-grpc", UserId: "u1", Count: 2})
+	addResp, err := cli.AddBot(ctx, &svcv1.AddBotRequest{RoomId: "r-grpc", UserId: "u1", Count: 2})
 	require.NoError(t, err)
 	require.Len(t, addResp.GetAdded(), 2)
 	require.Equal(t, "online", addResp.GetAdded()[0].GetStatus())
 	require.True(t, addResp.GetAdded()[0].GetOnline())
 	require.True(t, addResp.GetAdded()[0].GetAutoPlay())
 
-	leaveResp, err := cli.LeaveRoom(ctx, &clusterv1.LeaveRoomRequest{RoomId: "r-grpc", UserId: "u1"})
+	leaveResp, err := cli.LeaveRoom(ctx, &svcv1.LeaveRoomRequest{RoomId: "r-grpc", UserId: "u1"})
 	require.NoError(t, err)
 	require.Empty(t, leaveResp.GetError())
 }
@@ -145,12 +145,12 @@ func TestLobbyHandlersWithInterceptor(t *testing.T) {
 	}
 
 	dec := func(in interface{}) error {
-		buf, _ := proto.Marshal(&clusterv1.CreateRoomRequest{RoomId: "intercepted"})
+		buf, _ := proto.Marshal(&svcv1.CreateRoomRequest{RoomId: "intercepted"})
 		return proto.Unmarshal(buf, in.(proto.Message))
 	}
 	resp, err := lobbyCreateRoomHandler(srv, context.Background(), dec, interceptor)
 	require.NoError(t, err)
-	require.NotEmpty(t, resp.(*clusterv1.CreateRoomResponse).GetRoomNodeId())
+	require.NotEmpty(t, resp.(*svcv1.CreateRoomResponse).GetRoomNodeId())
 	require.Equal(t, 1, calls)
 }
 
@@ -162,7 +162,7 @@ func TestRegisterLobbyServiceAcceptsArbitraryRegistrar(t *testing.T) {
 	captured := &captureRegistrar{}
 	registerLobbyService(captured, newLobbyGRPCServer(lobbysvc.New(), nil, "room-r"))
 	require.Equal(t, 1, captured.calls)
-	require.Equal(t, "cluster.v1.LobbyService", captured.serviceName)
+	require.Equal(t, "v1.LobbyService", captured.serviceName)
 	require.ElementsMatch(t, []string{"CreateRoom", "JoinRoom", "GetRoom", "ListRooms", "ListRules", "AutoMatch", "LeaveRoom", "AddBot"}, captured.methods)
 }
 

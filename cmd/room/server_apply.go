@@ -6,29 +6,29 @@ import (
 	"strings"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/redis"
 )
 
 // ApplyEvent 通过 room.Service 驱动真实房间 worker，并把产出的通知桥接到订阅流。
-func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEventRequest) (*clusterv1.ApplyEventResponse, error) {
+func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventRequest) (*svcv1.ApplyEventResponse, error) {
 	if s == nil {
 		return nil, fmt.Errorf("nil room grpc server")
 	}
 	if !s.ready.Load() {
-		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "recovering"}, nil
+		return &svcv1.ApplyEventResponse{Accepted: false, Error: "recovering"}, nil
 	}
 	if s.rooms == nil {
 		return nil, fmt.Errorf("nil room service")
 	}
 	roomID := req.GetRoomId()
 	if roomID == "" {
-		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "empty room_id"}, nil
+		return &svcv1.ApplyEventResponse{Accepted: false, Error: "empty room_id"}, nil
 	}
 	userID := req.GetUserId()
 	if userID == "" {
-		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "empty user_id"}, nil
+		return &svcv1.ApplyEventResponse{Accepted: false, Error: "empty user_id"}, nil
 	}
 	idemKey := strings.TrimSpace(req.GetIdempotencyKey())
 	if idemKey != "" && s.rdb != nil {
@@ -36,60 +36,60 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *clusterv1.ApplyEve
 		fullKey := roomID + ":" + idemKey
 		rec, ok, err := s.rdb.GetIdempotency(ctx, scope, fullKey)
 		if err != nil {
-			return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+			return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
 		if ok && rec.Result == "ok" {
-			return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+			return &svcv1.ApplyEventResponse{Accepted: true}, nil
 		}
 	}
 	if _, err := s.rooms.Join(ctx, roomID, userID); err != nil && err.Error() != "room full" {
-		return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
 	s.persistRoomMeta(ctx, roomID, 0, nil)
 	switch req.GetBody().(type) {
-	case *clusterv1.ApplyEventRequest_Ready:
+	case *svcv1.ApplyEventRequest_Ready:
 		notifications, err := s.rooms.Ready(ctx, roomID, userID)
 		if err != nil {
-			return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+			return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
 		if err := s.persistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
-			return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+			return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
-		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
-	case *clusterv1.ApplyEventRequest_Discard:
+		return &svcv1.ApplyEventResponse{Accepted: true}, nil
+	case *svcv1.ApplyEventRequest_Discard:
 		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_Pong:
+	case *svcv1.ApplyEventRequest_Pong:
 		notifications, err := s.rooms.Pong(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_Chi:
+	case *svcv1.ApplyEventRequest_Chi:
 		notifications, err := s.rooms.Chi(ctx, roomID, userID, req.GetChi().GetTiles(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_Gang:
+	case *svcv1.ApplyEventRequest_Gang:
 		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_Hu:
+	case *svcv1.ApplyEventRequest_Hu:
 		notifications, err := s.rooms.Hu(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_Pass:
+	case *svcv1.ApplyEventRequest_Pass:
 		notifications, err := s.rooms.Pass(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_OpeningAction:
+	case *svcv1.ApplyEventRequest_OpeningAction:
 		event := req.GetOpeningAction()
 		notifications, err := s.rooms.OpeningAction(ctx, roomID, userID, event.GetAction(), event.GetTiles(), event.GetDirection(), event.GetSuit(), event.GetParams(), clusterPhaseTokToRoom(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
-	case *clusterv1.ApplyEventRequest_Leave:
+	case *svcv1.ApplyEventRequest_Leave:
 		if err := s.rooms.Leave(ctx, roomID, userID); err != nil {
-			return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+			return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
 		s.markIdempotency(ctx, roomID, idemKey)
-		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
-	case *clusterv1.ApplyEventRequest_Join:
+		return &svcv1.ApplyEventResponse{Accepted: true}, nil
+	case *svcv1.ApplyEventRequest_Join:
 		// Join 仅占座：s.rooms.Join 已在 switch 之前（第 44 行）隐式执行。
 		s.markIdempotency(ctx, roomID, idemKey)
-		return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+		return &svcv1.ApplyEventResponse{Accepted: true}, nil
 	default:
-		return &clusterv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
+		return &svcv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
 	}
 }
 
@@ -117,14 +117,14 @@ func clusterPhaseTokToRoom(tok *clientv1.PhaseToken) *roomsvc.PhaseToken {
 	return &roomsvc.PhaseToken{Step: tok.GetStep(), Reason: reason}
 }
 
-func (s *roomGRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*clusterv1.ApplyEventResponse, error) {
+func (s *roomGRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*svcv1.ApplyEventResponse, error) {
 	if err != nil {
-		return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
 	if err := s.persistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
-		return &clusterv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
+		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
-	return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+	return &svcv1.ApplyEventResponse{Accepted: true}, nil
 }
 
 func (s *roomGRPCServer) markIdempotency(ctx context.Context, roomID, idemKey string) {

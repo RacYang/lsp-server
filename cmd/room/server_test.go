@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
@@ -39,10 +39,10 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	client := clusterv1.NewRoomServiceClient(conn)
+	client := svcv1.NewRoomServiceClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	stream, err := client.StreamEvents(ctx, &clusterv1.StreamEventsRequest{RoomId: "r1"})
+	stream, err := client.StreamEvents(ctx, &svcv1.StreamEventsRequest{RoomId: "r1"})
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		srv.mu.Lock()
@@ -51,10 +51,10 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 
 	for _, userID := range []string{"u1", "u2", "u3", "u4"} {
-		resp, err := client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+		resp, err := client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 			RoomId: "r1",
 			UserId: userID,
-			Body:   &clusterv1.ApplyEventRequest_Ready{Ready: &clusterv1.ReadyEvent{}},
+			Body:   &svcv1.ApplyEventRequest_Ready{Ready: &svcv1.ReadyEvent{}},
 		})
 		require.NoError(t, err)
 		require.True(t, resp.GetAccepted())
@@ -74,10 +74,10 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 			if draw.GetTile() == "" {
 				continue
 			}
-			_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+			_, err = client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 				RoomId: "r1",
 				UserId: players[draw.GetSeatIndex()],
-				Body:   &clusterv1.ApplyEventRequest_Discard{Discard: &clusterv1.DiscardEvent{Tile: draw.GetTile()}},
+				Body:   &svcv1.ApplyEventRequest_Discard{Discard: &svcv1.DiscardEvent{Tile: draw.GetTile()}},
 			})
 			require.NoError(t, err)
 		}
@@ -86,44 +86,44 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 			case "exchange_three":
 				seat := action.GetSeatIndex()
 				require.GreaterOrEqual(t, len(hands[seat]), 3)
-				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+				_, err = client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body: &clusterv1.ApplyEventRequest_OpeningAction{OpeningAction: &clusterv1.OpeningActionEvent{
+					Body: &svcv1.ApplyEventRequest_OpeningAction{OpeningAction: &svcv1.OpeningActionEvent{
 						Action: "exchange_three",
 						Tiles:  append([]string(nil), hands[seat][:3]...),
 					}},
 				})
 				require.NoError(t, err)
 			case "que_men":
-				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+				_, err = client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body: &clusterv1.ApplyEventRequest_OpeningAction{OpeningAction: &clusterv1.OpeningActionEvent{
+					Body: &svcv1.ApplyEventRequest_OpeningAction{OpeningAction: &svcv1.OpeningActionEvent{
 						Action: "que_men",
 						Suit:   0,
 					}},
 				})
 				require.NoError(t, err)
 			case "pong_choice":
-				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+				_, err = client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body:   &clusterv1.ApplyEventRequest_Pass{Pass: &clusterv1.PassEvent{}},
+					Body:   &svcv1.ApplyEventRequest_Pass{Pass: &svcv1.PassEvent{}},
 				})
 				require.NoError(t, err)
 			case "gang_choice":
-				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+				_, err = client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body:   &clusterv1.ApplyEventRequest_Gang{Gang: &clusterv1.GangEvent{Tile: action.GetTile()}},
+					Body:   &svcv1.ApplyEventRequest_Gang{Gang: &svcv1.GangEvent{Tile: action.GetTile()}},
 				})
 				require.NoError(t, err)
 			case "hu_choice", "qiang_gang_choice", "tsumo_choice":
-				_, err = client.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+				_, err = client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 					RoomId: "r1",
 					UserId: players[action.GetSeatIndex()],
-					Body:   &clusterv1.ApplyEventRequest_Hu{Hu: &clusterv1.HuEvent{}},
+					Body:   &svcv1.ApplyEventRequest_Hu{Hu: &svcv1.HuEvent{}},
 				})
 				require.NoError(t, err)
 			}
@@ -149,30 +149,30 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 	ctx := context.Background()
 
 	s.setReady(false)
-	resp1, err := s.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+	resp1, err := s.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:         "r-idem",
 		UserId:         "u1",
 		IdempotencyKey: "k-retry",
-		Body:           &clusterv1.ApplyEventRequest_Ready{Ready: &clusterv1.ReadyEvent{}},
+		Body:           &svcv1.ApplyEventRequest_Ready{Ready: &svcv1.ReadyEvent{}},
 	})
 	require.NoError(t, err)
 	require.False(t, resp1.GetAccepted())
 
 	s.setReady(true)
-	resp2, err := s.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+	resp2, err := s.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:         "r-idem",
 		UserId:         "u1",
 		IdempotencyKey: "k-retry",
-		Body:           &clusterv1.ApplyEventRequest_Ready{Ready: &clusterv1.ReadyEvent{}},
+		Body:           &svcv1.ApplyEventRequest_Ready{Ready: &svcv1.ReadyEvent{}},
 	})
 	require.NoError(t, err)
 	require.True(t, resp2.GetAccepted())
 
-	resp3, err := s.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+	resp3, err := s.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:         "r-idem",
 		UserId:         "u1",
 		IdempotencyKey: "k-retry",
-		Body:           &clusterv1.ApplyEventRequest_Ready{Ready: &clusterv1.ReadyEvent{}},
+		Body:           &svcv1.ApplyEventRequest_Ready{Ready: &svcv1.ReadyEvent{}},
 	})
 	require.NoError(t, err)
 	require.True(t, resp3.GetAccepted())
@@ -184,15 +184,15 @@ func TestSnapshotRoomIncludesRoundView(t *testing.T) {
 	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
 	ctx := context.Background()
 	for _, userID := range []string{"u1", "u2", "u3", "u4"} {
-		_, err := srv.ApplyEvent(ctx, &clusterv1.ApplyEventRequest{
+		_, err := srv.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 			RoomId: "r-snap",
 			UserId: userID,
-			Body:   &clusterv1.ApplyEventRequest_Ready{Ready: &clusterv1.ReadyEvent{}},
+			Body:   &svcv1.ApplyEventRequest_Ready{Ready: &svcv1.ReadyEvent{}},
 		})
 		require.NoError(t, err)
 	}
 
-	snap, err := srv.SnapshotRoom(ctx, &clusterv1.SnapshotRoomRequest{RoomId: "r-snap"})
+	snap, err := srv.SnapshotRoom(ctx, &svcv1.SnapshotRoomRequest{RoomId: "r-snap"})
 	require.NoError(t, err)
 	require.Equal(t, "playing", snap.GetState())
 	require.EqualValues(t, 0, snap.GetActingSeat())
@@ -238,7 +238,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 		name   string
 		kind   roomsvc.Kind
 		env    *clientv1.Envelope
-		assert func(*testing.T, *clusterv1.RoomServiceStreamEventsResponse)
+		assert func(*testing.T, *svcv1.RoomServiceStreamEventsResponse)
 	}{
 		{
 			name: "start",
@@ -249,7 +249,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				ActingSeats:   []int32{0},
 				WallRemaining: 55,
 			}}},
-			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
 				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetStartGame().GetPhase())
 				require.EqualValues(t, 10, evt.GetStartGame().GetStep())
@@ -267,7 +267,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				WallRemaining:  54,
 				DeadlineUnixMs: 1234,
 			}}},
-			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
 				require.Equal(t, clientv1.Phase_PHASE_DISCARD, evt.GetDrawTile().GetPhase())
 				require.EqualValues(t, 11, evt.GetDrawTile().GetStep())
@@ -287,7 +287,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				Step:        12,
 				ActingSeats: []int32{2},
 			}}},
-			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
 				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetAction().GetPhase())
 				require.EqualValues(t, 12, evt.GetAction().GetStep())
@@ -305,7 +305,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				Step:        13,
 				ActingSeats: []int32{0, 1, 2, 3},
 			}}},
-			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
 				require.Equal(t, clientv1.Phase_PHASE_OPENING, evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 13, evt.GetOpeningDone().GetStep())
@@ -323,7 +323,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				Step:        14,
 				ActingSeats: []int32{0},
 			}}},
-			assert: func(t *testing.T, evt *clusterv1.RoomServiceStreamEventsResponse) {
+			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
 				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 14, evt.GetOpeningDone().GetStep())
@@ -414,8 +414,8 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 
 	ev := postgres.NewRoomEventStore(mock)
 	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, nil)
-	ch := make(chan *clusterv1.RoomServiceStreamEventsResponse, 1)
-	srv.streams["r-batch"] = []chan *clusterv1.RoomServiceStreamEventsResponse{ch}
+	ch := make(chan *svcv1.RoomServiceStreamEventsResponse, 1)
+	srv.streams["r-batch"] = []chan *svcv1.RoomServiceStreamEventsResponse{ch}
 
 	resp, err := srv.applyNotifications(context.Background(), "r-batch", "", []roomsvc.Notification{
 		{Kind: roomsvc.KindDrawTile, Payload: []byte("draw"), TargetSeat: roomsvc.BroadcastSeat},

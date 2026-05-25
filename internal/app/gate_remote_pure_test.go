@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	clusterv1 "racoo.cn/lsp/api/gen/go/cluster/v1"
+	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	"racoo.cn/lsp/internal/net/msgid"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/internal/store/redis"
@@ -97,14 +97,14 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		evt    *clusterv1.RoomServiceStreamEventsResponse
+		evt    *svcv1.RoomServiceStreamEventsResponse
 		wantID uint16
 	}{
 		{
 			name: "initial_deal",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				Cursor: "deal-0",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_InitialDeal{
+				Body: &svcv1.RoomServiceStreamEventsResponse_InitialDeal{
 					InitialDeal: &clientv1.InitialDealNotify{SeatIndex: 0, Tiles: []string{"m1", "m2"}},
 				},
 			},
@@ -112,10 +112,10 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		},
 		{
 			name: "start_game",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				RoomId: "r1",
 				Cursor: "1",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_StartGame{
+				Body: &svcv1.RoomServiceStreamEventsResponse_StartGame{
 					StartGame: &clientv1.StartGameNotify{DealerSeat: 2},
 				},
 			},
@@ -123,8 +123,8 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		},
 		{
 			name: "draw_tile",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
-				Body: &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
+				Body: &svcv1.RoomServiceStreamEventsResponse_DrawTile{
 					DrawTile: &clientv1.DrawTileNotify{SeatIndex: 1, Tile: "1m"},
 				},
 			},
@@ -132,8 +132,8 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		},
 		{
 			name: "action",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
-				Body: &clusterv1.RoomServiceStreamEventsResponse_Action{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
+				Body: &svcv1.RoomServiceStreamEventsResponse_Action{
 					Action: &clientv1.ActionNotify{SeatIndex: 0, Action: "pong", Tile: "5w"},
 				},
 			},
@@ -141,9 +141,9 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		},
 		{
 			name: "settlement",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-set",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_Settlement{
+				Body: &svcv1.RoomServiceStreamEventsResponse_Settlement{
 					Settlement: &clientv1.SettlementNotify{
 						WinnerUserIds: []string{"u1"},
 						TotalFan:      4,
@@ -156,8 +156,8 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		},
 		{
 			name: "opening_done_exchange",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
-				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
+				Body: &svcv1.RoomServiceStreamEventsResponse_OpeningDone{
 					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:    "exchange_three",
 						Kind:      "exchange_done",
@@ -169,8 +169,8 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		},
 		{
 			name: "opening_done_que",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
-				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
+				Body: &svcv1.RoomServiceStreamEventsResponse_OpeningDone{
 					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:   "que_men",
 						Kind:     "missing_suit_done",
@@ -182,8 +182,8 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 		},
 		{
 			name: "route_redirect",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
-				Body: &clusterv1.RoomServiceStreamEventsResponse_RouteRedirect{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
+				Body: &svcv1.RoomServiceStreamEventsResponse_RouteRedirect{
 					RouteRedirect: &clientv1.RouteRedirectNotify{WsUrl: "ws://x", Reason: "moved"},
 				},
 			},
@@ -203,7 +203,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 
 	t.Run("unknown_body", func(t *testing.T) {
 		t.Parallel()
-		_, _, err := encodeClusterRoomEvent(&clusterv1.RoomServiceStreamEventsResponse{})
+		_, _, err := encodeClusterRoomEvent(&svcv1.RoomServiceStreamEventsResponse{})
 		require.Error(t, err)
 	})
 }
@@ -213,15 +213,15 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		evt    *clusterv1.RoomServiceStreamEventsResponse
+		evt    *svcv1.RoomServiceStreamEventsResponse
 		assert func(*testing.T, *clientv1.Envelope)
 	}{
 		{
 			name: "start",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-progress",
 				Cursor: "r-progress:10",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_StartGame{
+				Body: &svcv1.RoomServiceStreamEventsResponse_StartGame{
 					StartGame: &clientv1.StartGameNotify{
 						DealerSeat:    0,
 						Phase:         clientv1.Phase_PHASE_DRAW,
@@ -241,10 +241,10 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "draw",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-progress",
 				Cursor: "r-progress:11",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_DrawTile{
+				Body: &svcv1.RoomServiceStreamEventsResponse_DrawTile{
 					DrawTile: &clientv1.DrawTileNotify{
 						SeatIndex:      1,
 						Tile:           "p9",
@@ -267,10 +267,10 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "action",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-progress",
 				Cursor: "r-progress:12",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_Action{
+				Body: &svcv1.RoomServiceStreamEventsResponse_Action{
 					Action: &clientv1.ActionNotify{
 						SeatIndex:   1,
 						Action:      "discard",
@@ -290,10 +290,10 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "exchange",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-progress",
 				Cursor: "r-progress:13",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+				Body: &svcv1.RoomServiceStreamEventsResponse_OpeningDone{
 					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:      "exchange_three",
 						Kind:        "exchange_done",
@@ -314,10 +314,10 @@ func TestEncodeClusterRoomEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "que",
-			evt: &clusterv1.RoomServiceStreamEventsResponse{
+			evt: &svcv1.RoomServiceStreamEventsResponse{
 				RoomId: "r-progress",
 				Cursor: "r-progress:14",
-				Body: &clusterv1.RoomServiceStreamEventsResponse_OpeningDone{
+				Body: &svcv1.RoomServiceStreamEventsResponse_OpeningDone{
 					OpeningDone: &clientv1.OpeningDoneNotify{
 						Action:      "que_men",
 						Kind:        "missing_suit_done",
@@ -517,7 +517,7 @@ func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
 		lobby:           &fakeLobbyClient{},
 		roomSeats:       make(map[string]map[int32]string),
 		defaultRoomAddr: "room-local",
-		roomClients:     map[string]clusterv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "waiting"}},
+		roomClients:     map[string]svcv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "waiting"}},
 		streamCtx:       context.Background(),
 		roomStreams:     make(map[string]*roomStreamHandle),
 	}
@@ -551,7 +551,7 @@ func TestRemoteRoomGatewayAutoMatchSkipsStartedRoom(t *testing.T) {
 	g := &remoteRoomGateway{
 		lobby:           lobby,
 		defaultRoomAddr: "room-local",
-		roomClients:     map[string]clusterv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "playing"}},
+		roomClients:     map[string]svcv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "playing"}},
 		roomSeats:       make(map[string]map[int32]string),
 		streamCtx:       context.Background(),
 		roomStreams:     make(map[string]*roomStreamHandle),
@@ -570,89 +570,89 @@ type fakeAutoMatchLobby struct {
 	left int
 }
 
-func (f *fakeAutoMatchLobby) CreateRoom(_ context.Context, _ *clusterv1.CreateRoomRequest, _ ...grpc.CallOption) (*clusterv1.CreateRoomResponse, error) {
-	return &clusterv1.CreateRoomResponse{RoomId: "ROOM02", SeatIndex: 0}, nil
+func (f *fakeAutoMatchLobby) CreateRoom(_ context.Context, _ *svcv1.CreateRoomRequest, _ ...grpc.CallOption) (*svcv1.CreateRoomResponse, error) {
+	return &svcv1.CreateRoomResponse{RoomId: "ROOM02", SeatIndex: 0}, nil
 }
 
-func (f *fakeAutoMatchLobby) JoinRoom(_ context.Context, req *clusterv1.JoinRoomRequest, _ ...grpc.CallOption) (*clusterv1.JoinRoomResponse, error) {
+func (f *fakeAutoMatchLobby) JoinRoom(_ context.Context, req *svcv1.JoinRoomRequest, _ ...grpc.CallOption) (*svcv1.JoinRoomResponse, error) {
 	if req.GetRoomId() == "ROOM01" {
-		return &clusterv1.JoinRoomResponse{SeatIndex: 1}, nil
+		return &svcv1.JoinRoomResponse{SeatIndex: 1}, nil
 	}
-	return &clusterv1.JoinRoomResponse{Error: "room not found"}, nil
+	return &svcv1.JoinRoomResponse{Error: "room not found"}, nil
 }
 
-func (f *fakeAutoMatchLobby) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequest, _ ...grpc.CallOption) (*clusterv1.GetRoomResponse, error) {
-	return &clusterv1.GetRoomResponse{RoomId: "ROOM01", RoomNodeId: "room-local"}, nil
+func (f *fakeAutoMatchLobby) GetRoom(_ context.Context, _ *svcv1.GetRoomRequest, _ ...grpc.CallOption) (*svcv1.GetRoomResponse, error) {
+	return &svcv1.GetRoomResponse{RoomId: "ROOM01", RoomNodeId: "room-local"}, nil
 }
 
-func (f *fakeAutoMatchLobby) ListRooms(_ context.Context, _ *clusterv1.ListRoomsRequest, _ ...grpc.CallOption) (*clusterv1.ListRoomsResponse, error) {
-	return &clusterv1.ListRoomsResponse{Rooms: []*clientv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}}, nil
+func (f *fakeAutoMatchLobby) ListRooms(_ context.Context, _ *svcv1.ListRoomsRequest, _ ...grpc.CallOption) (*svcv1.ListRoomsResponse, error) {
+	return &svcv1.ListRoomsResponse{Rooms: []*clientv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}}}, nil
 }
 
-func (f *fakeAutoMatchLobby) ListRules(_ context.Context, _ *clusterv1.ListRulesRequest, _ ...grpc.CallOption) (*clusterv1.ListRulesResponse, error) {
-	return &clusterv1.ListRulesResponse{}, nil
+func (f *fakeAutoMatchLobby) ListRules(_ context.Context, _ *svcv1.ListRulesRequest, _ ...grpc.CallOption) (*svcv1.ListRulesResponse, error) {
+	return &svcv1.ListRulesResponse{}, nil
 }
 
-func (f *fakeAutoMatchLobby) AutoMatch(_ context.Context, _ *clusterv1.AutoMatchRequest, _ ...grpc.CallOption) (*clusterv1.AutoMatchResponse, error) {
-	return &clusterv1.AutoMatchResponse{}, nil
+func (f *fakeAutoMatchLobby) AutoMatch(_ context.Context, _ *svcv1.AutoMatchRequest, _ ...grpc.CallOption) (*svcv1.AutoMatchResponse, error) {
+	return &svcv1.AutoMatchResponse{}, nil
 }
 
-func (f *fakeAutoMatchLobby) AddBot(_ context.Context, _ *clusterv1.AddBotRequest, _ ...grpc.CallOption) (*clusterv1.AddBotResponse, error) {
-	return &clusterv1.AddBotResponse{}, nil
+func (f *fakeAutoMatchLobby) AddBot(_ context.Context, _ *svcv1.AddBotRequest, _ ...grpc.CallOption) (*svcv1.AddBotResponse, error) {
+	return &svcv1.AddBotResponse{}, nil
 }
 
-func (f *fakeAutoMatchLobby) LeaveRoom(_ context.Context, _ *clusterv1.LeaveRoomRequest, _ ...grpc.CallOption) (*clusterv1.LeaveRoomResponse, error) {
+func (f *fakeAutoMatchLobby) LeaveRoom(_ context.Context, _ *svcv1.LeaveRoomRequest, _ ...grpc.CallOption) (*svcv1.LeaveRoomResponse, error) {
 	f.left++
-	return &clusterv1.LeaveRoomResponse{}, nil
+	return &svcv1.LeaveRoomResponse{}, nil
 }
 
 type fakeRoomClient struct {
 	state string
 }
 
-func (f *fakeRoomClient) ApplyEvent(_ context.Context, _ *clusterv1.ApplyEventRequest, _ ...grpc.CallOption) (*clusterv1.ApplyEventResponse, error) {
-	return &clusterv1.ApplyEventResponse{Accepted: true}, nil
+func (f *fakeRoomClient) ApplyEvent(_ context.Context, _ *svcv1.ApplyEventRequest, _ ...grpc.CallOption) (*svcv1.ApplyEventResponse, error) {
+	return &svcv1.ApplyEventResponse{Accepted: true}, nil
 }
 
-func (f *fakeRoomClient) StreamEvents(_ context.Context, _ *clusterv1.StreamEventsRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[clusterv1.RoomServiceStreamEventsResponse], error) {
+func (f *fakeRoomClient) StreamEvents(_ context.Context, _ *svcv1.StreamEventsRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[svcv1.RoomServiceStreamEventsResponse], error) {
 	return nil, errors.New("stream not implemented")
 }
 
-func (f *fakeRoomClient) SnapshotRoom(_ context.Context, _ *clusterv1.SnapshotRoomRequest, _ ...grpc.CallOption) (*clusterv1.SnapshotRoomResponse, error) {
-	return &clusterv1.SnapshotRoomResponse{State: f.state}, nil
+func (f *fakeRoomClient) SnapshotRoom(_ context.Context, _ *svcv1.SnapshotRoomRequest, _ ...grpc.CallOption) (*svcv1.SnapshotRoomResponse, error) {
+	return &svcv1.SnapshotRoomResponse{State: f.state}, nil
 }
 
-func (f *fakeLobbyClient) CreateRoom(_ context.Context, _ *clusterv1.CreateRoomRequest, _ ...grpc.CallOption) (*clusterv1.CreateRoomResponse, error) {
-	return &clusterv1.CreateRoomResponse{RoomId: "ROOM02", SeatIndex: 0}, nil
+func (f *fakeLobbyClient) CreateRoom(_ context.Context, _ *svcv1.CreateRoomRequest, _ ...grpc.CallOption) (*svcv1.CreateRoomResponse, error) {
+	return &svcv1.CreateRoomResponse{RoomId: "ROOM02", SeatIndex: 0}, nil
 }
 
-func (f *fakeLobbyClient) JoinRoom(_ context.Context, _ *clusterv1.JoinRoomRequest, _ ...grpc.CallOption) (*clusterv1.JoinRoomResponse, error) {
-	return &clusterv1.JoinRoomResponse{SeatIndex: 1}, nil
+func (f *fakeLobbyClient) JoinRoom(_ context.Context, _ *svcv1.JoinRoomRequest, _ ...grpc.CallOption) (*svcv1.JoinRoomResponse, error) {
+	return &svcv1.JoinRoomResponse{SeatIndex: 1}, nil
 }
 
-func (f *fakeLobbyClient) GetRoom(_ context.Context, _ *clusterv1.GetRoomRequest, _ ...grpc.CallOption) (*clusterv1.GetRoomResponse, error) {
-	return &clusterv1.GetRoomResponse{RoomId: "ROOM01", RoomNodeId: "room-local"}, nil
+func (f *fakeLobbyClient) GetRoom(_ context.Context, _ *svcv1.GetRoomRequest, _ ...grpc.CallOption) (*svcv1.GetRoomResponse, error) {
+	return &svcv1.GetRoomResponse{RoomId: "ROOM01", RoomNodeId: "room-local"}, nil
 }
 
-func (f *fakeLobbyClient) ListRooms(_ context.Context, _ *clusterv1.ListRoomsRequest, _ ...grpc.CallOption) (*clusterv1.ListRoomsResponse, error) {
-	return &clusterv1.ListRoomsResponse{
+func (f *fakeLobbyClient) ListRooms(_ context.Context, _ *svcv1.ListRoomsRequest, _ ...grpc.CallOption) (*svcv1.ListRoomsResponse, error) {
+	return &svcv1.ListRoomsResponse{
 		Rooms:         []*clientv1.RoomMeta{{RoomId: "ROOM01", RuleId: "sichuan_xuezhandaodi_huansanzhang", SeatCount: 1, MaxSeats: 4, Stage: "waiting"}},
 		NextPageToken: "next",
 	}, nil
 }
 
-func (f *fakeLobbyClient) ListRules(_ context.Context, _ *clusterv1.ListRulesRequest, _ ...grpc.CallOption) (*clusterv1.ListRulesResponse, error) {
-	return &clusterv1.ListRulesResponse{Rules: []*clientv1.RuleMeta{{RuleId: "sichuan_xuezhandaodi_huansanzhang"}}}, nil
+func (f *fakeLobbyClient) ListRules(_ context.Context, _ *svcv1.ListRulesRequest, _ ...grpc.CallOption) (*svcv1.ListRulesResponse, error) {
+	return &svcv1.ListRulesResponse{Rules: []*clientv1.RuleMeta{{RuleId: "sichuan_xuezhandaodi_huansanzhang"}}}, nil
 }
 
-func (f *fakeLobbyClient) AutoMatch(_ context.Context, _ *clusterv1.AutoMatchRequest, _ ...grpc.CallOption) (*clusterv1.AutoMatchResponse, error) {
-	return &clusterv1.AutoMatchResponse{RoomId: "ROOM01", SeatIndex: 1}, nil
+func (f *fakeLobbyClient) AutoMatch(_ context.Context, _ *svcv1.AutoMatchRequest, _ ...grpc.CallOption) (*svcv1.AutoMatchResponse, error) {
+	return &svcv1.AutoMatchResponse{RoomId: "ROOM01", SeatIndex: 1}, nil
 }
 
-func (f *fakeLobbyClient) AddBot(_ context.Context, _ *clusterv1.AddBotRequest, _ ...grpc.CallOption) (*clusterv1.AddBotResponse, error) {
-	return &clusterv1.AddBotResponse{}, nil
+func (f *fakeLobbyClient) AddBot(_ context.Context, _ *svcv1.AddBotRequest, _ ...grpc.CallOption) (*svcv1.AddBotResponse, error) {
+	return &svcv1.AddBotResponse{}, nil
 }
 
-func (f *fakeLobbyClient) LeaveRoom(_ context.Context, _ *clusterv1.LeaveRoomRequest, _ ...grpc.CallOption) (*clusterv1.LeaveRoomResponse, error) {
-	return &clusterv1.LeaveRoomResponse{}, nil
+func (f *fakeLobbyClient) LeaveRoom(_ context.Context, _ *svcv1.LeaveRoomRequest, _ ...grpc.CallOption) (*svcv1.LeaveRoomResponse, error) {
+	return &svcv1.LeaveRoomResponse{}, nil
 }

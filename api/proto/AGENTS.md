@@ -1,6 +1,11 @@
 # api/proto
 
-proto 契约定义层。客户端契约（`client/v1`）与集群 RPC 契约（`cluster/v1`）分树维护。
+proto 契约定义层。客户端消息契约（`client/v1`）与服务间 RPC 契约（`v1`）共用同一 proto 模块。
+
+## 结构
+
+- `client/v1/messages.proto`：客户端可见消息类型（`SeatInfo`、`Phase`、`Envelope` 等）。
+- `v1/service.proto`：集群内部 RPC 接口（`RoomService`、`LobbyService`），直接引用 `client/v1` 消息。
 
 ## 硬约束
 
