@@ -14,6 +14,7 @@ obs:
   addr: ""
 etcd:
   endpoints: ""
+  prefix: "/lsp"
 runtime:
   gate:
     ws_rate_limit_per_second: 20

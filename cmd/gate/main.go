@@ -42,7 +42,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
-		disco := cluster.NewEtcdDiscovery(cli, "/lsp", 30)
+		disco := cluster.NewEtcdDiscovery(cli, cfg.EtcdPrefix, 30)
 		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindGate, cluster.NewNodeID(), cluster.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,
 			Version:       "phase3",

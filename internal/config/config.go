@@ -26,8 +26,10 @@ type Config struct {
 	ObsAddr string
 	// EtcdEndpoints 逗号分隔的 etcd 端点；空表示不启用控制面客户端（单测与本地默认）。
 	EtcdEndpoints string
-	RoomTimeouts  RoomTimeouts
-	Runtime       RuntimeConfig
+	// EtcdPrefix 是 etcd 键空间前缀，默认 /lsp；多套环境共享同一 etcd 时需设置不同前缀。
+	EtcdPrefix   string
+	RoomTimeouts RoomTimeouts
+	Runtime      RuntimeConfig
 }
 
 // RoomTimeouts 定义房间各等待态服务端托管超时。
@@ -168,6 +170,7 @@ func Load(path string) (Config, error) {
 		PostgresDSN:          v.GetString("postgres.dsn"),
 		ObsAddr:              v.GetString("obs.addr"),
 		EtcdEndpoints:        v.GetString("etcd.endpoints"),
+		EtcdPrefix:           v.GetString("etcd.prefix"),
 		RoomTimeouts: RoomTimeouts{
 			OpeningDefault:  v.GetDuration("room.timeout.opening"),
 			OpeningByAction: roomTimeoutActionDurations(v.GetStringMapString("room.timeout.opening_by_action")),

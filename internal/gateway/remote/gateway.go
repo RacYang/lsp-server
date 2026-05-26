@@ -76,8 +76,8 @@ func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache 
 			_ = roomConn.Close()
 			return nil, nil, fmt.Errorf("dial etcd: %w", err)
 		}
-		roomRoute = cluster.NewEtcdRouter(etcdCli, "/lsp")
-		roomDisc = cluster.NewEtcdDiscovery(etcdCli, "/lsp", 30)
+		roomRoute = cluster.NewEtcdRouter(etcdCli, cfg.EtcdPrefix)
+		roomDisc = cluster.NewEtcdDiscovery(etcdCli, cfg.EtcdPrefix, 30)
 	}
 	pollCtx, cancel := context.WithCancel(context.Background())
 	gateway := &remoteRoomGateway{

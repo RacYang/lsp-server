@@ -63,7 +63,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
-		disco := cluster.NewEtcdDiscovery(cli, "/lsp", 30)
+		disco := cluster.NewEtcdDiscovery(cli, cfg.EtcdPrefix, 30)
 		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindLobby, cluster.NewNodeID(), cluster.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,
 			Version:       "phase3",
@@ -73,7 +73,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
-		claimer = cluster.NewEtcdRouter(cli, "/lsp")
+		claimer = cluster.NewEtcdRouter(cli, cfg.EtcdPrefix)
 	}
 	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
 		lobbyadapter.RegisterService(s, lobbyadapter.NewGRPCServer(svc, claimer, defaultRoomNodeID))

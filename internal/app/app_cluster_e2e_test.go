@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -216,9 +215,9 @@ func startProc(t *testing.T, ctx context.Context, repoRoot, target, cfgPath stri
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "LSP_CONFIG="+cfgPath)
 	logFile, _ := os.CreateTemp("", "proc-*.log")
-	var out bytes.Buffer
-	cmd.Stdout = io.MultiWriter(&out, logFile)
-	cmd.Stderr = io.MultiWriter(&out, logFile)
+	// Stdout 与 Stderr 分别独占 logFile；不共享 bytes.Buffer，避免两个 exec goroutine 并发写同一缓冲产生数据竞争。
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("启动进程 %s 失败: %v", target, err)
 	}
@@ -233,7 +232,7 @@ func startProc(t *testing.T, ctx context.Context, repoRoot, target, cfgPath stri
 		go func() { done <- cmd.Wait() }()
 		select {
 		case err := <-done:
-			t.Logf("%s 退出日志 (err=%v):\n%s", target, err, out.String())
+			t.Logf("%s 退出 (err=%v), 日志见: %s", target, err, logFile.Name())
 		case <-cancelCtx.Done():
 			if cmd.Process != nil {
 				_ = cmd.Process.Kill()

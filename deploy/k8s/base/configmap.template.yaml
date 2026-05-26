@@ -19,6 +19,7 @@ data:
       addr: ":18081"
     etcd:
       endpoints: "etcd:2379"
+      prefix: "/lsp"
     runtime:
       gate:
         ws_rate_limit_per_second: 20
@@ -51,6 +52,7 @@ data:
       addr: ":19083"
     etcd:
       endpoints: "etcd:2379"
+      prefix: "/lsp"
     runtime:
       gate:
         ws_rate_limit_per_second: 20
@@ -83,6 +85,7 @@ data:
       addr: ":19084"
     etcd:
       endpoints: "etcd:2379"
+      prefix: "/lsp"
     runtime:
       gate:
         ws_rate_limit_per_second: 20

@@ -108,7 +108,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
-		disco := cluster.NewEtcdDiscovery(cli, "/lsp", 30)
+		disco := cluster.NewEtcdDiscovery(cli, cfg.EtcdPrefix, 30)
 		advertiseAddr := strings.TrimSpace(cfg.ClusterAdvertiseAddr)
 		if advertiseAddr == "" {
 			advertiseAddr = cfg.ServerAddr
@@ -124,7 +124,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		defer func() { _ = reg.Stop(context.Background()) }()
 
 		if rcli != nil {
-			rt := cluster.NewEtcdRouter(cli, "/lsp")
+			rt := cluster.NewEtcdRouter(cli, cfg.EtcdPrefix)
 			if err := recoverOwnedRooms(ctx, rt, defaultRoomNodeID, rcli, ev, gs, svcCore); err != nil {
 				logx.Error(ctx, "房间冷启动恢复失败", "err", err.Error())
 				return 1
