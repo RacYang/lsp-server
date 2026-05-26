@@ -96,7 +96,9 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	svcCore.SetAfterCmdHook(botSup.AfterCmd)
 	svc := roomadapter.NewGRPCServer(svcCore, ev, gs, st, rcli)
 	botSup.SetNotificationHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
-		_ = svc.PersistPublishAndFinalize(ctx, roomID, "", notifications)
+		if err := svc.PersistPublishAndFinalize(ctx, roomID, "", notifications); err != nil {
+			logx.Error(logx.WithRoomID(ctx, roomID), "机器人通知持久化失败", "err", err.Error())
+		}
 	})
 	svc.SetIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {

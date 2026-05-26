@@ -319,6 +319,9 @@ func (a *roomActor) run() {
 			}
 			m.res <- roomSnapshotResult{playerIDs: out, fsmState: state, ready: a.room.Ready}
 		default:
+			// 到达此分支意味着某处向 actor 信道投递了未注册的命令类型，属于编程错误。
+			// panic 在开发期可立即暴露问题；生产环境中进程崩溃优于静默消费错误消息。
+			panic(fmt.Sprintf("actor 收到未处理的命令类型: %T", msg))
 		}
 		if a.onAfterCmd != nil && a.room != nil {
 			a.onAfterCmd(a.room.ID)
