@@ -10,6 +10,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
@@ -50,13 +51,20 @@ type remoteRoomGateway struct {
 	roomClients map[string]svcv1.RoomServiceClient
 }
 
+// grpcKeepaliveOpt 为集群内 gRPC 连接添加保活参数：每 30s 探测一次，10s 超时，空闲时也发送探测。
+var grpcKeepaliveOpt = grpc.WithKeepaliveParams(keepalive.ClientParameters{
+	Time:                30 * time.Second,
+	Timeout:             10 * time.Second,
+	PermitWithoutStream: true,
+})
+
 // New 根据配置构造远程房间网关，返回网关实例、清理函数和初始化错误。
 func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache *redis.Client, settlementStore *postgres.SettlementStore) (handler.RoomGateway, func(), error) {
-	lobbyConn, err := grpc.NewClient(cfg.ClusterLobbyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	lobbyConn, err := grpc.NewClient(cfg.ClusterLobbyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpcKeepaliveOpt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("dial lobby grpc: %w", err)
 	}
-	roomConn, err := grpc.NewClient(cfg.ClusterRoomAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	roomConn, err := grpc.NewClient(cfg.ClusterRoomAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpcKeepaliveOpt)
 	if err != nil {
 		_ = lobbyConn.Close()
 		return nil, nil, fmt.Errorf("dial room grpc: %w", err)

@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -86,17 +87,33 @@ func (g *remoteRoomGateway) roomAddressForRoom(ctx context.Context, roomID strin
 }
 
 // roomClientForAddr 从连接池返回或新建指定地址的 gRPC 客户端。
+// 若已有连接处于 TransientFailure 状态，则从缓存移除并重建，避免用失效连接发请求。
 func (g *remoteRoomGateway) roomClientForAddr(addr string) (svcv1.RoomServiceClient, error) {
 	g.connMu.Lock()
 	defer g.connMu.Unlock()
-	if client, ok := g.roomClients[addr]; ok && client != nil {
+	// 先检查物理连接健康度：TransientFailure 时清除并重建。
+	if conn := g.roomConnMap[addr]; conn != nil {
+		if conn.GetState() == connectivity.TransientFailure {
+			_ = conn.Close()
+			delete(g.roomConnMap, addr)
+			delete(g.roomClients, addr)
+		}
+	}
+	// 已有健康客户端（含测试中预注入的 fake 客户端）直接返回。
+	if client := g.roomClients[addr]; client != nil {
 		return client, nil
 	}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpcKeepaliveOpt)
 	if err != nil {
 		return nil, fmt.Errorf("dial room grpc %s: %w", addr, err)
 	}
 	client := svcv1.NewRoomServiceClient(conn)
+	if g.roomConnMap == nil {
+		g.roomConnMap = make(map[string]*grpc.ClientConn)
+	}
+	if g.roomClients == nil {
+		g.roomClients = make(map[string]svcv1.RoomServiceClient)
+	}
 	g.roomConnMap[addr] = conn
 	g.roomClients[addr] = client
 	return client, nil
