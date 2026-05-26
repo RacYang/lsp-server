@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RoomService_ApplyEvent_FullMethodName   = "/v1.RoomService/ApplyEvent"
-	RoomService_StreamEvents_FullMethodName = "/v1.RoomService/StreamEvents"
-	RoomService_SnapshotRoom_FullMethodName = "/v1.RoomService/SnapshotRoom"
+	RoomService_ApplyEvent_FullMethodName    = "/v1.RoomService/ApplyEvent"
+	RoomService_StreamEvents_FullMethodName  = "/v1.RoomService/StreamEvents"
+	RoomService_SnapshotRoom_FullMethodName  = "/v1.RoomService/SnapshotRoom"
+	RoomService_GetRoomEvents_FullMethodName = "/v1.RoomService/GetRoomEvents"
 )
 
 // RoomServiceClient is the client API for RoomService service.
@@ -31,11 +32,14 @@ const (
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC，非客户端直连）。
 type RoomServiceClient interface {
 	ApplyEvent(ctx context.Context, in *ApplyEventRequest, opts ...grpc.CallOption) (*ApplyEventResponse, error)
-	// StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
-	// 本 RPC 仅在迁移期间供旧客户端使用。
+	// StreamEvents 已废弃（deprecated）：实时事件路径改用 Redis List + BLPOP；
+	// 本 RPC 仅保留以维持迁移期间的向后兼容，后续版本将移除。
 	StreamEvents(ctx context.Context, in *StreamEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RoomServiceStreamEventsResponse], error)
 	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
 	SnapshotRoom(ctx context.Context, in *SnapshotRoomRequest, opts ...grpc.CallOption) (*SnapshotRoomResponse, error)
+	// GetRoomEvents 返回指定游标之后的历史事件，供 gate 在重连时补齐遗漏帧。
+	// 实时事件由 Redis BLPOP 获取；本接口仅用于重放历史，不阻塞等待新事件。
+	GetRoomEvents(ctx context.Context, in *GetRoomEventsRequest, opts ...grpc.CallOption) (*GetRoomEventsResponse, error)
 }
 
 type roomServiceClient struct {
@@ -85,6 +89,16 @@ func (c *roomServiceClient) SnapshotRoom(ctx context.Context, in *SnapshotRoomRe
 	return out, nil
 }
 
+func (c *roomServiceClient) GetRoomEvents(ctx context.Context, in *GetRoomEventsRequest, opts ...grpc.CallOption) (*GetRoomEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRoomEventsResponse)
+	err := c.cc.Invoke(ctx, RoomService_GetRoomEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RoomServiceServer is the server API for RoomService service.
 // All implementations must embed UnimplementedRoomServiceServer
 // for forward compatibility.
@@ -92,11 +106,14 @@ func (c *roomServiceClient) SnapshotRoom(ctx context.Context, in *SnapshotRoomRe
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC，非客户端直连）。
 type RoomServiceServer interface {
 	ApplyEvent(context.Context, *ApplyEventRequest) (*ApplyEventResponse, error)
-	// StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
-	// 本 RPC 仅在迁移期间供旧客户端使用。
+	// StreamEvents 已废弃（deprecated）：实时事件路径改用 Redis List + BLPOP；
+	// 本 RPC 仅保留以维持迁移期间的向后兼容，后续版本将移除。
 	StreamEvents(*StreamEventsRequest, grpc.ServerStreamingServer[RoomServiceStreamEventsResponse]) error
 	// SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
 	SnapshotRoom(context.Context, *SnapshotRoomRequest) (*SnapshotRoomResponse, error)
+	// GetRoomEvents 返回指定游标之后的历史事件，供 gate 在重连时补齐遗漏帧。
+	// 实时事件由 Redis BLPOP 获取；本接口仅用于重放历史，不阻塞等待新事件。
+	GetRoomEvents(context.Context, *GetRoomEventsRequest) (*GetRoomEventsResponse, error)
 	mustEmbedUnimplementedRoomServiceServer()
 }
 
@@ -115,6 +132,9 @@ func (UnimplementedRoomServiceServer) StreamEvents(*StreamEventsRequest, grpc.Se
 }
 func (UnimplementedRoomServiceServer) SnapshotRoom(context.Context, *SnapshotRoomRequest) (*SnapshotRoomResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SnapshotRoom not implemented")
+}
+func (UnimplementedRoomServiceServer) GetRoomEvents(context.Context, *GetRoomEventsRequest) (*GetRoomEventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRoomEvents not implemented")
 }
 func (UnimplementedRoomServiceServer) mustEmbedUnimplementedRoomServiceServer() {}
 func (UnimplementedRoomServiceServer) testEmbeddedByValue()                     {}
@@ -184,6 +204,24 @@ func _RoomService_SnapshotRoom_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RoomService_GetRoomEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoomEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoomServiceServer).GetRoomEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoomService_GetRoomEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoomServiceServer).GetRoomEvents(ctx, req.(*GetRoomEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RoomService_ServiceDesc is the grpc.ServiceDesc for RoomService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -198,6 +236,10 @@ var RoomService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SnapshotRoom",
 			Handler:    _RoomService_SnapshotRoom_Handler,
+		},
+		{
+			MethodName: "GetRoomEvents",
+			Handler:    _RoomService_GetRoomEvents_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

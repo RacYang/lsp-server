@@ -539,3 +539,23 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 	}
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestGetRoomEventsWithNilStore(t *testing.T) {
+	t.Parallel()
+	// ev == nil 时应返回空响应而不出错，覆盖 GetRoomEvents 早返回路径。
+	srv := newRoomGRPCServer(nil, nil, nil, nil, nil)
+	resp, err := srv.GetRoomEvents(context.Background(), &svcv1.GetRoomEventsRequest{
+		RoomId:      "r-nilev",
+		SinceCursor: "r-nilev:0",
+	})
+	require.NoError(t, err)
+	require.Empty(t, resp.GetEvents())
+}
+
+func TestSetIdempotencyTTL(t *testing.T) {
+	t.Parallel()
+	// 覆盖 setIdempotencyTTL 的正常赋值路径。
+	srv := newRoomGRPCServer(nil, nil, nil, nil, nil)
+	srv.setIdempotencyTTL(30 * time.Second)
+	require.Equal(t, 30*time.Second, srv.idempotencyTTL)
+}

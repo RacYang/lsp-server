@@ -518,8 +518,8 @@ func TestRemoteRoomGatewayLobbyMethods(t *testing.T) {
 		roomSeats:       make(map[string]map[int32]string),
 		defaultRoomAddr: "room-local",
 		roomClients:     map[string]svcv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "waiting"}},
-		streamCtx:       context.Background(),
-		roomStreams:     make(map[string]*roomStreamHandle),
+		pollCtx:         context.Background(),
+		pollHandles:     make(map[string]context.CancelFunc),
 	}
 	ctx := context.Background()
 
@@ -553,8 +553,8 @@ func TestRemoteRoomGatewayAutoMatchSkipsStartedRoom(t *testing.T) {
 		defaultRoomAddr: "room-local",
 		roomClients:     map[string]svcv1.RoomServiceClient{"room-local": &fakeRoomClient{state: "playing"}},
 		roomSeats:       make(map[string]map[int32]string),
-		streamCtx:       context.Background(),
-		roomStreams:     make(map[string]*roomStreamHandle),
+		pollCtx:         context.Background(),
+		pollHandles:     make(map[string]context.CancelFunc),
 	}
 
 	roomID, seat, err := g.AutoMatch(context.Background(), "sichuan_xuezhandaodi_huansanzhang", "u2", false)
@@ -620,6 +620,10 @@ func (f *fakeRoomClient) StreamEvents(_ context.Context, _ *svcv1.StreamEventsRe
 
 func (f *fakeRoomClient) SnapshotRoom(_ context.Context, _ *svcv1.SnapshotRoomRequest, _ ...grpc.CallOption) (*svcv1.SnapshotRoomResponse, error) {
 	return &svcv1.SnapshotRoomResponse{State: f.state}, nil
+}
+
+func (f *fakeRoomClient) GetRoomEvents(_ context.Context, _ *svcv1.GetRoomEventsRequest, _ ...grpc.CallOption) (*svcv1.GetRoomEventsResponse, error) {
+	return &svcv1.GetRoomEventsResponse{}, nil
 }
 
 func (f *fakeLobbyClient) CreateRoom(_ context.Context, _ *svcv1.CreateRoomRequest, _ ...grpc.CallOption) (*svcv1.CreateRoomResponse, error) {

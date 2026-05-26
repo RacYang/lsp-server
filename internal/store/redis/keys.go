@@ -31,3 +31,9 @@ func RoomSnapshotMetaKey(roomID string) string {
 func UserProfileKey(userID string) string {
 	return fmt.Sprintf("lsp:user:profile:%s", userID)
 }
+
+// RoomEventQueueKey 返回 lsp:room:{roomID}:events 形式的房间实时事件队列键。
+// 由 room 节点 RPUSH，gate 节点通过 BLPOP 消费；TTL 5 分钟防止死房间积压。
+func RoomEventQueueKey(roomID string) string {
+	return fmt.Sprintf("lsp:room:%s:events", roomID)
+}

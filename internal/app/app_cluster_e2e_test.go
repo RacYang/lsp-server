@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -22,6 +23,14 @@ import (
 )
 
 func TestClusterProcessesFourPlayersReceiveSettlement(t *testing.T) {
+	// 地基二：gate 通过 Redis BLPOP 订阅事件，集群测试须配置 miniredis。
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(mr.Close)
+	redisAddr := mr.Addr()
+
 	repoRoot := mustRepoRoot(t)
 	gateAddr := reserveTCPAddr(t)
 	lobbyAddr := reserveTCPAddr(t)
@@ -29,8 +38,8 @@ func TestClusterProcessesFourPlayersReceiveSettlement(t *testing.T) {
 
 	tempDir := t.TempDir()
 	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", lobbyAddr, "sichuan_xuezhandaodi_huansanzhang"))
-	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", roomAddr, "sichuan_xuezhandaodi_huansanzhang"))
-	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\n", gateAddr, "sichuan_xuezhandaodi_huansanzhang", lobbyAddr, roomAddr))
+	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nredis:\n  addr: %q\n", roomAddr, "sichuan_xuezhandaodi_huansanzhang", redisAddr))
+	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\nredis:\n  addr: %q\n", gateAddr, "sichuan_xuezhandaodi_huansanzhang", lobbyAddr, roomAddr, redisAddr))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -76,7 +85,7 @@ func TestClusterReconnectLoginWithSessionToken(t *testing.T) {
 
 	tempDir := t.TempDir()
 	lobbyCfg := writeConfig(t, tempDir, "lobby.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", lobbyAddr, "sichuan_xuezhandaodi_huansanzhang"))
-	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\n", roomAddr, "sichuan_xuezhandaodi_huansanzhang"))
+	roomCfg := writeConfig(t, tempDir, "room.yaml", fmt.Sprintf("server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: \"\"\n  room_addr: \"\"\nredis:\n  addr: %q\n", roomAddr, "sichuan_xuezhandaodi_huansanzhang", redisAddr))
 	gateCfg := writeConfig(t, tempDir, "gate.yaml", fmt.Sprintf(
 		"server:\n  addr: %q\nrule:\n  default_id: %q\ncluster:\n  lobby_addr: %q\n  room_addr: %q\nredis:\n  addr: %q\npostgres:\n  dsn: \"\"\nobs:\n  addr: \"\"\netcd:\n  endpoints: \"\"\n",
 		gateAddr, "sichuan_xuezhandaodi_huansanzhang", lobbyAddr, roomAddr, redisAddr))
@@ -206,14 +215,16 @@ func startProc(t *testing.T, ctx context.Context, repoRoot, target, cfgPath stri
 
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "LSP_CONFIG="+cfgPath)
+	logFile, _ := os.CreateTemp("", "proc-*.log")
 	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	cmd.Stdout = io.MultiWriter(&out, logFile)
+	cmd.Stderr = io.MultiWriter(&out, logFile)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("启动进程 %s 失败: %v", target, err)
 	}
+	t.Logf("进程 %s 日志文件: %s", target, logFile.Name())
 	t.Cleanup(func() {
-		cancelCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cancelCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if cmd.Process != nil {
 			_ = cmd.Process.Signal(os.Interrupt)
@@ -222,14 +233,14 @@ func startProc(t *testing.T, ctx context.Context, repoRoot, target, cfgPath stri
 		go func() { done <- cmd.Wait() }()
 		select {
 		case err := <-done:
-			if err != nil && ctx.Err() == nil {
-				t.Logf("%s 退出日志:\n%s", target, out.String())
-			}
+			t.Logf("%s 退出日志 (err=%v):\n%s", target, err, out.String())
 		case <-cancelCtx.Done():
 			if cmd.Process != nil {
 				_ = cmd.Process.Kill()
 			}
+			t.Logf("%s 超时强杀，日志见: %s", target, logFile.Name())
 		}
+		_ = logFile.Close()
 	})
 }
 

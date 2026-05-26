@@ -39,11 +39,6 @@ func withOutgoingTrace(ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, "racoo-trace-id", tid)
 }
 
-// roomStreamHandle 绑定单次房间事件订阅，便于重连时取消旧流并带游标重建。
-type roomStreamHandle struct {
-	cancel context.CancelFunc
-}
-
 type remoteRoomGateway struct {
 	lobby             svcv1.LobbyServiceClient
 	defaultRoomAddr   string
@@ -55,9 +50,12 @@ type remoteRoomGateway struct {
 	router            *router.Etcd
 	discovery         *discovery.Etcd
 
-	streamCtx             context.Context
-	streamMu              sync.Mutex
-	roomStreams           map[string]*roomStreamHandle
+	// pollCtx 是全部 Redis 轮询 goroutine 的根 context，gateway 关闭时统一取消。
+	pollCtx context.Context
+	pollMu  sync.Mutex
+	// pollHandles 记录每个活跃房间的轮询取消函数，Leave 时显式取消对应 goroutine。
+	pollHandles map[string]context.CancelFunc
+
 	seatMu                sync.Mutex
 	roomSeats             map[string]map[int32]string
 	offlineSurrenderAfter time.Duration
@@ -95,7 +93,7 @@ func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Man
 		roomRoute = router.NewEtcd(etcdCli, "/lsp")
 		roomDisc = discovery.NewEtcd(etcdCli, "/lsp", 30)
 	}
-	streamCtx, cancel := context.WithCancel(context.Background())
+	pollCtx, cancel := context.WithCancel(context.Background())
 	gateway := &remoteRoomGateway{
 		lobby:                 svcv1.NewLobbyServiceClient(lobbyConn),
 		defaultRoomAddr:       cfg.ClusterRoomAddr,
@@ -107,8 +105,8 @@ func newRemoteRoomGateway(cfg config.Config, hub *session.Hub, sess *session.Man
 		router:                roomRoute,
 		discovery:             roomDisc,
 		offlineSurrenderAfter: cfg.Runtime.RoomSurrenderAfterOffline,
-		streamCtx:             streamCtx,
-		roomStreams:           make(map[string]*roomStreamHandle),
+		pollCtx:               pollCtx,
+		pollHandles:           make(map[string]context.CancelFunc),
 		roomSeats:             make(map[string]map[int32]string),
 		roomConnMap:           map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
 		roomClients:           map[string]svcv1.RoomServiceClient{cfg.ClusterRoomAddr: svcv1.NewRoomServiceClient(roomConn)},
@@ -453,12 +451,12 @@ func (g *remoteRoomGateway) Leave(ctx context.Context, roomID, userID string) (f
 	if !resp.GetAccepted() {
 		return nil, fmt.Errorf("room apply leave rejected")
 	}
-	g.streamMu.Lock()
-	if cur := g.roomStreams[roomID]; cur != nil {
-		cur.cancel()
-		delete(g.roomStreams, roomID)
+	g.pollMu.Lock()
+	if cancel := g.pollHandles[roomID]; cancel != nil {
+		cancel()
+		delete(g.pollHandles, roomID)
 	}
-	g.streamMu.Unlock()
+	g.pollMu.Unlock()
 	return nil, nil
 }
 
@@ -601,70 +599,124 @@ func (g *remoteRoomGateway) applyRoomEvent(ctx context.Context, req *svcv1.Apply
 	return nil, nil
 }
 
-// EnsureRoomEventSubscription 建立对房间 gRPC 事件流的订阅；sinceCursor 传给 room 用于 PG 重放。
+// EnsureRoomEventSubscription 启动对房间实时事件的 Redis BLPOP 轮询订阅。
+// sinceCursor != "" 时会先通过 GetRoomEvents 向 hub 补齐历史帧，再启动轮询 goroutine。
+// 对同一房间重复调用（sinceCursor == ""）时，若轮询已在运行则直接返回。
 func (g *remoteRoomGateway) EnsureRoomEventSubscription(ctx context.Context, roomID, sinceCursor string) error {
 	if g == nil {
 		return fmt.Errorf("nil remote room gateway")
 	}
-	_ = ctx
-	return g.ensureRoomStream(ctx, roomID, sinceCursor)
-}
-
-func (g *remoteRoomGateway) ensureRoomStream(ctx context.Context, roomID, sinceCursor string) error {
-	roomClient, _, roomErr := g.roomClientForRoom(ctx, roomID)
-	if roomErr != nil {
-		return roomErr
-	}
-	streamBase := g.streamCtx
-	if tid := logx.TraceIDFromContext(ctx); tid != "" {
-		streamBase = metadata.AppendToOutgoingContext(g.streamCtx, "racoo-trace-id", tid)
+	if g.routeCache == nil {
+		return fmt.Errorf("redis 客户端未配置，无法订阅房间事件")
 	}
 
-	g.streamMu.Lock()
-	cur := g.roomStreams[roomID]
-	if sinceCursor == "" && cur != nil {
-		g.streamMu.Unlock()
+	g.pollMu.Lock()
+	_, alreadyPolling := g.pollHandles[roomID]
+	if sinceCursor == "" && alreadyPolling {
+		g.pollMu.Unlock()
 		return nil
 	}
-	if cur != nil {
-		cur.cancel()
-		delete(g.roomStreams, roomID)
+	if alreadyPolling {
+		// 重连时需重建订阅（带游标），先取消旧 goroutine
+		g.pollHandles[roomID]()
+		delete(g.pollHandles, roomID)
 	}
-	subCtx, cancel := context.WithCancel(streamBase)
-	handle := &roomStreamHandle{cancel: cancel}
-	g.roomStreams[roomID] = handle
-	g.streamMu.Unlock()
+	pollSubCtx, pollCancel := context.WithCancel(g.pollCtx)
+	g.pollHandles[roomID] = pollCancel
+	g.pollMu.Unlock()
 
-	var stream grpc.ServerStreamingClient[svcv1.RoomServiceStreamEventsResponse]
-	var err error
-	for attempt := 0; attempt < 8; attempt++ {
-		stream, err = roomClient.StreamEvents(subCtx, &svcv1.StreamEventsRequest{RoomId: roomID, SinceCursor: sinceCursor})
-		if err == nil {
-			break
-		}
-		st, ok := status.FromError(err)
-		if !ok || (st.Code() != codes.Unavailable && st.Code() != codes.DeadlineExceeded) {
-			break
-		}
-		timer := time.NewTimer(100 * time.Millisecond)
-		select {
-		case <-subCtx.Done():
-			timer.Stop()
-			err = subCtx.Err()
-		case <-timer.C:
+	// 历史事件重放仅在重连时执行（sinceCursor != ""）
+	if sinceCursor != "" {
+		if err := g.replayHistoricalEvents(ctx, roomID, sinceCursor); err != nil {
+			logCtx := logx.WithRoomID(ctx, roomID)
+			logx.Warn(logCtx, "历史事件重放失败", "err", err.Error())
 		}
 	}
-	if err != nil {
-		cancel()
-		g.streamMu.Lock()
-		if g.roomStreams[roomID] == handle {
-			delete(g.roomStreams, roomID)
-		}
-		g.streamMu.Unlock()
-		return fmt.Errorf("subscribe room stream: %w", err)
-	}
-	go g.consumeRoomStream(streamBase, roomID, stream, handle)
+
+	go g.pollRoomEvents(pollSubCtx, roomID)
 	return nil
+}
+
+// replayHistoricalEvents 向 room 节点查询游标之后的历史事件，并通过 hub 广播给已连接用户。
+func (g *remoteRoomGateway) replayHistoricalEvents(ctx context.Context, roomID, sinceCursor string) error {
+	roomClient, _, err := g.roomClientForRoom(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	var resp *svcv1.GetRoomEventsResponse
+	if err := retryGRPC(ctx, func(callCtx context.Context) error {
+		var callErr error
+		resp, callErr = roomClient.GetRoomEvents(withOutgoingTrace(callCtx), &svcv1.GetRoomEventsRequest{
+			RoomId:      roomID,
+			SinceCursor: sinceCursor,
+		})
+		return callErr
+	}); err != nil {
+		return fmt.Errorf("获取历史事件: %w", err)
+	}
+	for _, evt := range resp.GetEvents() {
+		g.forwardEventToHub(ctx, roomID, evt)
+	}
+	return nil
+}
+
+// pollRoomEvents 通过 Redis BLPOP 长阻塞拉取房间实时事件，并推送给已连接的 WebSocket 客户端。
+// ctx 取消（房间退出或 gateway 关闭）时 goroutine 自动退出。
+func (g *remoteRoomGateway) pollRoomEvents(ctx context.Context, roomID string) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		data, err := g.routeCache.RoomEventQueuePop(ctx, roomID, 2*time.Second)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			logCtx := logx.WithRoomID(ctx, roomID)
+			logx.Warn(logCtx, "拉取房间事件队列失败", "err", err.Error())
+			continue
+		}
+		if data == nil {
+			continue // BLPOP 超时，检查 ctx 后继续
+		}
+		var evt svcv1.RoomServiceStreamEventsResponse
+		if err := proto.Unmarshal(data, &evt); err != nil {
+			logCtx := logx.WithRoomID(ctx, roomID)
+			logx.Warn(logCtx, "反序列化房间事件失败", "err", err.Error())
+			continue
+		}
+		g.forwardEventToHub(ctx, roomID, &evt)
+	}
+}
+
+// forwardEventToHub 将房间事件编码为帧后广播（或单播）给 hub 内的连接，并更新会话游标。
+func (g *remoteRoomGateway) forwardEventToHub(ctx context.Context, roomID string, evt *svcv1.RoomServiceStreamEventsResponse) {
+	msgID, payload, err := encodeClusterRoomEvent(evt)
+	if err != nil {
+		logCtx := logx.WithRoomID(ctx, roomID)
+		logx.Warn(logCtx, "房间事件编码失败", "err", err.Error())
+		return
+	}
+	var delivered []string
+	if g.hub != nil {
+		encoded := frame.Encode(msgID, payload)
+		if evt.GetTargetSeat() < 0 {
+			delivered = g.hub.BroadcastDeliveredUsers(roomID, encoded)
+		} else if targetUserID, ok := g.userForSeat(roomID, evt.GetTargetSeat()); ok {
+			if g.hub.SendToUser(targetUserID, encoded) {
+				delivered = []string{targetUserID}
+			}
+		}
+	}
+	if g.sess != nil && evt.GetCursor() != "" {
+		cur := evt.GetCursor()
+		for _, uid := range delivered {
+			if err := g.sess.UpdateCursor(ctx, uid, cur); err != nil {
+				logCtx := logx.WithRoomID(logx.WithUserID(ctx, uid), roomID)
+				logx.Warn(logCtx, "更新会话游标失败", "cursor", cur, "err", err.Error())
+			}
+		}
+	}
 }
 
 // Resume 通过 Redis 会话与 room.SnapshotRoom 构造重连结果；不主动建立订阅（由 handler 在 Hub 注册后调用 EnsureRoomEventSubscription）。
@@ -825,49 +877,6 @@ func (g *remoteRoomGateway) userForSeat(roomID string, seat int32) (string, bool
 	defer g.seatMu.Unlock()
 	userID := g.roomSeats[roomID][seat]
 	return userID, userID != ""
-}
-
-func (g *remoteRoomGateway) consumeRoomStream(streamCtx context.Context, roomID string, stream grpc.ServerStreamingClient[svcv1.RoomServiceStreamEventsResponse], handle *roomStreamHandle) {
-	defer func() {
-		_ = stream.CloseSend()
-		g.streamMu.Lock()
-		if cur := g.roomStreams[roomID]; cur == handle {
-			delete(g.roomStreams, roomID)
-		}
-		g.streamMu.Unlock()
-	}()
-	for {
-		evt, err := stream.Recv()
-		if err != nil {
-			return
-		}
-		msgID, payload, err := encodeClusterRoomEvent(evt)
-		if err != nil {
-			logCtx := logx.WithRoomID(streamCtx, roomID)
-			logx.Warn(logCtx, "房间事件转客户端推送失败", "err", err.Error())
-			continue
-		}
-		var delivered []string
-		if g.hub != nil {
-			encoded := frame.Encode(msgID, payload)
-			if evt.GetTargetSeat() < 0 {
-				delivered = g.hub.BroadcastDeliveredUsers(roomID, encoded)
-			} else if targetUserID, ok := g.userForSeat(roomID, evt.GetTargetSeat()); ok {
-				if g.hub.SendToUser(targetUserID, encoded) {
-					delivered = []string{targetUserID}
-				}
-			}
-		}
-		if g.sess != nil && evt.GetCursor() != "" {
-			cur := evt.GetCursor()
-			for _, uid := range delivered {
-				if err := g.sess.UpdateCursor(streamCtx, uid, cur); err != nil {
-					logCtx := logx.WithRoomID(logx.WithUserID(streamCtx, uid), roomID)
-					logx.Warn(logCtx, "更新会话游标失败", "cursor", cur, "err", err.Error())
-				}
-			}
-		}
-	}
 }
 
 func (g *remoteRoomGateway) loadSettlementFallback(ctx context.Context, userID, roomID string) (*handler.ResumeResult, bool, error) {

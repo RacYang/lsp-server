@@ -203,13 +203,31 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 16; i++ {
-		msg, err := readWSClientMessage(conn, 4*time.Second)
-		if err != nil {
-			t.Fatal(err)
+	// 集群模式下游戏开局事件可能早于 ReadyResp 到达（Redis BLPOP 异步推送）。
+	// 将非 ReadyResp 消息暂存到本地切片，循环结束后统一回入 backlog，避免重复读同一条消息。
+	var pending []wsTestMessage
+	defer func() {
+		for _, m := range pending {
+			stashWSMessage(conn, m)
 		}
+	}()
+	for i := 0; i < 32; i++ {
+		_ = conn.SetReadDeadline(time.Now().Add(4 * time.Second))
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("准备阶段第 %d 次读取失败: %v", i, err)
+		}
+		h, err := frame.ReadFrame(bytes.NewReader(data))
+		if err != nil {
+			t.Fatalf("准备阶段帧解析失败: %v", err)
+		}
+		var env clientv1.Envelope
+		if err := proto.Unmarshal(h.Payload, &env); err != nil {
+			t.Fatalf("准备阶段 proto 解析失败: %v", err)
+		}
+		msg := wsTestMessage{msgID: h.MsgID, env: &env}
 		if msg.msgID != msgid.ReadyResp {
-			stashWSMessage(conn, msg)
+			pending = append(pending, msg)
 			continue
 		}
 		if msg.env.GetReadyResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {

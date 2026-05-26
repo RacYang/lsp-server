@@ -76,9 +76,26 @@ func (s *roomGRPCServer) persistPublishAndFinalize(ctx context.Context, roomID, 
 	s.markIdempotency(ctx, roomID, idemKey)
 	for idx, event := range events {
 		s.afterEventSideEffects(ctx, roomID, notifications[idx], event.evt, event.cursor)
+		s.publishToRedis(ctx, roomID, event.evt)
 		s.publish(roomID, event.evt)
 	}
 	return nil
+}
+
+// publishToRedis 将已生成的事件帧序列化后推送到 Redis List，供 gate 通过 BLPOP 消费。
+// rdb 为 nil 时（单进程模式）静默跳过；推送失败仅警告，不阻断事件流。
+func (s *roomGRPCServer) publishToRedis(ctx context.Context, roomID string, evt *svcv1.RoomServiceStreamEventsResponse) {
+	if s.rdb == nil {
+		return
+	}
+	data, err := proto.Marshal(evt)
+	if err != nil {
+		logx.Warn(logx.WithRoomID(ctx, roomID), "序列化事件失败，跳过 Redis 推送", "err", err.Error())
+		return
+	}
+	if err := s.rdb.RoomEventQueuePush(ctx, roomID, data); err != nil {
+		logx.Warn(logx.WithRoomID(ctx, roomID), "推送事件到 Redis 队列失败", "err", err.Error())
+	}
 }
 
 type persistedEvent struct {
@@ -444,7 +461,34 @@ func pickLastQueSuits(ctx context.Context, s *roomGRPCServer, roomID string) []i
 	return nil
 }
 
+// GetRoomEvents 返回指定游标之后的全部历史事件，供 gate 在重连时补齐遗漏帧。
+// 实时事件由 Redis BLPOP 获取；本接口仅查询历史，不阻塞等待新事件。
+func (s *roomGRPCServer) GetRoomEvents(ctx context.Context, req *svcv1.GetRoomEventsRequest) (*svcv1.GetRoomEventsResponse, error) {
+	if s == nil {
+		return nil, fmt.Errorf("nil room grpc server")
+	}
+	roomID := req.GetRoomId()
+	sinceSeq := parseSinceSeq(roomID, req.GetSinceCursor())
+	if s.ev == nil {
+		return &svcv1.GetRoomEventsResponse{}, nil
+	}
+	rows, err := s.ev.ListEventsAfter(ctx, roomID, sinceSeq)
+	if err != nil {
+		return nil, err
+	}
+	evts := make([]*svcv1.RoomServiceStreamEventsResponse, 0, len(rows))
+	for _, row := range rows {
+		evt, err := mapPGRowToEvent(roomID, row)
+		if err != nil {
+			return nil, err
+		}
+		evts = append(evts, evt)
+	}
+	return &svcv1.GetRoomEventsResponse{Events: evts}, nil
+}
+
 // StreamEvents 先按游标从 PostgreSQL 重放，再订阅实时通道。
+// 已废弃（deprecated）：实时事件路径改用 Redis List + BLPOP；本 RPC 仅保留向后兼容。
 func (s *roomGRPCServer) StreamEvents(req *svcv1.StreamEventsRequest, stream svcv1.RoomService_StreamEventsServer) error {
 	if s == nil {
 		return fmt.Errorf("nil room grpc server")

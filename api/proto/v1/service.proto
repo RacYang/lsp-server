@@ -9,11 +9,14 @@ option go_package = "racoo.cn/lsp/api/gen/go/v1;v1";
 // RoomService 在房间归属节点上执行局内事件（集群内 gRPC，非客户端直连）。
 service RoomService {
   rpc ApplyEvent(ApplyEventRequest) returns (ApplyEventResponse);
-  // StreamEvents 已废弃，实时事件路径由 Redis List（BLPOP）替代；
-  // 本 RPC 仅在迁移期间供旧客户端使用。
+  // StreamEvents 已废弃（deprecated）：实时事件路径改用 Redis List + BLPOP；
+  // 本 RPC 仅保留以维持迁移期间的向后兼容，后续版本将移除。
   rpc StreamEvents(StreamEventsRequest) returns (stream RoomServiceStreamEventsResponse);
   // SnapshotRoom 返回当前房间可恢复摘要与快照游标，供 gate 在订阅前对齐切点。
   rpc SnapshotRoom(SnapshotRoomRequest) returns (SnapshotRoomResponse);
+  // GetRoomEvents 返回指定游标之后的历史事件，供 gate 在重连时补齐遗漏帧。
+  // 实时事件由 Redis BLPOP 获取；本接口仅用于重放历史，不阻塞等待新事件。
+  rpc GetRoomEvents(GetRoomEventsRequest) returns (GetRoomEventsResponse);
 }
 
 // LobbyService 提供房间创建、加入与元数据查询（集群内 gRPC，非客户端直连接口）。
@@ -68,6 +71,18 @@ message JoinEvent {}
 message StreamEventsRequest {
   string room_id = 1;
   string since_cursor = 2;
+}
+
+// GetRoomEventsRequest 供 gate 在重连时从 room 节点拉取指定游标之后的历史事件。
+message GetRoomEventsRequest {
+  string room_id = 1;
+  // since_cursor 格式为 "{roomID}:{seq}"，仅返回 seq 之后的事件。
+  string since_cursor = 2;
+}
+
+// GetRoomEventsResponse 包含游标之后的全部历史事件；事件数量以房间完整局为上限。
+message GetRoomEventsResponse {
+  repeated RoomServiceStreamEventsResponse events = 1;
 }
 
 message SnapshotRoomRequest {
