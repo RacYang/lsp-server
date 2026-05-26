@@ -1,4 +1,4 @@
-package app
+package botsvc
 
 import (
 	"context"
@@ -9,6 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	roomsvc "racoo.cn/lsp/internal/service/room"
+
+	// 触发麻将规则注册，确保测试可使用 sichuan_xuezhandaodi_huansanzhang。
+	_ "racoo.cn/lsp/internal/mahjong/guobiao/jingji"
+	_ "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 )
 
 // TestBotSupervisorAllBotsCompleteARound 端到端验证：4 家全是占位 bot 时，

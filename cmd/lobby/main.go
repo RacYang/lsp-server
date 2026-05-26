@@ -12,6 +12,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
+	lobbyadapter "racoo.cn/lsp/internal/adapter/lobby"
 	"racoo.cn/lsp/internal/app"
 	"racoo.cn/lsp/internal/cluster/discovery"
 	"racoo.cn/lsp/internal/cluster/nodeid"
@@ -76,7 +77,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		claimer = router.NewEtcd(cli, "/lsp")
 	}
 	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
-		registerLobbyService(s, newLobbyGRPCServer(svc, claimer, defaultRoomNodeID))
+		lobbyadapter.RegisterService(s, lobbyadapter.NewGRPCServer(svc, claimer, defaultRoomNodeID))
 	})
 	if err != nil {
 		logx.Error(ctx, "大厅服务装配失败", "err", err.Error())

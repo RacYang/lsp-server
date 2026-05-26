@@ -16,6 +16,7 @@ import (
 	"racoo.cn/lsp/internal/cluster/nodeid"
 	"racoo.cn/lsp/internal/cluster/router"
 	"racoo.cn/lsp/internal/config"
+	botsvc "racoo.cn/lsp/internal/service/bot"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
@@ -90,7 +91,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 	})
 	// 占座机器人由本进程的 BotSupervisor 代为出牌；ADR-0037 描述的"后续补 supervisor"在此落地。
-	botSup := app.NewBotSupervisor(svcCore)
+	botSup := botsvc.NewBotSupervisor(svcCore)
 	svcCore.SetAfterCmdHook(botSup.AfterCmd)
 	svc := newRoomGRPCServer(svcCore, ev, gs, st, rcli)
 	botSup.SetNotificationHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {

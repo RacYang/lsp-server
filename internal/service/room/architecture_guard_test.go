@@ -140,7 +140,7 @@ func TestOpeningClientRuntimeDoesNotModelSichuanPhases(t *testing.T) {
 		require.NotContains(t, src, "PhaseQueMen", "%s must use generic PhaseOpening", base)
 	}
 	for _, rel := range []string{
-		"internal/app/bot_supervisor.go",
+		"internal/service/bot/supervisor.go",
 		"internal/bot/runner.go",
 	} {
 		src := readRepoFile(t, rel)

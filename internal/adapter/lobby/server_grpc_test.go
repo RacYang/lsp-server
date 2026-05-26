@@ -1,5 +1,5 @@
 // 直接驱动 lobby gRPC handler 的解码与拦截器桥接，覆盖 register/method handler 三函数。
-package main
+package lobbyadapter
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ func startBufLobbyServer(t *testing.T) (svcv1.LobbyServiceClient, func()) {
 	require.NoError(t, err)
 
 	srv := grpc.NewServer()
-	registerLobbyService(srv, newLobbyGRPCServer(lobbysvc.New(), nil, "room-test"))
+	RegisterService(srv, NewGRPCServer(lobbysvc.New(), nil, "room-test"))
 	go func() { _ = srv.Serve(ln) }()
 
 	addr := ln.Addr().String()
@@ -109,24 +109,24 @@ func TestRegisterLobbyService_RoundTrip(t *testing.T) {
 // 错误透传出去，不得吞掉、也不得继续走业务，否则会把脏数据写到 lobby service。
 func TestLobbyHandlersDecodeFailure(t *testing.T) {
 	t.Parallel()
-	srv := newLobbyGRPCServer(lobbysvc.New(), nil, "room-x")
+	srv := NewGRPCServer(lobbysvc.New(), nil, "room-x")
 	failingDec := func(_ interface{}) error { return errors.New("decode boom") }
 
-	_, err := lobbyCreateRoomHandler(srv, context.Background(), failingDec, nil)
+	_, err := createRoomHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
-	_, err = lobbyJoinRoomHandler(srv, context.Background(), failingDec, nil)
+	_, err = joinRoomHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
-	_, err = lobbyGetRoomHandler(srv, context.Background(), failingDec, nil)
+	_, err = getRoomHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
-	_, err = lobbyListRoomsHandler(srv, context.Background(), failingDec, nil)
+	_, err = listRoomsHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
-	_, err = lobbyListRulesHandler(srv, context.Background(), failingDec, nil)
+	_, err = listRulesHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
-	_, err = lobbyAutoMatchHandler(srv, context.Background(), failingDec, nil)
+	_, err = autoMatchHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
-	_, err = lobbyLeaveRoomHandler(srv, context.Background(), failingDec, nil)
+	_, err = leaveRoomHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
-	_, err = lobbyAddBotHandler(srv, context.Background(), failingDec, nil)
+	_, err = addBotHandler(srv, context.Background(), failingDec, nil)
 	require.ErrorContains(t, err, "decode boom")
 }
 
@@ -135,7 +135,7 @@ func TestLobbyHandlersDecodeFailure(t *testing.T) {
 // 这里通过计数器断言"拦截器至少被调用一次"，并在拦截器内部解码请求体以确保 ctx/req 是真实业务对象。
 func TestLobbyHandlersWithInterceptor(t *testing.T) {
 	t.Parallel()
-	srv := newLobbyGRPCServer(lobbysvc.New(), nil, "room-i")
+	srv := NewGRPCServer(lobbysvc.New(), nil, "room-i")
 
 	calls := 0
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -148,25 +148,25 @@ func TestLobbyHandlersWithInterceptor(t *testing.T) {
 		buf, _ := proto.Marshal(&svcv1.CreateRoomRequest{RoomId: "intercepted"})
 		return proto.Unmarshal(buf, in.(proto.Message))
 	}
-	resp, err := lobbyCreateRoomHandler(srv, context.Background(), dec, interceptor)
+	resp, err := createRoomHandler(srv, context.Background(), dec, interceptor)
 	require.NoError(t, err)
 	require.NotEmpty(t, resp.(*svcv1.CreateRoomResponse).GetRoomNodeId())
 	require.Equal(t, 1, calls)
 }
 
-// TestRegisterLobbyServiceAcceptsArbitraryRegistrar 校验 registerLobbyService 在自定义 registrar 上能正确登记 ServiceDesc：
+// TestRegisterLobbyServiceAcceptsArbitraryRegistrar 校验 RegisterService 在自定义 registrar 上能正确登记 ServiceDesc：
 // 真实 gRPC server 不便单测拦截 RegisterService 调用，这里用一个最小 registrar 桩把传入的 ServiceDesc 捕获下来，
 // 直接断言服务名与方法数量，避免业务代码隐式重命名服务或漏掉新增方法。
 func TestRegisterLobbyServiceAcceptsArbitraryRegistrar(t *testing.T) {
 	t.Parallel()
 	captured := &captureRegistrar{}
-	registerLobbyService(captured, newLobbyGRPCServer(lobbysvc.New(), nil, "room-r"))
+	RegisterService(captured, NewGRPCServer(lobbysvc.New(), nil, "room-r"))
 	require.Equal(t, 1, captured.calls)
 	require.Equal(t, "v1.LobbyService", captured.serviceName)
 	require.ElementsMatch(t, []string{"CreateRoom", "JoinRoom", "GetRoom", "ListRooms", "ListRules", "AutoMatch", "LeaveRoom", "AddBot"}, captured.methods)
 }
 
-// captureRegistrar 仅用于断言 registerLobbyService 写入的 ServiceDesc 元数据，不真正运行 RPC：
+// captureRegistrar 仅用于断言 RegisterService 写入的 ServiceDesc 元数据，不真正运行 RPC：
 // 它实现 grpc.ServiceRegistrar 接口的最小子集，把每次调用收到的服务名与方法名暂存到字段里。
 type captureRegistrar struct {
 	calls       int

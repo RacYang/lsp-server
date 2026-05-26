@@ -28,6 +28,9 @@ coverage:
     internal/app: 41
     internal/handler: 75
     internal/service/room: 67
+    internal/service/bot: 60
+    internal/adapter/lobby: 55
+    internal/adapter/room: 45
     internal/bot: 40
     internal/bot/advisor: 0
     internal/bot/wsclient: 0
@@ -90,8 +93,10 @@ lint:
       mahjong_fan: internal/mahjong/fan/**
       mahjong_analysis: internal/mahjong/analysis/**
       bot: internal/bot/**
+      service_bot: internal/service/bot/**
       domain: internal/domain/**
       app: internal/app/**
+      adapter: internal/adapter/**
       net: internal/net/**
       cluster: internal/cluster/**
       handler: internal/handler/**
@@ -108,27 +113,31 @@ lint:
       apigen_v1: api/gen/go/v1/**
     deny:
       - from: mahjong_builtin
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_xuezhandaodi
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_rules
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_tile
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_wall
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_hand
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_hu
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_fan
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: mahjong_analysis
-        to: [net, cluster, handler, store, service, session, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
       - from: domain
-        to: [net, cluster, handler, store, service, app, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, app, adapter, clock, metrics, bot, cmd]
       - from: handler
         to: [store]
+      - from: adapter
+        to: [app, cmd]
+      - from: service_bot
+        to: [net, cluster, handler, store, session, app, adapter, clock, metrics, cmd]
       - from: service
         to: [net, handler, cluster, bot, cmd]
       - from: pkg
@@ -144,8 +153,10 @@ lint:
           - mahjong_fan
           - mahjong_analysis
           - bot
+          - service_bot
           - domain
           - app
+          - adapter
           - net
           - cluster
           - handler
@@ -172,8 +183,10 @@ lint:
           - mahjong_fan
           - mahjong_analysis
           - bot
+          - service_bot
           - domain
           - app
+          - adapter
           - net
           - cluster
           - handler
@@ -200,8 +213,10 @@ lint:
           - mahjong_fan
           - mahjong_analysis
           - bot
+          - service_bot
           - domain
           - app
+          - adapter
           - net
           - cluster
           - handler

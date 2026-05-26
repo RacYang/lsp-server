@@ -1,4 +1,4 @@
-package main
+package lobbyadapter
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 func TestLobbyGRPCServerRoundTrip(t *testing.T) {
 	t.Parallel()
-	srv := newLobbyGRPCServer(lobbysvc.New(), nil, "")
+	srv := NewGRPCServer(lobbysvc.New(), nil, "")
 	ctx := context.Background()
 
 	created, err := srv.CreateRoom(ctx, &svcv1.CreateRoomRequest{RoomId: "r1"})
@@ -30,7 +30,7 @@ func TestLobbyGRPCServerRoundTrip(t *testing.T) {
 
 func TestLobbyGRPCServerListCreateAndAutoMatch(t *testing.T) {
 	t.Parallel()
-	srv := newLobbyGRPCServer(lobbysvc.New(), nil, "room-test")
+	srv := NewGRPCServer(lobbysvc.New(), nil, "room-test")
 	ctx := context.Background()
 
 	created, err := srv.CreateRoom(ctx, &svcv1.CreateRoomRequest{

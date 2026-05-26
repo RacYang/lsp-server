@@ -1,4 +1,4 @@
-package app
+package botsvc
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func IsBotUserID(userID string) bool {
 // supervisor 异步检查是否有 bot 座位需要响应，依次走策略决策并提交回 Service。
 //
 // ADR-0037 描述的"占座 + 后续补 supervisor"的"后续"在此落地。supervisor 借助 Service
-// 的公共入口（RoundView/PlayerIDs/Discard/...）观察并推进，因此被放在 app 层而不是 service 层，
+// 的公共入口（RoundView/PlayerIDs/Discard/...）观察并推进，因此被放在 service 层的独立子包，
 // 避免麻将/网络/AI 三类耦合都集中到 service 包。
 type BotSupervisor struct {
 	svc      *roomsvc.Service
