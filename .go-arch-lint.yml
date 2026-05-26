@@ -37,6 +37,8 @@ components:
     in: internal/app/**
   adapter:
     in: internal/adapter/**
+  gateway:
+    in: internal/gateway/**
   net:
     in: internal/net/**
   cluster:
@@ -291,6 +293,20 @@ deps:
       - pkg
       - apigen_client
       - apigen_v1
+  gateway:
+    mayDependOn:
+      - net
+      - cluster
+      - handler
+      - store
+      - session
+      - config
+      - clock
+      - metrics
+      - log
+      - pkg
+      - apigen_client
+      - apigen_v1
   net:
     anyProjectDeps: true
   cluster:
@@ -312,6 +328,7 @@ deps:
       - domain
       - app
       - adapter
+      - gateway
       - net
       - cluster
       - service
@@ -342,6 +359,7 @@ deps:
       - domain
       - app
       - adapter
+      - gateway
       - store
       - session
       - config

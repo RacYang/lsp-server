@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"racoo.cn/lsp/internal/config"
+	remotegateway "racoo.cn/lsp/internal/gateway/remote"
 	"racoo.cn/lsp/internal/handler"
 	botsvc "racoo.cn/lsp/internal/service/bot"
 	roomsvc "racoo.cn/lsp/internal/service/room"
@@ -88,7 +89,7 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 			pgCleanup = pool.Close
 		}
 		var gwCleanup func()
-		gateway, gwCleanup, err = newRemoteRoomGateway(cfg, hub, sessMgr, redisClient, settlements)
+		gateway, gwCleanup, err = remotegateway.New(cfg, hub, sessMgr, redisClient, settlements)
 		if err != nil {
 			if redisCleanup != nil {
 				redisCleanup()

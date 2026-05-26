@@ -1,5 +1,5 @@
 // remote room gateway 中纯函数与转换器的单元测试，避免起 grpc 依赖。
-package app
+package remote
 
 import (
 	"context"

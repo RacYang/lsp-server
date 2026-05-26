@@ -26,6 +26,7 @@ coverage:
     internal/mahjong/...: 90
     internal/domain/...: 80
     internal/app: 41
+    internal/gateway/remote: 35
     internal/handler: 75
     internal/service/room: 67
     internal/service/bot: 60
@@ -97,6 +98,7 @@ lint:
       domain: internal/domain/**
       app: internal/app/**
       adapter: internal/adapter/**
+      gateway: internal/gateway/**
       net: internal/net/**
       cluster: internal/cluster/**
       handler: internal/handler/**
@@ -113,31 +115,33 @@ lint:
       apigen_v1: api/gen/go/v1/**
     deny:
       - from: mahjong_builtin
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_xuezhandaodi
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_rules
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_tile
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_wall
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_hand
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_hu
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_fan
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: mahjong_analysis
-        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: domain
-        to: [net, cluster, handler, store, service, service_bot, app, adapter, clock, metrics, bot, cmd]
+        to: [net, cluster, handler, store, service, service_bot, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: handler
         to: [store]
       - from: adapter
-        to: [app, cmd]
+        to: [app, cmd, gateway]
+      - from: gateway
+        to: [mahjong_builtin, mahjong_guobiao, mahjong_xuezhandaodi, mahjong_rules, mahjong_tile, mahjong_wall, mahjong_hand, mahjong_hu, mahjong_fan, mahjong_analysis, domain, bot, service, service_bot, app, adapter, cmd]
       - from: service_bot
-        to: [net, cluster, handler, store, session, app, adapter, clock, metrics, cmd]
+        to: [net, cluster, handler, store, session, app, adapter, gateway, clock, metrics, cmd]
       - from: service
         to: [net, handler, cluster, bot, cmd]
       - from: pkg
@@ -157,6 +161,7 @@ lint:
           - domain
           - app
           - adapter
+          - gateway
           - net
           - cluster
           - handler
@@ -187,6 +192,7 @@ lint:
           - domain
           - app
           - adapter
+          - gateway
           - net
           - cluster
           - handler
@@ -217,6 +223,7 @@ lint:
           - domain
           - app
           - adapter
+          - gateway
           - net
           - cluster
           - handler
