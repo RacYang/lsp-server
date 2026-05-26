@@ -13,9 +13,8 @@ import (
 	"google.golang.org/grpc"
 	roomadapter "racoo.cn/lsp/internal/adapter/room"
 	"racoo.cn/lsp/internal/app"
-	"racoo.cn/lsp/internal/cluster/discovery"
-	"racoo.cn/lsp/internal/cluster/nodeid"
-	"racoo.cn/lsp/internal/cluster/router"
+
+	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
 	botsvc "racoo.cn/lsp/internal/service/bot"
 	roomsvc "racoo.cn/lsp/internal/service/room"
@@ -109,12 +108,12 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
-		disco := discovery.NewEtcd(cli, "/lsp", 30)
+		disco := cluster.NewEtcdDiscovery(cli, "/lsp", 30)
 		advertiseAddr := strings.TrimSpace(cfg.ClusterAdvertiseAddr)
 		if advertiseAddr == "" {
 			advertiseAddr = cfg.ServerAddr
 		}
-		reg, err := disco.RegisterAndKeepAlive(ctx, nodeid.KindRoom, defaultRoomNodeID, discovery.NodeMeta{
+		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindRoom, defaultRoomNodeID, cluster.NodeMeta{
 			AdvertiseAddr: advertiseAddr,
 			Version:       "phase3",
 		}, 10*time.Second)
@@ -125,7 +124,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		defer func() { _ = reg.Stop(context.Background()) }()
 
 		if rcli != nil {
-			rt := router.NewEtcd(cli, "/lsp")
+			rt := cluster.NewEtcdRouter(cli, "/lsp")
 			if err := recoverOwnedRooms(ctx, rt, defaultRoomNodeID, rcli, ev, gs, svcCore); err != nil {
 				logx.Error(ctx, "房间冷启动恢复失败", "err", err.Error())
 				return 1
@@ -164,7 +163,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	return 0
 }
 
-func recoverOwnedRooms(ctx context.Context, rt *router.Etcd, rnodeID string, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service) error {
+func recoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID string, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service) error {
 	if rt == nil || rcli == nil || svc == nil {
 		return nil
 	}

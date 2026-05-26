@@ -1,4 +1,4 @@
-package router
+package cluster
 
 import (
 	"context"
@@ -8,30 +8,45 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-// Etcd 负责房间 ownership 的 claim 与 resolve；它是 room affinity 的权威真相源。
-type Etcd struct {
+// Resolver 根据房间 ID 解析应转发到的 room 节点 ID；未找到时 ok 为 false。
+type Resolver interface {
+	ResolveRoomOwner(ctx context.Context, roomID string) (nodeID string, ok bool, err error)
+}
+
+// Claimer 由 lobby 在创建或首次绑定时声明房间归属（与租约绑定）。
+type Claimer interface {
+	ClaimRoom(ctx context.Context, roomID, roomNodeID string, leaseID int64) error
+}
+
+// SanitizeRoomID 去除 roomID 两端空白，避免 etcd 键误拼空格。
+func SanitizeRoomID(roomID string) string {
+	return strings.TrimSpace(roomID)
+}
+
+// EtcdRouter 负责房间 ownership 的 claim 与 resolve；是 room affinity 的权威真相源。
+type EtcdRouter struct {
 	cli    *clientv3.Client
 	prefix string
 }
 
-// NewEtcd 创建房间路由客户端；prefix 为空时回退到 /lsp。
-func NewEtcd(cli *clientv3.Client, prefix string) *Etcd {
+// NewEtcdRouter 创建房间路由客户端；prefix 为空时回退到 /lsp。
+func NewEtcdRouter(cli *clientv3.Client, prefix string) *EtcdRouter {
 	if strings.TrimSpace(prefix) == "" {
 		prefix = "/lsp"
 	}
-	return &Etcd{cli: cli, prefix: strings.TrimRight(prefix, "/")}
+	return &EtcdRouter{cli: cli, prefix: strings.TrimRight(prefix, "/")}
 }
 
-func (e *Etcd) roomKey(roomID string) string {
+func (e *EtcdRouter) roomKey(roomID string) string {
 	return fmt.Sprintf("%s/rooms/%s/owner", e.prefix, SanitizeRoomID(roomID))
 }
 
-func (e *Etcd) roomPrefix() string {
+func (e *EtcdRouter) roomPrefix() string {
 	return fmt.Sprintf("%s/rooms/", e.prefix)
 }
 
 // ClaimRoom 使用 compare-and-set 声明房间归属；已被其他节点占用时返回错误。
-func (e *Etcd) ClaimRoom(ctx context.Context, roomID, roomNodeID string, leaseID int64) error {
+func (e *EtcdRouter) ClaimRoom(ctx context.Context, roomID, roomNodeID string, leaseID int64) error {
 	if e == nil || e.cli == nil {
 		return fmt.Errorf("nil etcd client")
 	}
@@ -61,7 +76,7 @@ func (e *Etcd) ClaimRoom(ctx context.Context, roomID, roomNodeID string, leaseID
 }
 
 // ResolveRoomOwner 读取 room -> node 归属；键不存在时 ok=false。
-func (e *Etcd) ResolveRoomOwner(ctx context.Context, roomID string) (string, bool, error) {
+func (e *EtcdRouter) ResolveRoomOwner(ctx context.Context, roomID string) (string, bool, error) {
 	if e == nil || e.cli == nil {
 		return "", false, fmt.Errorf("nil etcd client")
 	}
@@ -76,7 +91,7 @@ func (e *Etcd) ResolveRoomOwner(ctx context.Context, roomID string) (string, boo
 }
 
 // ListRoomsByOwner 枚举当前归属于某 room 节点的房间，供进程冷启动恢复使用。
-func (e *Etcd) ListRoomsByOwner(ctx context.Context, roomNodeID string) ([]string, error) {
+func (e *EtcdRouter) ListRoomsByOwner(ctx context.Context, roomNodeID string) ([]string, error) {
 	if e == nil || e.cli == nil {
 		return nil, fmt.Errorf("nil etcd client")
 	}

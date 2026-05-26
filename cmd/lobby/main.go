@@ -14,9 +14,8 @@ import (
 	"google.golang.org/grpc"
 	lobbyadapter "racoo.cn/lsp/internal/adapter/lobby"
 	"racoo.cn/lsp/internal/app"
-	"racoo.cn/lsp/internal/cluster/discovery"
-	"racoo.cn/lsp/internal/cluster/nodeid"
-	"racoo.cn/lsp/internal/cluster/router"
+
+	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	"racoo.cn/lsp/internal/store/redis"
@@ -53,7 +52,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	} else {
 		svc = lobbysvc.New()
 	}
-	var claimer *router.Etcd
+	var claimer *cluster.EtcdRouter
 	if cfg.EtcdEndpoints != "" {
 		cli, err := clientv3.New(clientv3.Config{
 			Endpoints:   splitEtcdEndpoints(cfg.EtcdEndpoints),
@@ -64,8 +63,8 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
-		disco := discovery.NewEtcd(cli, "/lsp", 30)
-		reg, err := disco.RegisterAndKeepAlive(ctx, nodeid.KindLobby, nodeid.New(), discovery.NodeMeta{
+		disco := cluster.NewEtcdDiscovery(cli, "/lsp", 30)
+		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindLobby, cluster.NewNodeID(), cluster.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,
 			Version:       "phase3",
 		}, 10*time.Second)
@@ -74,7 +73,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
-		claimer = router.NewEtcd(cli, "/lsp")
+		claimer = cluster.NewEtcdRouter(cli, "/lsp")
 	}
 	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
 		lobbyadapter.RegisterService(s, lobbyadapter.NewGRPCServer(svc, claimer, defaultRoomNodeID))

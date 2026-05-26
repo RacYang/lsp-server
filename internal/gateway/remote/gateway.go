@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
-	"racoo.cn/lsp/internal/cluster/discovery"
-	"racoo.cn/lsp/internal/cluster/router"
+
+	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
 	"racoo.cn/lsp/internal/handler"
 	"racoo.cn/lsp/internal/session"
@@ -32,8 +32,8 @@ type remoteRoomGateway struct {
 	sess              *session.Manager
 	routeCache        *redis.Client
 	settlementStore   *postgres.SettlementStore
-	router            *router.Etcd
-	discovery         *discovery.Etcd
+	router            *cluster.EtcdRouter
+	discovery         *cluster.EtcdDiscovery
 
 	// pollCtx 是全部 Redis 轮询 goroutine 的根 context，gateway 关闭时统一取消。
 	pollCtx context.Context
@@ -63,8 +63,8 @@ func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache 
 	}
 	var (
 		etcdCli   *clientv3.Client
-		roomRoute *router.Etcd
-		roomDisc  *discovery.Etcd
+		roomRoute *cluster.EtcdRouter
+		roomDisc  *cluster.EtcdDiscovery
 	)
 	if strings.TrimSpace(cfg.EtcdEndpoints) != "" {
 		etcdCli, err = clientv3.New(clientv3.Config{
@@ -76,8 +76,8 @@ func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache 
 			_ = roomConn.Close()
 			return nil, nil, fmt.Errorf("dial etcd: %w", err)
 		}
-		roomRoute = router.NewEtcd(etcdCli, "/lsp")
-		roomDisc = discovery.NewEtcd(etcdCli, "/lsp", 30)
+		roomRoute = cluster.NewEtcdRouter(etcdCli, "/lsp")
+		roomDisc = cluster.NewEtcdDiscovery(etcdCli, "/lsp", 30)
 	}
 	pollCtx, cancel := context.WithCancel(context.Background())
 	gateway := &remoteRoomGateway{

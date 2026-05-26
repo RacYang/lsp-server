@@ -12,8 +12,8 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"racoo.cn/lsp/internal/app"
-	"racoo.cn/lsp/internal/cluster/discovery"
-	"racoo.cn/lsp/internal/cluster/nodeid"
+
+	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
 	"racoo.cn/lsp/pkg/logx"
 )
@@ -42,8 +42,8 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
-		disco := discovery.NewEtcd(cli, "/lsp", 30)
-		reg, err := disco.RegisterAndKeepAlive(ctx, nodeid.KindGate, nodeid.New(), discovery.NodeMeta{
+		disco := cluster.NewEtcdDiscovery(cli, "/lsp", 30)
+		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindGate, cluster.NewNodeID(), cluster.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,
 			Version:       "phase3",
 		}, 10*time.Second)

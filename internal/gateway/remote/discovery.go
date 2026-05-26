@@ -14,8 +14,8 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
-	"racoo.cn/lsp/internal/cluster/nodeid"
 
+	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
@@ -72,7 +72,7 @@ func (g *remoteRoomGateway) roomAddressForRoom(ctx context.Context, roomID strin
 			logx.Warn(logx.WithRoomID(ctx, roomID), "写入房间路由缓存失败", "err", err.Error())
 		}
 	}
-	nodeInfo, ok, err := g.discovery.ResolveNode(ctx, nodeid.KindRoom, nodeID)
+	nodeInfo, ok, err := g.discovery.ResolveNode(ctx, cluster.KindRoom, nodeID)
 	if err != nil {
 		return "", err
 	}

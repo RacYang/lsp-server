@@ -8,19 +8,20 @@ import (
 	"google.golang.org/grpc"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
-	"racoo.cn/lsp/internal/cluster/router"
+
+	"racoo.cn/lsp/internal/cluster"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 )
 
 // GRPCServer 将 lobby 业务服务适配为 v1.LobbyService。
 type GRPCServer struct {
 	svc        *lobbysvc.Service
-	claimer    *router.Etcd
+	claimer    *cluster.EtcdRouter
 	roomNodeID string
 }
 
 // NewGRPCServer 构造 lobby gRPC 适配器，可选传入 etcd 路由器用于 room 归属声明。
-func NewGRPCServer(svc *lobbysvc.Service, claimer *router.Etcd, roomNodeID string) *GRPCServer {
+func NewGRPCServer(svc *lobbysvc.Service, claimer *cluster.EtcdRouter, roomNodeID string) *GRPCServer {
 	return &GRPCServer{svc: svc, claimer: claimer, roomNodeID: roomNodeID}
 }
 

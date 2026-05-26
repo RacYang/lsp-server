@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"racoo.cn/lsp/internal/cluster/router"
+	"racoo.cn/lsp/internal/cluster"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
@@ -81,10 +81,10 @@ func TestRecoverOwnedRoomsNilInputs(t *testing.T) {
 }
 
 // TestRecoverOwnedRoomsEtcdCliNil 验证 etcd client 内部为 nil 时返回错误。
-// router.NewEtcd(nil, ...) 构造非 nil 的 *router.Etcd，但 ListRoomsByOwner 会返回错误。
+// cluster.NewEtcdRouter(nil, ...) 构造非 nil 的 *cluster.EtcdRouter，但 ListRoomsByOwner 会返回错误。
 func TestRecoverOwnedRoomsEtcdCliNil(t *testing.T) {
 	ctx := context.Background()
-	rt := router.NewEtcd(nil, "/lsp") // 非 nil 的 Etcd，但内部 cli 为 nil
+	rt := cluster.NewEtcdRouter(nil, "/lsp") // 非 nil 的 Etcd，但内部 cli 为 nil
 	rcli, err := redis.NewClient("127.0.0.1:9999")
 	require.NoError(t, err)
 	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "")
