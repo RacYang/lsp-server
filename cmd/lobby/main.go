@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	goredis "github.com/redis/go-redis/v9"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"racoo.cn/lsp/internal/app"
@@ -17,6 +18,7 @@ import (
 	"racoo.cn/lsp/internal/cluster/router"
 	"racoo.cn/lsp/internal/config"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
+	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
 )
 
@@ -38,7 +40,18 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		logx.Error(ctx, "大厅服务配置加载失败", "err", err.Error())
 		return 1
 	}
-	svc := lobbysvc.New()
+	var svc *lobbysvc.Service
+	if cfg.RedisAddr != "" {
+		rcli := goredis.NewClient(&goredis.Options{Addr: cfg.RedisAddr})
+		rdb := redis.NewClientFromUniversal(rcli)
+		reg := redis.NewLobbyRoomRegistry(rdb)
+		svc = lobbysvc.NewWithRegistry(reg)
+		if err := svc.RecoverFromRegistry(ctx); err != nil {
+			logx.Warn(ctx, "大厅状态从 Redis 恢复失败，以空状态启动", "err", err.Error())
+		}
+	} else {
+		svc = lobbysvc.New()
+	}
 	var claimer *router.Etcd
 	if cfg.EtcdEndpoints != "" {
 		cli, err := clientv3.New(clientv3.Config{

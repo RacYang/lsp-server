@@ -13,7 +13,28 @@ import (
 
 	_ "racoo.cn/lsp/internal/mahjong/builtin" // 注册内置麻将规则。
 	"racoo.cn/lsp/internal/mahjong/rules"
+	"racoo.cn/lsp/pkg/logx"
 )
+
+// RoomRegistry 提供大厅房间状态的持久化接口，供进程重启后恢复房间列表。
+// 实现方负责序列化；nil 注册表退化为纯内存模式（与未配置 Redis 时等价）。
+type RoomRegistry interface {
+	UpsertRoom(ctx context.Context, rec RoomRecord) error
+	DeleteRoom(ctx context.Context, roomID string) error
+	ListAll(ctx context.Context) ([]RoomRecord, error)
+}
+
+// RoomRecord 是持久化到外部存储的房间完整快照，含座位分配。
+type RoomRecord struct {
+	RoomID      string           `json:"room_id"`
+	NodeID      string           `json:"node_id"`
+	RuleID      string           `json:"rule_id"`
+	DisplayName string           `json:"display_name"`
+	Private     bool             `json:"private"`
+	CreatedAtMs int64            `json:"created_at_ms"`
+	MaxSeats    int32            `json:"max_seats"`
+	Seats       map[string]int32 `json:"seats"`
+}
 
 var (
 	// ErrRoomNotFound 表示房间尚未创建或已被移除。
@@ -72,9 +93,10 @@ type Service struct {
 	seats     map[string]map[string]int32
 	metas     map[string]roomMeta
 	newRoomID func() (string, error)
+	registry  RoomRegistry // 可空；非空时关键操作双写 Redis
 }
 
-// New 创建大厅服务实例。
+// New 创建纯内存的大厅服务实例。
 func New() *Service {
 	return &Service{
 		roomIDs:   make(map[string]string),
@@ -84,8 +106,47 @@ func New() *Service {
 	}
 }
 
+// NewWithRegistry 创建带 Redis 持久化的大厅服务。
+// 创建后应调用 RecoverFromRegistry 从已有记录恢复内存状态。
+func NewWithRegistry(reg RoomRegistry) *Service {
+	svc := New()
+	svc.registry = reg
+	return svc
+}
+
+// RecoverFromRegistry 从 RoomRegistry 恢复大厅内存状态；nil 注册表时为空操作。
+// 应在服务开始接受请求前调用。
+func (s *Service) RecoverFromRegistry(ctx context.Context) error {
+	if s == nil || s.registry == nil {
+		return nil
+	}
+	records, err := s.registry.ListAll(ctx)
+	if err != nil {
+		return fmt.Errorf("从注册表恢复大厅状态: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, rec := range records {
+		s.roomIDs[rec.RoomID] = rec.NodeID
+		seats := make(map[string]int32, len(rec.Seats))
+		for uid, seat := range rec.Seats {
+			seats[uid] = seat
+		}
+		s.seats[rec.RoomID] = seats
+		s.metas[rec.RoomID] = roomMeta{
+			ruleID:      rec.RuleID,
+			displayName: rec.DisplayName,
+			private:     rec.Private,
+			createdAtMs: rec.CreatedAtMs,
+			maxSeats:    rec.MaxSeats,
+		}
+	}
+	logx.Info(ctx, "大厅状态从注册表恢复完毕", "rooms", len(records))
+	return nil
+}
+
 // CreateRoom 创建房间并绑定到 room-local；后续会由调度器/etcd claim 替换。
-func (s *Service) CreateRoom(_ context.Context, roomID string) (string, error) {
+func (s *Service) CreateRoom(ctx context.Context, roomID string) (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("nil lobby service")
 	}
@@ -93,16 +154,19 @@ func (s *Service) CreateRoom(_ context.Context, roomID string) (string, error) {
 		return "", fmt.Errorf("%w: empty room_id", ErrInvalidArgument)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if nodeID, ok := s.roomIDs[roomID]; ok {
+		s.mu.Unlock()
 		return nodeID, nil
 	}
 	s.ensureRoomLocked(roomID, defaultRuleID, "", false)
+	rec, _ := s.buildRecordLocked(roomID)
+	s.mu.Unlock()
+	s.persistUpsert(ctx, rec)
 	return defaultNodeID, nil
 }
 
 // CreateRoomWithMeta 创建带大厅元数据的房间，并让创建者直接占用 0 号座位。
-func (s *Service) CreateRoomWithMeta(_ context.Context, ruleID, displayName string, private bool, creatorUserID string) (string, int32, error) {
+func (s *Service) CreateRoomWithMeta(ctx context.Context, ruleID, displayName string, private bool, creatorUserID string) (string, int32, error) {
 	if s == nil {
 		return "", 0, fmt.Errorf("nil lobby service")
 	}
@@ -110,14 +174,16 @@ func (s *Service) CreateRoomWithMeta(_ context.Context, ruleID, displayName stri
 		return "", 0, fmt.Errorf("%w: empty creator_user_id", ErrInvalidArgument)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	roomID, err := s.allocateRoomIDLocked()
 	if err != nil {
+		s.mu.Unlock()
 		return "", 0, err
 	}
 	s.ensureRoomLocked(roomID, ruleID, displayName, private)
 	s.seats[roomID][creatorUserID] = 0
+	rec, _ := s.buildRecordLocked(roomID)
+	s.mu.Unlock()
+	s.persistUpsert(ctx, rec)
 	return roomID, 0, nil
 }
 
@@ -261,7 +327,7 @@ func (s *Service) ensureRoomLocked(roomID, ruleID, displayName string, private b
 }
 
 // JoinRoom 为测试与基线阶段分配座位；重复加入返回原座位。
-func (s *Service) JoinRoom(_ context.Context, roomID, userID string) (int32, error) {
+func (s *Service) JoinRoom(ctx context.Context, roomID, userID string) (int32, error) {
 	if s == nil {
 		return 0, fmt.Errorf("nil lobby service")
 	}
@@ -269,11 +335,11 @@ func (s *Service) JoinRoom(_ context.Context, roomID, userID string) (int32, err
 		return 0, fmt.Errorf("%w: empty room_id or user_id", ErrInvalidArgument)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if _, ok := s.roomIDs[roomID]; !ok {
 		s.ensureRoomLocked(roomID, defaultRuleID, "", false)
 	}
 	if seat, ok := s.seats[roomID][userID]; ok {
+		s.mu.Unlock()
 		return seat, nil
 	}
 	used := make(map[int32]bool, len(s.seats[roomID]))
@@ -281,6 +347,7 @@ func (s *Service) JoinRoom(_ context.Context, roomID, userID string) (int32, err
 		used[seat] = true
 	}
 	if len(used) >= 4 {
+		s.mu.Unlock()
 		return 0, ErrRoomFull
 	}
 	var seat int32
@@ -290,11 +357,14 @@ func (s *Service) JoinRoom(_ context.Context, roomID, userID string) (int32, err
 		}
 	}
 	s.seats[roomID][userID] = seat
+	rec, _ := s.buildRecordLocked(roomID)
+	s.mu.Unlock()
+	s.persistUpsert(ctx, rec)
 	return seat, nil
 }
 
 // LeaveRoom 立即从大厅座位索引中移除用户，不等待 room actor 完成托管或结算。
-func (s *Service) LeaveRoom(_ context.Context, roomID, userID string) error {
+func (s *Service) LeaveRoom(ctx context.Context, roomID, userID string) error {
 	if s == nil {
 		return fmt.Errorf("nil lobby service")
 	}
@@ -302,17 +372,20 @@ func (s *Service) LeaveRoom(_ context.Context, roomID, userID string) error {
 		return fmt.Errorf("%w: empty room_id or user_id", ErrInvalidArgument)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	seats, ok := s.seats[roomID]
 	if !ok {
+		s.mu.Unlock()
 		return ErrRoomNotFound
 	}
 	delete(seats, userID)
+	rec, _ := s.buildRecordLocked(roomID)
+	s.mu.Unlock()
+	s.persistUpsert(ctx, rec)
 	return nil
 }
 
 // AddBot 在等待态房间中分配机器人座位；真实出牌由上层 bot supervisor 驱动。
-func (s *Service) AddBot(_ context.Context, roomID string, count int32, maxBots int) ([]BotSeat, error) {
+func (s *Service) AddBot(ctx context.Context, roomID string, count int32, maxBots int) ([]BotSeat, error) {
 	if s == nil {
 		return nil, fmt.Errorf("nil lobby service")
 	}
@@ -323,8 +396,8 @@ func (s *Service) AddBot(_ context.Context, roomID string, count int32, maxBots 
 		maxBots = 3
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if _, ok := s.roomIDs[roomID]; !ok {
+		s.mu.Unlock()
 		return nil, ErrRoomNotFound
 	}
 	used := make(map[int32]bool, len(s.seats[roomID]))
@@ -350,6 +423,11 @@ func (s *Service) AddBot(_ context.Context, roomID string, count int32, maxBots 
 		bots++
 		added = append(added, BotSeat{SeatIndex: seat, UserID: userID})
 	}
+	rec, _ := s.buildRecordLocked(roomID)
+	s.mu.Unlock()
+	if len(added) > 0 {
+		s.persistUpsert(ctx, rec)
+	}
 	return added, nil
 }
 
@@ -365,6 +443,43 @@ func (s *Service) GetRoom(_ context.Context, roomID string) (string, error) {
 		return "", ErrRoomNotFound
 	}
 	return nodeID, nil
+}
+
+// buildRecordLocked 在持锁状态下将指定房间的当前内存状态序列化为 RoomRecord。
+// 调用方必须已持有 s.mu。
+func (s *Service) buildRecordLocked(roomID string) (RoomRecord, bool) {
+	meta, ok := s.metas[roomID]
+	if !ok {
+		return RoomRecord{}, false
+	}
+	nodeID := s.roomIDs[roomID]
+	seats := make(map[string]int32, len(s.seats[roomID]))
+	for uid, seat := range s.seats[roomID] {
+		seats[uid] = seat
+	}
+	return RoomRecord{
+		RoomID:      roomID,
+		NodeID:      nodeID,
+		RuleID:      meta.ruleID,
+		DisplayName: meta.displayName,
+		Private:     meta.private,
+		CreatedAtMs: meta.createdAtMs,
+		MaxSeats:    meta.maxSeats,
+		Seats:       seats,
+	}, true
+}
+
+// persistUpsert 将房间记录同步写入注册表；写失败仅记警告，不影响主流程。
+// 写操作在互斥锁释放后执行，避免持锁期间阻塞。
+func (s *Service) persistUpsert(ctx context.Context, rec RoomRecord) {
+	if s.registry == nil {
+		return
+	}
+	writeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := s.registry.UpsertRoom(writeCtx, rec); err != nil {
+		logx.Warn(logx.WithRoomID(ctx, rec.RoomID), "大厅房间持久化写入失败", "err", err.Error())
+	}
 }
 
 func (s *Service) allocateRoomIDLocked() (string, error) {

@@ -37,3 +37,9 @@ func UserProfileKey(userID string) string {
 func RoomEventQueueKey(roomID string) string {
 	return fmt.Sprintf("lsp:room:%s:events", roomID)
 }
+
+// LobbyRoomsKey 返回 lsp:lobby:rooms Hash 键，field=roomID，value=JSON 房间快照。
+// 由 lobby 节点在房间创建/加入/离开时写入，启动时从此处恢复内存状态。
+func LobbyRoomsKey() string {
+	return "lsp:lobby:rooms"
+}

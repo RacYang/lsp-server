@@ -2,10 +2,52 @@ package lobby
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// memRegistry 是用于测试的内存 RoomRegistry 实现。
+type memRegistry struct {
+	mu      sync.Mutex
+	records map[string]RoomRecord
+}
+
+func newMemRegistry() *memRegistry {
+	return &memRegistry{records: make(map[string]RoomRecord)}
+}
+
+func (r *memRegistry) UpsertRoom(_ context.Context, rec RoomRecord) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.records[rec.RoomID] = rec
+	return nil
+}
+
+func (r *memRegistry) DeleteRoom(_ context.Context, roomID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.records, roomID)
+	return nil
+}
+
+func (r *memRegistry) ListAll(_ context.Context) ([]RoomRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]RoomRecord, 0, len(r.records))
+	for _, rec := range r.records {
+		out = append(out, rec)
+	}
+	return out, nil
+}
+
+func (r *memRegistry) get(roomID string) (RoomRecord, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec, ok := r.records[roomID]
+	return rec, ok
+}
 
 func TestNew(t *testing.T) {
 	t.Parallel()
@@ -173,4 +215,83 @@ func fixedRoomIDs(ids ...string) func() (string, error) {
 		i++
 		return id, nil
 	}
+}
+
+func TestNewWithRegistryPersistsCreateRoom(t *testing.T) {
+	t.Parallel()
+	reg := newMemRegistry()
+	svc := NewWithRegistry(reg)
+	ctx := context.Background()
+
+	_, err := svc.CreateRoom(ctx, "r-persist")
+	require.NoError(t, err)
+
+	rec, ok := reg.get("r-persist")
+	require.True(t, ok, "CreateRoom 应持久化房间记录")
+	require.Equal(t, "r-persist", rec.RoomID)
+	require.Equal(t, defaultNodeID, rec.NodeID)
+}
+
+func TestNewWithRegistryPersistsJoinAndLeave(t *testing.T) {
+	t.Parallel()
+	reg := newMemRegistry()
+	svc := NewWithRegistry(reg)
+	ctx := context.Background()
+
+	_, err := svc.CreateRoom(ctx, "r-join")
+	require.NoError(t, err)
+	seat, err := svc.JoinRoom(ctx, "r-join", "u1")
+	require.NoError(t, err)
+	require.EqualValues(t, 0, seat)
+
+	rec, ok := reg.get("r-join")
+	require.True(t, ok)
+	_, hasSeat := rec.Seats["u1"]
+	require.True(t, hasSeat, "JoinRoom 后注册表应含座位记录")
+
+	require.NoError(t, svc.LeaveRoom(ctx, "r-join", "u1"))
+	rec, _ = reg.get("r-join")
+	_, hasSeat = rec.Seats["u1"]
+	require.False(t, hasSeat, "LeaveRoom 后注册表应移除座位")
+}
+
+func TestRecoverFromRegistryRestoresState(t *testing.T) {
+	t.Parallel()
+	reg := newMemRegistry()
+
+	// 第一个实例：创建并加入房间
+	svc1 := NewWithRegistry(reg)
+	ctx := context.Background()
+	_, err := svc1.CreateRoom(ctx, "r-recover")
+	require.NoError(t, err)
+	_, err = svc1.JoinRoom(ctx, "r-recover", "u1")
+	require.NoError(t, err)
+
+	// 写操作同步完成，直接验证注册表状态
+	rec, ok := reg.get("r-recover")
+	require.True(t, ok && len(rec.Seats) == 1, "注册表应含 u1 座位记录")
+
+	// 第二个实例：模拟重启后恢复
+	svc2 := NewWithRegistry(reg)
+	require.NoError(t, svc2.RecoverFromRegistry(ctx))
+
+	// 房间应已恢复：GetRoom 正常返回
+	nodeID, err := svc2.GetRoom(ctx, "r-recover")
+	require.NoError(t, err)
+	require.Equal(t, defaultNodeID, nodeID)
+
+	// u1 再次加入应返回同一座位（不新分配）
+	seat, err := svc2.JoinRoom(ctx, "r-recover", "u1")
+	require.NoError(t, err)
+	require.EqualValues(t, 0, seat)
+
+	// 房间只有 1 个已知座位（u1），再加 2 人后满
+	_, err = svc2.JoinRoom(ctx, "r-recover", "u2")
+	require.NoError(t, err)
+	_, err = svc2.JoinRoom(ctx, "r-recover", "u3")
+	require.NoError(t, err)
+	_, err = svc2.JoinRoom(ctx, "r-recover", "u4")
+	require.NoError(t, err)
+	_, err = svc2.JoinRoom(ctx, "r-recover", "u5")
+	require.ErrorIs(t, err, ErrRoomFull)
 }
