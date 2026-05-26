@@ -1,4 +1,4 @@
-package main
+package roomadapter
 
 import (
 	"context"
@@ -20,6 +20,9 @@ import (
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
+
+	// 触发麻将规则注册。
+	_ "racoo.cn/lsp/internal/mahjong/sichuan/xuezhandaodi"
 )
 
 func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
@@ -30,8 +33,8 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 	defer func() { _ = ln.Close() }()
 
 	grpcSrv := grpc.NewServer()
-	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
-	registerRoomService(grpcSrv, srv)
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
+	RegisterService(grpcSrv, srv)
 	go func() { _ = grpcSrv.Serve(ln) }()
 	defer grpcSrv.Stop()
 
@@ -145,10 +148,10 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 	t.Cleanup(func() { _ = rcli.Close() })
 	rdb := redis.NewClientFromUniversal(rcli)
 
-	s := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
+	s := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
 	ctx := context.Background()
 
-	s.setReady(false)
+	s.SetReady(false)
 	resp1, err := s.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:         "r-idem",
 		UserId:         "u1",
@@ -158,7 +161,7 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, resp1.GetAccepted())
 
-	s.setReady(true)
+	s.SetReady(true)
 	resp2, err := s.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 		RoomId:         "r-idem",
 		UserId:         "u1",
@@ -181,7 +184,7 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 func TestSnapshotRoomIncludesRoundView(t *testing.T) {
 	t.Parallel()
 
-	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
 	ctx := context.Background()
 	for _, userID := range []string{"u1", "u2", "u3", "u4"} {
 		_, err := srv.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
@@ -470,7 +473,7 @@ func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 		_, err := rooms.Join(context.Background(), "r-meta", uid)
 		require.NoError(t, err)
 	}
-	srv := newRoomGRPCServer(rooms, nil, nil, nil, rdb)
+	srv := NewGRPCServer(rooms, nil, nil, nil, rdb)
 	ctx := context.Background()
 
 	quePayload, err := proto.Marshal(&clientv1.Envelope{
@@ -521,7 +524,7 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 	mock.ExpectRollback()
 
 	ev := postgres.NewRoomEventStore(mock)
-	srv := newRoomGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, nil)
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, nil)
 	ch := make(chan *svcv1.RoomServiceStreamEventsResponse, 1)
 	srv.streams["r-batch"] = []chan *svcv1.RoomServiceStreamEventsResponse{ch}
 
@@ -543,7 +546,7 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 func TestGetRoomEventsWithNilStore(t *testing.T) {
 	t.Parallel()
 	// ev == nil 时应返回空响应而不出错，覆盖 GetRoomEvents 早返回路径。
-	srv := newRoomGRPCServer(nil, nil, nil, nil, nil)
+	srv := NewGRPCServer(nil, nil, nil, nil, nil)
 	resp, err := srv.GetRoomEvents(context.Background(), &svcv1.GetRoomEventsRequest{
 		RoomId:      "r-nilev",
 		SinceCursor: "r-nilev:0",
@@ -554,8 +557,8 @@ func TestGetRoomEventsWithNilStore(t *testing.T) {
 
 func TestSetIdempotencyTTL(t *testing.T) {
 	t.Parallel()
-	// 覆盖 setIdempotencyTTL 的正常赋值路径。
-	srv := newRoomGRPCServer(nil, nil, nil, nil, nil)
-	srv.setIdempotencyTTL(30 * time.Second)
+	// 覆盖 SetIdempotencyTTL 的正常赋值路径。
+	srv := NewGRPCServer(nil, nil, nil, nil, nil)
+	srv.SetIdempotencyTTL(30 * time.Second)
 	require.Equal(t, 30*time.Second, srv.idempotencyTTL)
 }

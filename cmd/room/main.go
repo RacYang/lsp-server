@@ -11,6 +11,7 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
+	roomadapter "racoo.cn/lsp/internal/adapter/room"
 	"racoo.cn/lsp/internal/app"
 	"racoo.cn/lsp/internal/cluster/discovery"
 	"racoo.cn/lsp/internal/cluster/nodeid"
@@ -93,13 +94,13 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	// 占座机器人由本进程的 BotSupervisor 代为出牌；ADR-0037 描述的"后续补 supervisor"在此落地。
 	botSup := botsvc.NewBotSupervisor(svcCore)
 	svcCore.SetAfterCmdHook(botSup.AfterCmd)
-	svc := newRoomGRPCServer(svcCore, ev, gs, st, rcli)
+	svc := roomadapter.NewGRPCServer(svcCore, ev, gs, st, rcli)
 	botSup.SetNotificationHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
-		_ = svc.persistPublishAndFinalize(ctx, roomID, "", notifications)
+		_ = svc.PersistPublishAndFinalize(ctx, roomID, "", notifications)
 	})
-	svc.setIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
+	svc.SetIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {
-		svc.setReady(false)
+		svc.SetReady(false)
 		cli, err := clientv3.New(clientv3.Config{Endpoints: splitEndpoints(cfg.EtcdEndpoints), DialTimeout: 5 * time.Second})
 		if err != nil {
 			logx.Error(ctx, "房间服务 etcd 客户端初始化失败", "err", err.Error())
@@ -128,10 +129,10 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 				return 1
 			}
 		}
-		svc.setReady(true)
+		svc.SetReady(true)
 	}
 	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
-		registerRoomService(s, svc)
+		roomadapter.RegisterService(s, svc)
 	})
 	if err != nil {
 		logx.Error(ctx, "房间服务装配失败", "err", err.Error())

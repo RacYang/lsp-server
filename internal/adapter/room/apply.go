@@ -1,4 +1,4 @@
-package main
+package roomadapter
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 )
 
 // ApplyEvent 通过 room.Service 驱动真实房间 worker，并把产出的通知桥接到订阅流。
-func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventRequest) (*svcv1.ApplyEventResponse, error) {
+func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventRequest) (*svcv1.ApplyEventResponse, error) {
 	if s == nil {
 		return nil, fmt.Errorf("nil room grpc server")
 	}
@@ -52,7 +52,7 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventRe
 		if err != nil {
 			return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
-		if err := s.persistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
+		if err := s.PersistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
 			return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 		}
 		return &svcv1.ApplyEventResponse{Accepted: true}, nil
@@ -85,7 +85,7 @@ func (s *roomGRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventRe
 		s.markIdempotency(ctx, roomID, idemKey)
 		return &svcv1.ApplyEventResponse{Accepted: true}, nil
 	case *svcv1.ApplyEventRequest_Join:
-		// Join 仅占座：s.rooms.Join 已在 switch 之前（第 44 行）隐式执行。
+		// Join 仅占座：s.rooms.Join 已在 switch 之前（Join 调用）隐式执行。
 		s.markIdempotency(ctx, roomID, idemKey)
 		return &svcv1.ApplyEventResponse{Accepted: true}, nil
 	default:
@@ -117,17 +117,17 @@ func clusterPhaseTokToRoom(tok *clientv1.PhaseToken) *roomsvc.PhaseToken {
 	return &roomsvc.PhaseToken{Step: tok.GetStep(), Reason: reason}
 }
 
-func (s *roomGRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*svcv1.ApplyEventResponse, error) {
+func (s *GRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*svcv1.ApplyEventResponse, error) {
 	if err != nil {
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
-	if err := s.persistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
+	if err := s.PersistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
 	return &svcv1.ApplyEventResponse{Accepted: true}, nil
 }
 
-func (s *roomGRPCServer) markIdempotency(ctx context.Context, roomID, idemKey string) {
+func (s *GRPCServer) markIdempotency(ctx context.Context, roomID, idemKey string) {
 	if idemKey == "" || s.rdb == nil {
 		return
 	}

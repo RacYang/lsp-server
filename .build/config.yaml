@@ -38,7 +38,7 @@ coverage:
     cmd/bot: 0
     cmd/gate: 45
     cmd/lobby: 55
-    cmd/room: 48
+    cmd/room: 40
     cmd/cli: 35
     default: 60
   extra_exclude:
