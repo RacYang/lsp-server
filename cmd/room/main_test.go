@@ -165,3 +165,24 @@ func TestSplitEndpointsTrimsEmptyParts(t *testing.T) {
 
 	require.Equal(t, []string{"http://etcd-0:2379", "http://etcd-1:2379"}, got)
 }
+
+// TestRecoverSingleRoomNilRcli 验证 rcli 为 nil 时错误正确向上传播。
+// redis.Client.GetRoomSnapMeta 对 nil 接收者有保护，返回 "nil redis client" 错误而非 panic。
+// 此测试确保 recoverSingleRoom 不会在空指针上调用方法导致崩溃。
+func TestRecoverSingleRoomNilRcli(t *testing.T) {
+	t.Parallel()
+	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "")
+	err := recoverSingleRoom(context.Background(), nil, nil, nil, svc, "room-nil-rcli")
+	require.Error(t, err)
+}
+
+// TestRecoverSingleRoomUnreachableRedis 验证不可达 Redis 时连接错误被正确传播。
+// 不可达地址下 GetRoomSnapMeta 返回网络错误，recoverSingleRoom 应将其上报而非静默忽略。
+func TestRecoverSingleRoomUnreachableRedis(t *testing.T) {
+	t.Parallel()
+	rcli, err := redis.NewClient("127.0.0.1:9999")
+	require.NoError(t, err)
+	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "")
+	err = recoverSingleRoom(context.Background(), rcli, nil, nil, svc, "room-unreachable")
+	require.Error(t, err)
+}

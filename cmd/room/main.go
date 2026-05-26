@@ -10,6 +10,8 @@ import (
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	roomadapter "racoo.cn/lsp/internal/adapter/room"
 	"racoo.cn/lsp/internal/app"
@@ -163,6 +165,13 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	return 0
 }
 
+// recoverOwnedRooms 从 etcd/Redis/Postgres 恢复本节点拥有的房间。
+// 并发度上限 recoverConcurrency，整体超时 recoverTimeout；超时后降级上线（已恢复的房间继续运行，未完成的跳过）。
+const (
+	recoverConcurrency = 8
+	recoverTimeout     = 120 * time.Second
+)
+
 func recoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID string, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service) error {
 	if rt == nil || rcli == nil || svc == nil {
 		return nil
@@ -171,63 +180,80 @@ func recoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID stri
 	if err != nil {
 		return err
 	}
-	for _, roomID := range roomIDs {
-		var (
-			players   []string
-			state     = "waiting"
-			roundJSON []byte
-		)
-		if meta, ok, err := rcli.GetRoomSnapMeta(ctx, roomID); err != nil {
+	recoverCtx, cancel := context.WithTimeout(ctx, recoverTimeout)
+	defer cancel()
+
+	sem := semaphore.NewWeighted(recoverConcurrency)
+	eg, egCtx := errgroup.WithContext(recoverCtx)
+	for _, rid := range roomIDs {
+		roomID := rid
+		if err := sem.Acquire(egCtx, 1); err != nil {
+			// 整体超时，降级上线：终止剩余恢复，已完成的房间继续运行。
+			logx.Warn(ctx, "房间冷启动恢复超时，降级上线", "remaining", len(roomIDs), "err", err.Error())
+			break
+		}
+		eg.Go(func() error {
+			defer sem.Release(1)
+			return recoverSingleRoom(egCtx, rcli, ev, gs, svc, roomID)
+		})
+	}
+	return eg.Wait()
+}
+
+// recoverSingleRoom 恢复单个房间的状态；失败时返回 error 终止整批恢复。
+func recoverSingleRoom(ctx context.Context, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service, roomID string) error {
+	var (
+		players   []string
+		state     = "waiting"
+		roundJSON []byte
+	)
+	if meta, ok, err := rcli.GetRoomSnapMeta(ctx, roomID); err != nil {
+		return err
+	} else if ok {
+		players = append(players, meta.PlayerIDs...)
+		if strings.TrimSpace(meta.State) != "" {
+			state = meta.State
+		}
+		if meta.RoundJSON != "" {
+			roundJSON = []byte(meta.RoundJSON)
+		}
+	}
+	if gs != nil {
+		summary, err := gs.GetGameSummary(ctx, roomID)
+		if err != nil && !errors.Is(err, postgres.ErrGameSummaryNotFound) {
 			return err
-		} else if ok {
-			players = append(players, meta.PlayerIDs...)
-			if strings.TrimSpace(meta.State) != "" {
-				state = meta.State
+		}
+		if err == nil {
+			if len(summary.PlayerIDs) > 0 {
+				players = append([]string(nil), summary.PlayerIDs...)
 			}
-			if meta.RoundJSON != "" {
-				roundJSON = []byte(meta.RoundJSON)
+			if summary.EndedAt != nil {
+				state = "closed"
 			}
 		}
-		if gs != nil {
-			summary, err := gs.GetGameSummary(ctx, roomID)
-			if err != nil && !errors.Is(err, postgres.ErrGameSummaryNotFound) {
-				return err
-			}
-			if err == nil {
-				if len(summary.PlayerIDs) > 0 {
-					players = append([]string(nil), summary.PlayerIDs...)
-				}
-				if summary.EndedAt != nil {
-					state = "closed"
-				}
-			}
+	}
+	if ev != nil {
+		rows, err := ev.ListEventsAfter(ctx, roomID, 0)
+		if err != nil {
+			return err
 		}
-		if ev != nil {
-			rows, err := ev.ListEventsAfter(ctx, roomID, 0)
-			if err != nil {
-				return err
-			}
-			if derived := deriveRecoveredState(state, rows); derived != "" {
-				state = derived
-			}
+		if derived := deriveRecoveredState(state, rows); derived != "" {
+			state = derived
 		}
-		if state == "closed" || len(players) == 0 {
-			continue
-		}
-		if state == "playing" && len(roundJSON) == 0 {
+	}
+	if state == "closed" || len(players) == 0 {
+		return nil
+	}
+	if state == "playing" && len(roundJSON) == 0 {
+		state = "ready"
+	}
+	if err := svc.RecoverRoom(roomID, players, state, roundJSON); err != nil {
+		if errors.Is(err, roomsvc.ErrRoundPersistUnsupportedSchema) {
 			state = "ready"
+			roundJSON = nil
+			return svc.RecoverRoom(roomID, players, state, roundJSON)
 		}
-		if err := svc.RecoverRoom(roomID, players, state, roundJSON); err != nil {
-			if errors.Is(err, roomsvc.ErrRoundPersistUnsupportedSchema) {
-				state = "ready"
-				roundJSON = nil
-				if errRetry := svc.RecoverRoom(roomID, players, state, roundJSON); errRetry != nil {
-					return errRetry
-				}
-				continue
-			}
-			return err
-		}
+		return err
 	}
 	return nil
 }
