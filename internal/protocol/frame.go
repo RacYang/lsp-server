@@ -1,5 +1,5 @@
-// Package frame 实现 ADR-0003 约定的紧凑帧头与载荷编解码。
-package frame
+// Package protocol — 帧编解码实现。
+package protocol
 
 import (
 	"encoding/binary"
@@ -38,10 +38,10 @@ var (
 // MaxPayload 为单帧最大载荷字节数，防止 OOM。
 const MaxPayload = 4 << 20 // 4MiB
 
-// Encode 将 msg_id 与载荷编码为完整帧字节。
-func Encode(msgID uint16, payload []byte) []byte {
+// Encode 将 msg_id 与载荷编码为完整帧字节；载荷超过 MaxPayload 时返回 ErrPayloadTooLarge。
+func Encode(msgID uint16, payload []byte) ([]byte, error) {
 	if len(payload) > MaxPayload {
-		panic(fmt.Sprintf("payload overflow: %d", len(payload)))
+		return nil, fmt.Errorf("%w: %d", ErrPayloadTooLarge, len(payload))
 	}
 	out := make([]byte, HeaderSize+len(payload))
 	binary.BigEndian.PutUint16(out[0:2], Magic)
@@ -50,7 +50,7 @@ func Encode(msgID uint16, payload []byte) []byte {
 	// 载荷长度已由 MaxPayload 限制，可安全落入 uint32。
 	binary.BigEndian.PutUint32(out[5:9], uint32(len(payload))) //nolint:gosec // G115
 	copy(out[HeaderSize:], payload)
-	return out
+	return out, nil
 }
 
 // ReadFrame 从 r 读取一帧并返回 Header（含载荷副本）。

@@ -7,12 +7,11 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/pkg/logx"
 )
 
-// dispatchFrame 将一个 frame.Header 路由到对应 handler；保持原 ws.go 的 switch 行为，
+// dispatchFrame 将一个 protocol.Header 路由到对应 handler；保持原 ws.go 的 switch 行为，
 // 但每个 case 只是命名调用，便于按职责定位与新增用例。
 func dispatchFrame(
 	ctx context.Context,
@@ -20,44 +19,44 @@ func dispatchFrame(
 	conn *websocket.Conn,
 	r *http.Request,
 	state *wsConnState,
-	h frame.Header,
+	h protocol.Header,
 ) {
 	switch h.MsgID {
-	case msgid.LoginReq:
+	case protocol.LoginReq:
 		handleLogin(ctx, deps, conn, r, state, h.Payload)
-	case msgid.JoinRoomReq:
+	case protocol.JoinRoomReq:
 		handleJoinRoom(ctx, deps, conn, state, h.Payload)
-	case msgid.ListRoomsReq:
+	case protocol.ListRoomsReq:
 		handleListRooms(ctx, deps, conn, state, h.Payload)
-	case msgid.ListRulesReq:
+	case protocol.ListRulesReq:
 		handleListRules(ctx, deps, conn, state, h.Payload)
-	case msgid.AutoMatchReq:
+	case protocol.AutoMatchReq:
 		handleAutoMatch(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.CreateRoomReq:
+	case protocol.CreateRoomReq:
 		handleCreateRoom(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.AddBotReq:
+	case protocol.AddBotReq:
 		handleAddBot(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.ReadyReq:
+	case protocol.ReadyReq:
 		handleReady(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.HeartbeatReq:
+	case protocol.HeartbeatReq:
 		handleHeartbeat(deps, conn, state, h.Payload)
-	case msgid.RenameReq:
+	case protocol.RenameReq:
 		handleRename(ctx, deps, conn, state, h.Payload)
-	case msgid.OpeningActionReq:
+	case protocol.OpeningActionReq:
 		handleOpeningAction(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.LeaveRoomReq:
+	case protocol.LeaveRoomReq:
 		handleLeaveRoom(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.DiscardReq:
+	case protocol.DiscardReq:
 		handleDiscard(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.PongReq:
+	case protocol.PongReq:
 		handlePong(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.ChiReq:
+	case protocol.ChiReq:
 		handleChi(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.GangReq:
+	case protocol.GangReq:
 		handleGang(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.HuReq:
+	case protocol.HuReq:
 		handleHu(ctx, deps, conn, state, h.MsgID, h.Payload)
-	case msgid.PassReq:
+	case protocol.PassReq:
 		handlePass(ctx, deps, conn, state, h.MsgID, h.Payload)
 	default:
 		unknownMsgTotal.Inc()

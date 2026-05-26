@@ -18,8 +18,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	redisstore "racoo.cn/lsp/internal/store/redis"
@@ -187,7 +187,7 @@ func readEnv(t *testing.T, conn *websocket.Conn, wantMsg uint16) *clientv1.Envel
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := frame.ReadFrame(bytes.NewReader(data))
+	h, err := protocol.ReadFrame(bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func readUntilEnv(t *testing.T, conn *websocket.Conn, wantMsg uint16, maxFrames 
 		if err != nil {
 			t.Fatal(err)
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -238,10 +238,11 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 		LoginReq: &clientv1.LoginRequest{Nickname: "玩家"},
 	}}
 	pb, _ := proto.Marshal(login)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)); err != nil {
+	enc, _ := protocol.Encode(protocol.LoginReq, pb)
+	if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
-	env := readEnv(t, conn, msgid.LoginResp)
+	env := readEnv(t, conn, protocol.LoginResp)
 	uid := env.GetLoginResp().GetUserId()
 	if uid == "" {
 		t.Fatal("empty user id")
@@ -251,20 +252,20 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 		JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "room-1"},
 	}}
 	pb, _ = proto.Marshal(jr)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)); err != nil {
+	if err := conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb)); err != nil {
 		t.Fatal(err)
 	}
-	env = readEnv(t, conn, msgid.JoinRoomResp)
+	env = readEnv(t, conn, protocol.JoinRoomResp)
 	if env.GetJoinRoomResp().GetSeatIndex() < 0 {
 		t.Fatal("seat")
 	}
 
 	rd := &clientv1.Envelope{ReqId: "c", Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}}
 	pb, _ = proto.Marshal(rd)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)); err != nil {
+	if err := conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.ReadyReq, pb)); err != nil {
 		t.Fatal(err)
 	}
-	env = readEnv(t, conn, msgid.ReadyResp)
+	env = readEnv(t, conn, protocol.ReadyResp)
 	if env.GetReadyResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
 		t.Fatalf("ready err %v", env.GetReadyResp().GetErrorCode())
 	}
@@ -273,10 +274,10 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 		AddBotReq: &clientv1.AddBotRequest{Count: 3, OpId: "op-test"},
 	}}
 	pb, _ = proto.Marshal(addBot)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
+	if err := conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.AddBotReq, pb)); err != nil {
 		t.Fatal(err)
 	}
-	env = readEnv(t, conn, msgid.AddBotResp)
+	env = readEnv(t, conn, protocol.AddBotResp)
 	if len(env.GetAddBotResp().GetAdded()) != 3 {
 		t.Fatalf("add bot got %d seats", len(env.GetAddBotResp().GetAdded()))
 	}
@@ -284,10 +285,10 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 		AddBotReq: &clientv1.AddBotRequest{Count: 0, OpId: "op-bad"},
 	}}
 	pb, _ = proto.Marshal(badBot)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.AddBotReq, pb)); err != nil {
+	if err := conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.AddBotReq, pb)); err != nil {
 		t.Fatal(err)
 	}
-	env = readUntilEnv(t, conn, msgid.AddBotResp, 8)
+	env = readUntilEnv(t, conn, protocol.AddBotResp, 8)
 	if env.GetAddBotResp().GetErrorCode() == clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
 		t.Fatal("invalid add bot request should return an error")
 	}
@@ -319,21 +320,21 @@ func TestHandleWebSocketIdempotencyKeyDropsReplay(t *testing.T) {
 
 	login := &clientv1.Envelope{ReqId: "login", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, _ := proto.Marshal(login)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	_ = readEnv(t, conn, msgid.LoginResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
+	_ = readEnv(t, conn, protocol.LoginResp)
 
 	join := &clientv1.Envelope{ReqId: "join", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "r-idem"}}}
 	pb, _ = proto.Marshal(join)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
-	_ = readEnv(t, conn, msgid.JoinRoomResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb)))
+	_ = readEnv(t, conn, protocol.JoinRoomResp)
 
 	ready := &clientv1.Envelope{ReqId: "ready-1", IdempotencyKey: "idem-1", Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}}
 	pb, _ = proto.Marshal(ready)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)))
-	_ = readEnv(t, conn, msgid.ReadyResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.ReadyReq, pb)))
+	_ = readEnv(t, conn, protocol.ReadyResp)
 	ready.ReqId = "ready-2"
 	pb, _ = proto.Marshal(ready)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)))
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.ReadyReq, pb)))
 
 	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	_, _, err := conn.ReadMessage()
@@ -349,10 +350,10 @@ func TestHandleWebSocketUnknownMsgID(t *testing.T) {
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, _ := proto.Marshal(login)
-	_ = conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb))
+	_ = conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb))
 	_, _, _ = conn.ReadMessage()
 
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(99, []byte{1})); err != nil {
+	if err := conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(99, []byte{1})); err != nil {
 		t.Fatal(err)
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
@@ -410,8 +411,8 @@ func TestHandleWebSocketHeartbeat(t *testing.T) {
 		HeartbeatReq: &clientv1.HeartbeatRequest{ClientTsMs: 1},
 	}}
 	pb, _ := proto.Marshal(req)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.HeartbeatReq, pb)))
-	env := readEnv(t, conn, msgid.HeartbeatResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.HeartbeatReq, pb)))
+	env := readEnv(t, conn, protocol.HeartbeatResp)
 	require.NotZero(t, env.GetHeartbeatResp().GetServerTsMs())
 }
 
@@ -429,23 +430,23 @@ func TestHandleWebSocketLeaveRoom(t *testing.T) {
 		LoginReq: &clientv1.LoginRequest{Nickname: "玩家"},
 	}}
 	pb, _ := proto.Marshal(login)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	loginResp := readEnv(t, conn, msgid.LoginResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
+	loginResp := readEnv(t, conn, protocol.LoginResp)
 	uid := loginResp.GetLoginResp().GetUserId()
 
 	jr := &clientv1.Envelope{ReqId: "b", Body: &clientv1.Envelope_JoinRoomReq{
 		JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "room-leave"},
 	}}
 	pb, _ = proto.Marshal(jr)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
-	readEnv(t, conn, msgid.JoinRoomResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb)))
+	readEnv(t, conn, protocol.JoinRoomResp)
 
 	req := &clientv1.Envelope{ReqId: "c", Body: &clientv1.Envelope_LeaveRoomReq{
 		LeaveRoomReq: &clientv1.LeaveRoomRequest{},
 	}}
 	pb, _ = proto.Marshal(req)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LeaveRoomReq, pb)))
-	env := readEnv(t, conn, msgid.LeaveRoomResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LeaveRoomReq, pb)))
+	env := readEnv(t, conn, protocol.LeaveRoomResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, env.GetLeaveRoomResp().GetErrorCode())
 
 	token := loginResp.GetLoginResp().GetSessionToken()
@@ -472,27 +473,27 @@ func TestHandleWebSocketJoinRoomFull(t *testing.T) {
 		c := dialWS(t, srv)
 		login := &clientv1.Envelope{ReqId: "x", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 		pb, _ := proto.Marshal(login)
-		_ = c.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb))
+		_ = c.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb))
 		_, _, _ = c.ReadMessage()
 		jr := &clientv1.Envelope{ReqId: "y", Body: &clientv1.Envelope_JoinRoomReq{
 			JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "full-room"},
 		}}
 		pb, _ = proto.Marshal(jr)
-		_ = c.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb))
+		_ = c.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb))
 		_, _, _ = c.ReadMessage()
 	}
 
 	c5 := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "x", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, _ := proto.Marshal(login)
-	_ = c5.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb))
+	_ = c5.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb))
 	_, _, _ = c5.ReadMessage()
 	jr := &clientv1.Envelope{ReqId: "y", Body: &clientv1.Envelope_JoinRoomReq{
 		JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "full-room"},
 	}}
 	pb, _ = proto.Marshal(jr)
-	_ = c5.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb))
-	env := readEnv(t, c5, msgid.JoinRoomResp)
+	_ = c5.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb))
+	env := readEnv(t, c5, protocol.JoinRoomResp)
 	if env.GetJoinRoomResp().GetErrorCode() != clientv1.ErrorCode_ERROR_CODE_ROOM_FULL {
 		t.Fatalf("want ROOM_FULL got %v", env.GetJoinRoomResp().GetErrorCode())
 	}
@@ -505,13 +506,13 @@ func TestJoinRoomErrorCodeMapsNonFullErrors(t *testing.T) {
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, _ := proto.Marshal(login)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	readEnv(t, conn, msgid.LoginResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
+	readEnv(t, conn, protocol.LoginResp)
 
 	jr := &clientv1.Envelope{ReqId: "2", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "r1"}}}
 	pb, _ = proto.Marshal(jr)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
-	env := readEnv(t, conn, msgid.JoinRoomResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb)))
+	env := readEnv(t, conn, protocol.JoinRoomResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, env.GetJoinRoomResp().GetErrorCode())
 }
 
@@ -522,13 +523,13 @@ func TestJoinRoomErrorCodeRoomNotFound(t *testing.T) {
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, _ := proto.Marshal(login)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	readEnv(t, conn, msgid.LoginResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
+	readEnv(t, conn, protocol.LoginResp)
 
 	jr := &clientv1.Envelope{ReqId: "2", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "missing"}}}
 	pb, _ = proto.Marshal(jr)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
-	env := readEnv(t, conn, msgid.JoinRoomResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb)))
+	env := readEnv(t, conn, protocol.JoinRoomResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_ROOM_NOT_FOUND, env.GetJoinRoomResp().GetErrorCode())
 }
 
@@ -541,15 +542,15 @@ func TestJoinRoomBindSessionFailureReturnsInvalidState(t *testing.T) {
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{Nickname: "n"}}}
 	pb, _ := proto.Marshal(login)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	readEnv(t, conn, msgid.LoginResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
+	readEnv(t, conn, protocol.LoginResp)
 
 	mr.Close()
 
 	jr := &clientv1.Envelope{ReqId: "2", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "r1"}}}
 	pb, _ = proto.Marshal(jr)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
-	env := readEnv(t, conn, msgid.JoinRoomResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb)))
+	env := readEnv(t, conn, protocol.JoinRoomResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, env.GetJoinRoomResp().GetErrorCode())
 	require.NotEmpty(t, env.GetJoinRoomResp().GetErrorMessage())
 }
@@ -564,7 +565,7 @@ func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 		JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: "r"},
 	}}
 	pb, _ := proto.Marshal(jr)
-	_ = conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb))
+	_ = conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb))
 	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("expected no response")
@@ -579,12 +580,12 @@ func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, _ := proto.Marshal(login)
-	_ = conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb))
-	readEnv(t, conn, msgid.LoginResp)
+	_ = conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb))
+	readEnv(t, conn, protocol.LoginResp)
 
 	empty := &clientv1.Envelope{ReqId: "2"}
 	pb, _ = proto.Marshal(empty)
-	_ = conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb))
+	_ = conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.JoinRoomReq, pb))
 	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("join oneof 为空时不应回包")
@@ -597,7 +598,7 @@ func TestHandleWebSocketInvalidLoginPayload(t *testing.T) {
 	srv := wsTestServer(t, Deps{Rooms: NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
-	_ = conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, []byte{0xff}))
+	_ = conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, []byte{0xff}))
 	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("expected no reply")
@@ -633,11 +634,11 @@ func TestHandleWebSocketResumeRedirect(t *testing.T) {
 		LoginReq: &clientv1.LoginRequest{SessionToken: "tok"},
 	}}
 	pb, _ := proto.Marshal(req)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
 
-	env := readEnv(t, conn, msgid.LoginResp)
+	env := readEnv(t, conn, protocol.LoginResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_ROUTE_REDIRECT, env.GetLoginResp().GetErrorCode())
-	redirect := readEnv(t, conn, msgid.RouteRedirectNotify)
+	redirect := readEnv(t, conn, protocol.RouteRedirectNotify)
 	require.Equal(t, "ws://gate-b/ws", redirect.GetRouteRedirect().GetWsUrl())
 }
 
@@ -652,8 +653,8 @@ func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
 	}{
 		{
 			name:      "list_rooms",
-			reqMsgID:  msgid.ListRoomsReq,
-			respMsgID: msgid.ListRoomsResp,
+			reqMsgID:  protocol.ListRoomsReq,
+			respMsgID: protocol.ListRoomsResp,
 			env: &clientv1.Envelope{ReqId: "list", Body: &clientv1.Envelope_ListRoomsReq{
 				ListRoomsReq: &clientv1.ListRoomsRequest{},
 			}},
@@ -661,8 +662,8 @@ func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
 		},
 		{
 			name:      "list_rules",
-			reqMsgID:  msgid.ListRulesReq,
-			respMsgID: msgid.ListRulesResp,
+			reqMsgID:  protocol.ListRulesReq,
+			respMsgID: protocol.ListRulesResp,
 			env: &clientv1.Envelope{ReqId: "rules", Body: &clientv1.Envelope_ListRulesReq{
 				ListRulesReq: &clientv1.ListRulesRequest{},
 			}},
@@ -670,8 +671,8 @@ func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
 		},
 		{
 			name:      "auto_match",
-			reqMsgID:  msgid.AutoMatchReq,
-			respMsgID: msgid.AutoMatchResp,
+			reqMsgID:  protocol.AutoMatchReq,
+			respMsgID: protocol.AutoMatchResp,
 			env: &clientv1.Envelope{ReqId: "match", Body: &clientv1.Envelope_AutoMatchReq{
 				AutoMatchReq: &clientv1.AutoMatchRequest{},
 			}},
@@ -679,8 +680,8 @@ func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
 		},
 		{
 			name:      "create_room",
-			reqMsgID:  msgid.CreateRoomReq,
-			respMsgID: msgid.CreateRoomResp,
+			reqMsgID:  protocol.CreateRoomReq,
+			respMsgID: protocol.CreateRoomResp,
 			env: &clientv1.Envelope{ReqId: "create", Body: &clientv1.Envelope_CreateRoomReq{
 				CreateRoomReq: &clientv1.CreateRoomRequest{},
 			}},
@@ -695,7 +696,7 @@ func TestHandleWebSocketLobbyRequestsRequireLogin(t *testing.T) {
 			defer srv.Close()
 			conn := dialWS(t, srv)
 			pb, _ := proto.Marshal(tc.env)
-			require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(tc.reqMsgID, pb)))
+			require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(tc.reqMsgID, pb)))
 			resp := readEnv(t, conn, tc.respMsgID)
 			require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED, tc.code(resp))
 		})
@@ -715,13 +716,13 @@ func TestHandleWebSocketListRulesAfterLogin(t *testing.T) {
 
 	login := &clientv1.Envelope{ReqId: "login", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, _ := proto.Marshal(login)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	readEnv(t, conn, msgid.LoginResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
+	readEnv(t, conn, protocol.LoginResp)
 
 	req := &clientv1.Envelope{ReqId: "rules", Body: &clientv1.Envelope_ListRulesReq{ListRulesReq: &clientv1.ListRulesRequest{}}}
 	pb, _ = proto.Marshal(req)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ListRulesReq, pb)))
-	resp := readEnv(t, conn, msgid.ListRulesResp)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.ListRulesReq, pb)))
+	resp := readEnv(t, conn, protocol.ListRulesResp)
 	require.Len(t, resp.GetListRulesResp().GetRules(), 1)
 	require.Equal(t, "sichuan_xuezhandaodi_huansanzhang", resp.GetListRulesResp().GetRules()[0].GetRuleId())
 }
@@ -741,11 +742,11 @@ func TestHandleWebSocketResumeSettlementFallback(t *testing.T) {
 		LoginReq: &clientv1.LoginRequest{SessionToken: "tok"},
 	}}
 	pb, _ := proto.Marshal(req)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
 
-	env := readEnv(t, conn, msgid.LoginResp)
+	env := readEnv(t, conn, protocol.LoginResp)
 	require.False(t, env.GetLoginResp().GetResumed())
-	settle := readEnv(t, conn, msgid.Settlement)
+	settle := readEnv(t, conn, protocol.Settlement)
 	require.Equal(t, "r1", settle.GetSettlement().GetRoomId())
 }
 
@@ -761,8 +762,17 @@ func TestHandleWebSocketResumeErrorCode(t *testing.T) {
 		LoginReq: &clientv1.LoginRequest{SessionToken: "tok"},
 	}}
 	pb, _ := proto.Marshal(req)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, pb)))
 
-	env := readEnv(t, conn, msgid.LoginResp)
+	env := readEnv(t, conn, protocol.LoginResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_RECONNECTING, env.GetLoginResp().GetErrorCode())
+}
+
+// mustEncodeFrame 在测试中编码帧，载荷超限时 panic（测试环境不处理超限）。
+func mustEncodeFrame(msgID uint16, payload []byte) []byte {
+	enc, err := protocol.Encode(msgID, payload)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }

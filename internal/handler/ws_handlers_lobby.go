@@ -8,9 +8,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
-	"racoo.cn/lsp/internal/session"
+
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/pkg/logx"
 )
 
@@ -27,7 +26,7 @@ func handleListRooms(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		return
 	}
 	if state.userID == "" {
-		writeLobbyResponse(conn, msgid.ListRoomsResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.ListRoomsResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_ListRoomsResp{ListRoomsResp: &clientv1.ListRoomsResponse{
 				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
@@ -42,7 +41,7 @@ func handleListRooms(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		resp.ErrorCode = clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 		resp.ErrorMessage = err.Error()
 	}
-	writeLobbyResponse(conn, msgid.ListRoomsResp, &clientv1.Envelope{
+	writeLobbyResponse(conn, protocol.ListRoomsResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body:  &clientv1.Envelope_ListRoomsResp{ListRoomsResp: resp},
 	})
@@ -59,7 +58,7 @@ func handleListRules(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		return
 	}
 	if state.userID == "" {
-		writeLobbyResponse(conn, msgid.ListRulesResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.ListRulesResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_ListRulesResp{ListRulesResp: &clientv1.ListRulesResponse{
 				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
@@ -74,7 +73,7 @@ func handleListRules(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		resp.ErrorCode = clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 		resp.ErrorMessage = err.Error()
 	}
-	writeLobbyResponse(conn, msgid.ListRulesResp, &clientv1.Envelope{
+	writeLobbyResponse(conn, protocol.ListRulesResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body:  &clientv1.Envelope_ListRulesResp{ListRulesResp: resp},
 	})
@@ -91,7 +90,7 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		return
 	}
 	if state.userID == "" {
-		writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.AutoMatchResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
 				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
@@ -105,7 +104,7 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 	}
 	roomID, seat, err := deps.Rooms.AutoMatch(ctx, req.GetRuleId(), state.userID, req.GetPadWithBots())
 	if err != nil {
-		writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.AutoMatchResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
 				ErrorCode:    joinRoomErrorCode(err),
@@ -115,7 +114,7 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		return
 	}
 	if err := bindJoinedRoom(ctx, deps, conn, state, roomID); err != nil {
-		writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.AutoMatchResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
 				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
@@ -129,7 +128,7 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 	if req.GetPadWithBots() {
 		added, after, err := deps.Rooms.AddBot(ctx, roomID, state.userID, 3, "normal", "automatch:"+roomID+":"+state.userID)
 		if err != nil {
-			writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
+			writeLobbyResponse(conn, protocol.AutoMatchResp, &clientv1.Envelope{
 				ReqId: env.ReqId,
 				Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
 					ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
@@ -141,7 +140,7 @@ func handleAutoMatch(ctx context.Context, deps Deps, conn *websocket.Conn, state
 		seats = mergeSeatInfos(seats, added)
 		afterAddBot = after
 	}
-	writeLobbyResponse(conn, msgid.AutoMatchResp, &clientv1.Envelope{
+	writeLobbyResponse(conn, protocol.AutoMatchResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body: &clientv1.Envelope_AutoMatchResp{AutoMatchResp: &clientv1.AutoMatchResponse{
 			RoomId:      roomID,
@@ -174,7 +173,7 @@ func handleAddBot(ctx context.Context, deps Deps, conn *websocket.Conn, state *w
 		resp.ErrorCode = clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 		resp.ErrorMessage = err.Error()
 	}
-	writeLobbyResponse(conn, msgid.AddBotResp, &clientv1.Envelope{
+	writeLobbyResponse(conn, protocol.AddBotResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body:  &clientv1.Envelope_AddBotResp{AddBotResp: resp},
 	})
@@ -218,7 +217,7 @@ func handleCreateRoom(ctx context.Context, deps Deps, conn *websocket.Conn, stat
 		return
 	}
 	if state.userID == "" {
-		writeLobbyResponse(conn, msgid.CreateRoomResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.CreateRoomResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
 				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_UNAUTHORIZED,
@@ -232,7 +231,7 @@ func handleCreateRoom(ctx context.Context, deps Deps, conn *websocket.Conn, stat
 	}
 	roomID, seat, err := deps.Rooms.CreateRoom(ctx, req.GetRuleId(), req.GetDisplayName(), req.GetPrivate(), state.userID)
 	if err != nil {
-		writeLobbyResponse(conn, msgid.CreateRoomResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.CreateRoomResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
 				ErrorCode:    joinRoomErrorCode(err),
@@ -242,7 +241,7 @@ func handleCreateRoom(ctx context.Context, deps Deps, conn *websocket.Conn, stat
 		return
 	}
 	if err := bindJoinedRoom(ctx, deps, conn, state, roomID); err != nil {
-		writeLobbyResponse(conn, msgid.CreateRoomResp, &clientv1.Envelope{
+		writeLobbyResponse(conn, protocol.CreateRoomResp, &clientv1.Envelope{
 			ReqId: env.ReqId,
 			Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
 				ErrorCode:    clientv1.ErrorCode_ERROR_CODE_INVALID_STATE,
@@ -251,7 +250,7 @@ func handleCreateRoom(ctx context.Context, deps Deps, conn *websocket.Conn, stat
 		})
 		return
 	}
-	writeLobbyResponse(conn, msgid.CreateRoomResp, &clientv1.Envelope{
+	writeLobbyResponse(conn, protocol.CreateRoomResp, &clientv1.Envelope{
 		ReqId: env.ReqId,
 		Body: &clientv1.Envelope_CreateRoomResp{CreateRoomResp: &clientv1.CreateRoomResponse{
 			RoomId:      roomID,
@@ -294,5 +293,5 @@ func bindJoinedRoom(ctx context.Context, deps Deps, conn *websocket.Conn, state 
 
 func writeLobbyResponse(conn *websocket.Conn, outMsgID uint16, env *clientv1.Envelope) {
 	b, _ := proto.Marshal(env)
-	_ = session.WriteBinary(conn, frame.Encode(outMsgID, b))
+	writeBinaryFrame(conn, outMsgID, b)
 }

@@ -16,8 +16,7 @@ import (
 	"nhooyr.io/websocket"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 func TestTokenFileRoundTrip(t *testing.T) {
@@ -54,12 +53,12 @@ func TestConnectOnceSendsLoginAndReadsResponse(t *testing.T) {
 			errCh <- err
 			return
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			errCh <- err
 			return
 		}
-		if h.MsgID != msgid.LoginReq {
+		if h.MsgID != protocol.LoginReq {
 			errCh <- fmt.Errorf("unexpected msg_id: %d", h.MsgID)
 			return
 		}
@@ -83,7 +82,8 @@ func TestConnectOnceSendsLoginAndReadsResponse(t *testing.T) {
 			errCh <- err
 			return
 		}
-		if err := conn.Write(r.Context(), websocket.MessageBinary, frame.Encode(msgid.LoginResp, resp)); err != nil {
+		enc, _ := protocol.Encode(protocol.LoginResp, resp)
+		if err := conn.Write(r.Context(), websocket.MessageBinary, enc); err != nil {
 			errCh <- err
 			return
 		}
@@ -133,7 +133,8 @@ func TestConnectOnceReturnsRouteRedirectError(t *testing.T) {
 			errCh <- err
 			return
 		}
-		if err := conn.Write(r.Context(), websocket.MessageBinary, frame.Encode(msgid.RouteRedirectNotify, redirect)); err != nil {
+		enc, _ := protocol.Encode(protocol.RouteRedirectNotify, redirect)
+		if err := conn.Write(r.Context(), websocket.MessageBinary, enc); err != nil {
 			errCh <- err
 			return
 		}
@@ -175,7 +176,8 @@ func TestRunAppliesRouteRedirectWithoutBackoff(t *testing.T) {
 				WsUrl: "ws://" + r.Host + "/ws-next",
 			}},
 		})
-		_ = conn.Write(r.Context(), websocket.MessageBinary, frame.Encode(msgid.RouteRedirectNotify, redirect))
+		enc, _ := protocol.Encode(protocol.RouteRedirectNotify, redirect)
+		_ = conn.Write(r.Context(), websocket.MessageBinary, enc)
 	}))
 	defer srv.Close()
 

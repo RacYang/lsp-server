@@ -39,8 +39,8 @@ components:
     in: internal/adapter/**
   gateway:
     in: internal/gateway/**
-  net:
-    in: internal/net/**
+  protocol:
+    in: internal/protocol/**
   cluster:
     in: internal/cluster/**
   handler:
@@ -280,7 +280,7 @@ deps:
       - bot
       - service_bot
       - domain
-      - net
+      - protocol
       - cluster
       - handler
       - store
@@ -295,7 +295,7 @@ deps:
       - apigen_v1
   gateway:
     mayDependOn:
-      - net
+      - protocol
       - cluster
       - handler
       - store
@@ -307,7 +307,7 @@ deps:
       - pkg
       - apigen_client
       - apigen_v1
-  net:
+  protocol:
     anyProjectDeps: true
   cluster:
     anyProjectDeps: true
@@ -329,7 +329,7 @@ deps:
       - app
       - adapter
       - gateway
-      - net
+      - protocol
       - cluster
       - service
       - session

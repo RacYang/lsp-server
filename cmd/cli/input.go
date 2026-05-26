@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 // CommandHandler 把命令栏文本与快捷键映射为对服务器的请求帧。
@@ -47,21 +47,21 @@ func (h *CommandHandler) Handle(ctx context.Context, line string) bool {
 	case "join":
 		err = h.join(ctx, fields)
 	case "ready":
-		err = h.client.Send(ctx, msgid.ReadyReq, &clientv1.Envelope{ReqId: newReqID("ready"), Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}})
+		err = h.client.Send(ctx, protocol.ReadyReq, &clientv1.Envelope{ReqId: newReqID("ready"), Body: &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}}})
 	case "d", "discard":
 		err = h.discard(ctx, fields)
 	case "p", "pong":
-		err = h.client.Send(ctx, msgid.PongReq, &clientv1.Envelope{ReqId: newReqID("pong"), IdempotencyKey: newReqID("idem-pong"), Body: &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{PhaseToken: h.state.PhaseToken()}}})
+		err = h.client.Send(ctx, protocol.PongReq, &clientv1.Envelope{ReqId: newReqID("pong"), IdempotencyKey: newReqID("idem-pong"), Body: &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{PhaseToken: h.state.PhaseToken()}}})
 	case "g", "gang":
 		err = h.gang(ctx, fields)
 	case "h", "hu":
-		err = h.client.Send(ctx, msgid.HuReq, &clientv1.Envelope{ReqId: newReqID("hu"), IdempotencyKey: newReqID("idem-hu"), Body: &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{PhaseToken: h.state.PhaseToken()}}})
+		err = h.client.Send(ctx, protocol.HuReq, &clientv1.Envelope{ReqId: newReqID("hu"), IdempotencyKey: newReqID("idem-hu"), Body: &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{PhaseToken: h.state.PhaseToken()}}})
 	case "ex":
 		err = h.exchange(ctx, fields)
 	case "que":
 		err = h.que(ctx, fields)
 	case "leave":
-		err = h.client.Send(ctx, msgid.LeaveRoomReq, &clientv1.Envelope{ReqId: newReqID("leave"), IdempotencyKey: newReqID("idem-leave"), Body: &clientv1.Envelope_LeaveRoomReq{LeaveRoomReq: &clientv1.LeaveRoomRequest{}}})
+		err = h.client.Send(ctx, protocol.LeaveRoomReq, &clientv1.Envelope{ReqId: newReqID("leave"), IdempotencyKey: newReqID("idem-leave"), Body: &clientv1.Envelope_LeaveRoomReq{LeaveRoomReq: &clientv1.LeaveRoomRequest{}}})
 	case "status":
 		h.state.AddLog("状态已刷新")
 	default:
@@ -74,7 +74,7 @@ func (h *CommandHandler) Handle(ctx context.Context, line string) bool {
 }
 
 func (h *CommandHandler) listRooms(ctx context.Context) error {
-	return h.client.Send(ctx, msgid.ListRoomsReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.ListRoomsReq, &clientv1.Envelope{
 		ReqId: newReqID("list"),
 		Body:  &clientv1.Envelope_ListRoomsReq{ListRoomsReq: &clientv1.ListRoomsRequest{PageSize: 20}},
 	})
@@ -85,7 +85,7 @@ func (h *CommandHandler) match(ctx context.Context, fields []string) error {
 	if len(fields) > 1 {
 		ruleID = fields[1]
 	}
-	return h.client.Send(ctx, msgid.AutoMatchReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.AutoMatchReq, &clientv1.Envelope{
 		ReqId:          newReqID("match"),
 		IdempotencyKey: newReqID("idem-match"),
 		Body:           &clientv1.Envelope_AutoMatchReq{AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: ruleID}},
@@ -110,7 +110,7 @@ func (h *CommandHandler) createRoom(ctx context.Context, fields []string) error 
 }
 
 func (h *CommandHandler) sendCreateRoom(ctx context.Context, ruleID, displayName string, private bool) error {
-	return h.client.Send(ctx, msgid.CreateRoomReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.CreateRoomReq, &clientv1.Envelope{
 		ReqId:          newReqID("create"),
 		IdempotencyKey: newReqID("idem-create"),
 		Body: &clientv1.Envelope_CreateRoomReq{CreateRoomReq: &clientv1.CreateRoomRequest{
@@ -128,7 +128,7 @@ func (h *CommandHandler) join(ctx context.Context, fields []string) error {
 	}
 	roomID := fields[1]
 	h.state.Mutate(func(v *RoomView) { v.RoomID = roomID })
-	return h.client.Send(ctx, msgid.JoinRoomReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.JoinRoomReq, &clientv1.Envelope{
 		ReqId: newReqID("join"),
 		Body:  &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: roomID}},
 	})
@@ -140,7 +140,7 @@ func (h *CommandHandler) discard(ctx context.Context, fields []string) error {
 		return fmt.Errorf("用法: d <tile>")
 	}
 	tile := fields[1]
-	return h.client.Send(ctx, msgid.DiscardReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.DiscardReq, &clientv1.Envelope{
 		ReqId:          newReqID("discard"),
 		IdempotencyKey: newReqID("idem-discard"),
 		Body:           &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: tile, PhaseToken: h.state.PhaseToken()}},
@@ -153,7 +153,7 @@ func (h *CommandHandler) gang(ctx context.Context, fields []string) error {
 	if len(fields) > 1 {
 		tile = fields[1]
 	}
-	return h.client.Send(ctx, msgid.GangReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.GangReq, &clientv1.Envelope{
 		ReqId:          newReqID("gang"),
 		IdempotencyKey: newReqID("idem-gang"),
 		Body:           &clientv1.Envelope_GangReq{GangReq: &clientv1.GangRequest{Tile: tile, PhaseToken: h.state.PhaseToken()}},
@@ -185,7 +185,7 @@ func (h *CommandHandler) exchange(ctx context.Context, fields []string) error {
 			v.Players[v.SeatIndex].HandCnt = len(v.Players[v.SeatIndex].Hand)
 		}
 	})
-	return h.client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.OpeningActionReq, &clientv1.Envelope{
 		ReqId:          newReqID("exchange"),
 		IdempotencyKey: newReqID("idem-exchange"),
 		Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
@@ -205,7 +205,7 @@ func (h *CommandHandler) que(ctx context.Context, fields []string) error {
 	if !ok {
 		return fmt.Errorf("未知花色 %q，仅支持 m/p/s", fields[1])
 	}
-	return h.client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
+	return h.client.Send(ctx, protocol.OpeningActionReq, &clientv1.Envelope{
 		ReqId:          newReqID("que"),
 		IdempotencyKey: newReqID("idem-que"),
 		Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{

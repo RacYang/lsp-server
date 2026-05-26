@@ -27,8 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 func TestRoomProcessRestartReplay(t *testing.T) {
@@ -263,14 +262,15 @@ func requireReconnectSnapshot(t *testing.T, gateAddr, token, roomID string, conn
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reconn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)); err != nil {
+	enc, _ := protocol.Encode(protocol.LoginReq, pb)
+	if err := reconn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
-	env := readWSMessage(t, reconn, msgid.LoginResp)
+	env := readWSMessage(t, reconn, protocol.LoginResp)
 	if !env.GetLoginResp().GetResumed() {
 		t.Fatalf("期望 resumed=true，实际 %+v", env.GetLoginResp())
 	}
-	snap := readWSMessage(t, reconn, msgid.SnapshotNotify)
+	snap := readWSMessage(t, reconn, protocol.SnapshotNotify)
 	if snap.GetSnapshot().GetRoomId() != roomID {
 		t.Fatalf("重连快照房间号不一致: %+v", snap.GetSnapshot())
 	}
@@ -283,7 +283,7 @@ func readWSMessage(t *testing.T, conn *websocket.Conn, wantMsg uint16) *clientv1
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := frame.ReadFrame(bytes.NewReader(data))
+	h, err := protocol.ReadFrame(bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +304,8 @@ func sendReadyOnly(t *testing.T, conn *websocket.Conn) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)); err != nil {
+	enc, _ := protocol.Encode(protocol.ReadyReq, pb)
+	if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
 }

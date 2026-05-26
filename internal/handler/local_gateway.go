@@ -6,7 +6,8 @@ import (
 	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
+
+	"racoo.cn/lsp/internal/protocol"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
@@ -355,7 +356,10 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.
 	if !ok || g == nil || g.hub == nil {
 		return
 	}
-	encoded := frame.Encode(outMsgID, notification.Payload)
+	encoded, encErr := protocol.Encode(outMsgID, notification.Payload)
+	if encErr != nil {
+		return
+	}
 	if notification.Privacy == roomsvc.PrivacyPerSeat && notification.Project != nil {
 		players, _, _, ok := g.rooms.RoomSnapshot(roomID)
 		if !ok {
@@ -366,7 +370,9 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.
 			if len(projected) == 0 {
 				continue
 			}
-			g.hub.SendToUser(players[seat], frame.Encode(outMsgID, projected))
+			if enc, err := protocol.Encode(outMsgID, projected); err == nil {
+				g.hub.SendToUser(players[seat], enc)
+			}
 		}
 		return
 	}

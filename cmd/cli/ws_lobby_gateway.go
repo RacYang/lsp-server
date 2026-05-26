@@ -7,7 +7,7 @@ import (
 	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 // wsLobbyGateway 是 LobbyGateway 接口的生产实现，
@@ -28,7 +28,7 @@ func NewWSLobbyGateway(client *WSClient, bus *EventBus, state *AppState) LobbyGa
 
 func (g *wsLobbyGateway) AutoMatch(ctx context.Context, ruleID string) (LobbyJoinResult, error) {
 	reqID := newReqID("automatch")
-	env, err := g.rpc.Call(ctx, msgid.AutoMatchReq, &clientv1.Envelope{
+	env, err := g.rpc.Call(ctx, protocol.AutoMatchReq, &clientv1.Envelope{
 		ReqId: reqID,
 		Body:  &clientv1.Envelope_AutoMatchReq{AutoMatchReq: &clientv1.AutoMatchRequest{RuleId: ruleID, PadWithBots: true}},
 	}, func(e *clientv1.Envelope) bool { return e.GetAutoMatchResp() != nil })
@@ -52,7 +52,7 @@ func (g *wsLobbyGateway) AutoMatch(ctx context.Context, ruleID string) (LobbyJoi
 
 func (g *wsLobbyGateway) LeaveRoom(ctx context.Context) error {
 	reqID := newReqID("leave")
-	env, err := g.rpc.Call(ctx, msgid.LeaveRoomReq, &clientv1.Envelope{
+	env, err := g.rpc.Call(ctx, protocol.LeaveRoomReq, &clientv1.Envelope{
 		ReqId:          reqID,
 		IdempotencyKey: newReqID("idem-leave"),
 		Body:           &clientv1.Envelope_LeaveRoomReq{LeaveRoomReq: &clientv1.LeaveRoomRequest{}},
@@ -68,7 +68,7 @@ func (g *wsLobbyGateway) LeaveRoom(ctx context.Context) error {
 
 func (g *wsLobbyGateway) ListRules(ctx context.Context) ([]LobbyRuleMeta, error) {
 	reqID := newReqID("listrules")
-	env, err := g.rpc.Call(ctx, msgid.ListRulesReq, &clientv1.Envelope{
+	env, err := g.rpc.Call(ctx, protocol.ListRulesReq, &clientv1.Envelope{
 		ReqId: reqID,
 		Body:  &clientv1.Envelope_ListRulesReq{ListRulesReq: &clientv1.ListRulesRequest{}},
 	}, func(e *clientv1.Envelope) bool { return e.GetListRulesResp() != nil })
@@ -94,7 +94,7 @@ func (g *wsLobbyGateway) ListRules(ctx context.Context) ([]LobbyRuleMeta, error)
 
 func (g *wsLobbyGateway) ListRooms(ctx context.Context, pageToken string) (LobbyRoomList, error) {
 	reqID := newReqID("listrooms")
-	env, err := g.rpc.Call(ctx, msgid.ListRoomsReq, &clientv1.Envelope{
+	env, err := g.rpc.Call(ctx, protocol.ListRoomsReq, &clientv1.Envelope{
 		ReqId: reqID,
 		Body:  &clientv1.Envelope_ListRoomsReq{ListRoomsReq: &clientv1.ListRoomsRequest{PageToken: pageToken, PageSize: 20}},
 	}, func(e *clientv1.Envelope) bool { return e.GetListRoomsResp() != nil })
@@ -125,7 +125,7 @@ func (g *wsLobbyGateway) ListRooms(ctx context.Context, pageToken string) (Lobby
 
 func (g *wsLobbyGateway) CreateRoom(ctx context.Context, opts LobbyCreateOpts) (LobbyJoinResult, error) {
 	reqID := newReqID("createroom")
-	env, err := g.rpc.Call(ctx, msgid.CreateRoomReq, &clientv1.Envelope{
+	env, err := g.rpc.Call(ctx, protocol.CreateRoomReq, &clientv1.Envelope{
 		ReqId: reqID,
 		Body: &clientv1.Envelope_CreateRoomReq{CreateRoomReq: &clientv1.CreateRoomRequest{
 			RuleId:      opts.RuleID,
@@ -154,7 +154,7 @@ func (g *wsLobbyGateway) CreateRoom(ctx context.Context, opts LobbyCreateOpts) (
 
 func (g *wsLobbyGateway) JoinRoom(ctx context.Context, roomID string) (LobbyJoinResult, error) {
 	reqID := newReqID("joinroom")
-	env, err := g.rpc.Call(ctx, msgid.JoinRoomReq, &clientv1.Envelope{
+	env, err := g.rpc.Call(ctx, protocol.JoinRoomReq, &clientv1.Envelope{
 		ReqId: reqID,
 		Body:  &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: roomID}},
 	}, func(e *clientv1.Envelope) bool { return e.GetJoinRoomResp() != nil })
@@ -208,7 +208,7 @@ func (g *wsLobbyGateway) ChangeNickname(name string) {
 		defer cancel()
 		id, ch := g.bus.Subscribe(func(e *clientv1.Envelope) bool { return e.GetRenameResp() != nil }, 2)
 		defer g.bus.Unsubscribe(id)
-		_ = g.client.Send(ctx, msgid.RenameReq, &clientv1.Envelope{
+		_ = g.client.Send(ctx, protocol.RenameReq, &clientv1.Envelope{
 			ReqId: newReqID("rename"),
 			Body:  &clientv1.Envelope_RenameReq{RenameReq: &clientv1.RenameRequest{Nickname: name}},
 		})

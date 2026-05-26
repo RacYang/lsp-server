@@ -1,20 +1,31 @@
 // 帧编解码单元测试，覆盖魔数、版本、载荷边界与过大载荷错误路径。
-package frame
+package protocol
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 )
 
 func TestEncodeDecodeRoundTrip(t *testing.T) {
 	payload := []byte{1, 2, 3}
-	b := Encode(9, payload)
+	b, err := Encode(9, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
 	h, err := ReadFrame(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if h.MsgID != 9 || string(h.Payload) != string(payload) {
 		t.Fatalf("got %+v", h)
+	}
+}
+
+func TestEncodePayloadTooLarge(t *testing.T) {
+	_, err := Encode(1, make([]byte, MaxPayload+1))
+	if !errors.Is(err, ErrPayloadTooLarge) {
+		t.Fatalf("expected ErrPayloadTooLarge, got %v", err)
 	}
 }
 

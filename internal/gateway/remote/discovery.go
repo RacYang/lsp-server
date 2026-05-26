@@ -15,7 +15,8 @@ import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	"racoo.cn/lsp/internal/cluster/nodeid"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
 )
@@ -151,37 +152,37 @@ func encodeClusterRoomEvent(evt *svcv1.RoomServiceStreamEventsResponse) (uint16,
 	}
 	switch body := evt.Body.(type) {
 	case *svcv1.RoomServiceStreamEventsResponse_InitialDeal:
-		return marshalClientEnvelope(msgid.InitialDealNotify, &clientv1.Envelope{
+		return marshalClientEnvelope(protocol.InitialDealNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_InitialDeal{InitialDeal: body.InitialDeal},
 		})
 	case *svcv1.RoomServiceStreamEventsResponse_StartGame:
-		return marshalClientEnvelope(msgid.StartGame, &clientv1.Envelope{
+		return marshalClientEnvelope(protocol.StartGame, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_StartGame{StartGame: body.StartGame},
 		})
 	case *svcv1.RoomServiceStreamEventsResponse_DrawTile:
-		return marshalClientEnvelope(msgid.DrawTile, &clientv1.Envelope{
+		return marshalClientEnvelope(protocol.DrawTile, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_DrawTile{DrawTile: body.DrawTile},
 		})
 	case *svcv1.RoomServiceStreamEventsResponse_Action:
-		return marshalClientEnvelope(msgid.ActionNotify, &clientv1.Envelope{
+		return marshalClientEnvelope(protocol.ActionNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_Action{Action: body.Action},
 		})
 	case *svcv1.RoomServiceStreamEventsResponse_Settlement:
-		return marshalClientEnvelope(msgid.Settlement, &clientv1.Envelope{
+		return marshalClientEnvelope(protocol.Settlement, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_Settlement{Settlement: body.Settlement},
 		})
 	case *svcv1.RoomServiceStreamEventsResponse_OpeningDone:
-		return marshalClientEnvelope(msgid.OpeningDone, &clientv1.Envelope{
+		return marshalClientEnvelope(protocol.OpeningDone, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_OpeningDone{OpeningDone: body.OpeningDone},
 		})
 	case *svcv1.RoomServiceStreamEventsResponse_RouteRedirect:
-		return marshalClientEnvelope(msgid.RouteRedirectNotify, &clientv1.Envelope{
+		return marshalClientEnvelope(protocol.RouteRedirectNotify, &clientv1.Envelope{
 			ReqId: evt.GetCursor(),
 			Body:  &clientv1.Envelope_RouteRedirect{RouteRedirect: body.RouteRedirect},
 		})

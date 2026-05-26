@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"racoo.cn/lsp/internal/clock"
-	"racoo.cn/lsp/internal/net/frame"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 func TestHubNilBroadcast(t *testing.T) {
@@ -95,7 +95,7 @@ func TestHubBroadcastTwoClients(t *testing.T) {
 	h.Register("a", "room1", sc0)
 	h.Register("b", "room1", sc1)
 
-	want := frame.Encode(9, []byte{1, 2, 3})
+	want, _ := protocol.Encode(9, []byte{1, 2, 3})
 	h.Broadcast("room1", want)
 
 	_ = ca.SetReadDeadline(time.Now().Add(2 * time.Second))

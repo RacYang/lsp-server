@@ -12,8 +12,8 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	appmetrics "racoo.cn/lsp/internal/metrics"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
@@ -96,17 +96,17 @@ func handleLoginResume(
 	}
 	respEnv := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LoginResp{LoginResp: login}}
 	b, _ := proto.Marshal(respEnv)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.LoginResp, b))
+	writeBinaryFrame(conn, protocol.LoginResp, b)
 
 	if rr.Snapshot != nil {
 		snapEnv := &clientv1.Envelope{ReqId: rr.SnapshotSinceCursor, Body: &clientv1.Envelope_Snapshot{Snapshot: rr.Snapshot}}
 		sb, _ := proto.Marshal(snapEnv)
-		_ = session.WriteBinary(conn, frame.Encode(msgid.SnapshotNotify, sb))
+		writeBinaryFrame(conn, protocol.SnapshotNotify, sb)
 	}
 	if rr.Settlement != nil {
 		settleEnv := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_Settlement{Settlement: rr.Settlement}}
 		sb, _ := proto.Marshal(settleEnv)
-		_ = session.WriteBinary(conn, frame.Encode(msgid.Settlement, sb))
+		writeBinaryFrame(conn, protocol.Settlement, sb)
 	}
 }
 
@@ -137,7 +137,7 @@ func handleLoginIssue(
 	login := &clientv1.LoginResponse{UserId: state.userID, SessionToken: plainTok, Resumed: false}
 	respEnv := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LoginResp{LoginResp: login}}
 	b, _ := proto.Marshal(respEnv)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.LoginResp, b))
+	writeBinaryFrame(conn, protocol.LoginResp, b)
 	logx.Info(logx.WithUserID(ctx, state.userID), "玩家登录成功")
 }
 
@@ -193,7 +193,7 @@ func writeRenameResponse(conn *websocket.Conn, reqID string, code clientv1.Error
 		AppliedNickname: applied,
 	}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.RenameResp, b))
+	writeBinaryFrame(conn, protocol.RenameResp, b)
 }
 
 func writeLoginError(conn *websocket.Conn, reqID string, code clientv1.ErrorCode, msg string) {
@@ -202,7 +202,7 @@ func writeLoginError(conn *websocket.Conn, reqID string, code clientv1.ErrorCode
 		ErrorMessage: msg,
 	}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.LoginResp, b))
+	writeBinaryFrame(conn, protocol.LoginResp, b)
 }
 
 func writeLoginRedirect(conn *websocket.Conn, reqID string, rr *ResumeResult, tok string) {
@@ -213,11 +213,11 @@ func writeLoginRedirect(conn *websocket.Conn, reqID string, rr *ResumeResult, to
 		ErrorMessage: rr.Redirect.GetReason(),
 	}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.LoginResp, b))
+	writeBinaryFrame(conn, protocol.LoginResp, b)
 
 	redirectEnv := &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_RouteRedirect{RouteRedirect: rr.Redirect}}
 	rb, _ := proto.Marshal(redirectEnv)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.RouteRedirectNotify, rb))
+	writeBinaryFrame(conn, protocol.RouteRedirectNotify, rb)
 }
 
 // handleHeartbeat 刷新 hub 心跳，并回 ServerTsMs；不引入幂等/限流（心跳本身高频）。
@@ -236,5 +236,5 @@ func handleHeartbeat(deps Deps, conn *websocket.Conn, state *wsConnState, payloa
 		HeartbeatResp: &clientv1.HeartbeatResponse{ServerTsMs: time.Now().UnixMilli()},
 	}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.HeartbeatResp, b))
+	writeBinaryFrame(conn, protocol.HeartbeatResp, b)
 }

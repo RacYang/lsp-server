@@ -18,7 +18,8 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
@@ -78,9 +79,9 @@ func TestProtoTypesDirectPassthrough(t *testing.T) {
 // TestMarshalClientEnvelope 校验 marshal 失败与成功两条路径；空 envelope 不会引发错误。
 func TestMarshalClientEnvelope(t *testing.T) {
 	t.Parallel()
-	envID, payload, err := marshalClientEnvelope(msgid.StartGame, &clientv1.Envelope{ReqId: "x"})
+	envID, payload, err := marshalClientEnvelope(protocol.StartGame, &clientv1.Envelope{ReqId: "x"})
 	require.NoError(t, err)
-	require.Equal(t, msgid.StartGame, envID)
+	require.Equal(t, protocol.StartGame, envID)
 	require.NotEmpty(t, payload)
 
 	var decoded clientv1.Envelope
@@ -108,7 +109,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					InitialDeal: &clientv1.InitialDealNotify{SeatIndex: 0, Tiles: []string{"m1", "m2"}},
 				},
 			},
-			wantID: msgid.InitialDealNotify,
+			wantID: protocol.InitialDealNotify,
 		},
 		{
 			name: "start_game",
@@ -119,7 +120,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					StartGame: &clientv1.StartGameNotify{DealerSeat: 2},
 				},
 			},
-			wantID: msgid.StartGame,
+			wantID: protocol.StartGame,
 		},
 		{
 			name: "draw_tile",
@@ -128,7 +129,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					DrawTile: &clientv1.DrawTileNotify{SeatIndex: 1, Tile: "1m"},
 				},
 			},
-			wantID: msgid.DrawTile,
+			wantID: protocol.DrawTile,
 		},
 		{
 			name: "action",
@@ -137,7 +138,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					Action: &clientv1.ActionNotify{SeatIndex: 0, Action: "pong", Tile: "5w"},
 				},
 			},
-			wantID: msgid.ActionNotify,
+			wantID: protocol.ActionNotify,
 		},
 		{
 			name: "settlement",
@@ -152,7 +153,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					},
 				},
 			},
-			wantID: msgid.Settlement,
+			wantID: protocol.Settlement,
 		},
 		{
 			name: "opening_done_exchange",
@@ -165,7 +166,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					},
 				},
 			},
-			wantID: msgid.OpeningDone,
+			wantID: protocol.OpeningDone,
 		},
 		{
 			name: "opening_done_que",
@@ -178,7 +179,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					},
 				},
 			},
-			wantID: msgid.OpeningDone,
+			wantID: protocol.OpeningDone,
 		},
 		{
 			name: "route_redirect",
@@ -187,7 +188,7 @@ func TestEncodeClusterRoomEventAllBranches(t *testing.T) {
 					RouteRedirect: &clientv1.RouteRedirectNotify{WsUrl: "ws://x", Reason: "moved"},
 				},
 			},
-			wantID: msgid.RouteRedirectNotify,
+			wantID: protocol.RouteRedirectNotify,
 		},
 	}
 	for _, c := range cases {

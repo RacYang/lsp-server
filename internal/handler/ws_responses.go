@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 )
 
@@ -129,17 +130,17 @@ func joinRoomErrorCode(err error) clientv1.ErrorCode {
 func outboundMsgID(kind roomsvc.Kind) (uint16, bool) {
 	switch kind {
 	case roomsvc.KindInitialDeal:
-		return msgid.InitialDealNotify, true
+		return protocol.InitialDealNotify, true
 	case roomsvc.KindOpeningDone:
-		return msgid.OpeningDone, true
+		return protocol.OpeningDone, true
 	case roomsvc.KindStartGame:
-		return msgid.StartGame, true
+		return protocol.StartGame, true
 	case roomsvc.KindDrawTile:
-		return msgid.DrawTile, true
+		return protocol.DrawTile, true
 	case roomsvc.KindAction:
-		return msgid.ActionNotify, true
+		return protocol.ActionNotify, true
 	case roomsvc.KindSettlement:
-		return msgid.Settlement, true
+		return protocol.Settlement, true
 	default:
 		return 0, false
 	}

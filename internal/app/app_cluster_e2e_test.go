@@ -18,8 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 func TestClusterProcessesFourPlayersReceiveSettlement(t *testing.T) {
@@ -128,7 +127,8 @@ func TestClusterReconnectLoginWithSessionToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reconn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)); err != nil {
+	enc, _ := protocol.Encode(protocol.LoginReq, pb)
+	if err := reconn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
 	_ = reconn.SetReadDeadline(time.Now().Add(8 * time.Second))
@@ -136,8 +136,8 @@ func TestClusterReconnectLoginWithSessionToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("读登录响应失败: %v", err)
 	}
-	h, err := frame.ReadFrame(bytes.NewReader(data))
-	if err != nil || h.MsgID != msgid.LoginResp {
+	h, err := protocol.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != protocol.LoginResp {
 		t.Fatal("重连登录响应异常")
 	}
 	var envLogin clientv1.Envelope
@@ -152,11 +152,11 @@ func TestClusterReconnectLoginWithSessionToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("读快照帧失败: %v", err)
 	}
-	hSnap, err := frame.ReadFrame(bytes.NewReader(snapData))
+	hSnap, err := protocol.ReadFrame(bytes.NewReader(snapData))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hSnap.MsgID != msgid.SnapshotNotify {
+	if hSnap.MsgID != protocol.SnapshotNotify {
 		t.Fatalf("期望 SnapshotNotify，实际 msg_id=%d", hSnap.MsgID)
 	}
 	var snapEnv clientv1.Envelope

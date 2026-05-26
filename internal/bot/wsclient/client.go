@@ -18,8 +18,7 @@ import (
 	"nhooyr.io/websocket"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 // Client 是机器人使用的最小 WebSocket 协议客户端。
@@ -110,7 +109,11 @@ func (c *Client) Send(ctx context.Context, id uint16, env *clientv1.Envelope) er
 	if conn == nil {
 		return fmt.Errorf("尚未连接")
 	}
-	return conn.Write(ctx, websocket.MessageBinary, frame.Encode(id, payload))
+	enc, err := protocol.Encode(id, payload)
+	if err != nil {
+		return err
+	}
+	return conn.Write(ctx, websocket.MessageBinary, enc)
 }
 
 func (c *Client) dial(ctx context.Context) (*websocket.Conn, error) {
@@ -143,7 +146,7 @@ func (c *Client) dialOptions() (*websocket.DialOptions, error) {
 }
 
 func (c *Client) login(ctx context.Context) error {
-	return c.Send(ctx, msgid.LoginReq, &clientv1.Envelope{
+	return c.Send(ctx, protocol.LoginReq, &clientv1.Envelope{
 		ReqId: newReqID("login"),
 		Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{
 			Nickname:     c.name,
@@ -167,7 +170,7 @@ func (c *Client) readLoop(ctx context.Context) error {
 		if typ != websocket.MessageBinary {
 			continue
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			return err
 		}
@@ -195,7 +198,7 @@ func (c *Client) heartbeatLoop(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := c.Send(ctx, msgid.HeartbeatReq, &clientv1.Envelope{
+			if err := c.Send(ctx, protocol.HeartbeatReq, &clientv1.Envelope{
 				ReqId: newReqID("heartbeat"),
 				Body:  &clientv1.Envelope_HeartbeatReq{HeartbeatReq: &clientv1.HeartbeatRequest{ClientTsMs: time.Now().UnixMilli()}},
 			}); err != nil {

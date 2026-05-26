@@ -16,8 +16,7 @@ import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/app"
 	"racoo.cn/lsp/internal/config"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 type wsTestMessage struct {
@@ -82,7 +81,7 @@ func readWSClientMessage(conn *websocket.Conn, timeout time.Duration) (wsTestMes
 	if err != nil {
 		return wsTestMessage{}, fmt.Errorf("读消息失败: %w", err)
 	}
-	h, err := frame.ReadFrame(bytes.NewReader(data))
+	h, err := protocol.ReadFrame(bytes.NewReader(data))
 	if err != nil {
 		return wsTestMessage{}, err
 	}
@@ -103,15 +102,16 @@ func loginJoinReturnSessionToken(t *testing.T, conn *websocket.Conn, roomID stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)); err != nil {
+	enc, _ := protocol.Encode(protocol.LoginReq, pb)
+	if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := frame.ReadFrame(bytes.NewReader(data))
-	if err != nil || h.MsgID != msgid.LoginResp {
+	h, err := protocol.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != protocol.LoginResp {
 		t.Fatal("登录响应异常")
 	}
 	var env clientv1.Envelope
@@ -130,15 +130,16 @@ func loginJoinReturnSessionToken(t *testing.T, conn *websocket.Conn, roomID stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)); err != nil {
+	enc, _ = protocol.Encode(protocol.JoinRoomReq, pb)
+	if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
 	_, data, err = conn.ReadMessage()
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err = frame.ReadFrame(bytes.NewReader(data))
-	if err != nil || h.MsgID != msgid.JoinRoomResp {
+	h, err = protocol.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != protocol.JoinRoomResp {
 		t.Fatal("进房响应异常")
 	}
 	var joinEnv clientv1.Envelope
@@ -157,15 +158,16 @@ func loginJoin(t *testing.T, conn *websocket.Conn, roomID string) {
 		LoginReq: &clientv1.LoginRequest{Nickname: "测试玩家"},
 	}}
 	pb, _ := proto.Marshal(login)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)); err != nil {
+	enc, _ := protocol.Encode(protocol.LoginReq, pb)
+	if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := frame.ReadFrame(bytes.NewReader(data))
-	if err != nil || h.MsgID != msgid.LoginResp {
+	h, err := protocol.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != protocol.LoginResp {
 		t.Fatal("登录响应异常")
 	}
 
@@ -173,15 +175,16 @@ func loginJoin(t *testing.T, conn *websocket.Conn, roomID string) {
 		JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: roomID},
 	}}
 	pb, _ = proto.Marshal(jr)
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)); err != nil {
+	enc, _ = protocol.Encode(protocol.JoinRoomReq, pb)
+	if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
 	_, data, err = conn.ReadMessage()
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err = frame.ReadFrame(bytes.NewReader(data))
-	if err != nil || h.MsgID != msgid.JoinRoomResp {
+	h, err = protocol.ReadFrame(bytes.NewReader(data))
+	if err != nil || h.MsgID != protocol.JoinRoomResp {
 		t.Fatal("进房响应异常")
 	}
 	var joinEnv clientv1.Envelope
@@ -200,7 +203,8 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.ReadyReq, pb)); err != nil {
+	enc, _ := protocol.Encode(protocol.ReadyReq, pb)
+	if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 		t.Fatal(err)
 	}
 	// 集群模式下游戏开局事件可能早于 ReadyResp 到达（Redis BLPOP 异步推送）。
@@ -217,7 +221,7 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 		if err != nil {
 			t.Fatalf("准备阶段第 %d 次读取失败: %v", i, err)
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			t.Fatalf("准备阶段帧解析失败: %v", err)
 		}
@@ -226,7 +230,7 @@ func sendReadyAndReadResp(t *testing.T, conn *websocket.Conn) {
 			t.Fatalf("准备阶段 proto 解析失败: %v", err)
 		}
 		msg := wsTestMessage{msgID: h.MsgID, env: &env}
-		if msg.msgID != msgid.ReadyResp {
+		if msg.msgID != protocol.ReadyResp {
 			pending = append(pending, msg)
 			continue
 		}
@@ -248,11 +252,11 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 		}
 		lastProgress = fmt.Sprintf("msg=%d action=%s waiting_tile=%s hand_len=%d", msg.msgID, msg.env.GetAction().GetAction(), msg.env.GetDrawTile().GetTile(), len(hand))
 		switch msg.msgID {
-		case msgid.InitialDealNotify:
+		case protocol.InitialDealNotify:
 			if deal := msg.env.GetInitialDeal(); deal != nil && deal.GetSeatIndex() == seat {
 				hand = append(hand[:0], deal.GetTiles()...)
 			}
-		case msgid.DrawTile:
+		case protocol.DrawTile:
 			draw := msg.env.GetDrawTile()
 			if draw != nil && draw.GetSeatIndex() == seat && draw.GetTile() != "" {
 				hand = append(hand, draw.GetTile())
@@ -266,11 +270,12 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.DiscardReq, pb)); err != nil {
+				enc, _ := protocol.Encode(protocol.DiscardReq, pb)
+				if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 					return nil, err
 				}
 			}
-		case msgid.ActionNotify:
+		case protocol.ActionNotify:
 			action := msg.env.GetAction()
 			if action == nil || action.GetSeatIndex() != seat {
 				break
@@ -295,7 +300,8 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.OpeningActionReq, pb)); err != nil {
+				enc, _ := protocol.Encode(protocol.OpeningActionReq, pb)
+				if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 					return nil, err
 				}
 			case "que_men":
@@ -312,7 +318,8 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.OpeningActionReq, pb)); err != nil {
+				enc, _ := protocol.Encode(protocol.OpeningActionReq, pb)
+				if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 					return nil, err
 				}
 			case "pong_choice":
@@ -326,7 +333,8 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.PassReq, pb)); err != nil {
+				enc, _ := protocol.Encode(protocol.PassReq, pb)
+				if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 					return nil, err
 				}
 			case "gang_choice":
@@ -340,7 +348,8 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.GangReq, pb)); err != nil {
+				enc, _ := protocol.Encode(protocol.GangReq, pb)
+				if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 					return nil, err
 				}
 			case "hu_choice", "qiang_gang_choice", "tsumo_choice":
@@ -354,11 +363,12 @@ func driveConnUntilSettlement(conn *websocket.Conn, seat int32, max int) (*clien
 				if err != nil {
 					return nil, err
 				}
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.HuReq, pb)); err != nil {
+				enc, _ := protocol.Encode(protocol.HuReq, pb)
+				if err := conn.WriteMessage(websocket.BinaryMessage, enc); err != nil {
 					return nil, err
 				}
 			}
-		case msgid.Settlement:
+		case protocol.Settlement:
 			if sn := msg.env.GetSettlement(); sn != nil {
 				return sn, nil
 			}

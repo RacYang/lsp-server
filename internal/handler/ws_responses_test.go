@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 )
 
@@ -42,12 +43,12 @@ func TestOutboundMsgIDMappings(t *testing.T) {
 		kind roomsvc.Kind
 		want uint16
 	}{
-		{roomsvc.KindInitialDeal, msgid.InitialDealNotify},
-		{roomsvc.KindOpeningDone, msgid.OpeningDone},
-		{roomsvc.KindStartGame, msgid.StartGame},
-		{roomsvc.KindDrawTile, msgid.DrawTile},
-		{roomsvc.KindAction, msgid.ActionNotify},
-		{roomsvc.KindSettlement, msgid.Settlement},
+		{roomsvc.KindInitialDeal, protocol.InitialDealNotify},
+		{roomsvc.KindOpeningDone, protocol.OpeningDone},
+		{roomsvc.KindStartGame, protocol.StartGame},
+		{roomsvc.KindDrawTile, protocol.DrawTile},
+		{roomsvc.KindAction, protocol.ActionNotify},
+		{roomsvc.KindSettlement, protocol.Settlement},
 	}
 	for _, c := range cases {
 		got, ok := outboundMsgID(c.kind)

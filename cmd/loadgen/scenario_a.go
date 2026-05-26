@@ -11,8 +11,7 @@ import (
 	"nhooyr.io/websocket"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 type benchClient struct {
@@ -50,7 +49,7 @@ func runScenarioA(ctx context.Context, cfg scenarioConfig) (scenarioSummary, err
 		}
 		for round := 0; round < cfg.RoundCount; round++ {
 			for _, c := range clients {
-				if err := c.send(ctx, msgid.HeartbeatReq, &clientv1.Envelope{
+				if err := c.send(ctx, protocol.HeartbeatReq, &clientv1.Envelope{
 					ReqId: fmt.Sprintf("%s-heartbeat-%d", c.userID, round),
 					Body:  &clientv1.Envelope_HeartbeatReq{HeartbeatReq: &clientv1.HeartbeatRequest{ClientTsMs: time.Now().UnixMilli()}},
 				}); err != nil {
@@ -78,14 +77,14 @@ func prepareRoom(ctx context.Context, cfg scenarioConfig, roomID string) ([]*ben
 			return nil, requests, err
 		}
 		client := &benchClient{conn: conn}
-		if err := client.send(ctx, msgid.LoginReq, &clientv1.Envelope{
+		if err := client.send(ctx, protocol.LoginReq, &clientv1.Envelope{
 			ReqId: fmt.Sprintf("%s-login-%d", roomID, seat),
 			Body:  &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{Nickname: fmt.Sprintf("压测玩家%d", seat)}},
 		}); err != nil {
 			return nil, requests, err
 		}
 		requests++
-		loginResp, err := client.readUntil(ctx, msgid.LoginResp)
+		loginResp, err := client.readUntil(ctx, protocol.LoginResp)
 		if err != nil {
 			return nil, requests, err
 		}
@@ -94,27 +93,27 @@ func prepareRoom(ctx context.Context, cfg scenarioConfig, roomID string) ([]*ben
 		if client.userID == "" {
 			return nil, requests, fmt.Errorf("登录响应缺少 user_id")
 		}
-		if err := client.send(ctx, msgid.JoinRoomReq, &clientv1.Envelope{
+		if err := client.send(ctx, protocol.JoinRoomReq, &clientv1.Envelope{
 			ReqId: fmt.Sprintf("%s-join-%d", roomID, seat),
 			Body:  &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: roomID}},
 		}); err != nil {
 			return nil, requests, err
 		}
 		requests++
-		if _, err := client.readUntil(ctx, msgid.JoinRoomResp); err != nil {
+		if _, err := client.readUntil(ctx, protocol.JoinRoomResp); err != nil {
 			return nil, requests, err
 		}
 		clients = append(clients, client)
 	}
 	for seat, client := range clients {
-		if err := client.send(ctx, msgid.ReadyReq, &clientv1.Envelope{
+		if err := client.send(ctx, protocol.ReadyReq, &clientv1.Envelope{
 			ReqId: fmt.Sprintf("%s-ready-%d", roomID, seat),
 			Body:  &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}},
 		}); err != nil {
 			return nil, requests, err
 		}
 		requests++
-		if _, err := client.readUntil(ctx, msgid.ReadyResp); err != nil {
+		if _, err := client.readUntil(ctx, protocol.ReadyResp); err != nil {
 			return nil, requests, err
 		}
 	}
@@ -126,7 +125,11 @@ func (c *benchClient) send(ctx context.Context, msgID uint16, env *clientv1.Enve
 	if err != nil {
 		return err
 	}
-	return c.conn.Write(ctx, websocket.MessageBinary, frame.Encode(msgID, payload))
+	enc, encErr := protocol.Encode(msgID, payload)
+	if encErr != nil {
+		return encErr
+	}
+	return c.conn.Write(ctx, websocket.MessageBinary, enc)
 }
 
 func (c *benchClient) readUntil(ctx context.Context, wantMsgID uint16) (*clientv1.Envelope, error) {
@@ -140,7 +143,7 @@ func (c *benchClient) readUntil(ctx context.Context, wantMsgID uint16) (*clientv
 		if msgType != websocket.MessageBinary {
 			continue
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			return nil, err
 		}

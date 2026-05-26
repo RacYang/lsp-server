@@ -14,8 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 )
@@ -100,14 +100,16 @@ func loginAndJoin(t *testing.T, conn *websocket.Conn, roomID string) {
 	login := &clientv1.Envelope{ReqId: "login", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, err := proto.Marshal(login)
 	require.NoError(t, err)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	_ = readEnv(t, conn, msgid.LoginResp)
+	enc, _ := protocol.Encode(protocol.LoginReq, pb)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
+	_ = readEnv(t, conn, protocol.LoginResp)
 
 	join := &clientv1.Envelope{ReqId: "join", Body: &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: roomID}}}
 	pb, err = proto.Marshal(join)
 	require.NoError(t, err)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.JoinRoomReq, pb)))
-	_ = readEnv(t, conn, msgid.JoinRoomResp)
+	enc, _ = protocol.Encode(protocol.JoinRoomReq, pb)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
+	_ = readEnv(t, conn, protocol.JoinRoomResp)
 }
 
 // actionCase 用统一结构描述一个动作 handler 的输入帧与从响应里取出 ErrorCode 的方法，便于表驱动。
@@ -123,8 +125,8 @@ func actionCases() []actionCase {
 	return []actionCase{
 		{
 			name:    "discard",
-			reqMsg:  msgid.DiscardReq,
-			respMsg: msgid.DiscardResp,
+			reqMsg:  protocol.DiscardReq,
+			respMsg: protocol.DiscardResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: "1m"}}}
 			},
@@ -134,8 +136,8 @@ func actionCases() []actionCase {
 		},
 		{
 			name:    "pong",
-			reqMsg:  msgid.PongReq,
-			respMsg: msgid.PongResp,
+			reqMsg:  protocol.PongReq,
+			respMsg: protocol.PongResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{}}}
 			},
@@ -145,8 +147,8 @@ func actionCases() []actionCase {
 		},
 		{
 			name:    "chi",
-			reqMsg:  msgid.ChiReq,
-			respMsg: msgid.ChiResp,
+			reqMsg:  protocol.ChiReq,
+			respMsg: protocol.ChiResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_ChiReq{ChiReq: &clientv1.ChiRequest{Tiles: []string{"m1", "m2", "m3"}}}}
 			},
@@ -156,8 +158,8 @@ func actionCases() []actionCase {
 		},
 		{
 			name:    "gang",
-			reqMsg:  msgid.GangReq,
-			respMsg: msgid.GangResp,
+			reqMsg:  protocol.GangReq,
+			respMsg: protocol.GangResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_GangReq{GangReq: &clientv1.GangRequest{Tile: "1m"}}}
 			},
@@ -167,8 +169,8 @@ func actionCases() []actionCase {
 		},
 		{
 			name:    "hu",
-			reqMsg:  msgid.HuReq,
-			respMsg: msgid.HuResp,
+			reqMsg:  protocol.HuReq,
+			respMsg: protocol.HuResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{}}}
 			},
@@ -178,8 +180,8 @@ func actionCases() []actionCase {
 		},
 		{
 			name:    "pass",
-			reqMsg:  msgid.PassReq,
-			respMsg: msgid.PassResp,
+			reqMsg:  protocol.PassReq,
+			respMsg: protocol.PassResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_PassReq{PassReq: &clientv1.PassRequest{}}}
 			},
@@ -189,8 +191,8 @@ func actionCases() []actionCase {
 		},
 		{
 			name:    "openingActionExchangeThree",
-			reqMsg:  msgid.OpeningActionReq,
-			respMsg: msgid.OpeningActionResp,
+			reqMsg:  protocol.OpeningActionReq,
+			respMsg: protocol.OpeningActionResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
 					Action:    "exchange_three",
@@ -204,8 +206,8 @@ func actionCases() []actionCase {
 		},
 		{
 			name:    "openingActionQueMen",
-			reqMsg:  msgid.OpeningActionReq,
-			respMsg: msgid.OpeningActionResp,
+			reqMsg:  protocol.OpeningActionReq,
+			respMsg: protocol.OpeningActionResp,
 			build: func(reqID string) proto.Message {
 				return &clientv1.Envelope{ReqId: reqID, Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
 					Action: "que_men",
@@ -236,7 +238,8 @@ func TestActionHandlersHappyPath(t *testing.T) {
 
 			pb, err := proto.Marshal(c.build("req-1"))
 			require.NoError(t, err)
-			require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(c.reqMsg, pb)))
+			enc, _ := protocol.Encode(c.reqMsg, pb)
+			require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
 			env := readEnv(t, conn, c.respMsg)
 			code, msg := c.getError(env)
 			require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, code, "动作 %s 成功路径应返回 UNSPECIFIED", c.name)
@@ -263,7 +266,8 @@ func TestActionHandlersInvalidStateError(t *testing.T) {
 
 			pb, err := proto.Marshal(c.build("req-1"))
 			require.NoError(t, err)
-			require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(c.reqMsg, pb)))
+			enc, _ := protocol.Encode(c.reqMsg, pb)
+			require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
 			env := readEnv(t, conn, c.respMsg)
 			code, msg := c.getError(env)
 			require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, code, "动作 %s 失败路径应返回 INVALID_STATE", c.name)
@@ -288,8 +292,9 @@ func TestActionHandlersRateLimitedFromService(t *testing.T) {
 	req := &clientv1.Envelope{ReqId: "rl", Body: &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: "1m"}}}
 	pb, err := proto.Marshal(req)
 	require.NoError(t, err)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.DiscardReq, pb)))
-	env := readEnv(t, conn, msgid.DiscardResp)
+	enc, _ := protocol.Encode(protocol.DiscardReq, pb)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
+	env := readEnv(t, conn, protocol.DiscardResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_RATE_LIMITED, env.GetDiscardResp().GetErrorCode())
 }
 
@@ -308,14 +313,16 @@ func TestActionHandlersDropWhenNotInRoom(t *testing.T) {
 	login := &clientv1.Envelope{ReqId: "l", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
 	pb, err := proto.Marshal(login)
 	require.NoError(t, err)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LoginReq, pb)))
-	_ = readEnv(t, conn, msgid.LoginResp)
+	enc, _ := protocol.Encode(protocol.LoginReq, pb)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
+	_ = readEnv(t, conn, protocol.LoginResp)
 
 	leave := &clientv1.Envelope{ReqId: "leave-no-room", Body: &clientv1.Envelope_LeaveRoomReq{LeaveRoomReq: &clientv1.LeaveRoomRequest{}}}
 	pb, err = proto.Marshal(leave)
 	require.NoError(t, err)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.LeaveRoomReq, pb)))
-	env := readEnv(t, conn, msgid.LeaveRoomResp)
+	enc, _ = protocol.Encode(protocol.LeaveRoomReq, pb)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
+	env := readEnv(t, conn, protocol.LeaveRoomResp)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, env.GetLeaveRoomResp().GetErrorCode())
 	require.Contains(t, env.GetLeaveRoomResp().GetErrorMessage(), "尚未进入房间")
 }
@@ -336,14 +343,16 @@ func TestActionHandlersIdempotencyHits(t *testing.T) {
 	req := &clientv1.Envelope{ReqId: "d-1", IdempotencyKey: "idem-d", Body: &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: "1m"}}}
 	pb, err := proto.Marshal(req)
 	require.NoError(t, err)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.DiscardReq, pb)))
-	_ = readEnv(t, conn, msgid.DiscardResp)
+	enc, _ := protocol.Encode(protocol.DiscardReq, pb)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
+	_ = readEnv(t, conn, protocol.DiscardResp)
 	waitForAfterCount(t, gateway, 1, "首次请求必须执行 after 闭包")
 
 	req2 := &clientv1.Envelope{ReqId: "d-2", IdempotencyKey: "idem-d", Body: &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: "1m"}}}
 	pb, err = proto.Marshal(req2)
 	require.NoError(t, err)
-	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, frame.Encode(msgid.DiscardReq, pb)))
+	enc, _ = protocol.Encode(protocol.DiscardReq, pb)
+	require.NoError(t, conn.WriteMessage(websocket.BinaryMessage, enc))
 
 	if err := conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
 		t.Fatal(err)

@@ -7,9 +7,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
-	"racoo.cn/lsp/internal/session"
+
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/pkg/logx"
 )
 
@@ -50,7 +49,7 @@ func handleJoinRoom(
 		Seats:       selfSeatInfo(ctx, deps, int32(seat), state.userID), //nolint:gosec // 座位号 0..3
 	}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.JoinRoomResp, b))
+	writeBinaryFrame(conn, protocol.JoinRoomResp, b)
 }
 
 // handleReady：仅在已进入房间时执行；命中限流/幂等时静默丢弃，避免重复推进 FSM。
@@ -79,12 +78,12 @@ func handleReady(
 			ErrorMessage: err.Error(),
 		}}}
 		b, _ := proto.Marshal(resp)
-		_ = session.WriteBinary(conn, frame.Encode(msgid.ReadyResp, b))
+		writeBinaryFrame(conn, protocol.ReadyResp, b)
 		return
 	}
 	resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_ReadyResp{ReadyResp: &clientv1.ReadyResponse{}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.ReadyResp, b))
+	writeBinaryFrame(conn, protocol.ReadyResp, b)
 	if afterReady != nil {
 		afterReady()
 	}
@@ -130,7 +129,7 @@ func handleLeaveRoom(
 	}
 	resp := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_LeaveRoomResp{LeaveRoomResp: &clientv1.LeaveRoomResponse{}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.LeaveRoomResp, b))
+	writeBinaryFrame(conn, protocol.LeaveRoomResp, b)
 	if after != nil {
 		after()
 	}
@@ -160,7 +159,7 @@ func handleOpeningAction(
 	}
 	after, err := deps.Rooms.OpeningAction(ctx, state.roomID, state.userID, req.GetAction(), req.GetTiles(), req.GetDirection(), req.GetSuit(), req.GetParams(), req.GetPhaseToken())
 	resp, after := openingActionErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.OpeningActionResp, resp, after)
+	respondAction(conn, env.ReqId, protocol.OpeningActionResp, resp, after)
 }
 
 func handleDiscard(
@@ -184,7 +183,7 @@ func handleDiscard(
 	}
 	after, err := deps.Rooms.Discard(ctx, state.roomID, state.userID, req.GetTile(), req.GetPhaseToken())
 	resp, after := discardErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.DiscardResp, resp, after)
+	respondAction(conn, env.ReqId, protocol.DiscardResp, resp, after)
 }
 
 func handlePong(
@@ -207,7 +206,7 @@ func handlePong(
 	}
 	after, err := deps.Rooms.Pong(ctx, state.roomID, state.userID, env.GetPongReq().GetPhaseToken())
 	resp, after := pongErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.PongResp, resp, after)
+	respondAction(conn, env.ReqId, protocol.PongResp, resp, after)
 }
 
 func handleChi(
@@ -231,7 +230,7 @@ func handleChi(
 	}
 	after, err := deps.Rooms.Chi(ctx, state.roomID, state.userID, req.GetTiles(), req.GetPhaseToken())
 	resp, after := chiErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.ChiResp, resp, after)
+	respondAction(conn, env.ReqId, protocol.ChiResp, resp, after)
 }
 
 func handleGang(
@@ -255,7 +254,7 @@ func handleGang(
 	}
 	after, err := deps.Rooms.Gang(ctx, state.roomID, state.userID, req.GetTile(), req.GetPhaseToken())
 	resp, after := gangErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.GangResp, resp, after)
+	respondAction(conn, env.ReqId, protocol.GangResp, resp, after)
 }
 
 func handleHu(
@@ -278,7 +277,7 @@ func handleHu(
 	}
 	after, err := deps.Rooms.Hu(ctx, state.roomID, state.userID, env.GetHuReq().GetPhaseToken())
 	resp, after := huErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.HuResp, resp, after)
+	respondAction(conn, env.ReqId, protocol.HuResp, resp, after)
 }
 
 func handlePass(
@@ -301,7 +300,7 @@ func handlePass(
 	}
 	after, err := deps.Rooms.Pass(ctx, state.roomID, state.userID, env.GetPassReq().GetPhaseToken())
 	resp, after := passErrEnvelope(env.ReqId, after, err)
-	respondAction(conn, env.ReqId, msgid.PassResp, resp, after)
+	respondAction(conn, env.ReqId, protocol.PassResp, resp, after)
 }
 
 func writeJoinRoomError(conn *websocket.Conn, reqID string, code clientv1.ErrorCode, msg string) {
@@ -310,7 +309,7 @@ func writeJoinRoomError(conn *websocket.Conn, reqID string, code clientv1.ErrorC
 		ErrorMessage: msg,
 	}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.JoinRoomResp, b))
+	writeBinaryFrame(conn, protocol.JoinRoomResp, b)
 }
 
 func writeLeaveRoomError(conn *websocket.Conn, reqID string, code clientv1.ErrorCode, msg string) {
@@ -319,5 +318,5 @@ func writeLeaveRoomError(conn *websocket.Conn, reqID string, code clientv1.Error
 		ErrorMessage: msg,
 	}}}
 	b, _ := proto.Marshal(resp)
-	_ = session.WriteBinary(conn, frame.Encode(msgid.LeaveRoomResp, b))
+	writeBinaryFrame(conn, protocol.LeaveRoomResp, b)
 }

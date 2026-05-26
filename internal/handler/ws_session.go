@@ -9,8 +9,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/session"
 )
 
 func allowWebSocketOrigin(r *http.Request, allowedOrigins []string) bool {
@@ -57,7 +55,7 @@ func shouldDropRequest(env *clientv1.Envelope, msgID uint16, userID string) bool
 
 func respondAction(conn *websocket.Conn, reqID string, responseMsgID uint16, env *clientv1.Envelope, after func()) {
 	b, _ := proto.Marshal(env)
-	_ = session.WriteBinary(conn, frame.Encode(responseMsgID, b))
+	writeBinaryFrame(conn, responseMsgID, b)
 	if after != nil {
 		after()
 	}

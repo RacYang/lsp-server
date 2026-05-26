@@ -10,7 +10,8 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
-	"racoo.cn/lsp/internal/net/frame"
+
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/pkg/logx"
 )
 
@@ -356,8 +357,10 @@ func (g *remoteRoomGateway) forwardEventToHub(ctx context.Context, roomID string
 	}
 	var delivered []string
 	if g.hub != nil {
-		encoded := frame.Encode(msgID, payload)
-		if evt.GetTargetSeat() < 0 {
+		encoded, encErr := protocol.Encode(msgID, payload)
+		if encErr != nil {
+			logx.Warn(logx.WithRoomID(ctx, roomID), "帧编码失败", "err", encErr.Error())
+		} else if evt.GetTargetSeat() < 0 {
 			delivered = g.hub.BroadcastDeliveredUsers(roomID, encoded)
 		} else if targetUserID, ok := g.userForSeat(roomID, evt.GetTargetSeat()); ok {
 			if g.hub.SendToUser(targetUserID, encoded) {

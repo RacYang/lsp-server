@@ -20,7 +20,7 @@ import (
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 type fakeBC struct {
@@ -107,7 +107,7 @@ func TestReadyTriggersBroadcast(t *testing.T) {
 	if f.lastRoom != rid {
 		t.Fatalf("unexpected broadcast room=%s msg=%d", f.lastRoom, f.lastMsg)
 	}
-	if f.lastMsg != msgid.DrawTile && f.lastMsg != msgid.ActionNotify && f.lastMsg != msgid.StartGame {
+	if f.lastMsg != protocol.DrawTile && f.lastMsg != protocol.ActionNotify && f.lastMsg != protocol.StartGame {
 		t.Fatalf("unexpected broadcast room=%s msg=%d", f.lastRoom, f.lastMsg)
 	}
 }
@@ -1416,15 +1416,15 @@ func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 func outboundTestMsgID(kind Kind) (uint16, bool) {
 	switch kind {
 	case KindOpeningDone:
-		return msgid.OpeningDone, true
+		return protocol.OpeningDone, true
 	case KindStartGame:
-		return msgid.StartGame, true
+		return protocol.StartGame, true
 	case KindDrawTile:
-		return msgid.DrawTile, true
+		return protocol.DrawTile, true
 	case KindAction:
-		return msgid.ActionNotify, true
+		return protocol.ActionNotify, true
 	case KindSettlement:
-		return msgid.Settlement, true
+		return protocol.Settlement, true
 	default:
 		return 0, false
 	}

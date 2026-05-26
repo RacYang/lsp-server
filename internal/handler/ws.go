@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
 )
@@ -83,7 +83,7 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 		if err != nil {
 			return
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)
 			logx.Warn(logCtx, "二进制帧解析失败请检查客户端版本",
@@ -97,4 +97,14 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 
 		dispatchFrame(ctx, deps, conn, r, &state, h)
 	}
+}
+
+// writeBinaryFrame 编码消息帧并写入 WebSocket 连接；
+// 仅在载荷超过 MaxPayload（4MiB）时静默丢弃（实践中 proto 消息不会达到此量级）。
+func writeBinaryFrame(conn *websocket.Conn, msgID uint16, payload []byte) {
+	enc, err := protocol.Encode(msgID, payload)
+	if err != nil {
+		return
+	}
+	_ = session.WriteBinary(conn, enc)
 }

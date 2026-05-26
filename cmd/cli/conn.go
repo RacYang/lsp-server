@@ -18,8 +18,7 @@ import (
 	"nhooyr.io/websocket"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/frame"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 type WSClient struct {
@@ -223,7 +222,7 @@ func (c *WSClient) login(ctx context.Context) error {
 	c.mu.Lock()
 	name := c.name
 	c.mu.Unlock()
-	return c.Send(ctx, msgid.LoginReq, &clientv1.Envelope{
+	return c.Send(ctx, protocol.LoginReq, &clientv1.Envelope{
 		ReqId: newReqID("login"),
 		Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{
 			Nickname:     name,
@@ -241,7 +240,7 @@ func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn) error {
 		if typ != websocket.MessageBinary {
 			continue
 		}
-		h, err := frame.ReadFrame(bytes.NewReader(data))
+		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			return err
 		}
@@ -274,7 +273,7 @@ func (c *WSClient) heartbeatLoop(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			start := time.Now()
-			if err := c.Send(ctx, msgid.HeartbeatReq, &clientv1.Envelope{
+			if err := c.Send(ctx, protocol.HeartbeatReq, &clientv1.Envelope{
 				ReqId: newReqID("heartbeat"),
 				Body:  &clientv1.Envelope_HeartbeatReq{HeartbeatReq: &clientv1.HeartbeatRequest{ClientTsMs: start.UnixMilli()}},
 			}); err != nil {
@@ -296,7 +295,11 @@ func (c *WSClient) Send(ctx context.Context, id uint16, env *clientv1.Envelope) 
 	if conn == nil {
 		return fmt.Errorf("尚未连接")
 	}
-	return conn.Write(ctx, websocket.MessageBinary, frame.Encode(id, payload))
+	enc, err := protocol.Encode(id, payload)
+	if err != nil {
+		return err
+	}
+	return conn.Write(ctx, websocket.MessageBinary, enc)
 }
 
 func readToken(path string) string {

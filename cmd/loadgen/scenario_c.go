@@ -9,7 +9,7 @@ import (
 	"nhooyr.io/websocket"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	"racoo.cn/lsp/internal/net/msgid"
+	"racoo.cn/lsp/internal/protocol"
 )
 
 // runScenarioC 执行重连冲击剧本：稳态准备后断开 50% 连接，并统计 30 秒恢复结果。
@@ -75,7 +75,7 @@ func reconnectClient(ctx context.Context, wsURL string, sessionToken string) boo
 		_ = conn.Close(websocket.StatusNormalClosure, "reconnected")
 	}()
 	client := &benchClient{conn: conn, sessionToken: sessionToken}
-	if err := client.send(ctx, msgid.LoginReq, &clientv1.Envelope{
+	if err := client.send(ctx, protocol.LoginReq, &clientv1.Envelope{
 		ReqId: "reconnect-login",
 		Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{
 			Nickname:     "压测重连玩家",
@@ -84,7 +84,7 @@ func reconnectClient(ctx context.Context, wsURL string, sessionToken string) boo
 	}); err != nil {
 		return false
 	}
-	env, err := client.readUntil(ctx, msgid.LoginResp)
+	env, err := client.readUntil(ctx, protocol.LoginResp)
 	if err != nil {
 		return false
 	}

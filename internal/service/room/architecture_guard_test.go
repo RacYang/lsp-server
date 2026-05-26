@@ -192,7 +192,7 @@ func TestOpeningLegacyProtocolDefinitionsRemoved(t *testing.T) {
 			},
 		},
 		{
-			path: "internal/net/msgid/msgid.go",
+			path: "internal/protocol/msgid.go",
 			forbid: []string{
 				"ExchangeThreeReq uint16",
 				"ExchangeThreeResp uint16",

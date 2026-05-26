@@ -9,7 +9,8 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/bot/wsclient"
-	"racoo.cn/lsp/internal/net/msgid"
+
+	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/pkg/logx"
 )
 
@@ -168,24 +169,24 @@ func isOpeningDecision(view BotView) bool {
 }
 
 func (r *Runner) sendJoin(ctx context.Context, client *wsclient.Client) error {
-	return client.Send(ctx, msgid.JoinRoomReq, &clientv1.Envelope{
+	return client.Send(ctx, protocol.JoinRoomReq, &clientv1.Envelope{
 		ReqId: newReqID("join"),
 		Body:  &clientv1.Envelope_JoinRoomReq{JoinRoomReq: &clientv1.JoinRoomRequest{RoomId: r.cfg.RoomID}},
 	})
 }
 
 func (r *Runner) sendReady(ctx context.Context, client *wsclient.Client) error {
-	return client.Send(ctx, msgid.ReadyReq, &clientv1.Envelope{
+	return client.Send(ctx, protocol.ReadyReq, &clientv1.Envelope{
 		ReqId:          newReqID("ready"),
-		IdempotencyKey: r.idempotencyKey(msgid.ReadyReq),
+		IdempotencyKey: r.idempotencyKey(protocol.ReadyReq),
 		Body:           &clientv1.Envelope_ReadyReq{ReadyReq: &clientv1.ReadyRequest{}},
 	})
 }
 
 func (r *Runner) sendLeave(ctx context.Context, client *wsclient.Client) error {
-	return client.Send(ctx, msgid.LeaveRoomReq, &clientv1.Envelope{
+	return client.Send(ctx, protocol.LeaveRoomReq, &clientv1.Envelope{
 		ReqId:          newReqID("leave"),
-		IdempotencyKey: r.idempotencyKey(msgid.LeaveRoomReq),
+		IdempotencyKey: r.idempotencyKey(protocol.LeaveRoomReq),
 		Body:           &clientv1.Envelope_LeaveRoomReq{LeaveRoomReq: &clientv1.LeaveRoomRequest{}},
 	})
 }
@@ -194,51 +195,51 @@ func (r *Runner) sendAction(ctx context.Context, client *wsclient.Client, action
 	switch action.Kind {
 	case ActionExchangeThree:
 		r.state.RememberExchange(action.Tiles)
-		return client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
+		return client.Send(ctx, protocol.OpeningActionReq, &clientv1.Envelope{
 			ReqId:          newReqID("exchange"),
-			IdempotencyKey: r.idempotencyKey(msgid.OpeningActionReq),
+			IdempotencyKey: r.idempotencyKey(protocol.OpeningActionReq),
 			Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
 				Action: string(ActionExchangeThree),
 				Tiles:  append([]string(nil), action.Tiles...),
 			}},
 		})
 	case ActionQueMen:
-		return client.Send(ctx, msgid.OpeningActionReq, &clientv1.Envelope{
+		return client.Send(ctx, protocol.OpeningActionReq, &clientv1.Envelope{
 			ReqId:          newReqID("que"),
-			IdempotencyKey: r.idempotencyKey(msgid.OpeningActionReq),
+			IdempotencyKey: r.idempotencyKey(protocol.OpeningActionReq),
 			Body: &clientv1.Envelope_OpeningActionReq{OpeningActionReq: &clientv1.OpeningActionRequest{
 				Action: string(ActionQueMen),
 				Suit:   action.Suit,
 			}},
 		})
 	case ActionDiscard:
-		return client.Send(ctx, msgid.DiscardReq, &clientv1.Envelope{
+		return client.Send(ctx, protocol.DiscardReq, &clientv1.Envelope{
 			ReqId:          newReqID("discard"),
-			IdempotencyKey: r.idempotencyKey(msgid.DiscardReq),
+			IdempotencyKey: r.idempotencyKey(protocol.DiscardReq),
 			Body:           &clientv1.Envelope_DiscardReq{DiscardReq: &clientv1.DiscardRequest{Tile: action.Tile}},
 		})
 	case ActionPong:
-		return client.Send(ctx, msgid.PongReq, &clientv1.Envelope{
+		return client.Send(ctx, protocol.PongReq, &clientv1.Envelope{
 			ReqId:          newReqID("pong"),
-			IdempotencyKey: r.idempotencyKey(msgid.PongReq),
+			IdempotencyKey: r.idempotencyKey(protocol.PongReq),
 			Body:           &clientv1.Envelope_PongReq{PongReq: &clientv1.PongRequest{}},
 		})
 	case ActionGang:
-		return client.Send(ctx, msgid.GangReq, &clientv1.Envelope{
+		return client.Send(ctx, protocol.GangReq, &clientv1.Envelope{
 			ReqId:          newReqID("gang"),
-			IdempotencyKey: r.idempotencyKey(msgid.GangReq),
+			IdempotencyKey: r.idempotencyKey(protocol.GangReq),
 			Body:           &clientv1.Envelope_GangReq{GangReq: &clientv1.GangRequest{Tile: action.Tile}},
 		})
 	case ActionHu:
-		return client.Send(ctx, msgid.HuReq, &clientv1.Envelope{
+		return client.Send(ctx, protocol.HuReq, &clientv1.Envelope{
 			ReqId:          newReqID("hu"),
-			IdempotencyKey: r.idempotencyKey(msgid.HuReq),
+			IdempotencyKey: r.idempotencyKey(protocol.HuReq),
 			Body:           &clientv1.Envelope_HuReq{HuReq: &clientv1.HuRequest{}},
 		})
 	case ActionPass:
-		return client.Send(ctx, msgid.PassReq, &clientv1.Envelope{
+		return client.Send(ctx, protocol.PassReq, &clientv1.Envelope{
 			ReqId:          newReqID("pass"),
-			IdempotencyKey: r.idempotencyKey(msgid.PassReq),
+			IdempotencyKey: r.idempotencyKey(protocol.PassReq),
 			Body:           &clientv1.Envelope_PassReq{PassReq: &clientv1.PassRequest{}},
 		})
 	default:

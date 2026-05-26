@@ -1,8 +1,8 @@
-// Package msgid 定义二进制帧头中的 msg_id 常量，与 docs/PROTOCOL.md 及 Protobuf Envelope 对齐。
+// Package protocol — 消息类型编号常量，与 docs/PROTOCOL.md 及 Protobuf Envelope 对齐。
 //
 // 数值与协议文档一一对应，客户端与服务器共用同一套枚举，避免双真相源。
 // Phase 2 起增加心跳、离房等房间扩展编号，字段仍由 Protobuf 承载。
-package msgid
+package protocol
 
 // 以下为客户端帧类型编号（载荷为 Protobuf Envelope；Phase 1 基础编号兼容延续）。
 const (
@@ -27,8 +27,8 @@ const (
 	LeaveRoomReq        uint16 = 18
 	LeaveRoomResp       uint16 = 19
 	RouteRedirectNotify uint16 = 20
-	// 21..26 reserved: removed hard-cut opening-specific exchange_three/que_men request,
-	// response, and done message ids. Use OpeningActionReq/Resp and OpeningDone.
+	// 21..26 reserved: 已废弃的开局专用换三/缺门请求与应答编号，保留占位以兼容客户端。
+	// 使用 OpeningActionReq/Resp 与 OpeningDone 替代。
 	// SnapshotNotify 为 Phase 3 重连恢复下发的房间快照通知。
 	SnapshotNotify uint16 = 27
 	// Phase 4 交互闭环动作响应。
