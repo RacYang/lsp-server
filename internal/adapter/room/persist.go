@@ -12,7 +12,7 @@ import (
 	"racoo.cn/lsp/pkg/logx"
 )
 
-// PersistPublishAndFinalize 持久化通知列表，打幂等戳，再推送到所有订阅者。
+// PersistPublishAndFinalize 持久化通知列表，打幂等戳，再通过 Redis RPUSH 发布事件。
 func (s *GRPCServer) PersistPublishAndFinalize(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification) error {
 	notifications = expandPerSeatNotifications(notifications)
 	events, err := s.persistNotifications(ctx, roomID, notifications)
@@ -23,7 +23,6 @@ func (s *GRPCServer) PersistPublishAndFinalize(ctx context.Context, roomID, idem
 	for idx, event := range events {
 		s.afterEventSideEffects(ctx, roomID, notifications[idx], event.evt, event.cursor)
 		s.publishToRedis(ctx, roomID, event.evt)
-		s.publish(roomID, event.evt)
 	}
 	return nil
 }

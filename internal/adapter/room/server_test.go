@@ -27,13 +27,20 @@ import (
 
 func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 	t.Parallel()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rcli := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rcli.Close() })
+	rdb := redis.NewClientFromUniversal(rcli)
+
 	var lc net.ListenConfig
 	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	defer func() { _ = ln.Close() }()
 
 	grpcSrv := grpc.NewServer()
-	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
 	RegisterService(grpcSrv, srv)
 	go func() { _ = grpcSrv.Serve(ln) }()
 	defer grpcSrv.Stop()
@@ -43,16 +50,10 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 
 	client := svcv1.NewRoomServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	stream, err := client.StreamEvents(ctx, &svcv1.StreamEventsRequest{RoomId: "r1"})
-	require.NoError(t, err)
-	require.Eventually(t, func() bool {
-		srv.mu.Lock()
-		defer srv.mu.Unlock()
-		return len(srv.streams["r1"]) == 1
-	}, time.Second, 10*time.Millisecond)
 
+	// 四位玩家依次加入并准备，准备完毕后服务端自动开局并将事件推送至 Redis 队列。
 	for _, userID := range []string{"u1", "u2", "u3", "u4"} {
 		resp, err := client.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
 			RoomId: "r1",
@@ -63,12 +64,20 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 		require.True(t, resp.GetAccepted())
 	}
 
+	// 从 Redis 队列轮询事件并驱动游戏直至结算。
 	var gotSettlement bool
 	players := []string{"u1", "u2", "u3", "u4"}
 	hands := make([][]string, 4)
 	for i := 0; i < 512; i++ {
-		evt, err := stream.Recv()
-		require.NoError(t, err)
+		data, popErr := rdb.RoomEventQueuePop(ctx, "r1", 200*time.Millisecond)
+		if popErr != nil {
+			require.NoError(t, popErr)
+		}
+		if data == nil {
+			continue // 超时，继续轮询
+		}
+		var evt svcv1.RoomServiceStreamEventsResponse
+		require.NoError(t, proto.Unmarshal(data, &evt))
 		require.Equal(t, "r1", evt.GetRoomId())
 		if deal := evt.GetInitialDeal(); deal != nil {
 			hands[deal.GetSeatIndex()] = append([]string(nil), deal.GetTiles()...)
@@ -523,10 +532,15 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 		WillReturnError(context.DeadlineExceeded)
 	mock.ExpectRollback()
 
+	mr2, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr2.Close)
+	rcli2 := goredis.NewClient(&goredis.Options{Addr: mr2.Addr()})
+	t.Cleanup(func() { _ = rcli2.Close() })
+	rdb2 := redis.NewClientFromUniversal(rcli2)
+
 	ev := postgres.NewRoomEventStore(mock)
-	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, nil)
-	ch := make(chan *svcv1.RoomServiceStreamEventsResponse, 1)
-	srv.streams["r-batch"] = []chan *svcv1.RoomServiceStreamEventsResponse{ch}
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, rdb2)
 
 	resp, err := srv.applyNotifications(context.Background(), "r-batch", "", []roomsvc.Notification{
 		{Kind: roomsvc.KindDrawTile, Payload: []byte("draw"), TargetSeat: roomsvc.BroadcastSeat},
@@ -535,11 +549,14 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 	require.NoError(t, err)
 	require.False(t, resp.GetAccepted())
 	require.Contains(t, resp.GetError(), context.DeadlineExceeded.Error())
-	select {
-	case evt := <-ch:
-		t.Fatalf("unexpected published event: %+v", evt)
-	default:
-	}
+
+	// 持久化失败时 Redis 队列应为空，不应推送任何部分事件。
+	popCtx, popCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer popCancel()
+	data, popErr := rdb2.RoomEventQueuePop(popCtx, "r-batch", 10*time.Millisecond)
+	require.NoError(t, popErr)
+	require.Nil(t, data, "持久化失败时不应向 Redis 推送任何事件")
+
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

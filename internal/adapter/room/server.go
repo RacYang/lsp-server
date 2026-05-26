@@ -3,7 +3,6 @@ package roomadapter
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,20 +24,17 @@ type GRPCServer struct {
 	rdb            *redis.Client
 	idempotencyTTL time.Duration
 
-	ready   atomic.Bool
-	mu      sync.Mutex
-	streams map[string][]chan *svcv1.RoomServiceStreamEventsResponse
+	ready atomic.Bool
 }
 
 // NewGRPCServer 构造 room gRPC 适配器，并向 room.Service 注册超时回调。
 func NewGRPCServer(rooms *roomsvc.Service, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, st *postgres.SettlementStore, rdb *redis.Client) *GRPCServer {
 	srv := &GRPCServer{
-		rooms:   rooms,
-		ev:      ev,
-		gs:      gs,
-		st:      st,
-		rdb:     rdb,
-		streams: make(map[string][]chan *svcv1.RoomServiceStreamEventsResponse),
+		rooms: rooms,
+		ev:    ev,
+		gs:    gs,
+		st:    st,
+		rdb:   rdb,
 	}
 	if rooms != nil {
 		rooms.SetAutoTimeoutHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
