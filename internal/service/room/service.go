@@ -432,7 +432,7 @@ func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string
 			continue
 		}
 		if _, ok := r.JoinAutoSeat(userID); !ok {
-			return fmt.Errorf("recover room %s: room full", roomID)
+			return fmt.Errorf("recover room %s: %w", roomID, ErrRoomFull)
 		}
 	}
 	if err := restoreFSMForRecover(r, fsmState); err != nil {

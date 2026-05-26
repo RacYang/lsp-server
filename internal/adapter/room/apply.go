@@ -2,6 +2,7 @@ package roomadapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -42,7 +43,7 @@ func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventReques
 			return &svcv1.ApplyEventResponse{Accepted: true}, nil
 		}
 	}
-	if _, err := s.rooms.Join(ctx, roomID, userID); err != nil && err.Error() != "room full" {
+	if _, err := s.rooms.Join(ctx, roomID, userID); err != nil && !errors.Is(err, roomsvc.ErrRoomFull) {
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
 	s.persistRoomMeta(ctx, roomID, 0, nil)

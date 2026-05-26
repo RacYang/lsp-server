@@ -15,6 +15,9 @@ import (
 // ErrRateLimited 表示入口或房间队列限流。
 var ErrRateLimited = errors.New("rate limited")
 
+// ErrRoomFull 表示房间已无空余座位。
+var ErrRoomFull = errors.New("room full")
+
 const defaultMailboxCapacity = 64
 
 // roomActor 单房间串行化执行 Join/Ready 等命令，符合「每房一事件循环」模型。

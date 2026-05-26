@@ -25,7 +25,7 @@ func (a *roomActor) doJoin(userID string) (int, error) {
 	}
 	seat, ok := a.room.JoinAutoSeat(userID)
 	if !ok {
-		return -1, fmt.Errorf("room full")
+		return -1, ErrRoomFull
 	}
 	return seat, nil
 }
