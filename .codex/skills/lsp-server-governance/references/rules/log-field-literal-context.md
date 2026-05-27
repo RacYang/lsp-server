@@ -1,6 +1,6 @@
 ---
 description: 禁止业务日志调用手写追踪上下文字段
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 日志上下文字段

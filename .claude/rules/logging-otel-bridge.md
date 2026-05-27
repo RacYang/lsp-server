@@ -1,6 +1,6 @@
 ---
 description: OTel 日志桥接默认关闭，以 build tag 预留路径，不得默认启用
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # OpenTelemetry 日志桥接

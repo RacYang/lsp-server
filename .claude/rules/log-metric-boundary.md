@@ -1,6 +1,6 @@
 ---
 description: 高频运行态指标候选不得作为日志字段
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 日志与指标边界

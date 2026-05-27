@@ -1,6 +1,6 @@
 ---
 description: 错误处理必须保留可追溯错误链
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 错误处理

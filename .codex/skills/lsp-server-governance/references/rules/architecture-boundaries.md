@@ -1,6 +1,6 @@
 ---
 description: 分层依赖必须受架构边界约束
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 架构边界

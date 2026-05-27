@@ -16,10 +16,11 @@ description: 新增模板资产。用于增加代码骨架、注释样板、文�
 
 ## Steps
 
-1. 在 `.claude/templates/{code,comment,header,doc}/` 下创建目录。
-2. 编写 `manifest.yaml`，只使用 presence、regex、script 三种 verify hook。
-3. 添加模板文件并更新 `.claude/templates/README.md`。
-4. 更新覆盖矩阵与相关 command。
+1. **确认无重叠覆盖**：检索现有 rules/commands/ADR，确认无已有资产覆盖此场景；列出最近相关资产差异（ADR-0049）。
+2. 在 `.claude/templates/{code,comment,header,doc}/` 下创建目录。
+3. 编写 `manifest.yaml`，只使用 presence、regex、script 三种 verify hook。
+4. 添加模板文件并更新 `.claude/templates/README.md`。
+5. 更新覆盖矩阵与相关 command。
 
 ## Verify
 

@@ -1,6 +1,6 @@
 ---
 description: 日志动态级别当前仅限 Go API，不得开放未鉴权 HTTP 写端点
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 日志动态级别

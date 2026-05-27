@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from lang_verify_common import (
+    ROOT,
     cjk_ratio,
     collect_by_patterns,
     is_facade_impl,
@@ -214,6 +215,36 @@ def main() -> int:
     all_errs: list[str] = []
     for path in collect_by_patterns(paths, excludes):
         all_errs.extend(check_file(path))
+
+    # OTel build-tag check（logging-otel-bridge 规则）
+    # 扫描 internal/cmd/pkg 下 Go 文件：import OTel 但未加任何 build tag 则报错
+    _go_files = [
+        p
+        for subdir in ("internal", "cmd", "pkg")
+        for p in (ROOT / subdir).rglob("*.go")
+        if "gen" not in p.parts and "vendor" not in p.parts
+    ]
+    _otel_build_pat = re.compile(r"//go:build\s+\w*otel\w*")
+    for _path in _go_files:
+        _src = _path.read_text(encoding="utf-8", errors="ignore")
+        if "go.opentelemetry.io/otel" in _src and not _otel_build_pat.search(_src):
+            all_errs.append(
+                f"{_path}: 未加 otel build tag 即 import OTel"
+                "（违反 logging-otel-bridge 规则）"
+            )
+
+    # Dynamic-level HTTP check（logging-dynamic-level 规则）
+    # 同一文件同时含 HTTP handler 与日志级别 setter，须 ADR 评审
+    _http_pat = re.compile(r"\bhttp\.Handle(Func)?\s*\(")
+    _level_pat = re.compile(r"\bAtomicLevel\b|\bSetLevel\s*\(|\.Level\s*\(")
+    for _path in _go_files:
+        _src = _path.read_text(encoding="utf-8", errors="ignore")
+        if _http_pat.search(_src) and _level_pat.search(_src):
+            all_errs.append(
+                f"{_path}: 文件同时含 HTTP handler 与日志级别 setter"
+                "，须 ADR 评审（logging-dynamic-level 规则）"
+            )
+
     if all_errs:
         print("\n".join(all_errs), file=sys.stderr)
         return 1

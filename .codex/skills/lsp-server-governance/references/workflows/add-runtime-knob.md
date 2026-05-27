@@ -16,12 +16,13 @@ description: 新增运行时参数。用于扩展进程 YAML、internal/config.C
 
 ## Steps
 
-1. 确认参数属于运行时配置，不放入 `.build/config.yaml`。
-2. 更新 `internal/config/config.go` 的结构体、默认值与解析逻辑。
-3. 更新 `configs/dev.yaml` 或对应进程配置示例。
-4. 在消费侧只读取结构化配置，不散落环境变量或 magic number。
-5. 补 `internal/config` 单测与消费侧边界测试。
-6. 更新相关文档或 ADR-0022 的引用说明。
+1. **输出职责所有者分析**：列出涉及该职责的现有文件、接口、调用链；写出目标状态与当前状态的 diff，确认落点在正确层（ADR-0049）。未完成此步骤不得动代码。
+2. 确认参数属于运行时配置，不放入 `.build/config.yaml`。
+3. 更新 `internal/config/config.go` 的结构体、默认值与解析逻辑。
+4. 更新 `configs/dev.yaml` 或对应进程配置示例。
+5. 在消费侧只读取结构化配置，不散落环境变量或 magic number。
+6. 补 `internal/config` 单测与消费侧边界测试。
+7. 更新相关文档或 ADR-0022 的引用说明。
 
 ## Verify
 

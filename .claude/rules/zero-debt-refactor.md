@@ -1,6 +1,6 @@
 ---
 description: 任何修复/新增前必须全系统梳理并从最优解出发，禁止补丁式修复
-globs: ["**/*.go", "**/*.proto"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go", "**/*.proto"]
 ---
 
 # 零债务重构策略

@@ -1,6 +1,6 @@
 ---
 description: Go 源码注释以中文为主（仅统计注释文本）
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 注释语言约束

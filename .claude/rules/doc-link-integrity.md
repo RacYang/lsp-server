@@ -1,6 +1,6 @@
 ---
 description: 文档与治理资产中的交叉引用必须指向实际存在的文件
-alwaysApply: true
+globs: [".claude/**/*.md", "docs/**/*.md", "CLAUDE.md", "AGENTS.md"]
 ---
 
 # 文档链接完整性

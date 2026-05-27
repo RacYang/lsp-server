@@ -1,6 +1,6 @@
 ---
 description: Go 导出符号命名不得使用下划线
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # Go 命名

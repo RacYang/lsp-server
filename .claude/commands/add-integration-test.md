@@ -16,10 +16,11 @@ description: 新增集成测试。用于覆盖跨 app、handler、room service �
 
 ## Steps
 
-1. 在现有 integration 测试包中寻找相近夹具。
-2. 复用 fake clock、内存 hub 或无 Docker 存储替身。
-3. 给测试名描述用户可见行为，而不是实现细节。
-4. 如需 CI 覆盖，确认 Makefile 的 integration 目标包含该测试。
+1. **输出职责所有者分析**：列出涉及该职责的现有文件、接口、调用链；写出目标状态与当前状态的 diff，确认落点在正确层（ADR-0049）。未完成此步骤不得动代码。
+2. 在现有 integration 测试包中寻找相近夹具。
+3. 复用 fake clock、内存 hub 或无 Docker 存储替身。
+4. 给测试名描述用户可见行为，而不是实现细节。
+5. 如需 CI 覆盖，确认 Makefile 的 integration 目标包含该测试。
 
 ## Verify
 

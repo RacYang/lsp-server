@@ -1,6 +1,6 @@
 ---
 description: 日志结构化字段使用 snake_case 且长度受限
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 日志字段命名

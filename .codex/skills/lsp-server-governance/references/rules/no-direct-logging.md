@@ -1,6 +1,6 @@
 ---
 description: 禁止业务代码直接 import slog/zap，须经统一日志门面
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 禁止直调底层日志

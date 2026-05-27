@@ -1,6 +1,6 @@
 ---
 description: lsp-cli 发布目标必须在 SSOT、Makefile 与 GoReleaser 中保持一致
-alwaysApply: true
+globs: ["cmd/cli/**/*.go", ".goreleaser.yaml", "Makefile", ".build/config.yaml"]
 ---
 
 # lsp-cli 发布目标

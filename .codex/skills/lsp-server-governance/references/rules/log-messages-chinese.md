@@ -1,6 +1,6 @@
 ---
 description: 经日志门面输出的 message 以中文为主并符合字段治理
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 日志 message 语言

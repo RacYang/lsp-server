@@ -17,11 +17,12 @@ description: 通过共享规则接口新增麻将变体实现。用于引入新�
 
 ## Steps
 
-1. 在 `internal/mahjong/rules` 维持共享接口，并通过 `CapabilitySet` 组合开局、吃碰杠胡、轮转、计分、结算、终局与投影能力。
-2. 在规则专属包中实现变体逻辑，保持麻将算法层与传输、会话、存储隔离；room engine 不得依赖具体规则包。
-3. 如需注册表或配置选择，先把规则 ID 加入 `.build/config.yaml` 的 `mahjong.rules.allowed_ids`，再注册实现，并补配置解析与能力元数据测试。
-4. 为新行为补充 YAML 夹具与 Go 单测，至少覆盖发牌、动作、和牌、结算、重连快照与多局边界。
-5. 更新 `docs/RULE-ENGINE.md`、相关 ADR、`docs/PROTOCOL.md`、`docs/cli-tui-backend-gaps.md` 与 CHANGELOG；只有治理硬约束变更才更新 `docs/RULE-LIFECYCLE.md`。
+1. **输出职责所有者分析**：列出涉及该职责的现有文件、接口、调用链；写出目标状态与当前状态的 diff，确认落点在正确层（ADR-0049）。未完成此步骤不得动代码。
+2. 在 `internal/mahjong/rules` 维持共享接口，并通过 `CapabilitySet` 组合开局、吃碰杠胡、轮转、计分、结算、终局与投影能力。
+3. 在规则专属包中实现变体逻辑，保持麻将算法层与传输、会话、存储隔离；room engine 不得依赖具体规则包。
+4. 如需注册表或配置选择，先把规则 ID 加入 `.build/config.yaml` 的 `mahjong.rules.allowed_ids`，再注册实现，并补配置解析与能力元数据测试。
+5. 为新行为补充 YAML 夹具与 Go 单测，至少覆盖发牌、动作、和牌、结算、重连快照与多局边界。
+6. 更新 `docs/RULE-ENGINE.md`、相关 ADR、`docs/PROTOCOL.md`、`docs/cli-tui-backend-gaps.md` 与 CHANGELOG；只有治理硬约束变更才更新 `docs/RULE-LIFECYCLE.md`。
 
 ## Verify
 

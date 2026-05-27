@@ -1,6 +1,6 @@
 ---
 description: 敏感字段不得以原始键进入日志调用
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 日志敏感字段

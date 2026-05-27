@@ -16,11 +16,12 @@ description: 扩展现有麻将规则的计分逻辑。用于新增番种、结�
 
 ## Steps
 
-1. 只修改规则作用域内的计分包，不把番种判断放到传输层、存储层或 handler。
-2. 如需新增上下文字段，先扩展 `internal/mahjong/rules` 的共享结构，再由房间引擎填充。
-3. 在 `internal/mahjong/sichuan/xuezhandaodi` 中实现番种判断，保持名称显式、可确定性推导。
-4. 在 YAML 驱动测试或 Go 单测中同时补正例与反例。
-5. 更新 `docs/MAHJONG-ALGORITHMS.md` 或相关 ADR/CHANGELOG 条目，说明新增语义。
+1. **输出职责所有者分析**：列出涉及该职责的现有文件、接口、调用链；写出目标状态与当前状态的 diff，确认落点在正确层（ADR-0049）。未完成此步骤不得动代码。
+2. 只修改规则作用域内的计分包，不把番种判断放到传输层、存储层或 handler。
+3. 如需新增上下文字段，先扩展 `internal/mahjong/rules` 的共享结构，再由房间引擎填充。
+4. 在 `internal/mahjong/sichuan/xuezhandaodi` 中实现番种判断，保持名称显式、可确定性推导。
+5. 在 YAML 驱动测试或 Go 单测中同时补正例与反例。
+6. 更新 `docs/MAHJONG-ALGORITHMS.md` 或相关 ADR/CHANGELOG 条目，说明新增语义。
 
 ## Verify
 

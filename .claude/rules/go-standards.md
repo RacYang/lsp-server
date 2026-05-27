@@ -1,6 +1,6 @@
 ---
 description: Go 代码必须显式处理错误并保持可追踪的错误链
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # Go 规范

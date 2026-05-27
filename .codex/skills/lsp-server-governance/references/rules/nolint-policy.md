@@ -1,6 +1,6 @@
 ---
 description: nolint 豁免必须指向已启用 linter 且写明同行原因
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # nolint 豁免策略

@@ -16,13 +16,16 @@ description: 新增架构决策记录。用于引入新的治理、架构、协�
 
 ## Steps
 
-1. 在 `docs/adr/` 新增 ADR 文件，frontmatter 必须包含 `title`、`status`、`date`。
-2. 正文至少包含 `## 状态`、`## 背景`、`## 决策`、`## 后果`。
-3. 如 ADR 引入硬约束，本命令只记录决策；随后必须切换到 `/add-constraint` 完成 rule、enforcer 与负例闭环。
-4. 更新 `docs/adr/README.md` 的分阶段索引。
-5. 按影响面同步 `README.md`、`CHANGELOG.md` 与专题文档。
+1. **确认无重叠覆盖**：检索现有 rules/commands/ADR，确认无已有资产覆盖此场景；列出最近相关资产差异（ADR-0049）。
+2. 在 `docs/adr/` 新增 ADR 文件，frontmatter 必须包含 `title`、`date`。
+3. 正文必须包含 `## 决策`（bullet 列表）与 `## 后果`（bullet 列表）；`## 背景` 仅在无法自解释时加，最多 5 行；不加 `## 状态` 节。
+4. 如 ADR 引入硬约束，本命令只记录决策；随后必须切换到 `/add-constraint` 完成 rule、enforcer 与负例闭环。
+5. 更新 `docs/adr/README.md` 的分阶段索引。
+6. 按影响面同步 `README.md`、`CHANGELOG.md` 与专题文档。
 
 ## Verify
 
-- 运行 `make verify-meta`。
-- 文档范围较大时运行 `make verify-fast`。
+- 运行 `python3 scripts/verify-adr-numbering.py`（ADR 编号连续、README 已更新）。
+- 运行 `python3 scripts/verify-doc-links.py`（新 ADR 引用路径不悬空）。
+- 运行 `make verify-skeleton`。
+- 运行 `make verify`。

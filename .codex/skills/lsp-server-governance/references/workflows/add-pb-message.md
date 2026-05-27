@@ -16,11 +16,12 @@ description: 为客户端或 RPC 契约新增 Protobuf 消息。用于编辑 api
 
 ## Steps
 
-1. 将消息放在 `api/proto/client/v1` 或 `api/proto/cluster/v1`，保持 `package` 与 `go_package` 稳定。
-2. 在既有 message、oneof、enum 中只追加编号；删除或复用编号必须先走新版本包或独立 ADR。
-3. 运行 `make generate` 生成 `api/gen/go`，确认生成物与 proto 一起提交。
-4. 契约存在后再更新 handler、帧路由、gRPC server/client 与测试。
-5. 更新 `docs/PROTOCOL.md` 与相关 ADR/CHANGELOG。
+1. **输出职责所有者分析**：列出涉及该职责的现有文件、接口、调用链；写出目标状态与当前状态的 diff，确认落点在正确层（ADR-0049）。未完成此步骤不得动代码。
+2. 将消息放在 `api/proto/client/v1` 或 `api/proto/cluster/v1`，保持 `package` 与 `go_package` 稳定。
+3. 在既有 message、oneof、enum 中只追加编号；删除或复用编号必须先走新版本包或独立 ADR。
+4. 运行 `make generate` 生成 `api/gen/go`，确认生成物与 proto 一起提交。
+5. 契约存在后再更新 handler、帧路由、gRPC server/client 与测试。
+6. 更新 `docs/PROTOCOL.md` 与相关 ADR/CHANGELOG。
 
 ## Verify
 

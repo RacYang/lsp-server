@@ -16,11 +16,12 @@ description: 端到端新增仓库硬约束。用于引入新的工程硬规则�
 
 ## Steps
 
-1. 如需配置，先编辑 `.build/config.yaml`，并同步 `.build/schema/config.schema.json`。
-2. 新增或更新 `scripts/verify-*.py` / `scripts/verify-*.sh`，保持脚本可单独运行。
-3. 在 `.build/negatives/` 增加最小隔离负例，命名需能表达失败原因。
-4. 在 `.claude/rules/` 新增 `<name>.md`，frontmatter 填写 `description`，正文底部引用 ADR、enforcer 与负例。
-5. 如新增负例类型，扩展 `scripts/verify-negatives.sh` 的分派逻辑。
+1. **确认无重叠覆盖**：检索现有 rules/commands/ADR，确认无已有资产覆盖此场景；列出最近相关资产差异（ADR-0049）。
+2. 如需配置，先编辑 `.build/config.yaml`，并同步 `.build/schema/config.schema.json`。
+3. 新增或更新 `scripts/verify-*.py` / `scripts/verify-*.sh`，保持脚本可单独运行。
+4. 在 `.build/negatives/` 增加最小隔离负例，命名需能表达失败原因。
+5. 在 `.claude/rules/` 新增 `<name>.md`，frontmatter 填写 `description`，正文底部引用 ADR、enforcer 与负例。
+6. 如新增负例类型，扩展 `scripts/verify-negatives.sh` 的分派逻辑。
 
 ## Verify
 

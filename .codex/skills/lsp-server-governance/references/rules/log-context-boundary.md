@@ -1,6 +1,6 @@
 ---
 description: 已存在的日志边界文件须向 Context 注入追踪字段
-globs: ["**/*.go"]
+globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go"]
 ---
 
 # 日志上下文边界

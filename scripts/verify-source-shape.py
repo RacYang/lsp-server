@@ -63,6 +63,41 @@ def check_rule_shape(path: pathlib.Path) -> list[str]:
     return errors
 
 
+def check_rule_lines(path: pathlib.Path) -> list[str]:
+    """规则正文（frontmatter 与参考三元组分隔线之间）不得超过 10 行（ADR-0048）。"""
+    lines = read(path).splitlines()
+    # 跳过 frontmatter（第一对 --- 之间）
+    fm_end = 0
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], 1):
+            if line.strip() == "---":
+                fm_end = i + 1
+                break
+    # 正文：从 frontmatter 结束到参考三元组分隔线（--- 后紧跟 ADR/Enforcer/负例）
+    content: list[str] = []
+    for i in range(fm_end, len(lines)):
+        line = lines[i]
+        if line.strip() == "---":
+            rest = "\n".join(lines[i + 1 :])
+            if re.search(r"\*\*(ADR|Enforcer|负例)\*\*", rest[:300]):
+                break
+        if line.strip():
+            content.append(line)
+    if len(content) > 10:
+        return [f"{path}: 规则正文 {len(content)} 行超过 10 行上限（ADR-0048）"]
+    return []
+
+
+def check_todo_format(path: pathlib.Path) -> list[str]:
+    """// TODO 必须含括号注释人，格式 // TODO(<annotator>): ...（zero-debt-refactor）。"""
+    errors: list[str] = []
+    for i, line in enumerate(read(path).splitlines(), 1):
+        # 匹配 // TODO 后不带 ( 的裸 TODO
+        if re.search(r"//\s*TODO[^(]", line):
+            errors.append(f"{path}:{i}: 裸 TODO 缺少注释人，应为 // TODO(<annotator>): ...")
+    return errors
+
+
 CHECKS = {
     "naming": check_naming,
     "package-doc": check_package_doc,
@@ -70,6 +105,8 @@ CHECKS = {
     "test-layout": check_test_layout,
     "file-header": check_file_header,
     "rule-shape": check_rule_shape,
+    "rule-lines": check_rule_lines,
+    "todo-format": check_todo_format,
 }
 
 
@@ -86,6 +123,20 @@ def candidate_files(check: str) -> list[pathlib.Path]:
         return sorted((ROOT / ".claude" / "rules").glob("*.md")) + sorted(
             (ROOT / ".codex" / "skills" / "lsp-server-governance" / "references" / "rules").glob("*.md")
         )
+    if check == "rule-lines":
+        return sorted((ROOT / ".claude" / "rules").glob("*.md")) + sorted(
+            (ROOT / ".codex" / "skills" / "lsp-server-governance" / "references" / "rules").glob("*.md")
+        )
+    if check == "todo-format":
+        go_files: list[pathlib.Path] = []
+        for subdir in ("internal", "cmd", "pkg"):
+            d = ROOT / subdir
+            if d.is_dir():
+                go_files.extend(
+                    p for p in d.rglob("*.go")
+                    if "gen" not in p.parts and "vendor" not in p.parts and "testdata" not in p.parts
+                )
+        return go_files
     return [p for p in ROOT.glob("**/*.go") if "gen" not in p.parts and ".build" not in p.parts]
 
 

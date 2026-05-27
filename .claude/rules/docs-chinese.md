@@ -1,6 +1,6 @@
 ---
 description: 文档与规则正文以中文为主（剥离代码块后统计）
-globs: ["**/*.md"]
+globs: ["docs/**/*.md", "CLAUDE.md", "AGENTS.md", ".claude/**/*.md"]
 ---
 
 # 文档中文约束
