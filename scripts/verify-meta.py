@@ -63,7 +63,8 @@ def extract_body_ref(text: str, label: str) -> str | None:
 
 
 def validate_enforcer(enforcer: str, owner: pathlib.Path) -> None:
-    base = enforcer.split("#", 1)[0]
+    # 支持 "scripts/foo.py --check bar" 形式（取空格前的脚本路径）
+    base = enforcer.split("#", 1)[0].split(" ", 1)[0]
     if base.startswith("scripts/"):
         if not (base.endswith(".py") or base.endswith(".sh")):
             raise ValueError(f"{owner}: script enforcer must end with .py or .sh: {enforcer}")

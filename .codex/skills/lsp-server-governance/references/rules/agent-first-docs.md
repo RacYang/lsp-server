@@ -15,5 +15,5 @@ globs: [".claude/**/*.md", "docs/adr/*.md", "CLAUDE.md"]
 ---
 
 - **ADR**：`docs/adr/0048-agent-first-governance-format.md`
-- **Enforcer**：`scripts/verify-source-shape.py`
-- **负例**：`.build/negatives/rule_shape_agent_first_verbose.mdc.neg`
+- **Enforcer**：`scripts/verify-source-shape.py --check rule-lines`
+- **负例**：`.build/negatives/rule_lines_too_long.mdc.neg`

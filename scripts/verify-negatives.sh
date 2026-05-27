@@ -440,6 +440,12 @@ for rule in "${RULES_DIR}"/*.md; do
     *rule_shape*.mdc.neg)
       run_source_shape_negative "${negative_file}" "rule-shape"
       ;;
+    *rule_lines*.mdc.neg)
+      run_source_shape_negative "${negative_file}" "rule-lines"
+      ;;
+    *todo_format*.go.neg)
+      run_source_shape_negative "${negative_file}" "todo-format"
+      ;;
     *command_shape*.md.neg)
       run_command_shape_negative "${negative_file}"
       ;;

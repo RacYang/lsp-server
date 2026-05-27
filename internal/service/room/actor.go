@@ -363,6 +363,13 @@ func (a *roomActor) run() {
 		}
 		if a.room != nil && a.room.FSM != nil && a.room.FSM.State() == domainroom.StateClosed {
 			a.closed.Store(true)
+			// 清理所有离线投降定时器，防止已调度的 AfterFunc 在关闭后仍然触发。
+			for _, t := range a.offlineTimers {
+				if t != nil {
+					t.Stop()
+				}
+			}
+			a.offlineTimers = nil
 			if a.scheduler != nil {
 				a.scheduler.stop()
 			}

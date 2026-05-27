@@ -208,7 +208,7 @@ sync-agent-governance:
 verify-agent-governance-sync:
 	@python3 scripts/sync-agent-governance.py --check
 
-verify-meta: verify-observability verify-postgres-migrations verify-agent-governance-sync
+verify-meta: verify-observability verify-postgres-migrations verify-agent-governance-sync verify-adr-numbering
 	@python3 scripts/verify-ssot-coverage.py
 	@markdownlint-cli2 "docs/**/*.md" "*.md"
 	@shellcheck scripts/*.sh .build/derive.sh .githooks/*
@@ -234,6 +234,12 @@ verify-config-schema:
 
 verify-skeleton:
 	@python3 scripts/verify-skeleton.py
+	@python3 scripts/verify-source-shape.py --check rule-shape
+	@python3 scripts/verify-source-shape.py --check rule-lines
+	@python3 scripts/verify-source-shape.py --check todo-format
+
+verify-adr-numbering:
+	@python3 scripts/verify-adr-numbering.py
 
 verify-tools:
 	@yq -r '.tools | keys[]' .build/config.yaml | while read -r tool; do \

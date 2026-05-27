@@ -15,5 +15,5 @@ globs: ["internal/**/*.go", "cmd/**/*.go", "pkg/**/*.go", "**/*.proto"]
 ---
 
 - **ADR**：`docs/adr/0043-root-cause-fix-policy.md`、`docs/adr/0049-zero-debt-refactor-strategy.md`
-- **Enforcer**：`scripts/verify-source-shape.py`
-- **负例**：`.build/negatives/zero_debt_patch_guard.go.neg`
+- **Enforcer**：`scripts/verify-source-shape.py --check todo-format`
+- **负例**：`.build/negatives/todo_format_bare.go.neg`

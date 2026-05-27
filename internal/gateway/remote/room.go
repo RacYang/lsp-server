@@ -118,6 +118,8 @@ func (g *remoteRoomGateway) Leave(ctx context.Context, roomID, userID string) (f
 }
 
 // MarkSeatOffline 向 room actor 发送离线事件，由 actor 内部管理投降倒计时；消除 gate 侧计时器与重连判断的竞态。
+// 设计约定：网络故障或房间已关闭均降级忽略，调用方不应依赖此方法的错误返回——
+// 投降触发是 Actor 内部决策，gate 侧只负责"通知"而非"确认"。
 func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID string) error {
 	if g == nil || roomID == "" || userID == "" {
 		return nil
@@ -140,6 +142,8 @@ func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID 
 }
 
 // CancelOfflineSurrender 向 room actor 发送取消离线信号，由 actor 取消待触发的投降倒计时（玩家重连时调用）。
+// 设计约定：同 MarkSeatOffline，网络故障或房间已关闭均降级忽略；重连已成功建立 WS 连接是前置条件，
+// 此处失败不阻断重连流程——最坏情况是玩家重连后 Actor 仍触发投降，客户端可再次操作。
 func (g *remoteRoomGateway) CancelOfflineSurrender(ctx context.Context, roomID, userID string) error {
 	if g == nil || roomID == "" || userID == "" {
 		return nil

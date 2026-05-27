@@ -1,0 +1,9 @@
+package main
+
+// 负例：裸 TODO 缺少注释人，应为 // TODO(<annotator>): ...
+func badTodo() {
+	// TODO: 修复这里的问题（缺少括号注释人）
+	_ = 1
+	// TODO 另一个裸 TODO（无冒号无括号）
+	_ = 2
+}

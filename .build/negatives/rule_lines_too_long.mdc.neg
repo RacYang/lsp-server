@@ -1,0 +1,23 @@
+---
+description: 规则正文超过 10 行的负例
+---
+
+# 过长规则
+
+- 约束一
+- 约束二
+- 约束三
+- 约束四
+- 约束五
+- 约束六
+- 约束七
+- 约束八
+- 约束九
+- 约束十
+- 约束十一（超出 10 行上限）
+
+---
+
+- **ADR**：docs/adr/0048-agent-first-governance-format.md
+- **Enforcer**：scripts/verify-source-shape.py --check rule-lines
+- **负例**：.build/negatives/rule_lines_too_long.mdc.neg
