@@ -16,10 +16,11 @@ description: 新增标准 Go 包骨架。用于按 gate/lobby/room/mahjong/api/p
 
 ## Steps
 
-1. 选择与层匹配的 template，并确认 `coverage_cell` 已在覆盖矩阵登记。
-2. 创建包目录、`doc.go`、主实现文件与最小测试文件。
-3. 保持包注释、导出符号注释与错误处理符合模板。
-4. 检查新增 import 不突破 `.go-arch-lint.yml` 的分层边界。
+1. **输出职责所有者分析**：明确新包承担哪一职责、调用方是谁、依赖哪些层；写出与现有代码的边界 diff，确认不重复已有职责（ADR-0049）。
+2. 选择与层匹配的 template，并确认 `coverage_cell` 已在覆盖矩阵登记。
+3. 创建包目录、`doc.go`、主实现文件与最小测试文件。
+4. 保持包注释、导出符号注释与错误处理符合模板。
+5. 检查新增 import 不突破 `.go-arch-lint.yml` 的分层边界。
 
 ## Verify
 

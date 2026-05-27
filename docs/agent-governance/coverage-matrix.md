@@ -52,6 +52,8 @@ Claude 与 Codex 治理资产长期双边保留：`.claude/` 是 Claude 入口�
 | 治理元约束 | — | — | `.claude/rules/governance-meta.md` | `docs/adr/0042-agent-governance.md` |
 | 配置完整性 | — | — | `.claude/rules/config-integrity.md` | `docs/adr/0000-engineering-charter.md` |
 | 文档链接 | — | — | `.claude/rules/doc-link-integrity.md` | `docs/adr/0042-agent-governance.md` |
+| 治理文档格式 | — | — | `.claude/rules/agent-first-docs.md` | `docs/adr/0048-agent-first-governance-format.md` |
+| 零债务重构 | `/fix-bug`、`/scaffold-package` | — | `.claude/rules/zero-debt-refactor.md` | `docs/adr/0049-zero-debt-refactor-strategy.md` |
 
 ## 覆盖规则
 
