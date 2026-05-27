@@ -156,6 +156,7 @@ func retryGRPC(ctx context.Context, fn func(context.Context) error) error {
 			timer.Stop()
 			return ctx.Err()
 		case <-timer.C:
+			timer.Stop()
 		}
 	}
 	return lastErr

@@ -431,6 +431,26 @@ func (s *Service) AddBot(ctx context.Context, roomID string, count int32, maxBot
 	return added, nil
 }
 
+// DeleteRoom 从大厅内存与持久化注册表中删除指定房间记录，用于 CreateRoom 两阶段提交失败时的回滚。
+// 若房间不存在则静默返回（幂等）。
+func (s *Service) DeleteRoom(ctx context.Context, roomID string) {
+	if s == nil || roomID == "" {
+		return
+	}
+	s.mu.Lock()
+	delete(s.roomIDs, roomID)
+	delete(s.seats, roomID)
+	delete(s.metas, roomID)
+	s.mu.Unlock()
+	if s.registry != nil {
+		delCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		if err := s.registry.DeleteRoom(delCtx, roomID); err != nil {
+			logx.Warn(logx.WithRoomID(ctx, roomID), "大厅房间持久化删除失败", "err", err.Error())
+		}
+	}
+}
+
 // GetRoom 查询房间归属节点。
 func (s *Service) GetRoom(_ context.Context, roomID string) (string, error) {
 	if s == nil {

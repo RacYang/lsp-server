@@ -33,33 +33,38 @@ func TestRecoverOwnedRoomsEtcdCliNil(t *testing.T) {
 }
 
 // TestDeriveRecoveredState 验证依据持久化事件行推导恢复状态的完整分支。
-// 覆盖：空列表保持原状、各事件类型向 playing/closed 的状态迁移以及连续事件取最后状态。
+// 覆盖：空列表保持原状、各事件类型向 playing/closed 的状态迁移、连续事件取最后状态、
+// 以及 settlement 后出现开局事件时 clearRound 为 true。
 func TestDeriveRecoveredState(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		current string
-		rows    []postgres.RoomEventRow
-		want    string
+		name      string
+		current   string
+		rows      []postgres.RoomEventRow
+		wantState string
+		wantClear bool
 	}{
 		{
-			name:    "空事件列表不变",
-			current: "waiting",
-			rows:    nil,
-			want:    "waiting",
+			name:      "空事件列表不变",
+			current:   "waiting",
+			rows:      nil,
+			wantState: "waiting",
+			wantClear: false,
 		},
 		{
-			name:    "start_game 推导为 playing",
-			current: "ready",
-			rows:    []postgres.RoomEventRow{{Kind: string(roomsvc.KindStartGame)}},
-			want:    "playing",
+			name:      "start_game 推导为 playing",
+			current:   "ready",
+			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindStartGame)}},
+			wantState: "playing",
+			wantClear: false,
 		},
 		{
-			name:    "settlement 推导为 closed",
-			current: "ready",
-			rows:    []postgres.RoomEventRow{{Kind: string(roomsvc.KindSettlement)}},
-			want:    "closed",
+			name:      "settlement 推导为 closed",
+			current:   "ready",
+			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindSettlement)}},
+			wantState: "closed",
+			wantClear: false,
 		},
 		{
 			name:    "连续事件取最后状态",
@@ -68,33 +73,49 @@ func TestDeriveRecoveredState(t *testing.T) {
 				{Kind: string(roomsvc.KindStartGame)},
 				{Kind: string(roomsvc.KindSettlement)},
 			},
-			want: "closed",
+			wantState: "closed",
+			wantClear: false,
 		},
 		{
-			name:    "opening_done 推导为 playing",
-			current: "waiting",
-			rows:    []postgres.RoomEventRow{{Kind: string(roomsvc.KindOpeningDone)}},
-			want:    "playing",
+			name:    "settlement 后开局表示新一局 clearRound 为 true",
+			current: "ready",
+			rows: []postgres.RoomEventRow{
+				{Kind: string(roomsvc.KindStartGame)},
+				{Kind: string(roomsvc.KindSettlement)},
+				{Kind: string(roomsvc.KindStartGame)},
+			},
+			wantState: "playing",
+			wantClear: true,
 		},
 		{
-			name:    "draw_tile 推导为 playing",
-			current: "waiting",
-			rows:    []postgres.RoomEventRow{{Kind: string(roomsvc.KindDrawTile)}},
-			want:    "playing",
+			name:      "opening_done 推导为 playing",
+			current:   "waiting",
+			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindOpeningDone)}},
+			wantState: "playing",
+			wantClear: false,
 		},
 		{
-			name:    "action 推导为 playing",
-			current: "waiting",
-			rows:    []postgres.RoomEventRow{{Kind: string(roomsvc.KindAction)}},
-			want:    "playing",
+			name:      "draw_tile 推导为 playing",
+			current:   "waiting",
+			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindDrawTile)}},
+			wantState: "playing",
+			wantClear: false,
+		},
+		{
+			name:      "action 推导为 playing",
+			current:   "waiting",
+			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindAction)}},
+			wantState: "playing",
+			wantClear: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := DeriveRecoveredState(tt.current, tt.rows)
-			require.Equal(t, tt.want, got)
+			gotState, gotClear := DeriveRecoveredState(tt.current, tt.rows)
+			require.Equal(t, tt.wantState, gotState)
+			require.Equal(t, tt.wantClear, gotClear)
 		})
 	}
 }

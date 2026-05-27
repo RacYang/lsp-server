@@ -54,6 +54,7 @@ func (s *GRPCServer) ensureClaim(ctx context.Context, roomID, nodeID string) err
 }
 
 // CreateRoom 将 gRPC 请求翻译为大厅服务创建房间调用；集群模式下使用 selector 选取负载最轻的节点。
+// etcd claim 失败时回滚大厅内存与 Redis 记录，保持两阶段一致性。
 func (s *GRPCServer) CreateRoom(ctx context.Context, req *svcv1.CreateRoomRequest) (*svcv1.CreateRoomResponse, error) {
 	targetNode := s.selectNodeID(ctx)
 	if req.GetCreatorUserId() != "" || req.GetRoomId() == "" {
@@ -62,6 +63,8 @@ func (s *GRPCServer) CreateRoom(ctx context.Context, req *svcv1.CreateRoomReques
 			return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 		}
 		if err := s.ensureClaim(ctx, roomID, targetNode); err != nil {
+			// claim 失败：回滚大厅创建，避免产生无归属节点的幽灵房间。
+			s.svc.DeleteRoom(ctx, roomID)
 			return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 		}
 		return &svcv1.CreateRoomResponse{RoomId: roomID, RoomNodeId: targetNode, SeatIndex: seat}, nil
@@ -71,6 +74,7 @@ func (s *GRPCServer) CreateRoom(ctx context.Context, req *svcv1.CreateRoomReques
 		return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 	}
 	if err := s.ensureClaim(ctx, req.GetRoomId(), targetNode); err != nil {
+		s.svc.DeleteRoom(ctx, req.GetRoomId())
 		return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 	}
 	return &svcv1.CreateRoomResponse{RoomId: req.GetRoomId(), RoomNodeId: nodeID}, nil

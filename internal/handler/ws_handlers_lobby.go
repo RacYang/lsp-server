@@ -271,11 +271,26 @@ func normalizeClientRuleID(ruleID string) string {
 }
 
 func normalizeClientDisplayName(displayName, roomID string) string {
+	// 过滤控制字符并截断至 64 字节，与 sanitizeNickname 保持同等防御级别。
 	displayName = strings.TrimSpace(displayName)
-	if displayName != "" {
-		return displayName
+	if displayName == "" {
+		return roomID
 	}
-	return roomID
+	var b strings.Builder
+	for _, r := range displayName {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+		if b.Len() >= 64 {
+			break
+		}
+	}
+	result := strings.TrimSpace(b.String())
+	if result == "" {
+		return roomID
+	}
+	return result
 }
 
 func bindJoinedRoom(ctx context.Context, deps Deps, conn *websocket.Conn, state *wsConnState, roomID string) error {

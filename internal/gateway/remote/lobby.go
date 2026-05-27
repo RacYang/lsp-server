@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
@@ -172,12 +173,15 @@ func (g *remoteRoomGateway) AddBot(ctx context.Context, roomID, userID string, c
 	}
 	added := resp.GetAdded()
 	after := func() {
+		// after 在请求 ctx 外执行，使用独立超时而非 context.Background()。
+		botCtx, botCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer botCancel()
 		for _, seat := range resp.GetAdded() {
 			if seat.GetUserId() == "" {
 				continue
 			}
-			if _, err := g.Ready(context.Background(), roomID, seat.GetUserId()); err != nil {
-				logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), seat.GetUserId()), roomID)
+			if _, err := g.Ready(botCtx, roomID, seat.GetUserId()); err != nil {
+				logCtx := logx.WithRoomID(logx.WithUserID(botCtx, seat.GetUserId()), roomID)
 				logx.Warn(logCtx, "机器人自动准备失败", "err", err.Error())
 			}
 			g.rememberRoomSeat(roomID, seat.GetSeatIndex(), seat.GetUserId())

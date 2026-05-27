@@ -21,6 +21,8 @@ func (g *remoteRoomGateway) Join(ctx context.Context, roomID, userID string) (in
 		return -1, fmt.Errorf("nil remote room gateway")
 	}
 	var resp *svcv1.JoinRoomResponse
+	// JoinRoom 不携带幂等键；重试时若请求已被处理，Lobby.JoinRoom 会因同一 userID 已在房间
+	// 而返回现有座位（幂等语义由 Lobby 侧 ensureRoomLocked 保证）。
 	err := retryGRPC(ctx, func(callCtx context.Context) error {
 		var callErr error
 		resp, callErr = g.lobby.JoinRoom(withOutgoingTrace(callCtx), &svcv1.JoinRoomRequest{
@@ -135,18 +137,20 @@ func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID 
 		if g.hub != nil && g.hub.IsRegistered(userID, roomID) {
 			return
 		}
-		roomClient, _, err := g.roomClientForRoom(context.Background(), roomID)
+		// 使用有限超时的 context，避免进程关闭时半游离 goroutine 长期阻塞。
+		applyCtx, applyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer applyCancel()
+		logCtx := logx.WithRoomID(logx.WithUserID(applyCtx, userID), roomID)
+		roomClient, _, err := g.roomClientForRoom(applyCtx, roomID)
 		if err != nil {
-			logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), userID), roomID)
 			logx.Warn(logCtx, "离线投降获取 room client 失败", "err", err.Error())
 			return
 		}
-		if _, applyErr := roomClient.ApplyEvent(context.Background(), &svcv1.ApplyEventRequest{
+		if _, applyErr := roomClient.ApplyEvent(applyCtx, &svcv1.ApplyEventRequest{
 			RoomId: roomID,
 			UserId: userID,
 			Body:   &svcv1.ApplyEventRequest_Leave{Leave: &svcv1.LeaveEvent{}},
 		}); applyErr != nil {
-			logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), userID), roomID)
 			logx.Warn(logCtx, "离线超时投降事件发送失败", "err", applyErr.Error())
 		}
 	}()

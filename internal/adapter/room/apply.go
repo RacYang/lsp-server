@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
+	"racoo.cn/lsp/internal/metrics"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/redis"
 )
 
 // ApplyEvent 通过 room.Service 驱动真实房间 worker，并把产出的通知桥接到订阅流。
 func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventRequest) (*svcv1.ApplyEventResponse, error) {
+	started := time.Now()
 	if s == nil {
 		return nil, fmt.Errorf("nil room grpc server")
 	}
@@ -23,6 +26,10 @@ func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventReques
 	if s.rooms == nil {
 		return nil, fmt.Errorf("nil room service")
 	}
+	defer func() {
+		elapsed := time.Since(started).Seconds()
+		metrics.GRPCApplyEventSeconds.Observe(elapsed)
+	}()
 	roomID := req.GetRoomId()
 	if roomID == "" {
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: "empty room_id"}, nil
@@ -120,11 +127,14 @@ func clusterPhaseTokToRoom(tok *clientv1.PhaseToken) *roomsvc.PhaseToken {
 
 func (s *GRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*svcv1.ApplyEventResponse, error) {
 	if err != nil {
+		metrics.GRPCApplyEventTotal.WithLabelValues("error").Inc()
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
 	if err := s.PersistPublishAndFinalize(ctx, roomID, idemKey, notifications); err != nil {
+		metrics.GRPCApplyEventTotal.WithLabelValues("persist_error").Inc()
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: err.Error()}, nil
 	}
+	metrics.GRPCApplyEventTotal.WithLabelValues("ok").Inc()
 	return &svcv1.ApplyEventResponse{Accepted: true}, nil
 }
 

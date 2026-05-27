@@ -9,6 +9,9 @@ import (
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"racoo.cn/lsp/internal/metrics"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // NodeMeta 描述向控制面注册的节点元数据（地址、版本等）。
@@ -227,7 +230,10 @@ func (r *Registration) keepAlive(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = r.disco.KeepAlive(ctx, r.LeaseID)
+			if err := r.disco.KeepAlive(ctx, r.LeaseID); err != nil {
+				metrics.EtcdKeepaliveFailTotal.Inc()
+				logx.Warn(ctx, "etcd 租约续租失败，节点可能从注册表消失", "node_id", r.NodeID, "lease_id", r.LeaseID, "err", err.Error())
+			}
 		}
 	}
 }

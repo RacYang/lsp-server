@@ -3,6 +3,7 @@ package session
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"time"
 
@@ -60,7 +61,8 @@ func (m *Manager) Resume(ctx context.Context, plainToken string) (userID string,
 	if err != nil || !ok {
 		return "", Record{}, fmt.Errorf("会话记录不存在")
 	}
-	if srec.TokenHash != redis.HashSessionToken(plainToken) {
+	// 使用时序恒定比较，避免基于 hash 字符串前缀的 timing oracle（防御纵深）。
+	if subtle.ConstantTimeCompare([]byte(srec.TokenHash), []byte(redis.HashSessionToken(plainToken))) != 1 {
 		return "", Record{}, fmt.Errorf("会话令牌校验失败")
 	}
 	tokenVer, ok := redis.ParseSessionTokenVersion(plainToken)

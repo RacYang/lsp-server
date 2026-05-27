@@ -32,7 +32,7 @@ func (s *LeastRoomsSelector) Select(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("查询 room 节点列表失败: %w", err)
 	}
 	if len(nodes) == 0 {
-		return "", fmt.Errorf("无可用 room 节点")
+		return "", fmt.Errorf("无可用 room 节点（etcd prefix=%s）", s.disco.prefix)
 	}
 	best := nodes[0]
 	for _, n := range nodes[1:] {

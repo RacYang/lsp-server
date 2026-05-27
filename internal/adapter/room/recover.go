@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"racoo.cn/lsp/internal/cluster"
+	"racoo.cn/lsp/internal/metrics"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
@@ -40,6 +41,7 @@ func RecoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID stri
 		roomID := rid
 		if err := sem.Acquire(egCtx, 1); err != nil {
 			// 整体超时，降级上线：终止剩余恢复，已完成的房间继续运行。
+			metrics.RoomRecoverSkipTotal.Add(float64(len(roomIDs)))
 			logx.Warn(ctx, "房间冷启动恢复超时，降级上线", "remaining", len(roomIDs), "err", err.Error())
 			break
 		}
@@ -91,8 +93,13 @@ func RecoverSingleRoom(ctx context.Context, rcli *redis.Client, ev *postgres.Roo
 		if err != nil {
 			return err
 		}
-		if derived := DeriveRecoveredState(state, rows); derived != "" {
+		derived, clearRound := DeriveRecoveredState(state, rows)
+		if derived != "" {
 			state = derived
+		}
+		// settlement 后又有开局事件，说明新一局已开始；旧局 roundJSON 快照不适用，丢弃。
+		if clearRound {
+			roundJSON = nil
 		}
 	}
 	if state == "closed" || len(players) == 0 {
@@ -111,15 +118,23 @@ func RecoverSingleRoom(ctx context.Context, rcli *redis.Client, ev *postgres.Roo
 }
 
 // DeriveRecoveredState 根据持久化事件行推导最终恢复状态。
-func DeriveRecoveredState(current string, rows []postgres.RoomEventRow) string {
-	state := current
+// 若 settlement 之后出现开局类事件（如 start_game），表示新一局已开始；
+// 此时同时返回 clearRound=true，提示调用方丢弃可能属于上一局的 roundJSON 快照。
+func DeriveRecoveredState(current string, rows []postgres.RoomEventRow) (state string, clearRound bool) {
+	state = current
+	var afterSettlement bool
 	for _, row := range rows {
 		switch row.Kind {
-		case string(roomsvc.KindOpeningDone), string(roomsvc.KindStartGame), string(roomsvc.KindDrawTile), string(roomsvc.KindAction):
-			state = "playing"
 		case string(roomsvc.KindSettlement):
 			state = "closed"
+			afterSettlement = true
+		case string(roomsvc.KindOpeningDone), string(roomsvc.KindStartGame), string(roomsvc.KindDrawTile), string(roomsvc.KindAction):
+			state = "playing"
+			if afterSettlement {
+				// settlement 后紧跟开局事件，说明新一局已开始，旧快照不适用。
+				clearRound = true
+			}
 		}
 	}
-	return state
+	return state, clearRound
 }

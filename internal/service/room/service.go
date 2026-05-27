@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,9 +16,11 @@ import (
 
 // Service 编排房间命令；每房间在内部通过 roomActor 单协程串行化变更。
 type Service struct {
-	lobby                *RoomRegistry
-	mu                   sync.Mutex
-	actors               map[string]*roomActor
+	lobby  *RoomRegistry
+	mu     sync.Mutex
+	actors map[string]*roomActor
+	// activeCount 以无锁方式维护活跃房间数，供 ActiveRoomCount 无竞争读取。
+	activeCount          atomic.Int32
 	engine               *Engine
 	clock                clock.Clock
 	tmo                  TimeoutConfig
@@ -245,6 +248,7 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	a.onAfterCmd = s.onAfterCmd
 	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
 	s.actors[roomID] = a
+	s.activeCount.Add(1)
 	go a.run()
 }
 
@@ -282,8 +286,13 @@ func (s *Service) removeActor(roomID string) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.actors, roomID)
+	if _, ok := s.actors[roomID]; ok {
+		delete(s.actors, roomID)
+		s.mu.Unlock()
+		s.activeCount.Add(-1)
+		return
+	}
+	s.mu.Unlock()
 }
 
 func (s *Service) getActor(roomID string) *roomActor {
@@ -293,13 +302,12 @@ func (s *Service) getActor(roomID string) *roomActor {
 }
 
 // ActiveRoomCount 返回当前节点托管的活跃房间数，用于负载上报。
+// 通过 atomic 计数器读取，无需持有互斥锁，不与 Join/Leave 等高频路径竞争。
 func (s *Service) ActiveRoomCount() int {
 	if s == nil {
 		return 0
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.actors)
+	return int(s.activeCount.Load())
 }
 
 // Join 自动占座并返回座位号。
