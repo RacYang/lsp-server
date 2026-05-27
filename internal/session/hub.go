@@ -185,6 +185,10 @@ func (h *Hub) TouchHeartbeat(userID string) {
 }
 
 // IsRegistered 返回用户当前是否仍注册在指定房间连接中。
+//
+// Deprecated: 投降决策已移入 room actor 内部（ADR-0049 零债务重构），
+// Gate 层不再通过此方法判断是否取消投降倒计时；保留供测试与观测使用。
+// TODO(debt): 在大重构阶段（地基四 G 系列）统一评估是否可删除。
 func (h *Hub) IsRegistered(userID, roomID string) bool {
 	if h == nil || userID == "" {
 		return false
