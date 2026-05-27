@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/metrics"
@@ -26,7 +27,7 @@ type roomActor struct {
 	// initialRound 用于冷启动恢复进行中的牌局。
 	initialRound *RoundState
 	round        *RoundState
-	// 当前实现保持“单房单命令在途”，避免房间关闭时遗留未消费命令造成悬挂。
+	// 当前实现保持”单房单命令在途”，避免房间关闭时遗留未消费命令造成悬挂。
 	ch chan any
 	// submitMu 串行化外部提交，保证房间关闭后不会再有新的发送者卡在无人接收的通道上。
 	submitMu             sync.Mutex
@@ -37,6 +38,25 @@ type roomActor struct {
 	onAuto               func(context.Context, string, []Notification)
 	onAfterCmd           func(roomID string)
 	allowLeaveDuringPlay bool
+	// offlineTimers 记录各座位的离线投降定时器；键为 userID。
+	// 全部操作均在 actor run goroutine 内串行执行，无需额外同步。
+	offlineTimers map[string]*time.Timer
+	// offlineSurrenderAfter 为离线投降延迟；零值使用 DefaultOfflineSurrenderAfter。
+	offlineSurrenderAfter time.Duration
+}
+
+// DefaultOfflineSurrenderAfter 是离线投降的默认等待时长。
+const DefaultOfflineSurrenderAfter = 30 * time.Second
+
+// cmdMarkOffline 通知 actor 某座位玩家已离线，actor 内部启动投降定时器。
+// 投降决策权在 actor，消除 Gate 层 IsRegistered+ApplyEvent 的 TOCTOU 竞争。
+type cmdMarkOffline struct {
+	userID string
+}
+
+// cmdCancelOffline 通知 actor 玩家已重连，取消之前的投降定时器（fire-and-forget）。
+type cmdCancelOffline struct {
+	userID string
 }
 
 type cmdJoin struct {
@@ -197,13 +217,16 @@ func (a *roomActor) run() {
 			seat, err := a.doJoin(m.userID)
 			m.res <- joinResult{seat: seat, err: err}
 		case cmdReady:
+			a.cancelOfflineTimer(m.userID)
 			notifications, err := a.doReady(m.userID)
 			a.resetScheduler()
 			m.res <- readyResult{notifications: notifications, err: err}
 		case cmdLeave:
+			a.cancelOfflineTimer(m.userID)
 			m.res <- a.doLeave(m.userID)
 			a.resetScheduler()
 		case cmdDiscard:
+			a.cancelOfflineTimer(m.userID)
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
 				a.logActionRejected(m.ctx, m.userID, "discard", m.phaseTok, err)
 				m.res <- actionResult{err: err}
@@ -216,6 +239,7 @@ func (a *roomActor) run() {
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdPong:
+			a.cancelOfflineTimer(m.userID)
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
 				a.logActionRejected(m.ctx, m.userID, "pong", m.phaseTok, err)
 				m.res <- actionResult{err: err}
@@ -228,6 +252,7 @@ func (a *roomActor) run() {
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdChi:
+			a.cancelOfflineTimer(m.userID)
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
 				a.logActionRejected(m.ctx, m.userID, "chi", m.phaseTok, err)
 				m.res <- actionResult{err: err}
@@ -240,6 +265,7 @@ func (a *roomActor) run() {
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdGang:
+			a.cancelOfflineTimer(m.userID)
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
 				a.logActionRejected(m.ctx, m.userID, "gang", m.phaseTok, err)
 				m.res <- actionResult{err: err}
@@ -252,6 +278,7 @@ func (a *roomActor) run() {
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdHu:
+			a.cancelOfflineTimer(m.userID)
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
 				a.logActionRejected(m.ctx, m.userID, "hu", m.phaseTok, err)
 				m.res <- actionResult{err: err}
@@ -264,6 +291,7 @@ func (a *roomActor) run() {
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdPass:
+			a.cancelOfflineTimer(m.userID)
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
 				a.logActionRejected(m.ctx, m.userID, "pass", m.phaseTok, err)
 				m.res <- actionResult{err: err}
@@ -287,6 +315,7 @@ func (a *roomActor) run() {
 			a.resetScheduler()
 			m.res <- actionResult{notifications: notifications, err: err}
 		case cmdOpeningAction:
+			a.cancelOfflineTimer(m.userID)
 			if err := a.checkPhaseToken(m.phaseTok); err != nil {
 				a.logActionRejected(m.ctx, m.userID, m.action, m.phaseTok, err)
 				m.res <- actionResult{err: err}
@@ -318,6 +347,12 @@ func (a *roomActor) run() {
 				state = string(a.room.FSM.State())
 			}
 			m.res <- roomSnapshotResult{playerIDs: out, fsmState: state, ready: a.room.Ready}
+		case cmdMarkOffline:
+			// 玩家离线：启动投降计时器。已有计时器则先重置（防止同一连接多次触发）。
+			a.ensureOfflineTimer(m.userID)
+		case cmdCancelOffline:
+			// 玩家重连：取消计时器（fire-and-forget，不需要响应）。
+			a.cancelOfflineTimer(m.userID)
 		default:
 			// 到达此分支意味着某处向 actor 信道投递了未注册的命令类型，属于编程错误。
 			// panic 在开发期可立即暴露问题；生产环境中进程崩溃优于静默消费错误消息。
@@ -658,5 +693,67 @@ func (a *roomActor) submitAction(ctx context.Context, cmd any) ([]Notification, 
 		return rr.notifications, rr.err
 	default:
 		return nil, fmt.Errorf("unsupported action command")
+	}
+}
+
+// ensureOfflineTimer 在 actor goroutine 内启动（或重置）离线投降计时器。
+// 计时器触发后经 submitLeave 向自身邮箱投递 Leave 命令，保证串行化。
+func (a *roomActor) ensureOfflineTimer(userID string) {
+	if a.offlineTimers == nil {
+		a.offlineTimers = make(map[string]*time.Timer)
+	}
+	if t, ok := a.offlineTimers[userID]; ok {
+		t.Stop()
+	}
+	delay := a.offlineSurrenderAfter
+	if delay <= 0 {
+		delay = DefaultOfflineSurrenderAfter
+	}
+	a.offlineTimers[userID] = time.AfterFunc(delay, func() {
+		// 计时器触发后通过邮箱投递 Leave，由 actor 主循环串行处理；
+		// 若 actor 已关闭，submitLeave 会静默返回 error，不阻塞。
+		ctx := context.Background()
+		if err := a.submitLeave(ctx, userID); err != nil {
+			logCtx := logx.WithUserID(ctx, userID)
+			if a.room != nil {
+				logCtx = logx.WithRoomID(logCtx, a.room.ID)
+			}
+			logx.Warn(logCtx, "离线投降 Leave 失败", "err", err.Error())
+		}
+	})
+}
+
+// cancelOfflineTimer 取消玩家的离线投降计时器；无计时器时为空操作。
+func (a *roomActor) cancelOfflineTimer(userID string) {
+	if t, ok := a.offlineTimers[userID]; ok {
+		t.Stop()
+		delete(a.offlineTimers, userID)
+	}
+}
+
+// submitMarkOffline 向 actor 邮箱投递离线事件（fire-and-forget，不等待响应）。
+func (a *roomActor) submitMarkOffline(userID string) {
+	if a == nil || a.closed.Load() {
+		return
+	}
+	a.submitMu.Lock()
+	defer a.submitMu.Unlock()
+	select {
+	case a.ch <- cmdMarkOffline{userID: userID}:
+	default:
+		// 邮箱满时丢弃；投降计时器不会触发，玩家状态仍可通过后续 Leave 清理。
+	}
+}
+
+// submitCancelOffline 向 actor 邮箱投递重连取消离线事件（fire-and-forget）。
+func (a *roomActor) submitCancelOffline(userID string) {
+	if a == nil || a.closed.Load() {
+		return
+	}
+	a.submitMu.Lock()
+	defer a.submitMu.Unlock()
+	select {
+	case a.ch <- cmdCancelOffline{userID: userID}:
+	default:
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -13,6 +14,15 @@ import (
 	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
+)
+
+const (
+	// wsPingInterval 每隔此时长向客户端发送 ping 控制帧，确认链路存活。
+	wsPingInterval = 30 * time.Second
+	// wsReadTimeout 两次有效消息（含 pong）之间的最大静默时间；超时后 ReadMessage 返回错误触发断开。
+	wsReadTimeout = 90 * time.Second
+	// wsPingWriteTimeout ping 控制帧写入的超时上限。
+	wsPingWriteTimeout = 5 * time.Second
 )
 
 // Deps 为处理器依赖。
@@ -31,6 +41,7 @@ type RoomGateway interface {
 	Ready(ctx context.Context, roomID, userID string) (func(), error)
 	Leave(ctx context.Context, roomID, userID string) (func(), error)
 	MarkSeatOffline(ctx context.Context, roomID, userID string) error
+	CancelOfflineSurrender(ctx context.Context, roomID, userID string) error
 	OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *clientv1.PhaseToken) (func(), error)
 	Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error)
 	Pong(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
@@ -55,7 +66,8 @@ type wsConnState struct {
 
 // HandleWebSocket 升级为 WebSocket 并启动单连接的帧读循环。
 //
-// 写出由本函数与本包内 handler 串行触达，避免 gorilla/websocket 的并发写者风险。
+// 写端由 session.WriteBinary 的每连接写协程序列化，ping 控制帧通过 gorilla 并发安全的
+// WriteControl 发出，与业务帧写入互不干扰。
 func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(req *http.Request) bool {
@@ -67,8 +79,35 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 		logx.Error(ctx, "连接升级为 WebSocket 时失败", "err", err.Error())
 		return
 	}
+
+	// 初始读超时；pong handler 与每次成功读取都会续期，确保僵尸连接被及时清理。
+	_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+		return nil
+	})
+
+	// ping goroutine 与读循环并行运行，done 关闭时退出。
+	// WriteControl 是 gorilla/websocket 文档明确并发安全的方法，可与写协程并存。
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(wsPingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(wsPingWriteTimeout)); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
 	state := wsConnState{}
 	defer func() {
+		close(done)
 		if deps.Rooms != nil && state.userID != "" && state.roomID != "" {
 			_ = deps.Rooms.MarkSeatOffline(context.Background(), state.roomID, state.userID)
 		}
@@ -83,6 +122,8 @@ func HandleWebSocket(ctx context.Context, deps Deps, w http.ResponseWriter, r *h
 		if err != nil {
 			return
 		}
+		// 任意数据帧到达即续期，避免高负载时大量业务帧被误判超时。
+		_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 		h, err := protocol.ReadFrame(bytes.NewReader(data))
 		if err != nil {
 			logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)

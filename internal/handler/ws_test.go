@@ -38,7 +38,8 @@ func (f *fakeResumeGateway) Ready(_ context.Context, _, _ string) (func(), error
 func (f *fakeResumeGateway) Leave(_ context.Context, _, _ string) (func(), error) {
 	return nil, nil
 }
-func (f *fakeResumeGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
+func (f *fakeResumeGateway) MarkSeatOffline(_ context.Context, _, _ string) error        { return nil }
+func (f *fakeResumeGateway) CancelOfflineSurrender(_ context.Context, _, _ string) error { return nil }
 func (f *fakeResumeGateway) OpeningAction(_ context.Context, _, _, _ string, _ []string, _, _ int32, _ map[string]string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }
@@ -102,8 +103,9 @@ func (g *joinStubGateway) Ready(_ context.Context, _, _ string) (func(), error) 
 	g.readyN++
 	return nil, nil
 }
-func (g *joinStubGateway) Leave(_ context.Context, _, _ string) (func(), error) { return nil, nil }
-func (g *joinStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
+func (g *joinStubGateway) Leave(_ context.Context, _, _ string) (func(), error)        { return nil, nil }
+func (g *joinStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error        { return nil }
+func (g *joinStubGateway) CancelOfflineSurrender(_ context.Context, _, _ string) error { return nil }
 func (g *joinStubGateway) OpeningAction(_ context.Context, _, _, _ string, _ []string, _, _ int32, _ map[string]string, _ *clientv1.PhaseToken) (func(), error) {
 	return nil, nil
 }

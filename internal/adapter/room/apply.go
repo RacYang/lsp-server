@@ -96,6 +96,14 @@ func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventReques
 		// Join 仅占座：s.rooms.Join 已在 switch 之前（Join 调用）隐式执行。
 		s.markIdempotency(ctx, roomID, idemKey)
 		return &svcv1.ApplyEventResponse{Accepted: true}, nil
+	case *svcv1.ApplyEventRequest_MarkOffline:
+		// MarkOffline 为 fire-and-forget 指令；actor 内部启动投降倒计时，无通知产出。
+		s.rooms.MarkSeatOffline(roomID, userID)
+		return &svcv1.ApplyEventResponse{Accepted: true}, nil
+	case *svcv1.ApplyEventRequest_CancelOffline:
+		// CancelOffline 为 fire-and-forget 指令；actor 内部取消待触发的投降倒计时。
+		s.rooms.CancelOfflineSurrender(roomID, userID)
+		return &svcv1.ApplyEventResponse{Accepted: true}, nil
 	default:
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
 	}

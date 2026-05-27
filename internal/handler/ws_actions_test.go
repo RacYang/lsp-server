@@ -49,7 +49,8 @@ func (g *actionStubGateway) Ready(_ context.Context, _, _ string) (func(), error
 func (g *actionStubGateway) Leave(_ context.Context, _, _ string) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }
-func (g *actionStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error { return nil }
+func (g *actionStubGateway) MarkSeatOffline(_ context.Context, _, _ string) error        { return nil }
+func (g *actionStubGateway) CancelOfflineSurrender(_ context.Context, _, _ string) error { return nil }
 func (g *actionStubGateway) OpeningAction(_ context.Context, _, _, _ string, _ []string, _, _ int32, _ map[string]string, _ *clientv1.PhaseToken) (func(), error) {
 	return g.makeAfter(), g.actionErr
 }

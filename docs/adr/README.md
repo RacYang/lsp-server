@@ -70,3 +70,5 @@
 - [ADR-0045 房间 deadline 单一所有权与 PhaseUpdate/PhaseToken 契约](0045-phase-deadline-single-owner-and-phase-token.md)：已采纳；deadline 派生自 phaseStart+phaseReason，engine 经 enterPhase 写入，scheduler 退化为定时器对齐，协议层强制嵌入 PhaseUpdate 并以 PhaseToken 校验请求。
 - [ADR-0046 治理体系迁移至 .claude/ 唯一事实源](0046-unified-claude-code-governance.md)：已采纳；以 `.claude/` 为唯一 SSOT，统一路径、术语、格式与 harness，完成 Cursor→Claude Code 迁移闭环。
 - [ADR-0047 CLI 纯中文 TUI 重构](0047-cli-pure-chinese-redesign.md)：已采纳；去掉三主题牌面与黑白美学，用纯中文宽字符、竖排手牌、四向对称牌桌与 Unicode 框线统一 CLI 前端。
+- [ADR-0048 Agent 优先的治理文档格式](0048-agent-first-governance-format.md)：已采纳；治理资产以 agent 解析效率为优化目标，禁止散文，固定结构。
+- [ADR-0049 零债务重构策略](0049-zero-debt-refactor-strategy.md)：已采纳；所有变更前必须全系统梳理并找到最优落点，禁止补丁式修复。

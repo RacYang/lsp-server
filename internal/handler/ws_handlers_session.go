@@ -84,6 +84,13 @@ func handleLoginResume(
 			logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)
 			logx.Warn(logCtx, "恢复后订阅房间事件流失败", "err", err.Error())
 		}
+		// 玩家重连时取消 actor 内待触发的投降倒计时；fire-and-forget，失败不中断重连流程。
+		if state.roomID != "" {
+			if err := deps.Rooms.CancelOfflineSurrender(ctx, state.roomID, state.userID); err != nil {
+				logCtx := logx.WithRoomID(logx.WithUserID(ctx, state.userID), state.roomID)
+				logx.Warn(logCtx, "取消离线投降倒计时失败", "err", err.Error())
+			}
+		}
 	}
 
 	login := &clientv1.LoginResponse{

@@ -117,43 +117,47 @@ func (g *remoteRoomGateway) Leave(ctx context.Context, roomID, userID string) (f
 	return nil, nil
 }
 
-// MarkSeatOffline 延迟后若用户未重连则发送离开事件，实现离线投降。
+// MarkSeatOffline 向 room actor 发送离线事件，由 actor 内部管理投降倒计时；消除 gate 侧计时器与重连判断的竞态。
 func (g *remoteRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID string) error {
 	if g == nil || roomID == "" || userID == "" {
 		return nil
 	}
-	delay := g.offlineSurrenderAfter
-	if delay <= 0 {
-		delay = 30 * time.Second
+	roomClient, _, err := g.roomClientForRoom(ctx, roomID)
+	if err != nil {
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "离线投降获取房间客户端失败", "err", err.Error())
+		return nil
 	}
-	go func() {
-		timer := time.NewTimer(delay)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-		}
-		if g.hub != nil && g.hub.IsRegistered(userID, roomID) {
-			return
-		}
-		// 使用有限超时的 context，避免进程关闭时半游离 goroutine 长期阻塞。
-		applyCtx, applyCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer applyCancel()
-		logCtx := logx.WithRoomID(logx.WithUserID(applyCtx, userID), roomID)
-		roomClient, _, err := g.roomClientForRoom(applyCtx, roomID)
-		if err != nil {
-			logx.Warn(logCtx, "离线投降获取 room client 失败", "err", err.Error())
-			return
-		}
-		if _, applyErr := roomClient.ApplyEvent(applyCtx, &svcv1.ApplyEventRequest{
-			RoomId: roomID,
-			UserId: userID,
-			Body:   &svcv1.ApplyEventRequest_Leave{Leave: &svcv1.LeaveEvent{}},
-		}); applyErr != nil {
-			logx.Warn(logCtx, "离线超时投降事件发送失败", "err", applyErr.Error())
-		}
-	}()
+	if _, applyErr := roomClient.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &svcv1.ApplyEventRequest_MarkOffline{MarkOffline: &svcv1.MarkOfflineEvent{}},
+	}); applyErr != nil {
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "离线事件发送失败降级忽略", "err", applyErr.Error())
+	}
+	return nil
+}
+
+// CancelOfflineSurrender 向 room actor 发送取消离线信号，由 actor 取消待触发的投降倒计时（玩家重连时调用）。
+func (g *remoteRoomGateway) CancelOfflineSurrender(ctx context.Context, roomID, userID string) error {
+	if g == nil || roomID == "" || userID == "" {
+		return nil
+	}
+	roomClient, _, err := g.roomClientForRoom(ctx, roomID)
+	if err != nil {
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "取消离线投降获取房间客户端失败", "err", err.Error())
+		return nil
+	}
+	if _, applyErr := roomClient.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
+		RoomId: roomID,
+		UserId: userID,
+		Body:   &svcv1.ApplyEventRequest_CancelOffline{CancelOffline: &svcv1.CancelOfflineEvent{}},
+	}); applyErr != nil {
+		logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), roomID)
+		logx.Warn(logCtx, "取消离线投降发送失败降级忽略", "err", applyErr.Error())
+	}
 	return nil
 }
 

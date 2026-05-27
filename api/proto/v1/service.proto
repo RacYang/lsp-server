@@ -48,6 +48,10 @@ message ApplyEventRequest {
     JoinEvent join = 14;
     ChiEvent chi = 15;
     OpeningActionEvent opening_action = 16;
+    // MarkOfflineEvent 由 gate 在连接断开时发送，room actor 内部启动投降倒计时。
+    MarkOfflineEvent mark_offline = 17;
+    // CancelOfflineEvent 由 gate 在玩家重连时发送，room actor 取消待触发的投降倒计时。
+    CancelOfflineEvent cancel_offline = 18;
   }
   string idempotency_key = 9;
   string user_id = 10;
@@ -170,6 +174,12 @@ message OpeningActionEvent {
   int32 suit = 4;
   map<string, string> params = 5;
 }
+
+// MarkOfflineEvent 通知 room actor 玩家已断线，开始投降倒计时（服务端内部指令，非客户端可见）。
+message MarkOfflineEvent {}
+
+// CancelOfflineEvent 通知 room actor 玩家已重连，取消待触发的投降倒计时（服务端内部指令，非客户端可见）。
+message CancelOfflineEvent {}
 
 // ── LobbyService 请求/响应 ───────────────────────────────────────────────
 

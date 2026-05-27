@@ -1,0 +1,22 @@
+---
+kind: constraint
+description: 在错误层添加 guard 屏蔽根因，而非修复根因所在层
+adr: docs/adr/0049-zero-debt-refactor-strategy.md
+negative_test: .build/negatives/zero_debt_patch_guard.go.neg
+---
+
+package gateway
+
+// MarkSeatOffline 在 gate 层做了补丁式检查，而 timer 逻辑属于 room actor 职责。
+// 正确做法：timer 由 actor 持有，gate 只发送 cmdMarkOffline 信号。
+func (g *Gateway) MarkSeatOffline(ctx context.Context, roomID, userID string) error {
+	go func() {
+		time.Sleep(30 * time.Second)
+		// TODO(debt): hub 检查不是 atomic 的，存在 TOCTOU 竞态
+		if g.hub.IsRegistered(userID, roomID) {
+			return
+		}
+		g.leave(ctx, roomID, userID)
+	}()
+	return nil
+}

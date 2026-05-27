@@ -30,7 +30,8 @@ type Service struct {
 	allowLeaveDuringPlay bool
 	// onAfterCmd 在 actor 处理完一条命令后触发，BotSupervisor 借此接力推动机器人座位。
 	// 这条回调必须自身保持非阻塞（典型实现是丢给独立 goroutine 处理），否则会拖慢 actor 主循环。
-	onAfterCmd func(roomID string)
+	onAfterCmd            func(roomID string)
+	offlineSurrenderAfter time.Duration
 }
 
 // TimeoutConfig 定义各等待态的服务端托管时长。
@@ -159,6 +160,35 @@ func (s *Service) SetAllowLeaveDuringPlay(allow bool) {
 	s.allowLeaveDuringPlay = allow
 }
 
+// SetOfflineSurrenderAfter 覆盖离线投降等待时长；需在第一个房间启动前调用。
+func (s *Service) SetOfflineSurrenderAfter(d time.Duration) {
+	if s == nil || d <= 0 {
+		return
+	}
+	s.offlineSurrenderAfter = d
+}
+
+// MarkSeatOffline 向对应 actor 投递离线事件，actor 内部启动投降倒计时。
+// 投降决策权由 actor 持有，消除 Gate 层 hub 检查与发送之间的 TOCTOU 竞争。
+func (s *Service) MarkSeatOffline(roomID, userID string) {
+	if s == nil || roomID == "" || userID == "" {
+		return
+	}
+	if a := s.getActor(roomID); a != nil {
+		a.submitMarkOffline(userID)
+	}
+}
+
+// CancelOfflineSurrender 向对应 actor 投递取消离线事件（玩家重连时调用）。
+func (s *Service) CancelOfflineSurrender(roomID, userID string) {
+	if s == nil || roomID == "" || userID == "" {
+		return
+	}
+	if a := s.getActor(roomID); a != nil {
+		a.submitCancelOffline(userID)
+	}
+}
+
 // SetAutoTimeoutHandler 注册后台托管通知处理器。
 func (s *Service) SetAutoTimeoutHandler(fn func(context.Context, string, []Notification)) {
 	if s == nil {
@@ -247,6 +277,7 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	a.onAuto = s.onAuto
 	a.onAfterCmd = s.onAfterCmd
 	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
+	a.offlineSurrenderAfter = s.offlineSurrenderAfter
 	s.actors[roomID] = a
 	s.activeCount.Add(1)
 	go a.run()
@@ -276,6 +307,7 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 	a.onAuto = s.onAuto
 	a.onAfterCmd = s.onAfterCmd
 	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
+	a.offlineSurrenderAfter = s.offlineSurrenderAfter
 	s.actors[roomID] = a
 	s.mu.Unlock()
 	go a.run()

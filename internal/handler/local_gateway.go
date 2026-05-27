@@ -39,6 +39,9 @@ func (g *LocalRoomGateway) SetOfflineSurrenderAfter(d time.Duration) {
 		return
 	}
 	g.offlineSurrenderAfter = d
+	if g.rooms != nil {
+		g.rooms.SetOfflineSurrenderAfter(d)
+	}
 }
 
 // Join 直接走本地房间服务加入逻辑。
@@ -230,27 +233,20 @@ func (g *LocalRoomGateway) Leave(ctx context.Context, roomID, userID string) (fu
 	return nil, nil
 }
 
-func (g *LocalRoomGateway) MarkSeatOffline(ctx context.Context, roomID, userID string) error {
+func (g *LocalRoomGateway) MarkSeatOffline(_ context.Context, roomID, userID string) error {
 	if g == nil || g.rooms == nil || roomID == "" || userID == "" {
 		return nil
 	}
-	delay := g.offlineSurrenderAfter
-	go func() {
-		timer := time.NewTimer(delay)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			if g.hub != nil && g.hub.IsRegistered(userID, roomID) {
-				return
-			}
-			if err := g.rooms.Leave(context.Background(), roomID, userID); err != nil {
-				logCtx := logx.WithRoomID(logx.WithUserID(context.Background(), userID), roomID)
-				logx.Warn(logCtx, "离线超时投降离开房间失败", "err", err.Error())
-			}
-		}
-	}()
+	// 投降计时器由 Actor 持有，消除 TOCTOU 竞争；Gateway 只做信号投递。
+	g.rooms.MarkSeatOffline(roomID, userID)
+	return nil
+}
+
+func (g *LocalRoomGateway) CancelOfflineSurrender(_ context.Context, roomID, userID string) error {
+	if g == nil || g.rooms == nil || roomID == "" || userID == "" {
+		return nil
+	}
+	g.rooms.CancelOfflineSurrender(roomID, userID)
 	return nil
 }
 
