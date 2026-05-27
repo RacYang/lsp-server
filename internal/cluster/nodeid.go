@@ -30,3 +30,15 @@ func FormatNodeID(k Kind, id string) string {
 func KindString(k Kind) string {
 	return string(k)
 }
+
+// ParseEndpoints 将逗号分隔的 etcd 地址字符串解析为切片，并去除空白项。
+func ParseEndpoints(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}

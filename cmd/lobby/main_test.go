@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"racoo.cn/lsp/internal/cluster"
 )
 
 func writeLobbyCfg(t *testing.T, name, content string) string {
@@ -52,8 +54,9 @@ func TestRunNoExternalDepsCleanShutdown(t *testing.T) {
 	}
 }
 
-func TestSplitEtcdEndpoints(t *testing.T) {
-	got := splitEtcdEndpoints(" a, ,b ")
+func TestParseEndpoints(t *testing.T) {
+	// 验证 cluster.ParseEndpoints 正确处理空白与空项（逻辑已移至 internal/cluster）。
+	got := cluster.ParseEndpoints(" a, ,b ")
 	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("%+v", got)
 	}

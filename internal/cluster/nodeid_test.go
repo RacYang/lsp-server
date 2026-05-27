@@ -19,3 +19,9 @@ func TestFormatNodeID(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "room/abc", FormatNodeID(KindRoom, "abc"))
 }
+
+func TestParseEndpoints(t *testing.T) {
+	t.Parallel()
+	got := ParseEndpoints(" http://etcd-0:2379, ,http://etcd-1:2379 ")
+	require.Equal(t, []string{"http://etcd-0:2379", "http://etcd-1:2379"}, got)
+}

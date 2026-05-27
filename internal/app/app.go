@@ -30,7 +30,7 @@ type App struct {
 	cleanup func()
 }
 
-// New 根据配置装配应用；当前等价于 gate 角色，保留以兼容 Phase 1 调用点。
+// New 根据配置装配应用；等价于 NewGate，保留以兼容现有调用点与测试。
 func New(ctx context.Context, cfg config.Config) (*App, error) {
 	return NewGate(ctx, cfg)
 }

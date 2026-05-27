@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -52,10 +51,13 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	} else {
 		svc = lobbysvc.New()
 	}
-	var claimer *cluster.EtcdRouter
+	var (
+		claimer  *cluster.EtcdRouter
+		selector cluster.RoomNodeSelector
+	)
 	if cfg.EtcdEndpoints != "" {
 		cli, err := clientv3.New(clientv3.Config{
-			Endpoints:   splitEtcdEndpoints(cfg.EtcdEndpoints),
+			Endpoints:   cluster.ParseEndpoints(cfg.EtcdEndpoints),
 			DialTimeout: 5 * time.Second,
 		})
 		if err != nil {
@@ -74,9 +76,12 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
 		claimer = cluster.NewEtcdRouter(cli, cfg.EtcdPrefix)
+		selector = cluster.NewLeastRoomsSelector(disco)
 	}
 	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
-		lobbyadapter.RegisterService(s, lobbyadapter.NewGRPCServer(svc, claimer, defaultRoomNodeID))
+		srv := lobbyadapter.NewGRPCServer(svc, claimer, defaultRoomNodeID)
+		srv.SetRoomNodeSelector(selector)
+		lobbyadapter.RegisterService(s, srv)
 	})
 	if err != nil {
 		logx.Error(ctx, "大厅服务装配失败", "err", err.Error())
@@ -94,16 +99,4 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		return 1
 	}
 	return 0
-}
-
-func splitEtcdEndpoints(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
 }

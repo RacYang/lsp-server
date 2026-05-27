@@ -292,6 +292,16 @@ func (s *Service) getActor(roomID string) *roomActor {
 	return s.actors[roomID]
 }
 
+// ActiveRoomCount 返回当前节点托管的活跃房间数，用于负载上报。
+func (s *Service) ActiveRoomCount() int {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.actors)
+}
+
 // Join 自动占座并返回座位号。
 func (s *Service) Join(ctx context.Context, roomID, userID string) (int, error) {
 	if err := s.EnsureRoom(roomID); err != nil {

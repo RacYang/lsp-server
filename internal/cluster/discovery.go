@@ -19,6 +19,8 @@ type NodeMeta struct {
 	ExternalWSURL string
 	// Version 为进程构建版本，便于灰度观察。
 	Version string
+	// ActiveRooms 为当前节点托管的活跃房间数；room 节点周期性上报，供 Lobby 负载均衡选节点。
+	ActiveRooms int32
 }
 
 // Registrar 抽象节点注册：租约续期失败时 Watch 侧应感知下线。
@@ -153,6 +155,11 @@ func (e *EtcdDiscovery) WatchNodes(ctx context.Context, kind Kind) (<-chan []Nod
 	return out, nil
 }
 
+// ListNodes 返回指定类型的全部在线节点列表。
+func (e *EtcdDiscovery) ListNodes(ctx context.Context, kind Kind) ([]NodeInfo, error) {
+	return e.listNodes(ctx, kind)
+}
+
 func (e *EtcdDiscovery) listNodes(ctx context.Context, kind Kind) ([]NodeInfo, error) {
 	resp, err := e.cli.Get(ctx, e.nodePrefix(kind), clientv3.WithPrefix())
 	if err != nil {
@@ -231,4 +238,19 @@ func (r *Registration) Stop(ctx context.Context) error {
 		return nil
 	}
 	return r.disco.Revoke(ctx, r.LeaseID)
+}
+
+// UpdateMeta 在不更换租约的情况下更新节点元数据，用于定期上报负载等动态字段。
+func (r *Registration) UpdateMeta(ctx context.Context, kind Kind, meta NodeMeta) error {
+	if r == nil || r.disco == nil || r.disco.cli == nil {
+		return nil
+	}
+	payload, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("序列化节点元数据失败: %w", err)
+	}
+	key := r.disco.nodeKey(kind, r.NodeID)
+	//nolint:gosec // leaseID 类型转换安全
+	_, err = r.disco.cli.Put(ctx, key, string(payload), clientv3.WithLease(clientv3.LeaseID(r.LeaseID)))
+	return err
 }

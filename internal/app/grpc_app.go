@@ -7,7 +7,11 @@ import (
 	"net"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // GRPCApp 为 gRPC 进程装配：lobby/room 等角色可复用同一生命周期管理。
@@ -31,6 +35,43 @@ func NewGRPC(ctx context.Context, addr string, register func(*grpc.Server)) (*GR
 		register(srv)
 	}
 	return &GRPCApp{srv: srv, ln: ln}, nil
+}
+
+// traceUnaryServerInterceptor 从 gRPC metadata 中提取 trace-id 并注入 Context。
+func traceUnaryServerInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		md, _ := metadata.FromIncomingContext(ctx)
+		tid := ""
+		if vals := md.Get("racoo-trace-id"); len(vals) > 0 {
+			tid = vals[0]
+		}
+		if tid == "" {
+			tid = uuid.NewString()
+		}
+		return handler(logx.WithTraceID(ctx, tid), req)
+	}
+}
+
+type ctxServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *ctxServerStream) Context() context.Context { return s.ctx }
+
+// traceStreamServerInterceptor 为流式 RPC 同样注入 trace-id，保持与 unary 拦截器的一致性。
+func traceStreamServerInterceptor() grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		md, _ := metadata.FromIncomingContext(ss.Context())
+		tid := ""
+		if vals := md.Get("racoo-trace-id"); len(vals) > 0 {
+			tid = vals[0]
+		}
+		if tid == "" {
+			tid = uuid.NewString()
+		}
+		return handler(srv, &ctxServerStream{ServerStream: ss, ctx: logx.WithTraceID(ss.Context(), tid)})
+	}
 }
 
 // Addr 返回已绑定监听地址。

@@ -17,7 +17,8 @@ import (
 type GRPCServer struct {
 	svc        *lobbysvc.Service
 	claimer    *cluster.EtcdRouter
-	roomNodeID string
+	selector   cluster.RoomNodeSelector // 非 nil 时在 CreateRoom 中动态选节点
+	roomNodeID string                   // selector 为 nil 或失败时的兜底节点 ID
 }
 
 // NewGRPCServer 构造 lobby gRPC 适配器，可选传入 etcd 路由器用于 room 归属声明。
@@ -25,33 +26,51 @@ func NewGRPCServer(svc *lobbysvc.Service, claimer *cluster.EtcdRouter, roomNodeI
 	return &GRPCServer{svc: svc, claimer: claimer, roomNodeID: roomNodeID}
 }
 
-func (s *GRPCServer) ensureClaim(ctx context.Context, roomID string) error {
-	if s == nil || s.claimer == nil || roomID == "" || s.roomNodeID == "" {
+// SetRoomNodeSelector 注入节点选择器；注入后 CreateRoom 使用选择器动态选择负载最轻的节点。
+func (s *GRPCServer) SetRoomNodeSelector(sel cluster.RoomNodeSelector) {
+	if s != nil {
+		s.selector = sel
+	}
+}
+
+// selectNodeID 优先使用选择器，失败或未配置时回退到固定节点 ID。
+func (s *GRPCServer) selectNodeID(ctx context.Context) string {
+	if s.selector != nil {
+		if id, err := s.selector.Select(ctx); err == nil {
+			return id
+		}
+	}
+	return s.roomNodeIDOrLocal()
+}
+
+func (s *GRPCServer) ensureClaim(ctx context.Context, roomID, nodeID string) error {
+	if s == nil || s.claimer == nil || roomID == "" || nodeID == "" {
 		return nil
 	}
-	if err := s.claimer.ClaimRoom(ctx, roomID, s.roomNodeID, 0); err != nil {
+	if err := s.claimer.ClaimRoom(ctx, roomID, nodeID, 0); err != nil {
 		return fmt.Errorf("claim room owner: %w", err)
 	}
 	return nil
 }
 
-// CreateRoom 将 gRPC 请求翻译为大厅服务创建房间调用。
+// CreateRoom 将 gRPC 请求翻译为大厅服务创建房间调用；集群模式下使用 selector 选取负载最轻的节点。
 func (s *GRPCServer) CreateRoom(ctx context.Context, req *svcv1.CreateRoomRequest) (*svcv1.CreateRoomResponse, error) {
+	targetNode := s.selectNodeID(ctx)
 	if req.GetCreatorUserId() != "" || req.GetRoomId() == "" {
 		roomID, seat, err := s.svc.CreateRoomWithMeta(ctx, req.GetRuleId(), req.GetDisplayName(), req.GetPrivate(), req.GetCreatorUserId())
 		if err != nil {
 			return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 		}
-		if err := s.ensureClaim(ctx, roomID); err != nil {
+		if err := s.ensureClaim(ctx, roomID, targetNode); err != nil {
 			return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 		}
-		return &svcv1.CreateRoomResponse{RoomId: roomID, RoomNodeId: s.roomNodeIDOrLocal(), SeatIndex: seat}, nil
+		return &svcv1.CreateRoomResponse{RoomId: roomID, RoomNodeId: targetNode, SeatIndex: seat}, nil
 	}
 	nodeID, err := s.svc.CreateRoom(ctx, req.GetRoomId())
 	if err != nil {
 		return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 	}
-	if err := s.ensureClaim(ctx, req.GetRoomId()); err != nil {
+	if err := s.ensureClaim(ctx, req.GetRoomId(), targetNode); err != nil {
 		return &svcv1.CreateRoomResponse{Error: err.Error()}, nil
 	}
 	return &svcv1.CreateRoomResponse{RoomId: req.GetRoomId(), RoomNodeId: nodeID}, nil
@@ -63,7 +82,7 @@ func (s *GRPCServer) JoinRoom(ctx context.Context, req *svcv1.JoinRoomRequest) (
 	if err != nil {
 		return &svcv1.JoinRoomResponse{Error: err.Error()}, nil
 	}
-	if err := s.ensureClaim(ctx, req.GetRoomId()); err != nil {
+	if err := s.ensureClaim(ctx, req.GetRoomId(), s.roomNodeIDOrLocal()); err != nil {
 		return &svcv1.JoinRoomResponse{Error: err.Error()}, nil
 	}
 	return &svcv1.JoinRoomResponse{SeatIndex: seat}, nil
@@ -113,10 +132,11 @@ func (s *GRPCServer) AutoMatch(ctx context.Context, req *svcv1.AutoMatchRequest)
 	if err != nil {
 		return &svcv1.AutoMatchResponse{Error: err.Error()}, nil
 	}
-	if err := s.ensureClaim(ctx, roomID); err != nil {
+	targetNode := s.selectNodeID(ctx)
+	if err := s.ensureClaim(ctx, roomID, targetNode); err != nil {
 		return &svcv1.AutoMatchResponse{Error: err.Error()}, nil
 	}
-	return &svcv1.AutoMatchResponse{RoomId: roomID, RoomNodeId: s.roomNodeIDOrLocal(), SeatIndex: seat}, nil
+	return &svcv1.AutoMatchResponse{RoomId: roomID, RoomNodeId: targetNode, SeatIndex: seat}, nil
 }
 
 // AddBot 向房间补充占位机器人，返回新增的座位信息列表。

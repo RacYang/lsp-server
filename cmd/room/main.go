@@ -10,12 +10,9 @@ import (
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	roomadapter "racoo.cn/lsp/internal/adapter/room"
 	"racoo.cn/lsp/internal/app"
-
 	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
 	botsvc "racoo.cn/lsp/internal/service/bot"
@@ -29,8 +26,7 @@ const defaultRoomNodeID = "room-local"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	code := run(ctx, stop)
-	os.Exit(code)
+	os.Exit(run(ctx, stop))
 }
 
 func run(ctx context.Context, stop context.CancelFunc) int {
@@ -52,10 +48,8 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	)
 	if cfg.PostgresDSN != "" {
 		pool, err := postgres.OpenPoolWithOptions(ctx, cfg.PostgresDSN, postgres.PoolOptions{
-			MaxConns:          cfg.Runtime.Postgres.Pool.MaxConns,
-			MinConns:          cfg.Runtime.Postgres.Pool.MinConns,
-			MaxConnLifetime:   cfg.Runtime.Postgres.Pool.MaxConnLifetime,
-			MaxConnIdleTime:   cfg.Runtime.Postgres.Pool.MaxConnIdleTime,
+			MaxConns: cfg.Runtime.Postgres.Pool.MaxConns, MinConns: cfg.Runtime.Postgres.Pool.MinConns,
+			MaxConnLifetime: cfg.Runtime.Postgres.Pool.MaxConnLifetime, MaxConnIdleTime: cfg.Runtime.Postgres.Pool.MaxConnIdleTime,
 			HealthCheckPeriod: cfg.Runtime.Postgres.Pool.HealthCheckPeriod,
 		})
 		if err != nil {
@@ -85,14 +79,10 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	svcCore.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
 	svcCore.SetAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay)
 	svcCore.SetTimeoutConfig(roomsvc.TimeoutConfig{
-		OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
-		OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
-		ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
-		TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
-		Discard:         cfg.RoomTimeouts.Discard,
-		SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
+		OpeningDefault: cfg.RoomTimeouts.OpeningDefault, OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
+		ClaimWindow: cfg.RoomTimeouts.ClaimWindow, TsumoWindow: cfg.RoomTimeouts.TsumoWindow,
+		Discard: cfg.RoomTimeouts.Discard, SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 	})
-	// 占座机器人由本进程的 BotSupervisor 代为出牌；ADR-0037 描述的"后续补 supervisor"在此落地。
 	botSup := botsvc.NewBotSupervisor(svcCore)
 	svcCore.SetAfterCmdHook(botSup.AfterCmd)
 	svc := roomadapter.NewGRPCServer(svcCore, ev, gs, st, rcli)
@@ -104,7 +94,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	svc.SetIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {
 		svc.SetReady(false)
-		cli, err := clientv3.New(clientv3.Config{Endpoints: splitEndpoints(cfg.EtcdEndpoints), DialTimeout: 5 * time.Second})
+		cli, err := clientv3.New(clientv3.Config{Endpoints: cluster.ParseEndpoints(cfg.EtcdEndpoints), DialTimeout: 5 * time.Second})
 		if err != nil {
 			logx.Error(ctx, "房间服务 etcd 客户端初始化失败", "err", err.Error())
 			return 1
@@ -116,18 +106,32 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			advertiseAddr = cfg.ServerAddr
 		}
 		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindRoom, defaultRoomNodeID, cluster.NodeMeta{
-			AdvertiseAddr: advertiseAddr,
-			Version:       "phase3",
+			AdvertiseAddr: advertiseAddr, Version: "phase3",
 		}, 10*time.Second)
 		if err != nil {
 			logx.Error(ctx, "房间节点注册到 etcd 失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
-
+		// 每 10 秒上报活跃房间数，供 Lobby 负载均衡选节点。
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					_ = reg.UpdateMeta(ctx, cluster.KindRoom, cluster.NodeMeta{
+						AdvertiseAddr: advertiseAddr, Version: "phase3",
+						ActiveRooms: int32(svcCore.ActiveRoomCount()), //nolint:gosec // 房间数不超过 int32 范围
+					})
+				}
+			}
+		}()
 		if rcli != nil {
 			rt := cluster.NewEtcdRouter(cli, cfg.EtcdPrefix)
-			if err := recoverOwnedRooms(ctx, rt, defaultRoomNodeID, rcli, ev, gs, svcCore); err != nil {
+			if err := roomadapter.RecoverOwnedRooms(ctx, rt, defaultRoomNodeID, rcli, ev, gs, svcCore); err != nil {
 				logx.Error(ctx, "房间冷启动恢复失败", "err", err.Error())
 				return 1
 			}
@@ -146,10 +150,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		readiness = append(readiness, app.RedisReadinessProbe(rcli))
 	}
 	if pg != nil {
-		readiness = append(readiness, app.ReadinessProbe{
-			Name:  "postgres",
-			Check: pg.Ping,
-		})
+		readiness = append(readiness, app.ReadinessProbe{Name: "postgres", Check: pg.Ping})
 	}
 	obsStop, err := app.StartObsHTTP(cfg.ObsAddr, readiness...)
 	if err != nil {
@@ -163,122 +164,4 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		return 1
 	}
 	return 0
-}
-
-// recoverOwnedRooms 从 etcd/Redis/Postgres 恢复本节点拥有的房间。
-// 并发度上限 recoverConcurrency，整体超时 recoverTimeout；超时后降级上线（已恢复的房间继续运行，未完成的跳过）。
-const (
-	recoverConcurrency = 8
-	recoverTimeout     = 120 * time.Second
-)
-
-func recoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID string, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service) error {
-	if rt == nil || rcli == nil || svc == nil {
-		return nil
-	}
-	roomIDs, err := rt.ListRoomsByOwner(ctx, rnodeID)
-	if err != nil {
-		return err
-	}
-	recoverCtx, cancel := context.WithTimeout(ctx, recoverTimeout)
-	defer cancel()
-
-	sem := semaphore.NewWeighted(recoverConcurrency)
-	eg, egCtx := errgroup.WithContext(recoverCtx)
-	for _, rid := range roomIDs {
-		roomID := rid
-		if err := sem.Acquire(egCtx, 1); err != nil {
-			// 整体超时，降级上线：终止剩余恢复，已完成的房间继续运行。
-			logx.Warn(ctx, "房间冷启动恢复超时，降级上线", "remaining", len(roomIDs), "err", err.Error())
-			break
-		}
-		eg.Go(func() error {
-			defer sem.Release(1)
-			return recoverSingleRoom(egCtx, rcli, ev, gs, svc, roomID)
-		})
-	}
-	return eg.Wait()
-}
-
-// recoverSingleRoom 恢复单个房间的状态；失败时返回 error 终止整批恢复。
-func recoverSingleRoom(ctx context.Context, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service, roomID string) error {
-	var (
-		players   []string
-		state     = "waiting"
-		roundJSON []byte
-	)
-	if meta, ok, err := rcli.GetRoomSnapMeta(ctx, roomID); err != nil {
-		return err
-	} else if ok {
-		players = append(players, meta.PlayerIDs...)
-		if strings.TrimSpace(meta.State) != "" {
-			state = meta.State
-		}
-		if meta.RoundJSON != "" {
-			roundJSON = []byte(meta.RoundJSON)
-		}
-	}
-	if gs != nil {
-		summary, err := gs.GetGameSummary(ctx, roomID)
-		if err != nil && !errors.Is(err, postgres.ErrGameSummaryNotFound) {
-			return err
-		}
-		if err == nil {
-			if len(summary.PlayerIDs) > 0 {
-				players = append([]string(nil), summary.PlayerIDs...)
-			}
-			if summary.EndedAt != nil {
-				state = "closed"
-			}
-		}
-	}
-	if ev != nil {
-		rows, err := ev.ListEventsAfter(ctx, roomID, 0)
-		if err != nil {
-			return err
-		}
-		if derived := deriveRecoveredState(state, rows); derived != "" {
-			state = derived
-		}
-	}
-	if state == "closed" || len(players) == 0 {
-		return nil
-	}
-	if state == "playing" && len(roundJSON) == 0 {
-		state = "ready"
-	}
-	if err := svc.RecoverRoom(roomID, players, state, roundJSON); err != nil {
-		if errors.Is(err, roomsvc.ErrRoundPersistUnsupportedSchema) {
-			state = "ready"
-			roundJSON = nil
-			return svc.RecoverRoom(roomID, players, state, roundJSON)
-		}
-		return err
-	}
-	return nil
-}
-
-func splitEndpoints(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
-}
-
-func deriveRecoveredState(current string, rows []postgres.RoomEventRow) string {
-	state := current
-	for _, row := range rows {
-		switch row.Kind {
-		case string(roomsvc.KindOpeningDone), string(roomsvc.KindStartGame), string(roomsvc.KindDrawTile), string(roomsvc.KindAction):
-			state = "playing"
-		case string(roomsvc.KindSettlement):
-			state = "closed"
-		}
-	}
-	return state
 }
