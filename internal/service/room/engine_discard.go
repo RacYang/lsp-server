@@ -318,20 +318,16 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		if err != nil {
 			return nil, err
 		}
-		out := []Notification{{
-			Kind:       KindDrawTile,
-			Payload:    drawPayload,
-			TargetSeat: BroadcastSeat,
-			Privacy:    PrivacyPerSeat,
-			Project: func(target Seat) []byte {
-				visible := target == turn
-				payload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, visible)
-				if err != nil {
-					return drawPayload
-				}
-				return payload
-			},
-		}}
+		hiddenPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, false)
+		if err != nil {
+			return nil, err
+		}
+		out := perSeatNotifications(KindDrawTile, func(target Seat) []byte {
+			if target == turn {
+				return drawPayload
+			}
+			return hiddenPayload
+		})
 		choice := &clientv1.ActionNotify{
 			SeatIndex: seatIndex,
 			Action:    "tsumo_choice",
@@ -354,20 +350,16 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := []Notification{{
-		Kind:       KindDrawTile,
-		Payload:    drawPayload,
-		TargetSeat: BroadcastSeat,
-		Privacy:    PrivacyPerSeat,
-		Project: func(target Seat) []byte {
-			visible := target == turn
-			payload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, visible)
-			if err != nil {
-				return drawPayload
-			}
-			return payload
-		},
-	}}
+	hiddenPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, false)
+	if err != nil {
+		return nil, err
+	}
+	out := perSeatNotifications(KindDrawTile, func(target Seat) []byte {
+		if target == turn {
+			return drawPayload
+		}
+		return hiddenPayload
+	})
 	return out, nil
 }
 

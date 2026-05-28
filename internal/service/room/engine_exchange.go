@@ -103,11 +103,11 @@ func (e *Engine) applyOpeningAction(rs *RoundState, seat Seat, action rules.Open
 func (e *Engine) projectOpeningResult(ctx context.Context, rs *RoundState, result rules.OpeningResult) ([]Notification, error) {
 	out := make([]Notification, 0, 2)
 	for _, projection := range result.Notifications {
-		notification, err := rs.openingProjectionNotification(projection, result.NextStep)
+		notifications, err := rs.openingProjectionNotifications(projection, result.NextStep)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, notification)
+		out = append(out, notifications...)
 	}
 	if result.AllOpeningComplete {
 		next, err := e.completeOpening(ctx, rs)
@@ -126,7 +126,7 @@ func (e *Engine) projectOpeningResult(ctx context.Context, rs *RoundState, resul
 	return out, nil
 }
 
-func (rs *RoundState) openingProjectionNotification(projection rules.OpeningNotification, nextStep *rules.OpeningStep) (Notification, error) {
+func (rs *RoundState) openingProjectionNotifications(projection rules.OpeningNotification, nextStep *rules.OpeningStep) ([]Notification, error) {
 	progress := rs.roundProgress()
 	if nextStep == nil {
 		progress = rs.drawTransitionProgress()
@@ -134,26 +134,24 @@ func (rs *RoundState) openingProjectionNotification(projection rules.OpeningNoti
 	return openingProjectionToNotification(projection, progress)
 }
 
-func openingProjectionToNotification(projection rules.OpeningNotification, progress RoundProgress) (Notification, error) {
+func openingProjectionToNotification(projection rules.OpeningNotification, progress RoundProgress) ([]Notification, error) {
 	payload, err := marshalOpeningProjection(projection.Done, progress, -1)
 	if err != nil {
-		return Notification{}, err
+		return nil, err
 	}
-	notification := Notification{Kind: KindOpeningDone, Payload: payload, TargetSeat: BroadcastSeat}
 	if len(projection.Done.LocalTiles) > 0 {
-		notification.Privacy = PrivacyPerSeat
-		notification.Project = func(target Seat) []byte {
+		return perSeatNotifications(KindOpeningDone, func(target Seat) []byte {
 			if !target.Valid() {
-				return nil
+				return payload
 			}
 			projected, err := marshalOpeningProjection(projection.Done, progress, target)
 			if err != nil {
-				return nil
+				return payload
 			}
 			return projected
-		}
+		}), nil
 	}
-	return notification, nil
+	return []Notification{{Kind: KindOpeningDone, Payload: payload, TargetSeat: BroadcastSeat}}, nil
 }
 
 func marshalOpeningProjection(done rules.OpeningDoneProjection, progress RoundProgress, target Seat) ([]byte, error) {

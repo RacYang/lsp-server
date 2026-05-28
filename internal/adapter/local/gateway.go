@@ -359,22 +359,6 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.
 	if encErr != nil {
 		return
 	}
-	if notification.Privacy == roomsvc.PrivacyPerSeat && notification.Project != nil {
-		players, _, _, ok := g.rooms.RoomSnapshot(roomID)
-		if !ok {
-			return
-		}
-		for seat := 0; seat < len(players) && seat < 4; seat++ {
-			projected := notification.Project(roomsvc.Seat(seat))
-			if len(projected) == 0 {
-				continue
-			}
-			if enc, err := protocol.Encode(outMsgID, projected); err == nil {
-				g.hub.SendToUser(players[seat], enc)
-			}
-		}
-		return
-	}
 	if notification.TargetSeat == roomsvc.BroadcastSeat {
 		g.hub.Broadcast(roomID, encoded)
 		return

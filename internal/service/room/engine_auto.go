@@ -204,11 +204,11 @@ func autoOpeningNotifications(result rules.OpeningResult) ([]Notification, error
 	progress := autoOpeningProgress(result.NextStep)
 	out := make([]Notification, 0, len(result.Notifications))
 	for _, projection := range result.Notifications {
-		notification, err := openingProjectionToNotification(projection, progress)
+		notifications, err := openingProjectionToNotification(projection, progress)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, notification)
+		out = append(out, notifications...)
 	}
 	return out, nil
 }

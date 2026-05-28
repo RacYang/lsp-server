@@ -723,16 +723,17 @@ func TestDrawTileNotificationProjectsTileOnlyToActor(t *testing.T) {
 	e := NewEngine("sichuan_xuezhandaodi_huansanzhang")
 	notifs, err := e.drawForCurrentTurn(rs)
 	require.NoError(t, err)
-	require.Len(t, notifs, 1)
-	require.Equal(t, PrivacyPerSeat, notifs[0].Privacy)
-	require.NotNil(t, notifs[0].Project)
+	// 引擎已展开为 4 条独立通知（每座位一条），不再使用 Project 函数
+	require.Len(t, notifs, 4)
 
+	// 摸牌方（座位 1）应看到真实牌面
 	var actorEnv clientv1.Envelope
-	require.NoError(t, proto.Unmarshal(notifs[0].Project(1), &actorEnv))
+	require.NoError(t, proto.Unmarshal(notifs[1].Payload, &actorEnv))
 	require.Equal(t, "p7", actorEnv.GetDrawTile().Tile)
 
+	// 其他座位（如座位 0）不应看到真实牌面
 	var otherEnv clientv1.Envelope
-	require.NoError(t, proto.Unmarshal(notifs[0].Project(0), &otherEnv))
+	require.NoError(t, proto.Unmarshal(notifs[0].Payload, &otherEnv))
 	require.Empty(t, otherEnv.GetDrawTile().Tile)
 }
 
@@ -774,7 +775,8 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 	notifs, err = e.ApplyGang(context.Background(), rs, 2, "m3")
 	require.NoError(t, err)
 	require.False(t, rs.claimWindowOpen)
-	require.Len(t, notifs, 2)
+	// 明杠 1 条（广播）+ 摸牌展开为 4 条 = 5 条通知
+	require.Len(t, notifs, 5)
 	require.Equal(t, Seat(2), rs.turn)
 	require.Len(t, rs.meldInfosBySeat()[2].Melds, 1)
 	require.Equal(t, "zhi_gang", rs.meldInfosBySeat()[2].Melds[0].Kind)
@@ -799,15 +801,16 @@ func TestApplyAnGangRecordsConcealedMeldAndHidesActionTile(t *testing.T) {
 	}
 	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyGang(context.Background(), rs, 0, "m1")
 	require.NoError(t, err)
-	require.Len(t, notifs, 2)
+	// 暗杠展开为 4 条（每座位） + 摸牌展开为 4 条 = 8 条通知
+	require.Len(t, notifs, 8)
 	require.Equal(t, rules.GangKindAn, rs.gangRecords[0].Kind)
 	info := rs.meldInfosBySeat()[0].Melds[0]
 	require.Equal(t, "an_gang", info.Kind)
 	require.True(t, info.Concealed)
-	require.Equal(t, PrivacyPerSeat, notifs[0].Privacy)
 
+	// 非当事座位（座位 1）不应看到暗杠牌面（前 4 条是 an_gang 通知）
 	var other clientv1.Envelope
-	require.NoError(t, proto.Unmarshal(notifs[0].Project(1), &other))
+	require.NoError(t, proto.Unmarshal(notifs[1].Payload, &other))
 	require.Empty(t, other.GetAction().Tile)
 	require.Empty(t, other.GetAction().GetDetail().Tile)
 }
@@ -1197,7 +1200,8 @@ func TestPlayerJourney_D2_4_DiscardTimeoutSurrenders(t *testing.T) {
 	notifs, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyTimeout(context.Background(), rs)
 	require.NoError(t, err)
 	require.True(t, rs.isSurrendered(0))
-	require.Len(t, notifs, 1)
+	// 摸牌展开为 4 条（每座位一条）
+	require.Len(t, notifs, 4)
 	require.Equal(t, Seat(1), rs.turn)
 	for _, notification := range notifs {
 		var env clientv1.Envelope
@@ -1230,7 +1234,8 @@ func TestServiceAutoTimeoutSurrendersThroughActor(t *testing.T) {
 	require.NoError(t, svc.RecoverRoom("r-service-timeout", []string{"u0", "u1", "u2", "u3"}, "playing", data))
 	notifs, err := svc.AutoTimeout(context.Background(), "r-service-timeout")
 	require.NoError(t, err)
-	require.Len(t, notifs, 1)
+	// 摸牌展开为 4 条（每座位一条）
+	require.Len(t, notifs, 4)
 	a := svc.getActor("r-service-timeout")
 	require.NotNil(t, a)
 	require.True(t, a.room.Surrendered[0])
@@ -1411,7 +1416,8 @@ func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
 
 	notifs, err := a.doGang("u0", "m1")
 	require.NoError(t, err)
-	require.Len(t, notifs, 2)
+	// 暗杠展开为 4 条 + 结算 1 条 = 5 条（荒牌时无摸牌通知）
+	require.Len(t, notifs, 5)
 	require.Nil(t, a.round)
 	require.Equal(t, domainroom.StateClosed, r.FSM.State())
 }

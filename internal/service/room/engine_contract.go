@@ -51,6 +51,17 @@ func (rs *RoundState) totalScores() []*rules.SeatScore {
 	return out
 }
 
+// perSeatNotifications 将一个"按座位差异化"的通知展开为每座位一条。
+// payloadForSeat 接收目标座位，返回该座位应收到的 Payload；
+// 相邻座位若 Payload 相同，仍各发独立通知以维持统一的下游模型。
+func perSeatNotifications(kind Kind, payloadForSeat func(Seat) []byte) []Notification {
+	out := make([]Notification, 4)
+	for seat := Seat(0); seat < 4; seat++ {
+		out[seat] = Notification{Kind: kind, Payload: payloadForSeat(seat), TargetSeat: seat}
+	}
+	return out
+}
+
 func (rs *RoundState) roundProgress() RoundProgress {
 	return ProjectRoundState(rs).Progress
 }

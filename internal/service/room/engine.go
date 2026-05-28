@@ -34,23 +34,14 @@ const (
 const defaultExchangeDirection int32 = 3
 
 // Notification 为 room 服务产出的通知载荷；payload 已是 client.v1.Envelope 的序列化结果。
+// Notification 是房间引擎向外投递的单条通知；TargetSeat 为 BroadcastSeat 时广播全桌。
+// 每条 Notification 携带完整、独立的 Payload，不再含 Project 函数或 Privacy 字段——
+// 需要差异化投影（如摸牌私密牌面、暗杠）时，引擎在生成时直接展开为每座位一条通知。
 type Notification struct {
 	Kind       Kind
 	Payload    []byte
 	TargetSeat Seat
-	Privacy    NotificationPrivacy
-	Project    func(Seat) []byte
 }
-
-// NotificationPrivacy 标识通知是否需要按座位投影后下发。
-type NotificationPrivacy int
-
-const (
-	// PrivacyPublic 表示 payload 可原样广播给全桌。
-	PrivacyPublic NotificationPrivacy = iota
-	// PrivacyPerSeat 表示 payload 必须经 Project 按目标座位改写。
-	PrivacyPerSeat
-)
 
 // Engine 负责在单房上下文内生成确定性的血战流程通知。
 //

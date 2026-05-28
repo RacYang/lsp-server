@@ -80,7 +80,7 @@ func TestLocalRoomGatewayEnsureSubscriptionNoOp(t *testing.T) {
 	require.NoError(t, g.EnsureRoomEventSubscription(context.Background(), "r", "c"))
 }
 
-func TestLocalRoomGatewaySendsPerSeatProjectedNotification(t *testing.T) {
+func TestLocalRoomGatewaySendsPerSeatNotifications(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	svc := roomsvc.NewService(roomsvc.NewLobby())
@@ -89,22 +89,18 @@ func TestLocalRoomGatewaySendsPerSeatProjectedNotification(t *testing.T) {
 		require.NoError(t, err)
 	}
 	g := NewLocalRoomGateway(svc, session.NewHub(), nil)
-	payload, err := proto.Marshal(&clientv1.Envelope{
-		Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: 0, Tile: "m1"}},
-	})
-	require.NoError(t, err)
-	g.sendNotification("project-room", roomsvc.Notification{
-		Kind:       roomsvc.KindDrawTile,
-		Payload:    payload,
-		TargetSeat: roomsvc.BroadcastSeat,
-		Privacy:    roomsvc.PrivacyPerSeat,
-		Project: func(seat roomsvc.Seat) []byte {
-			projected, _ := proto.Marshal(&clientv1.Envelope{
-				Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: int32(seat), Tile: ""}},
-			})
-			return projected
-		},
-	})
+	// 引擎已在生成时展开为每座位一条独立通知；此处模拟四条逐一调用
+	for seat := roomsvc.Seat(0); seat < 4; seat++ {
+		payload, err := proto.Marshal(&clientv1.Envelope{
+			Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: int32(seat), Tile: ""}},
+		})
+		require.NoError(t, err)
+		g.sendNotification("project-room", roomsvc.Notification{
+			Kind:       roomsvc.KindDrawTile,
+			Payload:    payload,
+			TargetSeat: seat,
+		})
+	}
 }
 
 func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {

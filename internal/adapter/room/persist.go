@@ -14,8 +14,8 @@ import (
 )
 
 // PersistPublishAndFinalize 持久化通知列表，打幂等戳，再通过 Redis RPUSH 发布事件。
+// 引擎已在生成时展开 per-seat 通知（每条携带独立 Payload），此处无须再做展开。
 func (s *GRPCServer) PersistPublishAndFinalize(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification) error {
-	notifications = expandPerSeatNotifications(notifications)
 	events, err := s.persistNotifications(ctx, roomID, notifications)
 	if err != nil {
 		return err
@@ -85,25 +85,6 @@ func (s *GRPCServer) persistNotifications(ctx context.Context, roomID string, no
 		out = append(out, persistedEvent{cursor: cursors[idx], evt: evt})
 	}
 	return out, nil
-}
-
-func expandPerSeatNotifications(notifications []roomsvc.Notification) []roomsvc.Notification {
-	out := make([]roomsvc.Notification, 0, len(notifications))
-	for _, notification := range notifications {
-		if notification.Privacy != roomsvc.PrivacyPerSeat || notification.Project == nil {
-			out = append(out, notification)
-			continue
-		}
-		for seat := 0; seat < 4; seat++ {
-			projected := notification
-			projected.TargetSeat = roomsvc.Seat(seat)
-			projected.Payload = notification.Project(roomsvc.Seat(seat))
-			projected.Privacy = roomsvc.PrivacyPublic
-			projected.Project = nil
-			out = append(out, projected)
-		}
-	}
-	return out
 }
 
 func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification roomsvc.Notification, evt *svcv1.RoomServiceStreamEventsResponse, cursor string) {

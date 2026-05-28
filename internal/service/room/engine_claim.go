@@ -267,28 +267,29 @@ func (e *Engine) finishGangAction(rs *RoundState, seat Seat, gangTile tile.Tile,
 	if err != nil {
 		return nil, err
 	}
-	notification := Notification{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}
+	var out []Notification
 	if meldKind == "an_gang" {
-		notification.Privacy = PrivacyPerSeat
-		notification.Project = func(target Seat) []byte {
-			projected := proto.Clone(action).(*clientv1.ActionNotify)
-			if target != seat {
-				projected.Tile = ""
-				if projected.Detail != nil {
-					projected.Detail.Tile = ""
-				}
-			}
-			payload, err := marshalEnvelope(&clientv1.Envelope{
-				ReqId: fmt.Sprintf("gang-%d", rs.step),
-				Body:  &clientv1.Envelope_Action{Action: projected},
-			})
-			if err != nil {
-				return nil
-			}
-			return payload
+		hiddenAction := proto.Clone(action).(*clientv1.ActionNotify)
+		hiddenAction.Tile = ""
+		if hiddenAction.Detail != nil {
+			hiddenAction.Detail.Tile = ""
 		}
+		hiddenPayload, err := marshalEnvelope(&clientv1.Envelope{
+			ReqId: fmt.Sprintf("gang-%d", rs.step),
+			Body:  &clientv1.Envelope_Action{Action: hiddenAction},
+		})
+		if err != nil {
+			return nil, err
+		}
+		out = perSeatNotifications(KindAction, func(target Seat) []byte {
+			if target == seat {
+				return payload
+			}
+			return hiddenPayload
+		})
+	} else {
+		out = []Notification{{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}}
 	}
-	out := []Notification{notification}
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {
 		return nil, err
