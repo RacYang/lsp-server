@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
@@ -30,9 +29,9 @@ const (
 // BuildSettlement 生成当前四川血战子集的结算摘要。
 // 当前结算先汇总房间引擎已经计算好的胡牌与杠分，再补充查花猪、查大叫等局末罚分。
 // 后续扩展番种或包牌规则时，应优先扩展规则上下文与结构化明细，而不是在传输层拼文本。
-func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32, scoreEvents []rules.ScoreEvent, winnerSeats []domainroom.Seat) ([]*clientv1.SeatScore, []*clientv1.PenaltyItem, []*clientv1.WinnerBreakdown, string) {
-	seatScores := make([]*clientv1.SeatScore, 0, 4)
-	penalties := make([]*clientv1.PenaltyItem, 0)
+func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32, scoreEvents []rules.ScoreEvent, winnerSeats []domainroom.Seat) ([]*rules.SeatScore, []*rules.PenaltyItem, []*rules.WinnerBreakdown, string) {
+	seatScores := make([]*rules.SeatScore, 0, 4)
+	penalties := make([]*rules.PenaltyItem, 0)
 	balances := foldScoreEvents(scoreEvents)
 	detail := "荒牌"
 	winners := map[domainroom.Seat]struct{}{}
@@ -68,9 +67,9 @@ func BuildSettlement(playerIDs [4]string, hands []*hand.Hand, queBySeat []int32,
 			}
 		}
 		appendRefundPenalties(&penalties, balances, scoreEvents, seat, skipped, len(winners) == 0 && !isTing(hands[seat]))
-		seatScores = append(seatScores, &clientv1.SeatScore{
+		seatScores = append(seatScores, &rules.SeatScore{
 			SeatIndex: seatIndex,
-			UserId:    playerIDs[seat],
+			UserID:    playerIDs[seat],
 			TotalFan:  balances[seat],
 			Skipped:   skipped,
 		})
@@ -104,8 +103,8 @@ func foldScoreEvents(scoreEvents []rules.ScoreEvent) []int32 {
 	return balances
 }
 
-func appendPenalty(penalties *[]*clientv1.PenaltyItem, balances []int32, reason string, fromSeat, toSeat, amount int32) {
-	*penalties = append(*penalties, &clientv1.PenaltyItem{
+func appendPenalty(penalties *[]*rules.PenaltyItem, balances []int32, reason string, fromSeat, toSeat, amount int32) {
+	*penalties = append(*penalties, &rules.PenaltyItem{
 		Reason:   reason,
 		FromSeat: fromSeat,
 		ToSeat:   toSeat,
@@ -119,7 +118,7 @@ func appendPenalty(penalties *[]*clientv1.PenaltyItem, balances []int32, reason 
 	}
 }
 
-func appendRefundPenalties(penalties *[]*clientv1.PenaltyItem, balances []int32, scoreEvents []rules.ScoreEvent, seat int, skipped, noTingDraw bool) {
+func appendRefundPenalties(penalties *[]*rules.PenaltyItem, balances []int32, scoreEvents []rules.ScoreEvent, seat int, skipped, noTingDraw bool) {
 	if !skipped && !noTingDraw {
 		return
 	}
@@ -157,8 +156,8 @@ func isTing(h *hand.Hand) bool {
 	return hu.IsTing(h.Counts())
 }
 
-func buildWinnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, winners map[domainroom.Seat]struct{}) []*clientv1.WinnerBreakdown {
-	bySeat := make(map[domainroom.Seat]*clientv1.WinnerBreakdown, len(winners))
+func buildWinnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, winners map[domainroom.Seat]struct{}) []*rules.WinnerBreakdown {
+	bySeat := make(map[domainroom.Seat]*rules.WinnerBreakdown, len(winners))
 	seenName := make(map[domainroom.Seat]map[string]struct{}, len(winners))
 	for _, entry := range scoreEvents {
 		if entry.WinnerSeat < 0 || entry.WinnerSeat > 3 {
@@ -170,7 +169,7 @@ func buildWinnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, 
 		b := bySeat[entry.WinnerSeat]
 		if b == nil {
 			seatIndex := entry.WinnerSeat.Proto()
-			b = &clientv1.WinnerBreakdown{SeatIndex: seatIndex, UserId: playerIDs[entry.WinnerSeat]}
+			b = &rules.WinnerBreakdown{SeatIndex: seatIndex, UserID: playerIDs[entry.WinnerSeat]}
 			bySeat[entry.WinnerSeat] = b
 			seenName[entry.WinnerSeat] = make(map[string]struct{})
 		}
@@ -188,7 +187,7 @@ func buildWinnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, 
 			b.FanNames = append(b.FanNames, name)
 		}
 	}
-	out := make([]*clientv1.WinnerBreakdown, 0, len(winners))
+	out := make([]*rules.WinnerBreakdown, 0, len(winners))
 	for seat := 0; seat < 4; seat++ {
 		if b := bySeat[domainroom.SeatFromInt(seat)]; b != nil {
 			out = append(out, b)

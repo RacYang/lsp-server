@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
@@ -116,8 +117,8 @@ func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, n
 		}
 	}
 	if notification.Kind == roomsvc.KindSettlement && s.st != nil && evt.GetSettlement() != nil {
-		// evt.GetSettlement() 已是 *clientv1.SettlementNotify，直接持久化。
-		if err := s.st.AppendSettlement(ctx, evt.GetSettlement()); err != nil {
+		rec := buildSettlementRecord(roomID, notification.Payload, evt.GetSettlement())
+		if err := s.st.AppendSettlement(ctx, rec); err != nil {
 			logx.Error(logx.WithRoomID(ctx, roomID), "结算数据持久化失败", "err", err.Error())
 		}
 	}
@@ -132,4 +133,25 @@ func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*svcv1.RoomServi
 	n := roomsvc.Notification{Kind: roomsvc.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...), TargetSeat: roomsvc.Seat(row.TargetSeat)}
 	cur := fmt.Sprintf("%s:%d", roomID, row.Seq)
 	return mapNotificationToEvent(roomID, cur, n)
+}
+
+// buildSettlementRecord 将传输层结算 proto 提取为存储层内部记录；
+// payload 为已序列化的 Envelope 字节，供 GetLatestSettlement 原样返回给调用方直接推送。
+func buildSettlementRecord(roomID string, payload []byte, s *clientv1.SettlementNotify) postgres.SettlementRecord {
+	rec := postgres.SettlementRecord{
+		RoomID:        roomID,
+		WinnerUserIDs: s.GetWinnerUserIds(),
+		TotalFan:      s.GetTotalFan(),
+		DetailText:    s.GetDetailText(),
+		Payload:       payload,
+	}
+	if ri := s.GetRoundIndex(); ri != 0 {
+		v := ri
+		rec.RoundIndex = &v
+	}
+	if hi := s.GetHandIndex(); hi != 0 {
+		v := hi
+		rec.HandIndex = &v
+	}
+	return rec
 }

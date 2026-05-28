@@ -38,10 +38,10 @@ func TestBuildSettlementMultiWinnerAndPenalties(t *testing.T) {
 	var sawHuaZhu bool
 	var sawChaDaJiao bool
 	for _, p := range penalties {
-		if p.GetReason() == "查花猪" {
+		if p.Reason == "查花猪" {
 			sawHuaZhu = true
 		}
-		if p.GetReason() == "查大叫" {
+		if p.Reason == "查大叫" {
 			sawChaDaJiao = true
 		}
 	}
@@ -62,12 +62,12 @@ func TestBuildSettlementRefundsGangIncome(t *testing.T) {
 	scoreEvents := []rules.ScoreEvent{{Reason: ReasonGangMing, FromSeat: 0, ToSeat: 1, Amount: 1, WinnerSeat: domainroom.SeatInvalid}}
 
 	scores, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, scoreEvents, nil)
-	if scores[1].GetTotalFan() >= 1 {
+	if scores[1].TotalFan >= 1 {
 		t.Fatalf("expected refund to reduce seat score, got %+v", scores[1])
 	}
 	var sawRefund bool
 	for _, penalty := range penalties {
-		if penalty.GetReason() == ReasonRefundMing {
+		if penalty.Reason == ReasonRefundMing {
 			sawRefund = true
 		}
 	}
@@ -94,17 +94,17 @@ func TestBuildSettlementWinnerBreakdownBaoPai(t *testing.T) {
 	if len(breakdowns) != 1 {
 		t.Fatalf("breakdowns len = %d", len(breakdowns))
 	}
-	if breakdowns[0].GetFan() != 3 {
-		t.Fatalf("fan = %d", breakdowns[0].GetFan())
+	if breakdowns[0].Fan != 3 {
+		t.Fatalf("fan = %d", breakdowns[0].Fan)
 	}
 	found := false
-	for _, name := range breakdowns[0].GetFanNames() {
+	for _, name := range breakdowns[0].FanNames {
 		if name == ReasonBaoPai {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("missing bao pai fan name: %+v", breakdowns[0].GetFanNames())
+		t.Fatalf("missing bao pai fan name: %+v", breakdowns[0].FanNames)
 	}
 }
 

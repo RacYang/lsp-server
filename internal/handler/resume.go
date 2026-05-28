@@ -9,8 +9,10 @@ type ResumeResult struct {
 	Resumed             bool
 	Snapshot            *clientv1.SnapshotNotify
 	SnapshotSinceCursor string
-	Settlement          *clientv1.SettlementNotify
-	Redirect            *clientv1.RouteRedirectNotify
+	// SettlementPayload 是已序列化的 Envelope proto 字节（可能为空）；
+	// 仅在房间已结算但客户端重连时填充，供 handler 直接推送给客户端，无须重新序列化。
+	SettlementPayload []byte
+	Redirect          *clientv1.RouteRedirectNotify
 }
 
 // ResumeError 为恢复链路上的显式业务错误（而非底层传输故障）。

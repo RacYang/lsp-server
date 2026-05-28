@@ -10,9 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pashagolub/pgxmock/v3"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
-
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/store/postgres"
 )
 
@@ -200,25 +197,27 @@ func TestSettlementStoreAppendAndHas(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { mock.Close() })
 
-	settlement := &clientv1.SettlementNotify{
-		RoomId:        "r1",
-		WinnerUserIds: []string{"u1"},
+	roundIdx := int32(1)
+	handIdx := int32(2)
+	payload := []byte("serialized-envelope-bytes")
+	rec := postgres.SettlementRecord{
+		RoomID:        "r1",
+		WinnerUserIDs: []string{"u1"},
 		TotalFan:      8,
 		DetailText:    "detail",
-		RoundIndex:    1,
-		HandIndex:     2,
+		Payload:       payload,
+		RoundIndex:    &roundIdx,
+		HandIndex:     &handIdx,
 	}
-	payload, err := proto.Marshal(settlement)
-	require.NoError(t, err)
 	mock.ExpectExec("INSERT INTO settlements").
-		WithArgs("r1", []string{"u1"}, int32(8), "detail", payload, int32(1), int32(2)).
+		WithArgs("r1", []string{"u1"}, int32(8), "detail", payload, &roundIdx, &handIdx).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectQuery("SELECT COUNT").
 		WithArgs("r1").
 		WillReturnRows(pgxmock.NewRows([]string{"c"}).AddRow(1))
 
 	s := postgres.NewSettlementStore(mock)
-	require.NoError(t, s.AppendSettlement(context.Background(), settlement))
+	require.NoError(t, s.AppendSettlement(context.Background(), rec))
 	ok, err := s.HasSettlement(context.Background(), "r1")
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -228,7 +227,7 @@ func TestSettlementStoreAppendAndHas(t *testing.T) {
 func TestSettlementStoreNilReceiver(t *testing.T) {
 	t.Parallel()
 	var s *postgres.SettlementStore
-	require.Error(t, s.AppendSettlement(context.Background(), &clientv1.SettlementNotify{RoomId: "r"}))
+	require.Error(t, s.AppendSettlement(context.Background(), postgres.SettlementRecord{RoomID: "r"}))
 	_, err := s.HasSettlement(context.Background(), "r")
 	require.Error(t, err)
 }
@@ -239,22 +238,15 @@ func TestSettlementStoreGetLatestSettlement(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { mock.Close() })
 
-	want := &clientv1.SettlementNotify{
-		RoomId:        "r2",
-		WinnerUserIds: []string{"u2"},
-		TotalFan:      4,
-		DetailText:    "latest",
-	}
-	payload, err := proto.Marshal(want)
-	require.NoError(t, err)
+	wantPayload := []byte("settlement-envelope-bytes")
 	mock.ExpectQuery("SELECT payload").
 		WithArgs("r2").
-		WillReturnRows(pgxmock.NewRows([]string{"payload"}).AddRow(payload))
+		WillReturnRows(pgxmock.NewRows([]string{"payload"}).AddRow(wantPayload))
 
 	s := postgres.NewSettlementStore(mock)
 	got, err := s.GetLatestSettlement(context.Background(), "r2")
 	require.NoError(t, err)
-	require.True(t, proto.Equal(want, got))
+	require.Equal(t, wantPayload, got)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

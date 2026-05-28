@@ -96,10 +96,10 @@ func TestChaDaJiaoYAMLFixtures(t *testing.T) {
 			var sawSeatPenalty bool
 			var sawReason bool
 			for _, penalty := range penalties {
-				if penalty.GetFromSeat() == 0 && penalty.GetReason() == ReasonChaDaJiao {
+				if penalty.FromSeat == 0 && penalty.Reason == ReasonChaDaJiao {
 					sawSeatPenalty = true
 				}
-				if tc.ExpectReason != "" && penalty.GetFromSeat() == 0 && penalty.GetReason() == tc.ExpectReason {
+				if tc.ExpectReason != "" && penalty.FromSeat == 0 && penalty.Reason == tc.ExpectReason {
 					sawReason = true
 				}
 			}
@@ -165,10 +165,10 @@ func TestGangRefundYAMLFixtures(t *testing.T) {
 			}
 			_, penalties, _, _ := BuildSettlement(playerIDs, hands, queBySeat, scoreEvents, fixtureSeats(winners))
 			for _, penalty := range penalties {
-				if penalty.GetReason() == tc.ExpectPenalty.Reason &&
-					penalty.GetFromSeat() == tc.ExpectPenalty.From &&
-					penalty.GetToSeat() == tc.ExpectPenalty.To &&
-					penalty.GetAmount() == tc.ExpectPenalty.Amount {
+				if penalty.Reason == tc.ExpectPenalty.Reason &&
+					penalty.FromSeat == tc.ExpectPenalty.From &&
+					penalty.ToSeat == tc.ExpectPenalty.To &&
+					penalty.Amount == tc.ExpectPenalty.Amount {
 					return
 				}
 			}

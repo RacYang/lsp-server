@@ -108,7 +108,7 @@ func (g *remoteRoomGateway) loadSettlementFallback(ctx context.Context, userID, 
 	if g == nil || g.settlementStore == nil || roomID == "" {
 		return nil, false, nil
 	}
-	settlement, err := g.settlementStore.GetLatestSettlement(ctx, roomID)
+	settlementPayload, err := g.settlementStore.GetLatestSettlement(ctx, roomID)
 	if err != nil {
 		if errors.Is(err, postgres.ErrSettlementNotFound) {
 			return nil, false, nil
@@ -116,9 +116,9 @@ func (g *remoteRoomGateway) loadSettlementFallback(ctx context.Context, userID, 
 		return nil, false, err
 	}
 	return &handler.ResumeResult{
-		UserID:     userID,
-		RoomID:     roomID,
-		Resumed:    false,
-		Settlement: settlement,
+		UserID:            userID,
+		RoomID:            roomID,
+		Resumed:           false,
+		SettlementPayload: settlementPayload,
 	}, true, nil
 }

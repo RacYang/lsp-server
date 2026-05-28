@@ -4,7 +4,6 @@ package jingji
 import (
 	"context"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/hu"
@@ -169,7 +168,7 @@ func flowerCount(sc rules.ScoreContext, seat domainroom.Seat) int {
 	return n
 }
 
-func defaultSeatScores(playerIDs [4]string, scoreEvents []rules.ScoreEvent) []*clientv1.SeatScore {
+func defaultSeatScores(playerIDs [4]string, scoreEvents []rules.ScoreEvent) []*rules.SeatScore {
 	balances := make([]int32, 4)
 	for _, entry := range scoreEvents {
 		if entry.Amount <= 0 {
@@ -182,11 +181,11 @@ func defaultSeatScores(playerIDs [4]string, scoreEvents []rules.ScoreEvent) []*c
 			balances[entry.ToSeat] += entry.Amount
 		}
 	}
-	out := make([]*clientv1.SeatScore, 0, 4)
+	out := make([]*rules.SeatScore, 0, 4)
 	for seat, total := range balances {
-		out = append(out, &clientv1.SeatScore{
+		out = append(out, &rules.SeatScore{
 			SeatIndex: int32(seat), //nolint:gosec // 固定四座
-			UserId:    playerIDs[seat],
+			UserID:    playerIDs[seat],
 			TotalFan:  total,
 		})
 	}
@@ -216,12 +215,12 @@ func winnerSeatsFromEvents(events []rules.WinEvent) []domainroom.Seat {
 	return out
 }
 
-func winnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, winnerSeats []domainroom.Seat) []*clientv1.WinnerBreakdown {
+func winnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, winnerSeats []domainroom.Seat) []*rules.WinnerBreakdown {
 	winners := map[domainroom.Seat]struct{}{}
 	for _, seat := range winnerSeats {
 		winners[seat] = struct{}{}
 	}
-	bySeat := map[domainroom.Seat]*clientv1.WinnerBreakdown{}
+	bySeat := map[domainroom.Seat]*rules.WinnerBreakdown{}
 	seen := map[domainroom.Seat]map[string]struct{}{}
 	for _, entry := range scoreEvents {
 		if _, ok := winners[entry.WinnerSeat]; !ok {
@@ -229,7 +228,7 @@ func winnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, winne
 		}
 		b := bySeat[entry.WinnerSeat]
 		if b == nil {
-			b = &clientv1.WinnerBreakdown{SeatIndex: entry.WinnerSeat.Proto(), UserId: playerIDs[entry.WinnerSeat]}
+			b = &rules.WinnerBreakdown{SeatIndex: entry.WinnerSeat.Proto(), UserID: playerIDs[entry.WinnerSeat]}
 			bySeat[entry.WinnerSeat] = b
 			seen[entry.WinnerSeat] = map[string]struct{}{}
 		}
@@ -247,7 +246,7 @@ func winnerBreakdowns(playerIDs [4]string, scoreEvents []rules.ScoreEvent, winne
 			b.FanNames = append(b.FanNames, name)
 		}
 	}
-	out := make([]*clientv1.WinnerBreakdown, 0, len(winners))
+	out := make([]*rules.WinnerBreakdown, 0, len(winners))
 	for seat := 0; seat < 4; seat++ {
 		if b := bySeat[domainroom.SeatFromInt(seat)]; b != nil {
 			out = append(out, b)

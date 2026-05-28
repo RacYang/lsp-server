@@ -110,10 +110,9 @@ func handleLoginResume(
 		sb, _ := proto.Marshal(snapEnv)
 		writeBinaryFrame(conn, protocol.SnapshotNotify, sb)
 	}
-	if rr.Settlement != nil {
-		settleEnv := &clientv1.Envelope{ReqId: env.ReqId, Body: &clientv1.Envelope_Settlement{Settlement: rr.Settlement}}
-		sb, _ := proto.Marshal(settleEnv)
-		writeBinaryFrame(conn, protocol.Settlement, sb)
+	if len(rr.SettlementPayload) > 0 {
+		// SettlementPayload 已是序列化的 Envelope proto 字节，直接推送无须重新序列化。
+		writeBinaryFrame(conn, protocol.Settlement, rr.SettlementPayload)
 	}
 }
 

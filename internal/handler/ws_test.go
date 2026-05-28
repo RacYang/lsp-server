@@ -731,11 +731,16 @@ func TestHandleWebSocketListRulesAfterLogin(t *testing.T) {
 
 func TestHandleWebSocketResumeSettlementFallback(t *testing.T) {
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{resumeResult: &ResumeResult{
-		UserID:     "u1",
-		RoomID:     "r1",
-		Resumed:    false,
+	// SettlementPayload 是已序列化的 Envelope proto 字节，handler 直接推送不二次封装。
+	settleEnv := &clientv1.Envelope{ReqId: "settlement", Body: &clientv1.Envelope_Settlement{
 		Settlement: &clientv1.SettlementNotify{RoomId: "r1", TotalFan: 8},
+	}}
+	settlePayload, _ := proto.Marshal(settleEnv)
+	srv := wsTestServer(t, Deps{Rooms: &fakeResumeGateway{resumeResult: &ResumeResult{
+		UserID:            "u1",
+		RoomID:            "r1",
+		Resumed:           false,
+		SettlementPayload: settlePayload,
 	}}, Hub: hub, Session: &session.Manager{}})
 	defer srv.Close()
 	conn := dialWS(t, srv)

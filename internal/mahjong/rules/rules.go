@@ -8,7 +8,6 @@ import (
 	"sort"
 	"sync"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	"racoo.cn/lsp/internal/mahjong/fan"
 	"racoo.cn/lsp/internal/mahjong/hand"
@@ -186,12 +185,36 @@ type SettlementContext struct {
 	ScoreEvents []ScoreEvent
 }
 
+// SeatScore 是单座位的结算得分，与传输层解耦的内部类型。
+type SeatScore struct {
+	SeatIndex int32
+	UserID    string
+	TotalFan  int32
+	Skipped   bool
+}
+
+// PenaltyItem 是单条罚分或退税记录，与传输层解耦的内部类型。
+type PenaltyItem struct {
+	Reason   string
+	FromSeat int32
+	ToSeat   int32
+	Amount   int32
+}
+
+// WinnerBreakdown 是胡牌玩家的番种分解，与传输层解耦的内部类型。
+type WinnerBreakdown struct {
+	SeatIndex int32
+	UserID    string
+	Fan       int32
+	FanNames  []string
+}
+
 // SettlementResult 是 room 折叠成 SettlementNotify 所需的规则无关结算投影。
 type SettlementResult struct {
 	WinnerUserIDs      []string
-	SeatScores         []*clientv1.SeatScore
-	Penalties          []*clientv1.PenaltyItem
-	PerWinnerBreakdown []*clientv1.WinnerBreakdown
+	SeatScores         []*SeatScore
+	Penalties          []*PenaltyItem
+	PerWinnerBreakdown []*WinnerBreakdown
 	DetailText         string
 }
 
@@ -621,11 +644,11 @@ func (f FeatureSet) BuildSettlement(ctx SettlementContext) SettlementResult {
 			balances[event.ToSeat] += event.Amount
 		}
 	}
-	scores := make([]*clientv1.SeatScore, 0, len(balances))
+	scores := make([]*SeatScore, 0, len(balances))
 	for seat, total := range balances {
-		scores = append(scores, &clientv1.SeatScore{
+		scores = append(scores, &SeatScore{
 			SeatIndex: int32(seat), //nolint:gosec // 固定座位范围 0..3
-			UserId:    ctx.PlayerIDs[seat],
+			UserID:    ctx.PlayerIDs[seat],
 			TotalFan:  total,
 		})
 	}
