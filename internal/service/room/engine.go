@@ -170,7 +170,7 @@ type RoundView struct {
 	ActingSeat       int32
 	ActingSeats      []int32
 	WaitingAction    string
-	Phase            clientv1.Phase
+	Phase            Phase
 	LastStep         int64
 	PendingTile      string
 	AvailableActions []string
@@ -201,7 +201,7 @@ type RoundProgress struct {
 	ActingSeat       int32
 	ActingSeats      []int32
 	WaitingAction    string
-	Phase            clientv1.Phase
+	Phase            Phase
 	Step             int64
 	PendingTile      string
 	AvailableActions []string
@@ -215,7 +215,7 @@ type RoundProgress struct {
 // toPhaseUpdate 构造嵌入到 Notify / Response 的 PhaseUpdate；详见 ADR-0045。
 func (p RoundProgress) toPhaseUpdate() *clientv1.PhaseUpdate {
 	return &clientv1.PhaseUpdate{
-		Phase:            p.Phase,
+		Phase:            p.Phase.Proto(),
 		Step:             p.Step,
 		Reason:           p.Reason.Proto(),
 		DeadlineUnixMs:   p.DeadlineUnixMs,

@@ -219,7 +219,7 @@ func autoOpeningProgress(nextStep *rules.OpeningStep) RoundProgress {
 	}
 	reason := openingWaitingReason(nextStep)
 	return RoundProgress{
-		Phase:            clientv1.Phase_PHASE_OPENING,
+		Phase:            PhaseOpening,
 		Step:             0,
 		ActingSeats:      []int32{0, 1, 2, 3},
 		WaitingAction:    nextStep.Action,
@@ -230,7 +230,7 @@ func autoOpeningProgress(nextStep *rules.OpeningStep) RoundProgress {
 
 func autoDrawProgress(step int, turn Seat, remaining int) RoundProgress {
 	return RoundProgress{
-		Phase:           clientv1.Phase_PHASE_DRAW,
+		Phase:           PhaseDraw,
 		Step:            int64(step),
 		ActingSeat:      turn.Proto(),
 		ActingSeats:     []int32{turn.Proto()},

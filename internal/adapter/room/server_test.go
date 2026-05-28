@@ -303,27 +303,27 @@ func TestWaitingReasonFromRoundView(t *testing.T) {
 	}{
 		{
 			desc: "开局阶段映射",
-			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_OPENING},
+			view: roomsvc.RoundView{Phase: roomsvc.PhaseOpening},
 			want: clientv1.WaitingReason_WAITING_REASON_OPENING,
 		},
 		{
 			desc: "吃碰杠抢窗口映射",
-			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_CLAIM, WaitingAction: "claim_window"},
+			view: roomsvc.RoundView{Phase: roomsvc.PhaseClaim, WaitingAction: "claim_window"},
 			want: clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW,
 		},
 		{
 			desc: "自摸窗口映射",
-			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_TSUMO, WaitingAction: "tsumo_window"},
+			view: roomsvc.RoundView{Phase: roomsvc.PhaseTsumo, WaitingAction: "tsumo_window"},
 			want: clientv1.WaitingReason_WAITING_REASON_TSUMO,
 		},
 		{
 			desc: "弃牌映射",
-			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_DISCARD, WaitingAction: "discard"},
+			view: roomsvc.RoundView{Phase: roomsvc.PhaseDiscard, WaitingAction: "discard"},
 			want: clientv1.WaitingReason_WAITING_REASON_DISCARD,
 		},
 		{
 			desc: "其它动作回退 None",
-			view: roomsvc.RoundView{Phase: clientv1.Phase_PHASE_DRAW, WaitingAction: "unknown"},
+			view: roomsvc.RoundView{Phase: roomsvc.PhaseDraw, WaitingAction: "unknown"},
 			want: clientv1.WaitingReason_WAITING_REASON_NONE,
 		},
 	}
@@ -364,14 +364,14 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			name: "start",
 			kind: roomsvc.KindStartGame,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
-				Phase:         clientv1.Phase_PHASE_DRAW,
+				Phase:         roomsvc.PhaseDraw.Proto(),
 				Step:          10,
 				ActingSeats:   []int32{0},
 				WallRemaining: 55,
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetStartGame().GetPhase())
+				require.Equal(t, roomsvc.PhaseDraw.Proto(), evt.GetStartGame().GetPhase())
 				require.EqualValues(t, 10, evt.GetStartGame().GetStep())
 				require.Equal(t, []int32{0}, evt.GetStartGame().GetActingSeats())
 				require.EqualValues(t, 55, evt.GetStartGame().GetWallRemaining())
@@ -381,7 +381,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			name: "draw",
 			kind: roomsvc.KindDrawTile,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
-				Phase:          clientv1.Phase_PHASE_DISCARD,
+				Phase:          roomsvc.PhaseDiscard.Proto(),
 				Step:           11,
 				ActingSeats:    []int32{1},
 				WallRemaining:  54,
@@ -389,7 +389,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clientv1.Phase_PHASE_DISCARD, evt.GetDrawTile().GetPhase())
+				require.Equal(t, roomsvc.PhaseDiscard.Proto(), evt.GetDrawTile().GetPhase())
 				require.EqualValues(t, 11, evt.GetDrawTile().GetStep())
 				require.Equal(t, []int32{1}, evt.GetDrawTile().GetActingSeats())
 				require.EqualValues(t, 54, evt.GetDrawTile().GetWallRemaining())
@@ -403,13 +403,13 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				SeatIndex:   1,
 				Action:      "discard",
 				Tile:        "p9",
-				Phase:       clientv1.Phase_PHASE_DRAW,
+				Phase:       roomsvc.PhaseDraw.Proto(),
 				Step:        12,
 				ActingSeats: []int32{2},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetAction().GetPhase())
+				require.Equal(t, roomsvc.PhaseDraw.Proto(), evt.GetAction().GetPhase())
 				require.EqualValues(t, 12, evt.GetAction().GetStep())
 				require.Equal(t, []int32{2}, evt.GetAction().GetActingSeats())
 			},
@@ -421,13 +421,13 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				Action:      "exchange_three",
 				Kind:        "exchange_done",
 				Params:      map[string]string{"direction": "3"},
-				Phase:       clientv1.Phase_PHASE_OPENING,
+				Phase:       roomsvc.PhaseOpening.Proto(),
 				Step:        13,
 				ActingSeats: []int32{0, 1, 2, 3},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clientv1.Phase_PHASE_OPENING, evt.GetOpeningDone().GetPhase())
+				require.Equal(t, roomsvc.PhaseOpening.Proto(), evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 13, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0, 1, 2, 3}, evt.GetOpeningDone().GetActingSeats())
 				require.Equal(t, "3", evt.GetOpeningDone().GetParams()["direction"])
@@ -439,13 +439,13 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
 				Action:      "que_men",
 				Kind:        "missing_suit_done",
-				Phase:       clientv1.Phase_PHASE_DRAW,
+				Phase:       roomsvc.PhaseDraw.Proto(),
 				Step:        14,
 				ActingSeats: []int32{0},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, clientv1.Phase_PHASE_DRAW, evt.GetOpeningDone().GetPhase())
+				require.Equal(t, roomsvc.PhaseDraw.Proto(), evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 14, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0}, evt.GetOpeningDone().GetActingSeats())
 			},

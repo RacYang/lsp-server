@@ -422,7 +422,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		ActingSeat:       view.ActingSeat,
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
 		WaitingAction:    view.WaitingAction,
-		Phase:            view.Phase,
+		Phase:            view.Phase.Proto(),
 		LastStep:         view.LastStep,
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),

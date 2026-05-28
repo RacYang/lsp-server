@@ -103,7 +103,7 @@ func (s *GRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRe
 					State:            meta.State,
 					ActingSeat:       view.ActingSeat,
 					WaitingAction:    view.WaitingAction,
-					Phase:            view.Phase,
+					Phase:            view.Phase.Proto(),
 					ActingSeats:      append([]int32(nil), view.ActingSeats...),
 					LastStep:         view.LastStep,
 					PendingTile:      view.PendingTile,
@@ -149,7 +149,7 @@ func (s *GRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRe
 		State:            state,
 		ActingSeat:       view.ActingSeat,
 		WaitingAction:    view.WaitingAction,
-		Phase:            view.Phase,
+		Phase:            view.Phase.Proto(),
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
 		LastStep:         view.LastStep,
 		PendingTile:      view.PendingTile,
@@ -187,10 +187,10 @@ func handForSeat(hands [][]string, seat int) []string {
 }
 
 // phaseUpdateFromRoundView 从 RoundView 派生 PhaseUpdate；
-// view.Phase 与 waitingReasonFromRoundView 均返回 clientv1 类型，无须转译。
+// view.Phase 调用 .Proto() 转换为传输层枚举；waitingReasonFromRoundView 同。
 func phaseUpdateFromRoundView(view roomsvc.RoundView) *clientv1.PhaseUpdate {
 	return &clientv1.PhaseUpdate{
-		Phase:            view.Phase,
+		Phase:            view.Phase.Proto(),
 		Step:             view.LastStep,
 		Reason:           waitingReasonFromRoundView(view),
 		DeadlineUnixMs:   view.DeadlineUnixMs,
@@ -201,7 +201,7 @@ func phaseUpdateFromRoundView(view roomsvc.RoundView) *clientv1.PhaseUpdate {
 }
 
 func waitingReasonFromRoundView(view roomsvc.RoundView) clientv1.WaitingReason {
-	if view.Phase == clientv1.Phase_PHASE_OPENING {
+	if view.Phase == roomsvc.PhaseOpening {
 		return clientv1.WaitingReason_WAITING_REASON_OPENING
 	}
 	switch view.WaitingAction {

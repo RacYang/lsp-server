@@ -247,7 +247,7 @@ func (e *PhaseDriftError) PhaseUpdate() *clientv1.PhaseUpdate {
 	if e == nil {
 		return nil
 	}
-	if e.Progress.Step != 0 || e.Progress.Phase != clientv1.Phase_PHASE_UNSPECIFIED || e.Progress.Reason != ReasonNone {
+	if e.Progress.Step != 0 || e.Progress.Phase != PhaseUnspecified || e.Progress.Reason != ReasonNone {
 		return e.Progress.toPhaseUpdate()
 	}
 	return &clientv1.PhaseUpdate{
@@ -291,23 +291,23 @@ type PhaseTransition struct {
 	Notifications  []Notification
 }
 
-func (rs *RoundState) phase() clientv1.Phase {
+func (rs *RoundState) phase() Phase {
 	if rs == nil {
-		return clientv1.Phase_PHASE_UNSPECIFIED
+		return PhaseUnspecified
 	}
 	switch {
 	case rs.closed:
-		return clientv1.Phase_PHASE_CLOSED
+		return PhaseClosed
 	case rs.waitingOpening:
 		return rs.openingPhase()
 	case rs.claimWindowOpen:
-		return clientv1.Phase_PHASE_CLAIM
+		return PhaseClaim
 	case rs.waitingTsumo:
-		return clientv1.Phase_PHASE_TSUMO
+		return PhaseTsumo
 	case rs.waitingDiscard:
-		return clientv1.Phase_PHASE_DISCARD
+		return PhaseDiscard
 	default:
-		return clientv1.Phase_PHASE_UNSPECIFIED
+		return PhaseUnspecified
 	}
 }
 
@@ -332,8 +332,8 @@ func (rs *RoundState) actingSeats() []int32 {
 	return nil
 }
 
-func (rs *RoundState) openingPhase() clientv1.Phase {
-	return clientv1.Phase_PHASE_OPENING
+func (rs *RoundState) openingPhase() Phase {
+	return PhaseOpening
 }
 
 func (rs *RoundState) pendingActiveSeats(done []bool) []int32 {
