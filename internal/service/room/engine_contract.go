@@ -2,6 +2,7 @@ package room
 
 import (
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 )
 
@@ -12,7 +13,7 @@ func (rs *RoundState) wallRemaining() int32 {
 	return int32(rs.wall.Remaining()) //nolint:gosec // 四川牌墙剩余张数小于 int32 上限
 }
 
-func (rs *RoundState) ruleMeta() *clientv1.RuleMeta {
+func (rs *RoundState) ruleMeta() *RuleMeta {
 	if rs == nil {
 		return nil
 	}
@@ -21,8 +22,8 @@ func (rs *RoundState) ruleMeta() *clientv1.RuleMeta {
 	if meta.DisplayName == "" && rs.rule != nil {
 		meta.DisplayName = rs.rule.Name()
 	}
-	return &clientv1.RuleMeta{
-		RuleId:          rs.ruleID,
+	return &RuleMeta{
+		RuleID:          rs.ruleID,
 		DisplayName:     meta.DisplayName,
 		ShortDesc:       meta.ShortDesc,
 		EnabledFeatures: append([]string(nil), meta.EnabledFeatures...),
@@ -30,20 +31,20 @@ func (rs *RoundState) ruleMeta() *clientv1.RuleMeta {
 	}
 }
 
-func (rs *RoundState) totalScores() []*clientv1.SeatScore {
+func (rs *RoundState) totalScores() []*rules.SeatScore {
 	if rs == nil {
 		return nil
 	}
 	balances := seatBalancesFromScoreEvents(rs.scoreEvents)
-	out := make([]*clientv1.SeatScore, 0, 4)
+	out := make([]*rules.SeatScore, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		userID := ""
 		if seat < len(rs.playerIDs) {
 			userID = rs.playerIDs[seat]
 		}
-		out = append(out, &clientv1.SeatScore{
+		out = append(out, &rules.SeatScore{
 			SeatIndex: int32(seat), //nolint:gosec // 固定座位范围 0..3
-			UserId:    userID,
+			UserID:    userID,
 			TotalFan:  balances[seat],
 		})
 	}
@@ -139,7 +140,7 @@ func (rs *RoundState) rememberLastAction(detail *clientv1.ActionDetail) {
 	if rs == nil || detail == nil {
 		return
 	}
-	rs.lastAction = &clientv1.LastActionInfo{
+	rs.lastAction = &LastActionInfo{
 		Step:        detail.GetStep(),
 		ActorSeat:   detail.GetActorSeat(),
 		Action:      detail.GetAction(),
@@ -150,13 +151,13 @@ func (rs *RoundState) rememberLastAction(detail *clientv1.ActionDetail) {
 	}
 }
 
-func (rs *RoundState) meldInfosBySeat() []*clientv1.SeatMelds {
-	out := make([]*clientv1.SeatMelds, 0, 4)
+func (rs *RoundState) meldInfosBySeat() []*SeatMelds {
+	out := make([]*SeatMelds, 0, 4)
 	if rs == nil {
 		return out
 	}
 	for seat := 0; seat < 4; seat++ {
-		seatMelds := &clientv1.SeatMelds{SeatIndex: int32(seat)} //nolint:gosec // 固定座位范围 0..3
+		seatMelds := &SeatMelds{SeatIndex: int32(seat)} //nolint:gosec // 固定座位范围 0..3
 		if seat < len(rs.melds) {
 			for _, encoded := range rs.melds[seat] {
 				if info := meldInfoFromEncoded(Seat(seat), encoded, rs.step); info != nil {
@@ -169,7 +170,7 @@ func (rs *RoundState) meldInfosBySeat() []*clientv1.SeatMelds {
 	return out
 }
 
-func meldInfoFromEncoded(seat Seat, encoded string, step int) *clientv1.MeldInfo {
+func meldInfoFromEncoded(seat Seat, encoded string, step int) *MeldInfo {
 	fact, ok := parseMeldFact(encoded)
 	if !ok || fact.Kind == "" {
 		return nil
@@ -195,7 +196,7 @@ func meldInfoFromEncoded(seat Seat, encoded string, step int) *clientv1.MeldInfo
 			tiles = append(tiles, t.String())
 		}
 	}
-	return &clientv1.MeldInfo{
+	return &MeldInfo{
 		SeatIndex:       seat.Proto(),
 		Kind:            fact.Kind,
 		Tiles:           tiles,

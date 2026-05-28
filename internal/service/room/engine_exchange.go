@@ -30,7 +30,7 @@ func (e *Engine) completeOpening(ctx context.Context, rs *RoundState) ([]Notific
 		DealerSeat: rs.dealerSeat.Proto(),
 		RoundIndex: 0,
 		HandIndex:  0,
-		RuleMeta:   rs.ruleMeta(),
+		RuleMeta:   toProtoRuleMeta(rs.ruleMeta()),
 	}
 	progress.applyToStart(start)
 	startPayload, err := marshalEnvelope(&clientv1.Envelope{

@@ -77,7 +77,7 @@ type RoundState struct {
 	discards    [][]tile.Tile
 	flowers     [][]tile.Tile
 	melds       [][]string
-	lastAction  *clientv1.LastActionInfo
+	lastAction  *LastActionInfo
 
 	waitingOpening         bool
 	waitingDiscard         bool
@@ -178,20 +178,20 @@ type RoundView struct {
 	HandsBySeat      [][]string
 	DiscardsBySeat   [][]string
 	MeldsBySeat      [][]string
-	MeldInfosBySeat  []*clientv1.SeatMelds
-	// 以下字段供 BotSupervisor 与重连快照重建 bot 视图使用，对老调用方可零值兼容。
+	MeldInfosBySeat  []*SeatMelds
+	// 以下字段供重连快照重建视图使用，对老调用方可零值兼容。
 	QueBySeat        []int32
 	PlayerIDs        [4]string
 	HuedSeats        []bool
 	Closed           bool
 	OpeningSubmitted map[string][]bool
-	LastAction       *clientv1.LastActionInfo
+	LastAction       *LastActionInfo
 	WallRemaining    int32
 	DeadlineUnixMs   int64
 	RoundIndex       int32
 	HandIndex        int32
-	TotalScores      []*clientv1.SeatScore
-	RuleMeta         *clientv1.RuleMeta
+	TotalScores      []*rules.SeatScore
+	RuleMeta         *RuleMeta
 }
 
 // RoundProgress 是局内进度的权威投影，不承载房间生命周期或 UI 文案。
@@ -230,16 +230,16 @@ type RoundFacts struct {
 	HandsBySeat     [][]string
 	DiscardsBySeat  [][]string
 	MeldsBySeat     [][]string
-	MeldInfosBySeat []*clientv1.SeatMelds
+	MeldInfosBySeat []*SeatMelds
 	QueBySeat       []int32
 	PlayerIDs       [4]string
 	HuedSeats       []bool
 	Closed          bool
-	LastAction      *clientv1.LastActionInfo
+	LastAction      *LastActionInfo
 	RoundIndex      int32
 	HandIndex       int32
-	TotalScores     []*clientv1.SeatScore
-	RuleMeta        *clientv1.RuleMeta
+	TotalScores     []*rules.SeatScore
+	RuleMeta        *RuleMeta
 }
 
 // RoundProjection 聚合 room service 对外暴露的局内事实。

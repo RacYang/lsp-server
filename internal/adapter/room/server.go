@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
+	"racoo.cn/lsp/internal/mahjong/rules"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
@@ -111,15 +112,15 @@ func (s *GRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRe
 					YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
 					DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
 					MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
-					MeldInfosBySeat:  view.MeldInfosBySeat,
-					LastAction:       view.LastAction,
+					MeldInfosBySeat:  viewMeldInfosBySeat(view.MeldInfosBySeat),
+					LastAction:       viewLastAction(view.LastAction),
 					WallRemaining:    view.WallRemaining,
 					DeadlineUnixMs:   view.DeadlineUnixMs,
 					PhaseUpdate:      phaseUpdateFromRoundView(view),
 					RoundIndex:       view.RoundIndex,
 					HandIndex:        view.HandIndex,
-					TotalScores:      view.TotalScores,
-					RuleMeta:         view.RuleMeta,
+					TotalScores:      viewTotalScores(view.TotalScores),
+					RuleMeta:         viewRuleMeta(view.RuleMeta),
 				}, nil
 			}
 		}
@@ -157,15 +158,15 @@ func (s *GRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRe
 		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
 		DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
 		MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
-		MeldInfosBySeat:  view.MeldInfosBySeat,
-		LastAction:       view.LastAction,
+		MeldInfosBySeat:  viewMeldInfosBySeat(view.MeldInfosBySeat),
+		LastAction:       viewLastAction(view.LastAction),
 		WallRemaining:    view.WallRemaining,
 		DeadlineUnixMs:   view.DeadlineUnixMs,
 		PhaseUpdate:      phaseUpdateFromRoundView(view),
 		RoundIndex:       view.RoundIndex,
 		HandIndex:        view.HandIndex,
-		TotalScores:      view.TotalScores,
-		RuleMeta:         view.RuleMeta,
+		TotalScores:      viewTotalScores(view.TotalScores),
+		RuleMeta:         viewRuleMeta(view.RuleMeta),
 	}, nil
 }
 
@@ -213,6 +214,70 @@ func waitingReasonFromRoundView(view roomsvc.RoundView) clientv1.WaitingReason {
 	default:
 		return clientv1.WaitingReason_WAITING_REASON_NONE
 	}
+}
+
+// viewRuleMeta 将 service 层内部 RuleMeta 转换为传输层 proto 类型。
+func viewRuleMeta(m *roomsvc.RuleMeta) *clientv1.RuleMeta {
+	if m == nil {
+		return nil
+	}
+	return &clientv1.RuleMeta{
+		RuleId:          m.RuleID,
+		DisplayName:     m.DisplayName,
+		ShortDesc:       m.ShortDesc,
+		EnabledFeatures: append([]string(nil), m.EnabledFeatures...),
+		MaxHands:        m.MaxHands,
+	}
+}
+
+// viewLastAction 将 service 层内部 LastActionInfo 转换为传输层 proto 类型。
+func viewLastAction(a *roomsvc.LastActionInfo) *clientv1.LastActionInfo {
+	if a == nil {
+		return nil
+	}
+	return &clientv1.LastActionInfo{
+		Step:        a.Step,
+		ActorSeat:   a.ActorSeat,
+		Action:      a.Action,
+		Tile:        a.Tile,
+		TargetSeat:  a.TargetSeat,
+		SourceSeat:  a.SourceSeat,
+		CreatedAtMs: a.CreatedAtMs,
+	}
+}
+
+// viewMeldInfosBySeat 将 service 层内部 SeatMelds 切片转换为传输层 proto 类型。
+func viewMeldInfosBySeat(seats []*roomsvc.SeatMelds) []*clientv1.SeatMelds {
+	out := make([]*clientv1.SeatMelds, 0, len(seats))
+	for _, s := range seats {
+		pm := &clientv1.SeatMelds{SeatIndex: s.SeatIndex}
+		for _, m := range s.Melds {
+			pm.Melds = append(pm.Melds, &clientv1.MeldInfo{
+				SeatIndex:       m.SeatIndex,
+				Kind:            m.Kind,
+				Tiles:           append([]string(nil), m.Tiles...),
+				ClaimedFromSeat: m.ClaimedFromSeat,
+				Concealed:       m.Concealed,
+				Step:            m.Step,
+			})
+		}
+		out = append(out, pm)
+	}
+	return out
+}
+
+// viewTotalScores 将 rules 层内部 SeatScore 切片转换为传输层 proto 类型。
+func viewTotalScores(scores []*rules.SeatScore) []*clientv1.SeatScore {
+	out := make([]*clientv1.SeatScore, 0, len(scores))
+	for _, s := range scores {
+		out = append(out, &clientv1.SeatScore{
+			SeatIndex: s.SeatIndex,
+			UserId:    s.UserID,
+			TotalFan:  s.TotalFan,
+			Skipped:   s.Skipped,
+		})
+	}
+	return out
 }
 
 // clientSeatsFromPlayerIDs 将玩家列表映射为座位信息切片，供快照响应使用；空座位填占位结构。

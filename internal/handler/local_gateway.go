@@ -7,6 +7,7 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
+	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/protocol"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	roomsvc "racoo.cn/lsp/internal/service/room"
@@ -429,14 +430,14 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		YourHandTiles:    handForSeat(view.HandsBySeat, mySeat),
 		DiscardsBySeat:   stringMatrixToClientSeatTiles(view.DiscardsBySeat),
 		MeldsBySeat:      stringMatrixToClientSeatTiles(view.MeldsBySeat),
-		MeldInfosBySeat:  view.MeldInfosBySeat,
-		LastAction:       view.LastAction,
+		MeldInfosBySeat:  roomViewMeldInfosBySeat(view.MeldInfosBySeat),
+		LastAction:       roomViewLastAction(view.LastAction),
 		WallRemaining:    view.WallRemaining,
 		DeadlineUnixMs:   view.DeadlineUnixMs,
 		RoundIndex:       view.RoundIndex,
 		HandIndex:        view.HandIndex,
-		TotalScores:      view.TotalScores,
-		RuleMeta:         view.RuleMeta,
+		TotalScores:      roomViewTotalScores(view.TotalScores),
+		RuleMeta:         roomViewRuleMeta(view.RuleMeta),
 	}
 	for seat := 0; seat < len(snap.Seats) && seat < len(view.HandsBySeat); seat++ {
 		snap.Seats[seat].HandCount = int32(len(view.HandsBySeat[seat])) //nolint:gosec // 座位手牌数量小于 20。
@@ -529,6 +530,66 @@ func lobbyRuleMetasToClient(rules []lobbysvc.RuleMeta) []*clientv1.RuleMeta {
 	out := make([]*clientv1.RuleMeta, 0, len(rules))
 	for _, rule := range rules {
 		out = append(out, lobbyRuleMetaToClient(rule))
+	}
+	return out
+}
+
+func roomViewRuleMeta(m *roomsvc.RuleMeta) *clientv1.RuleMeta {
+	if m == nil {
+		return nil
+	}
+	return &clientv1.RuleMeta{
+		RuleId:          m.RuleID,
+		DisplayName:     m.DisplayName,
+		ShortDesc:       m.ShortDesc,
+		EnabledFeatures: append([]string(nil), m.EnabledFeatures...),
+		MaxHands:        m.MaxHands,
+	}
+}
+
+func roomViewLastAction(a *roomsvc.LastActionInfo) *clientv1.LastActionInfo {
+	if a == nil {
+		return nil
+	}
+	return &clientv1.LastActionInfo{
+		Step:        a.Step,
+		ActorSeat:   a.ActorSeat,
+		Action:      a.Action,
+		Tile:        a.Tile,
+		TargetSeat:  a.TargetSeat,
+		SourceSeat:  a.SourceSeat,
+		CreatedAtMs: a.CreatedAtMs,
+	}
+}
+
+func roomViewMeldInfosBySeat(seats []*roomsvc.SeatMelds) []*clientv1.SeatMelds {
+	out := make([]*clientv1.SeatMelds, 0, len(seats))
+	for _, s := range seats {
+		pm := &clientv1.SeatMelds{SeatIndex: s.SeatIndex}
+		for _, m := range s.Melds {
+			pm.Melds = append(pm.Melds, &clientv1.MeldInfo{
+				SeatIndex:       m.SeatIndex,
+				Kind:            m.Kind,
+				Tiles:           append([]string(nil), m.Tiles...),
+				ClaimedFromSeat: m.ClaimedFromSeat,
+				Concealed:       m.Concealed,
+				Step:            m.Step,
+			})
+		}
+		out = append(out, pm)
+	}
+	return out
+}
+
+func roomViewTotalScores(scores []*rules.SeatScore) []*clientv1.SeatScore {
+	out := make([]*clientv1.SeatScore, 0, len(scores))
+	for _, s := range scores {
+		out = append(out, &clientv1.SeatScore{
+			SeatIndex: s.SeatIndex,
+			UserId:    s.UserID,
+			TotalFan:  s.TotalFan,
+			Skipped:   s.Skipped,
+		})
 	}
 	return out
 }

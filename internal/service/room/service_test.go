@@ -54,8 +54,8 @@ func TestStartRoundEmitsTargetedInitialDeals(t *testing.T) {
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
 		deal := env.GetInitialDeal()
 		require.NotNil(t, deal)
-		require.EqualValues(t, seat, deal.GetSeatIndex())
-		require.Len(t, deal.GetTiles(), 13)
+		require.EqualValues(t, seat, deal.SeatIndex)
+		require.Len(t, deal.Tiles, 13)
 	}
 }
 
@@ -73,7 +73,7 @@ func TestStartRoundBiaozhunSkipsExchangeThree(t *testing.T) {
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
 		action := env.GetAction()
 		require.NotNil(t, action)
-		require.Equal(t, "que_men", action.GetAction())
+		require.Equal(t, "que_men", action.Action)
 		require.Equal(t, clientv1.Phase_PHASE_OPENING, action.GetPhase())
 	}
 }
@@ -344,11 +344,11 @@ func TestRoundViewIncludesAuthoritativeTUIFields(t *testing.T) {
 	require.EqualValues(t, 2, view.WallRemaining)
 	require.EqualValues(t, 12345, view.DeadlineUnixMs)
 	require.NotNil(t, view.LastAction)
-	require.Equal(t, "discard", view.LastAction.GetAction())
+	require.Equal(t, "discard", view.LastAction.Action)
 	require.NotNil(t, view.RuleMeta)
-	require.Contains(t, view.RuleMeta.GetEnabledFeatures(), "exchange_three")
+	require.Contains(t, view.RuleMeta.EnabledFeatures, "exchange_three")
 	require.Len(t, view.MeldInfosBySeat, 4)
-	require.Equal(t, "pong", view.MeldInfosBySeat[0].GetMelds()[0].GetKind())
+	require.Equal(t, "pong", view.MeldInfosBySeat[0].Melds[0].Kind)
 }
 
 func TestExchangeThreeUsesClientDirection(t *testing.T) {
@@ -541,9 +541,9 @@ func TestApplyDiscardPromptsClaimInsteadOfNextDraw(t *testing.T) {
 	for _, notification := range notifs {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
-		if action := env.GetAction(); action != nil && action.GetAction() == "pong_choice" {
+		if action := env.GetAction(); action != nil && action.Action == "pong_choice" {
 			sawClaim = true
-			require.EqualValues(t, 2, action.GetSeatIndex())
+			require.EqualValues(t, 2, action.SeatIndex)
 		}
 		if env.GetDrawTile() != nil {
 			t.Fatal("claim window should not broadcast next draw")
@@ -620,9 +620,9 @@ func TestApplyDiscardOpenMeldHuBeatsPong(t *testing.T) {
 	for _, notification := range notifs {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
-		if action := env.GetAction(); action != nil && action.GetAction() == "hu_choice" {
+		if action := env.GetAction(); action != nil && action.Action == "hu_choice" {
 			sawHuChoice = true
-			require.EqualValues(t, 1, action.GetSeatIndex())
+			require.EqualValues(t, 1, action.SeatIndex)
 			require.Equal(t, []string{"hu", "pong"}, action.GetPhaseUpdate().GetAvailableActions())
 		}
 	}
@@ -697,9 +697,9 @@ func TestSelfDrawHuWithOpenQueSuitMeldUsesClosedHandOnlyForQueBlock(t *testing.T
 	for _, notification := range notifs {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
-		if action := env.GetAction(); action != nil && action.GetAction() == "tsumo_choice" {
+		if action := env.GetAction(); action != nil && action.Action == "tsumo_choice" {
 			sawChoice = true
-			require.EqualValues(t, 0, action.GetSeatIndex())
+			require.EqualValues(t, 0, action.SeatIndex)
 			require.Equal(t, []string{"hu", "pass"}, action.GetPhaseUpdate().GetAvailableActions())
 		}
 	}
@@ -729,11 +729,11 @@ func TestDrawTileNotificationProjectsTileOnlyToActor(t *testing.T) {
 
 	var actorEnv clientv1.Envelope
 	require.NoError(t, proto.Unmarshal(notifs[0].Project(1), &actorEnv))
-	require.Equal(t, "p7", actorEnv.GetDrawTile().GetTile())
+	require.Equal(t, "p7", actorEnv.GetDrawTile().Tile)
 
 	var otherEnv clientv1.Envelope
 	require.NoError(t, proto.Unmarshal(notifs[0].Project(0), &otherEnv))
-	require.Empty(t, otherEnv.GetDrawTile().GetTile())
+	require.Empty(t, otherEnv.GetDrawTile().Tile)
 }
 
 func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
@@ -763,8 +763,8 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 	for _, notification := range notifs {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
-		if action := env.GetAction(); action != nil && action.GetAction() != "discard" {
-			claimBySeat[action.GetSeatIndex()] = action.GetAction()
+		if action := env.GetAction(); action != nil && action.Action != "discard" {
+			claimBySeat[action.SeatIndex] = action.Action
 		}
 	}
 	require.Equal(t, map[int32]string{2: "gang_choice"}, claimBySeat)
@@ -776,9 +776,9 @@ func TestApplyDiscardPromptsMultipleClaimCandidates(t *testing.T) {
 	require.False(t, rs.claimWindowOpen)
 	require.Len(t, notifs, 2)
 	require.Equal(t, Seat(2), rs.turn)
-	require.Len(t, rs.meldInfosBySeat()[2].GetMelds(), 1)
-	require.Equal(t, "zhi_gang", rs.meldInfosBySeat()[2].GetMelds()[0].GetKind())
-	require.EqualValues(t, 0, rs.meldInfosBySeat()[2].GetMelds()[0].GetClaimedFromSeat())
+	require.Len(t, rs.meldInfosBySeat()[2].Melds, 1)
+	require.Equal(t, "zhi_gang", rs.meldInfosBySeat()[2].Melds[0].Kind)
+	require.EqualValues(t, 0, rs.meldInfosBySeat()[2].Melds[0].ClaimedFromSeat)
 	require.Equal(t, rules.GangKindMing, rs.gangRecords[0].Kind)
 }
 
@@ -801,15 +801,15 @@ func TestApplyAnGangRecordsConcealedMeldAndHidesActionTile(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, notifs, 2)
 	require.Equal(t, rules.GangKindAn, rs.gangRecords[0].Kind)
-	info := rs.meldInfosBySeat()[0].GetMelds()[0]
-	require.Equal(t, "an_gang", info.GetKind())
-	require.True(t, info.GetConcealed())
+	info := rs.meldInfosBySeat()[0].Melds[0]
+	require.Equal(t, "an_gang", info.Kind)
+	require.True(t, info.Concealed)
 	require.Equal(t, PrivacyPerSeat, notifs[0].Privacy)
 
 	var other clientv1.Envelope
 	require.NoError(t, proto.Unmarshal(notifs[0].Project(1), &other))
-	require.Empty(t, other.GetAction().GetTile())
-	require.Empty(t, other.GetAction().GetDetail().GetTile())
+	require.Empty(t, other.GetAction().Tile)
+	require.Empty(t, other.GetAction().GetDetail().Tile)
 }
 
 func TestApplyBuGangCompletesWithoutRobCandidate(t *testing.T) {
@@ -832,8 +832,8 @@ func TestApplyBuGangCompletesWithoutRobCandidate(t *testing.T) {
 	_, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").ApplyGang(context.Background(), rs, 0, "m5")
 	require.NoError(t, err)
 	require.Equal(t, rules.GangKindBu, rs.gangRecords[0].Kind)
-	info := rs.meldInfosBySeat()[0].GetMelds()[0]
-	require.Equal(t, "bu_gang", info.GetKind())
+	info := rs.meldInfosBySeat()[0].Melds[0]
+	require.Equal(t, "bu_gang", info.Kind)
 	require.False(t, rs.qiangGangWindow)
 }
 
@@ -872,7 +872,7 @@ func TestApplyBuGangCanBeRobbedWithoutGangRecord(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, rs.gangRecords)
 	require.NotContains(t, rs.hands[0].Tiles(), gangTile)
-	require.Equal(t, "pong", rs.meldInfosBySeat()[0].GetMelds()[0].GetKind())
+	require.Equal(t, "pong", rs.meldInfosBySeat()[0].Melds[0].Kind)
 }
 
 type allowChiClaimPolicy struct{}
@@ -911,10 +911,10 @@ func TestApplyChiRecordsStructuredMeldAndRequiresExplicitDiscard(t *testing.T) {
 	require.True(t, rs.waitingDiscard)
 	require.Equal(t, Seat(1), rs.turn)
 	require.Empty(t, rs.hands[1].Tiles())
-	info := rs.meldInfosBySeat()[1].GetMelds()[0]
-	require.Equal(t, "chi", info.GetKind())
-	require.Equal(t, []string{"m1", "m2", "m3"}, info.GetTiles())
-	require.EqualValues(t, 0, info.GetClaimedFromSeat())
+	info := rs.meldInfosBySeat()[1].Melds[0]
+	require.Equal(t, "chi", info.Kind)
+	require.Equal(t, []string{"m1", "m2", "m3"}, info.Tiles)
+	require.EqualValues(t, 0, info.ClaimedFromSeat)
 }
 
 func TestApplyPassRelaysClaimCandidate(t *testing.T) {
@@ -944,8 +944,8 @@ func TestApplyPassRelaysClaimCandidate(t *testing.T) {
 
 	var env clientv1.Envelope
 	require.NoError(t, proto.Unmarshal(notifs[0].Payload, &env))
-	require.Equal(t, "pong_choice", env.GetAction().GetAction())
-	require.EqualValues(t, 1, env.GetAction().GetSeatIndex())
+	require.Equal(t, "pong_choice", env.GetAction().Action)
+	require.EqualValues(t, 1, env.GetAction().SeatIndex)
 }
 
 func TestApplyPassSelfDrawKeepsPlayerDiscardChoice(t *testing.T) {
@@ -1005,7 +1005,7 @@ func TestApplyHuClearsHuedSeatActionWindowBeforeNextDraw(t *testing.T) {
 	for _, notification := range notifs {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
-		if action := env.GetAction(); action != nil && action.GetAction() == "hu" {
+		if action := env.GetAction(); action != nil && action.Action == "hu" {
 			hu = action
 			break
 		}
@@ -1098,7 +1098,7 @@ func TestDiscardHuContinuesFromDiscarderNextSeat(t *testing.T) {
 	for _, notification := range notifs {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
-		if draw := env.GetDrawTile(); draw != nil && draw.GetSeatIndex() == 1 {
+		if draw := env.GetDrawTile(); draw != nil && draw.SeatIndex == 1 {
 			sawSeat1Draw = true
 		}
 	}
@@ -1131,7 +1131,7 @@ func TestPlayerJourney_C2_2_ClaimTimeoutDoesNotChooseForHuman(t *testing.T) {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
 		if action := env.GetAction(); action != nil {
-			require.NotContains(t, []string{"hu", "gang", "pong"}, action.GetAction(), "真人超时不得替玩家选择收益动作")
+			require.NotContains(t, []string{"hu", "gang", "pong"}, action.Action, "真人超时不得替玩家选择收益动作")
 		}
 	}
 }
@@ -1203,7 +1203,7 @@ func TestPlayerJourney_D2_4_DiscardTimeoutSurrenders(t *testing.T) {
 		var env clientv1.Envelope
 		require.NoError(t, proto.Unmarshal(notification.Payload, &env))
 		if action := env.GetAction(); action != nil {
-			require.NotEqual(t, "discard", action.GetAction(), "真人出牌超时不得由服务端代选弃牌")
+			require.NotEqual(t, "discard", action.Action, "真人出牌超时不得由服务端代选弃牌")
 		}
 	}
 }

@@ -88,6 +88,20 @@ func sumPositiveSeatScores(scores []*rules.SeatScore) int32 {
 	return total
 }
 
+// toProtoRuleMeta 将内部 RuleMeta 转换为传输层 proto 类型（序列化边界）。
+func toProtoRuleMeta(m *RuleMeta) *clientv1.RuleMeta {
+	if m == nil {
+		return nil
+	}
+	return &clientv1.RuleMeta{
+		RuleId:          m.RuleID,
+		DisplayName:     m.DisplayName,
+		ShortDesc:       m.ShortDesc,
+		EnabledFeatures: append([]string(nil), m.EnabledFeatures...),
+		MaxHands:        m.MaxHands,
+	}
+}
+
 // toProtoSeatScores 将规则层内部类型转换为传输层 proto 类型（唯一序列化边界）。
 func toProtoSeatScores(scores []*rules.SeatScore) []*clientv1.SeatScore {
 	out := make([]*clientv1.SeatScore, 0, len(scores))
