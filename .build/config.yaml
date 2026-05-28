@@ -276,6 +276,69 @@ lint:
           - cmd
       - from: service
         to: [protocol, handler, cluster, cmd]
+      - from: protocol
+        to:
+          - domain
+          - handler
+          - store
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - clock
+          - metrics
+          - cmd
+          - apigen_client
+          - apigen_v1
+          - contract
+      - from: metrics
+        to:
+          - domain
+          - handler
+          - store
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - clock
+          - cmd
+          - apigen_client
+          - apigen_v1
+          - contract
+      - from: clock
+        to:
+          - domain
+          - handler
+          - store
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - protocol
+          - metrics
+          - cmd
+          - apigen_client
+          - apigen_v1
+          - contract
+      - from: session
+        to:
+          - domain
+          - handler
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - protocol
+          - cmd
+          - apigen_client
+          - apigen_v1
+          - contract
       - from: pkg
         to:
           - mahjong_builtin

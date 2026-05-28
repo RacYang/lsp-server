@@ -310,7 +310,20 @@ deps:
       - apigen_client
       - apigen_v1
   protocol:
-    anyProjectDeps: true
+    mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - config
+      - log
+      - pkg
   cluster:
     anyProjectDeps: true
   contract:
@@ -389,13 +402,57 @@ deps:
       - apigen_client
       - apigen_v1
   session:
-    anyProjectDeps: true
+    mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - store
+      - service
+      - config
+      - clock
+      - metrics
+      - log
+      - pkg
   config:
     anyProjectDeps: true
   clock:
-    anyProjectDeps: true
+    mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - config
+      - log
+      - pkg
   metrics:
-    anyProjectDeps: true
+    mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - protocol
+      - config
+      - log
+      - pkg
   log:
     anyProjectDeps: true
   cmd:
