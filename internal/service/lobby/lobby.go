@@ -65,20 +65,11 @@ type BotSeat struct {
 	UserID    string
 }
 
-type roomMeta struct {
-	ruleID      string
-	displayName string
-	private     bool
-	createdAtMs int64
-	maxSeats    int32
-}
-
 // Service 为大厅服务：维护房间到 room 节点映射与简单座位分配。
+// rooms 是唯一内存状态：三条原始 Map（roomIDs/seats/metas）已合并为单一 RoomRecord 集合。
 type Service struct {
 	mu        sync.Mutex
-	roomIDs   map[string]string
-	seats     map[string]map[string]int32
-	metas     map[string]roomMeta
+	rooms     map[string]*RoomRecord
 	newRoomID func() (string, error)
 	registry  RoomRegistry // 可空；非空时关键操作双写 Redis
 }
@@ -86,9 +77,7 @@ type Service struct {
 // New 创建纯内存的大厅服务实例。
 func New() *Service {
 	return &Service{
-		roomIDs:   make(map[string]string),
-		seats:     make(map[string]map[string]int32),
-		metas:     make(map[string]roomMeta),
+		rooms:     make(map[string]*RoomRecord),
 		newRoomID: randomRoomID,
 	}
 }
@@ -114,19 +103,13 @@ func (s *Service) RecoverFromRegistry(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, rec := range records {
-		s.roomIDs[rec.RoomID] = rec.NodeID
+		r := rec
 		seats := make(map[string]int32, len(rec.Seats))
 		for uid, seat := range rec.Seats {
 			seats[uid] = seat
 		}
-		s.seats[rec.RoomID] = seats
-		s.metas[rec.RoomID] = roomMeta{
-			ruleID:      rec.RuleID,
-			displayName: rec.DisplayName,
-			private:     rec.Private,
-			createdAtMs: rec.CreatedAtMs,
-			maxSeats:    rec.MaxSeats,
-		}
+		r.Seats = seats
+		s.rooms[rec.RoomID] = &r
 	}
 	logx.Info(ctx, "大厅状态从注册表恢复完毕", "rooms", len(records))
 	return nil
@@ -141,12 +124,13 @@ func (s *Service) CreateRoom(ctx context.Context, roomID string) (string, error)
 		return "", fmt.Errorf("%w: empty room_id", ErrInvalidArgument)
 	}
 	s.mu.Lock()
-	if nodeID, ok := s.roomIDs[roomID]; ok {
+	if room, ok := s.rooms[roomID]; ok {
+		nodeID := room.NodeID
 		s.mu.Unlock()
 		return nodeID, nil
 	}
 	s.ensureRoomLocked(roomID, defaultRuleID, "", false)
-	rec, _ := s.buildRecordLocked(roomID)
+	rec := s.buildRecordLocked(roomID)
 	s.mu.Unlock()
 	s.persistUpsert(ctx, rec)
 	return defaultNodeID, nil
@@ -167,8 +151,8 @@ func (s *Service) CreateRoomWithMeta(ctx context.Context, ruleID, displayName st
 		return "", 0, err
 	}
 	s.ensureRoomLocked(roomID, ruleID, displayName, private)
-	s.seats[roomID][creatorUserID] = 0
-	rec, _ := s.buildRecordLocked(roomID)
+	s.rooms[roomID].Seats[creatorUserID] = 0
+	rec := s.buildRecordLocked(roomID)
 	s.mu.Unlock()
 	s.persistUpsert(ctx, rec)
 	return roomID, 0, nil
@@ -189,21 +173,22 @@ func (s *Service) ListRooms(_ context.Context, pageSize int32, pageToken string)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rooms := make([]RoomMeta, 0, len(s.roomIDs))
-	for roomID, meta := range s.metas {
-		seatCount := int32(len(s.seats[roomID])) //nolint:gosec // 房间座位数上限固定为 4
-		if meta.private || seatCount >= meta.maxSeats || meta.stage() != waitingStage {
+	rooms := make([]RoomMeta, 0, len(s.rooms))
+	for roomID, room := range s.rooms {
+		seatCount := int32(len(room.Seats)) //nolint:gosec // 房间座位数上限固定为 4
+		if room.Private || seatCount >= room.MaxSeats {
 			continue
 		}
+		ruleID := normalizeRuleID(room.RuleID)
 		rooms = append(rooms, RoomMeta{
 			RoomID:      roomID,
-			RuleID:      normalizeRuleID(meta.ruleID),
-			DisplayName: meta.displayName,
+			RuleID:      ruleID,
+			DisplayName: room.DisplayName,
 			SeatCount:   seatCount,
-			MaxSeats:    meta.maxSeats,
-			CreatedAtMs: meta.createdAtMs,
-			Stage:       meta.stage(),
-			RuleMeta:    ruleMeta(normalizeRuleID(meta.ruleID)),
+			MaxSeats:    room.MaxSeats,
+			CreatedAtMs: room.CreatedAtMs,
+			Stage:       waitingStage,
+			RuleMeta:    ruleMeta(ruleID),
 		})
 	}
 	sort.Slice(rooms, func(i, j int) bool {
@@ -299,17 +284,18 @@ func (s *Service) AutoMatch(ctx context.Context, ruleID, userID string) (string,
 }
 
 func (s *Service) ensureRoomLocked(roomID, ruleID, displayName string, private bool) {
-	s.roomIDs[roomID] = defaultNodeID
-	s.seats[roomID] = make(map[string]int32)
 	if displayName == "" {
 		displayName = roomID
 	}
-	s.metas[roomID] = roomMeta{
-		ruleID:      normalizeRuleID(ruleID),
-		displayName: displayName,
-		private:     private,
-		createdAtMs: time.Now().UnixMilli(),
-		maxSeats:    defaultMaxSeats,
+	s.rooms[roomID] = &RoomRecord{
+		RoomID:      roomID,
+		NodeID:      defaultNodeID,
+		RuleID:      normalizeRuleID(ruleID),
+		DisplayName: displayName,
+		Private:     private,
+		CreatedAtMs: time.Now().UnixMilli(),
+		MaxSeats:    defaultMaxSeats,
+		Seats:       make(map[string]int32),
 	}
 }
 
@@ -322,15 +308,16 @@ func (s *Service) JoinRoom(ctx context.Context, roomID, userID string) (int32, e
 		return 0, fmt.Errorf("%w: empty room_id or user_id", ErrInvalidArgument)
 	}
 	s.mu.Lock()
-	if _, ok := s.roomIDs[roomID]; !ok {
+	if _, ok := s.rooms[roomID]; !ok {
 		s.ensureRoomLocked(roomID, defaultRuleID, "", false)
 	}
-	if seat, ok := s.seats[roomID][userID]; ok {
+	room := s.rooms[roomID]
+	if seat, ok := room.Seats[userID]; ok {
 		s.mu.Unlock()
 		return seat, nil
 	}
-	used := make(map[int32]bool, len(s.seats[roomID]))
-	for _, seat := range s.seats[roomID] {
+	used := make(map[int32]bool, len(room.Seats))
+	for _, seat := range room.Seats {
 		used[seat] = true
 	}
 	if len(used) >= 4 {
@@ -343,8 +330,8 @@ func (s *Service) JoinRoom(ctx context.Context, roomID, userID string) (int32, e
 			break
 		}
 	}
-	s.seats[roomID][userID] = seat
-	rec, _ := s.buildRecordLocked(roomID)
+	room.Seats[userID] = seat
+	rec := s.buildRecordLocked(roomID)
 	s.mu.Unlock()
 	s.persistUpsert(ctx, rec)
 	return seat, nil
@@ -359,13 +346,13 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, userID string) error {
 		return fmt.Errorf("%w: empty room_id or user_id", ErrInvalidArgument)
 	}
 	s.mu.Lock()
-	seats, ok := s.seats[roomID]
+	room, ok := s.rooms[roomID]
 	if !ok {
 		s.mu.Unlock()
 		return ErrRoomNotFound
 	}
-	delete(seats, userID)
-	rec, _ := s.buildRecordLocked(roomID)
+	delete(room.Seats, userID)
+	rec := s.buildRecordLocked(roomID)
 	s.mu.Unlock()
 	s.persistUpsert(ctx, rec)
 	return nil
@@ -383,13 +370,14 @@ func (s *Service) AddBot(ctx context.Context, roomID string, count int32, maxBot
 		maxBots = 3
 	}
 	s.mu.Lock()
-	if _, ok := s.roomIDs[roomID]; !ok {
+	room, ok := s.rooms[roomID]
+	if !ok {
 		s.mu.Unlock()
 		return nil, ErrRoomNotFound
 	}
-	used := make(map[int32]bool, len(s.seats[roomID]))
+	used := make(map[int32]bool, len(room.Seats))
 	bots := 0
-	for userID, seat := range s.seats[roomID] {
+	for userID, seat := range room.Seats {
 		used[seat] = true
 		if strings.HasPrefix(userID, "bot:") {
 			bots++
@@ -404,13 +392,13 @@ func (s *Service) AddBot(ctx context.Context, roomID string, count int32, maxBot
 				break
 			}
 		}
-		userID := fmt.Sprintf("bot:%s:%d", roomID, seat)
-		s.seats[roomID][userID] = seat
+		botUserID := fmt.Sprintf("bot:%s:%d", roomID, seat)
+		room.Seats[botUserID] = seat
 		used[seat] = true
 		bots++
-		added = append(added, BotSeat{SeatIndex: seat, UserID: userID})
+		added = append(added, BotSeat{SeatIndex: seat, UserID: botUserID})
 	}
-	rec, _ := s.buildRecordLocked(roomID)
+	rec := s.buildRecordLocked(roomID)
 	s.mu.Unlock()
 	if len(added) > 0 {
 		s.persistUpsert(ctx, rec)
@@ -425,9 +413,7 @@ func (s *Service) DeleteRoom(ctx context.Context, roomID string) {
 		return
 	}
 	s.mu.Lock()
-	delete(s.roomIDs, roomID)
-	delete(s.seats, roomID)
-	delete(s.metas, roomID)
+	delete(s.rooms, roomID)
 	s.mu.Unlock()
 	if s.registry != nil {
 		delCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -445,35 +431,27 @@ func (s *Service) GetRoom(_ context.Context, roomID string) (string, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	nodeID, ok := s.roomIDs[roomID]
+	room, ok := s.rooms[roomID]
 	if !ok {
 		return "", ErrRoomNotFound
 	}
-	return nodeID, nil
+	return room.NodeID, nil
 }
 
-// buildRecordLocked 在持锁状态下将指定房间的当前内存状态序列化为 RoomRecord。
+// buildRecordLocked 在持锁状态下返回指定房间的持久化快照副本。
 // 调用方必须已持有 s.mu。
-func (s *Service) buildRecordLocked(roomID string) (RoomRecord, bool) {
-	meta, ok := s.metas[roomID]
-	if !ok {
-		return RoomRecord{}, false
+func (s *Service) buildRecordLocked(roomID string) RoomRecord {
+	room := s.rooms[roomID]
+	if room == nil {
+		return RoomRecord{}
 	}
-	nodeID := s.roomIDs[roomID]
-	seats := make(map[string]int32, len(s.seats[roomID]))
-	for uid, seat := range s.seats[roomID] {
+	seats := make(map[string]int32, len(room.Seats))
+	for uid, seat := range room.Seats {
 		seats[uid] = seat
 	}
-	return RoomRecord{
-		RoomID:      roomID,
-		NodeID:      nodeID,
-		RuleID:      meta.ruleID,
-		DisplayName: meta.displayName,
-		Private:     meta.private,
-		CreatedAtMs: meta.createdAtMs,
-		MaxSeats:    meta.maxSeats,
-		Seats:       seats,
-	}, true
+	rec := *room
+	rec.Seats = seats
+	return rec
 }
 
 // persistUpsert 将房间记录同步写入注册表；写失败仅记警告，不影响主流程。
@@ -495,7 +473,7 @@ func (s *Service) allocateRoomIDLocked() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if _, ok := s.roomIDs[roomID]; !ok {
+		if _, ok := s.rooms[roomID]; !ok {
 			return roomID, nil
 		}
 	}
@@ -519,10 +497,6 @@ func normalizeRuleID(ruleID string) string {
 		return defaultRuleID
 	}
 	return strings.TrimSpace(ruleID)
-}
-
-func (m roomMeta) stage() string {
-	return waitingStage
 }
 
 func parsePageToken(token string) (int64, string, error) {
