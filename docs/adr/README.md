@@ -54,21 +54,21 @@
 - [ADR-0029 签名提交升级评估](0029-signed-commit-required.md)：已采纳；定义签名提交试运行与升级路径。
 - [ADR-0030 单机 Docker Compose 部署形态](0030-single-host-compose-deploy.md)：已采纳；与 ADR-0024 并存，限定单机 / 小规模 / 单租户场景。
 - [ADR-0031 大厅列表与自动匹配协议](0031-lobby-list-and-matchmaking.md)：已采纳；定义客户端可见的房间列表、自动匹配与创建房间契约。
-- [ADR-0032 lsp-cli 二进制分发](0032-cli-binary-distribution.md)：已采纳；定义五平台二进制、GoReleaser 与发布目标 SSOT。
+- [ADR-0032 lsp-cli 二进制分发](0032-cli-binary-distribution.md)：**已退役**；cmd/cli 删除后编号保留以维持序列连续性。
 - [ADR-0033 日志采样与 PII 脱敏策略](0033-logging-sampling-and-pii-redaction.md)：已采纳；定义默认关闭采样、Error 永不采样与键名层 PII 边界。
 - [ADR-0034 日志动态级别管控](0034-logging-dynamic-level-control.md)：已采纳；限定 Phase 1 仅提供 AtomicLevel Go API，不开放未鉴权 HTTP 写端点。
 - [ADR-0035 OTel Logs Bridge 评估](0035-otel-logs-bridge.md)：已采纳；默认关闭 OTel 日志桥接，以 build tag 预留 trace/span 注入路径。
 - [ADR-0036 静态分析与 nolint 治理策略](0036-static-analysis-and-lint-policy.md)：已采纳；定义 golangci-lint SSOT、全局排除与行级 nolint 豁免边界。
 - [ADR-0037 Bot Supervisor 与 AddBot RPC](0037-bot-supervisor-and-add-bot-rpc.md)：已采纳；定义一键补位机器人、AddBot RPC 与 supervisor 后续边界。
-- [ADR-0038 lsp-cli 黑白四方对称 TUI 布局](0038-cli-symmetric-tui-layout.md)：已采纳 → **被 ADR-0047 取代**；定义桌面终端牌桌布局、黑白视觉语言与三主题牌面。
+- [ADR-0038 CLI 对称 TUI 布局](0038-cli-symmetric-tui-layout.md)：**已退役**；cmd/cli 删除后编号保留以维持序列连续性。
 - [ADR-0039 四川血战权威局内契约](0039-sichuan-xuezhandaodi-authoritative-round-contract.md)：已采纳；定义玩家/托管命令分流、权威阶段、局共识、每座位投影与客户端 req_id 关联。
 - [ADR-0040 组合式麻将规则能力](0040-composable-mahjong-rule-capabilities.md)：已采纳；定义换三张、定缺、吃碰杠胡、轮转、计分与结算的规则能力组合边界。
 - [ADR-0041 麻将规则 ID 命名规范](0041-mahjong-rule-id-naming.md)：已采纳；统一 `<region>_<variant>_<option>` 全拼音规则 ID，并禁止缩写与混合语言。
 - [ADR-0042 Agent 治理体系职责边界](0042-agent-governance.md)：已采纳；定义 AGENTS、ADR、rules、skills、templates 与 harness 的职责边界。
 - [ADR-0043 根因优先的问题处理策略](0043-root-cause-fix-policy.md)：已采纳；定义查问题与修问题必须先解释根因、拒绝补丁式修复。
-- [ADR-0044 房间状态与前后端交互契约](0044-room-state-and-client-contract.md)：已采纳；统一 RoomLifecycle、RoundProgress、SeatRoster、RoundFacts 与 UXTransient 的命名、投影和传输边界。
+- [ADR-0044 房间状态与客户端契约](0044-room-state-and-client-contract.md)：**已退役**；前端删除后服务端侧职责由 ADR-0039/0040/0045 管辖，编号保留以维持序列连续性。
 - [ADR-0045 房间 deadline 单一所有权与 PhaseUpdate/PhaseToken 契约](0045-phase-deadline-single-owner-and-phase-token.md)：已采纳；deadline 派生自 phaseStart+phaseReason，engine 经 enterPhase 写入，scheduler 退化为定时器对齐，协议层强制嵌入 PhaseUpdate 并以 PhaseToken 校验请求。
 - [ADR-0046 治理体系迁移至 .claude/ 唯一事实源](0046-unified-claude-code-governance.md)：已采纳；以 `.claude/` 为唯一 SSOT，统一路径、术语、格式与 harness，完成 Cursor→Claude Code 迁移闭环。
-- [ADR-0047 CLI 纯中文 TUI 重构](0047-cli-pure-chinese-redesign.md)：已采纳；去掉三主题牌面与黑白美学，用纯中文宽字符、竖排手牌、四向对称牌桌与 Unicode 框线统一 CLI 前端。
+- [ADR-0047 CLI 纯中文 TUI 重设计](0047-cli-pure-chinese-redesign.md)：**已退役**；cmd/cli 删除后编号保留以维持序列连续性。
 - [ADR-0048 Agent 优先的治理文档格式](0048-agent-first-governance-format.md)：已采纳；治理资产以 agent 解析效率为优化目标，禁止散文，固定结构。
 - [ADR-0049 零债务重构策略](0049-zero-debt-refactor-strategy.md)：已采纳；所有变更前必须全系统梳理并找到最优落点，禁止补丁式修复。

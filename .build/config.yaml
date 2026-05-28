@@ -30,21 +30,14 @@ coverage:
     internal/handler: 75
     internal/protocol: 80
     internal/service/room: 67
-    internal/service/bot: 60
     internal/adapter/lobby: 55
     internal/adapter/room: 45
-    internal/bot: 40
-    internal/bot/advisor: 0
-    internal/bot/wsclient: 0
     cmd/all: 45
-    cmd/bot: 0
     cmd/gate: 45
     cmd/lobby: 55
     cmd/room: 40
-    cmd/cli: 35
     default: 60
-  extra_exclude:
-    - "cmd/loadgen/**"
+  extra_exclude: []
 
 lint:
   golangci:
@@ -94,8 +87,6 @@ lint:
       mahjong_hu: internal/mahjong/hu/**
       mahjong_fan: internal/mahjong/fan/**
       mahjong_analysis: internal/mahjong/analysis/**
-      bot: internal/bot/**
-      service_bot: internal/service/bot/**
       domain: internal/domain/**
       app: internal/app/**
       adapter: internal/adapter/**
@@ -122,14 +113,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_xuezhandaodi
         to:
@@ -138,14 +127,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_rules
         to:
@@ -154,14 +141,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_tile
         to:
@@ -170,14 +155,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_wall
         to:
@@ -186,14 +169,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_hand
         to:
@@ -202,14 +183,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_hu
         to:
@@ -218,14 +197,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_fan
         to:
@@ -234,14 +211,12 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: mahjong_analysis
         to:
@@ -250,17 +225,15 @@ lint:
           - handler
           - store
           - service
-          - service_bot
           - session
           - app
           - adapter
           - gateway
           - clock
           - metrics
-          - bot
           - cmd
       - from: domain
-        to: [protocol, cluster, handler, store, service, service_bot, app, adapter, gateway, clock, metrics, bot, cmd]
+        to: [protocol, cluster, handler, store, service, app, adapter, gateway, clock, metrics, cmd]
       - from: handler
         to: [store]
       - from: adapter
@@ -278,16 +251,12 @@ lint:
           - mahjong_fan
           - mahjong_analysis
           - domain
-          - bot
           - service
-          - service_bot
           - app
           - adapter
           - cmd
-      - from: service_bot
-        to: [protocol, cluster, handler, store, session, app, adapter, gateway, clock, metrics, cmd]
       - from: service
-        to: [protocol, handler, cluster, bot, cmd]
+        to: [protocol, handler, cluster, cmd]
       - from: pkg
         to:
           - mahjong_builtin
@@ -300,8 +269,6 @@ lint:
           - mahjong_hu
           - mahjong_fan
           - mahjong_analysis
-          - bot
-          - service_bot
           - domain
           - app
           - adapter
@@ -331,8 +298,6 @@ lint:
           - mahjong_hu
           - mahjong_fan
           - mahjong_analysis
-          - bot
-          - service_bot
           - domain
           - app
           - adapter
@@ -362,8 +327,6 @@ lint:
           - mahjong_hu
           - mahjong_fan
           - mahjong_analysis
-          - bot
-          - service_bot
           - domain
           - app
           - adapter
@@ -584,14 +547,6 @@ metrics:
     - "_ratio"
     - "_info"
     - "_depth"
-
-release:
-  cli_targets:
-    - darwin/arm64
-    - darwin/amd64
-    - linux/amd64
-    - linux/arm64
-    - windows/amd64
 
 governance:
   entry_md_max_lines: 80

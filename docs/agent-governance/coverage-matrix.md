@@ -25,7 +25,6 @@ Claude 与 Codex 治理资产长期双边保留：`.claude/` 是 Claude 入口�
 | api | `/add-pb-message` | `.claude/templates/code/proto-message/manifest.yaml` | `.claude/rules/proto-standards.md` |
 | persistence | `/scaffold-package` | `.claude/templates/code/go-repository/manifest.yaml` | `.claude/rules/redis-keys-naming.md` |
 | observability | `/add-metric` | `.claude/templates/doc/runbook/manifest.yaml` | `.claude/rules/metrics-naming.md` |
-| cli | `/scaffold-package` | `.claude/templates/code/go-cli-command/manifest.yaml` | `.claude/rules/cli-release-targets.md` |
 
 ## 横切关注
 

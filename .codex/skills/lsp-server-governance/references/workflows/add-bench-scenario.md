@@ -1,12 +1,12 @@
 ---
-description: 新增压测场景。用于扩展 bench/scenarios、cmd/loadgen 场景实现、verify-bench 入口与长期基线归档。
+description: 新增压测场景。用于扩展 bench/scenarios、verify-bench 入口与长期基线归档。
 ---
 
 # 新增压测场景
 
 ## When to use
 
-当需要新增 Phase 6 容量场景、预发压测剧本、重连冲击模型或新的可重复 loadgen 运行路径时使用。
+当需要新增容量场景、预发压测剧本、重连冲击模型或新的可重复压测路径时使用。
 
 压测场景属于 workflow 资产，不需要为每个场景新增 rule；只有当压测规则本身变成长期硬约束时，才另行使用 `/add-constraint`。
 
@@ -20,10 +20,9 @@ description: 新增压测场景。用于扩展 bench/scenarios、cmd/loadgen 场
 
 1. **输出职责所有者分析**：列出涉及该职责的现有文件、接口、调用链；写出目标状态与当前状态的 diff，确认落点在正确层（ADR-0049）。未完成此步骤不得动代码。
 2. 在 `bench/scenarios/scenario_X/config.yaml` 新增剧本配置。
-3. 在 `cmd/loadgen/scenario_X.go` 增加场景实现，保持命名与配置路径一一对应。
-4. 更新 `bench/scripts/run.sh` 或 loadgen 分派逻辑，支持 `SCENARIO=X make verify-bench`。
-5. 如形成长期基线，归档到 `docs/baselines/<run_id>/`，不要提交 `bench/runs/`。
-6. 更新 `bench/README.md`、`docs/TESTING.md` 与 CHANGELOG。
+3. 更新 `bench/scripts/run.sh`，支持 `SCENARIO=X make verify-bench`。
+4. 如形成长期基线，归档到 `docs/baselines/<run_id>/`，不要提交 `bench/runs/`。
+5. 更新 `bench/README.md`、`docs/TESTING.md` 与 CHANGELOG。
 
 ## Verify
 

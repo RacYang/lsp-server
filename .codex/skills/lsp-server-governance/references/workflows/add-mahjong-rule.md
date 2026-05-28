@@ -22,7 +22,7 @@ description: 通过共享规则接口新增麻将变体实现。用于引入新�
 3. 在规则专属包中实现变体逻辑，保持麻将算法层与传输、会话、存储隔离；room engine 不得依赖具体规则包。
 4. 如需注册表或配置选择，先把规则 ID 加入 `.build/config.yaml` 的 `mahjong.rules.allowed_ids`，再注册实现，并补配置解析与能力元数据测试。
 5. 为新行为补充 YAML 夹具与 Go 单测，至少覆盖发牌、动作、和牌、结算、重连快照与多局边界。
-6. 更新 `docs/RULE-ENGINE.md`、相关 ADR、`docs/PROTOCOL.md`、`docs/cli-tui-backend-gaps.md` 与 CHANGELOG；只有治理硬约束变更才更新 `docs/RULE-LIFECYCLE.md`。
+6. 更新 `docs/RULE-ENGINE.md`、相关 ADR、`docs/PROTOCOL.md` 与 CHANGELOG；只有治理硬约束变更才更新 `docs/RULE-LIFECYCLE.md`。
 
 ## Verify
 

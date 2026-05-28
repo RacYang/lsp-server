@@ -61,8 +61,6 @@ POLICY_DOMAINS: list[tuple[str, list[str], set[str]]] = [
     ("Redis 键命名", ["redis.*key", "键名.*构造", "集中构造"], {"0010"}),
     # 指标 (ADR-0019)
     ("指标命名", ["metrics.*prefix", "lsp_", "指标.*命名空间"], {"0019"}),
-    # CLI 发布 (ADR-0032)
-    ("CLI 发布目标", ["cli_targets", "发布平台", "GoReleaser"], {"0032"}),
     # 测试 (ADR-0000 / ADR-0043)
     ("测试规范", ["覆盖率", "cover.*threshold", "表驱动", "根因"], {"0000", "0043"}),
     # 持久化迁移

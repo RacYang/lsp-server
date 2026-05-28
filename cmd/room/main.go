@@ -15,7 +15,6 @@ import (
 	"racoo.cn/lsp/internal/app"
 	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
-	botsvc "racoo.cn/lsp/internal/service/bot"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
@@ -83,14 +82,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		ClaimWindow: cfg.RoomTimeouts.ClaimWindow, TsumoWindow: cfg.RoomTimeouts.TsumoWindow,
 		Discard: cfg.RoomTimeouts.Discard, SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 	})
-	botSup := botsvc.NewBotSupervisor(svcCore)
-	svcCore.SetAfterCmdHook(botSup.AfterCmd)
 	svc := roomadapter.NewGRPCServer(svcCore, ev, gs, st, rcli)
-	botSup.SetNotificationHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
-		if err := svc.PersistPublishAndFinalize(ctx, roomID, "", notifications); err != nil {
-			logx.Error(logx.WithRoomID(ctx, roomID), "机器人通知持久化失败", "err", err.Error())
-		}
-	})
 	svc.SetIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {
 		svc.SetReady(false)

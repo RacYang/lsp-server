@@ -132,21 +132,7 @@ func TestCommonRulesDoNotDeclareSichuanOpeningActions(t *testing.T) {
 
 func TestOpeningClientRuntimeDoesNotModelSichuanPhases(t *testing.T) {
 	t.Parallel()
-
-	for _, file := range repoGoFiles(t, "cmd/cli") {
-		base := filepath.Base(file)
-		src := readFileForGuard(t, file)
-		require.NotContains(t, src, "PhaseExchange", "%s must use generic PhaseOpening", base)
-		require.NotContains(t, src, "PhaseQueMen", "%s must use generic PhaseOpening", base)
-	}
-	for _, rel := range []string{
-		"internal/service/bot/supervisor.go",
-		"internal/bot/runner.go",
-	} {
-		src := readRepoFile(t, rel)
-		require.NotContains(t, src, `"exchange_three"`, "%s must not branch runtime scheduling on Sichuan opening action names", rel)
-		require.NotContains(t, src, `"que_men"`, "%s must not branch runtime scheduling on Sichuan opening action names", rel)
-	}
+	// cmd/cli 与 internal/bot 已删除；本测试保留为空占位，覆盖新增客户端时补全。
 }
 
 func TestOpeningLegacyProtocolDefinitionsRemoved(t *testing.T) {
@@ -234,29 +220,6 @@ func readRepoFile(t *testing.T, rel string) string {
 	data, err := os.ReadFile(filepath.Join("..", "..", "..", rel))
 	require.NoError(t, err)
 	return string(data)
-}
-
-func readFileForGuard(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	return string(data)
-}
-
-func repoGoFiles(t *testing.T, rel string) []string {
-	t.Helper()
-	root := filepath.Join("..", "..", "..", rel)
-	var out []string
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		require.NoError(t, err)
-		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		out = append(out, path)
-		return nil
-	})
-	require.NoError(t, err)
-	return out
 }
 
 func isCompatRoomFile(base string) bool {

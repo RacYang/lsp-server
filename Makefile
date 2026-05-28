@@ -8,16 +8,15 @@ DOCKER ?= docker
 VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-CLI_LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(DATE)
 
 HAS_GO := $(shell find . -type f -name '*.go' -not -path './.build/negatives/*' -not -path '*/gen/*' -print -quit 2>/dev/null)
 HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 
-.PHONY: bootstrap generate fix fix-file build-cli build-bot build-cli-all sync-agent-governance verify verify-fast verify-pre-commit verify-image verify-bench \
+.PHONY: bootstrap generate fix fix-file sync-agent-governance verify verify-fast verify-pre-commit verify-image verify-bench \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
 	verify-meta verify-agent-governance-sync verify-config verify-config-schema verify-tools verify-determinism verify-commit-msg verify-lang verify-nolint-policy verify-domain verify-redis-keys verify-metrics-naming verify-observability verify-postgres-migrations verify-gate-session-routing verify-skeleton \
-	verify-cli-release-targets verify-mahjong-rule-ids verify-git-repo verify-git-local verify-git-push
+	verify-mahjong-rule-ids verify-git-repo verify-git-local verify-git-push
 
 bootstrap:
 	@bash scripts/install-tools.sh
@@ -44,29 +43,9 @@ fix-file:
 	  *.proto) buf format -w "$(FILE)" ;; 
 	esac
 
-build-cli:
-	@mkdir -p dist
-	@go build -trimpath -ldflags="$(CLI_LDFLAGS)" -o dist/lsp-cli ./cmd/cli
+verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-config-schema verify-tools verify-determinism verify-git-repo verify-lang verify-nolint-policy verify-domain verify-skeleton
 
-build-bot:
-	@mkdir -p dist
-	@go build -trimpath -o dist/lsp-bot ./cmd/bot
-
-build-cli-all:
-	@mkdir -p dist
-	@find dist -maxdepth 1 -type f -name 'lsp-cli_*' -delete
-	@rm -f dist/SHA256SUMS
-	@for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64; do \
-		os="$${target%/*}"; arch="$${target#*/}"; ext=""; \
-		if [[ "$$os" == "windows" ]]; then ext=".exe"; fi; \
-		echo "building lsp-cli $$os/$$arch"; \
-		GOOS="$$os" GOARCH="$$arch" CGO_ENABLED=0 go build -trimpath -ldflags="$(CLI_LDFLAGS)" -o "dist/lsp-cli_$${os}_$${arch}$${ext}" ./cmd/cli; \
-	done
-	@(cd dist && files="$$(find . -maxdepth 1 -type f -name 'lsp-cli_*' -print | sort)"; if command -v shasum >/dev/null 2>&1; then shasum -a 256 $$files > SHA256SUMS; else sha256sum $$files > SHA256SUMS; fi)
-
-verify: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break verify-test verify-test-integration verify-cover verify-vuln verify-tidy verify-secrets verify-meta verify-config verify-config-schema verify-tools verify-determinism verify-cli-release-targets verify-git-repo verify-lang verify-nolint-policy verify-domain verify-skeleton
-
-verify-fast: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-test-fast verify-secrets verify-meta verify-config verify-config-schema verify-tools verify-determinism verify-cli-release-targets verify-git-repo verify-lang verify-nolint-policy verify-domain verify-skeleton
+verify-fast: verify-fmt verify-lint verify-arch verify-deps verify-proto verify-test-fast verify-secrets verify-meta verify-config verify-config-schema verify-tools verify-determinism verify-git-repo verify-lang verify-nolint-policy verify-domain verify-skeleton
 
 verify-git-repo:
 	@python3 scripts/verify-repo-hygiene.py
@@ -289,9 +268,6 @@ verify-metrics-naming:
 
 verify-gate-session-routing:
 	@python3 scripts/verify-gate-session-routing.py
-
-verify-cli-release-targets:
-	@python3 scripts/verify-cli-release-targets.py
 
 verify-mahjong-rule-ids:
 	@python3 scripts/verify-mahjong-rule-ids.py

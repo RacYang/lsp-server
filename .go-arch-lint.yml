@@ -27,10 +27,6 @@ components:
     in: internal/mahjong/fan/**
   mahjong_analysis:
     in: internal/mahjong/analysis/**
-  bot:
-    in: internal/bot/**
-  service_bot:
-    in: internal/service/bot/**
   domain:
     in: internal/domain/**
   app:
@@ -223,28 +219,6 @@ deps:
       - pkg
       - apigen_client
       - apigen_v1
-  bot:
-    anyProjectDeps: true
-  service_bot:
-    mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - bot
-      - domain
-      - service
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   domain:
     mayDependOn:
       - mahjong_builtin
@@ -277,8 +251,6 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - mahjong_analysis
-      - bot
-      - service_bot
       - domain
       - protocol
       - cluster
@@ -323,8 +295,6 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - mahjong_analysis
-      - bot
-      - service_bot
       - domain
       - app
       - adapter
@@ -355,7 +325,6 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - mahjong_analysis
-      - service_bot
       - domain
       - app
       - adapter

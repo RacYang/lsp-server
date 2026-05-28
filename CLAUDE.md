@@ -1,6 +1,6 @@
 # lsp-server
 
-麻将游戏服务器，自研网络、房间编排与规则分发，拒绝游戏服务器框架依赖。多服务架构：gate、lobby、room、bot、cli，gRPC 集群层 + proto 客户端契约，Alpha 阶段。
+麻将游戏服务器，自研网络、房间编排与规则分发，拒绝游戏服务器框架依赖。多服务架构：gate、lobby、room，gRPC 集群层，Alpha 阶段。
 
 ## 不可妥协纪律
 
@@ -19,7 +19,7 @@
 | 新增或修订长期决策 | `/add-adr` |
 | 新增硬约束、enforcer 或负例 | `/add-constraint` |
 | 修改治理阈值、工具版本或白名单 | `/update-ssot` |
-| 新增 Go 包、handler、service、actor 或 CLI 子命令 | `/scaffold-package` |
+| 新增 Go 包、handler、service 或 actor | `/scaffold-package` |
 | 新增 proto 消息或 RPC 契约 | `/add-pb-message` |
 | 新增麻将规则变体 | `/add-mahjong-rule` |
 | 新增番种或计分逻辑 | `/add-fan-type` |
@@ -49,7 +49,6 @@
 - **日志体系**：`docs/adr/0006-logging-system-and-facade.md`
 - **麻将规则引擎**：`docs/RULE-ENGINE.md`、`docs/ROOM-FSM.md`
 - **Agent 治理体系**：`docs/adr/0042-agent-governance.md`、`docs/agent-governance/coverage-matrix.md`
-- **CLI 纯中文 TUI 设计**：`docs/adr/0047-cli-pure-chinese-redesign.md`
 - **根因修复策略**：`docs/adr/0043-root-cause-fix-policy.md`
 - **Agent 双边治理**：`.claude/`、`.codex/skills/lsp-server-governance/`、`docs/agent-governance/coverage-matrix.md`
 - **ADR 索引**：`docs/adr/README.md`

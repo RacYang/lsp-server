@@ -14,7 +14,6 @@ import (
 	"racoo.cn/lsp/internal/config"
 	remotegateway "racoo.cn/lsp/internal/gateway/remote"
 	"racoo.cn/lsp/internal/handler"
-	botsvc "racoo.cn/lsp/internal/service/bot"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/internal/store/postgres"
@@ -126,10 +125,6 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		if local, ok := gateway.(*handler.LocalRoomGateway); ok {
 			local.SetOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline)
 			rs.SetAutoTimeoutHandler(local.BroadcastNotifications)
-			// 单进程聚合也跑 BotSupervisor，并把 bot 动作通知接回本地 gateway。
-			botSup := botsvc.NewBotSupervisor(rs)
-			botSup.SetNotificationHandler(local.BroadcastNotifications)
-			rs.SetAfterCmdHook(botSup.AfterCmd)
 		}
 		cleanup = func() {
 			if redisCleanup != nil {

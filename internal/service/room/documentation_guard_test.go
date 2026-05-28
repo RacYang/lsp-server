@@ -65,12 +65,6 @@ func TestMultiRuleDocumentationDoesNotDescribeLegacyFieldsAsRoomModel(t *testing
 			mustHave:  "所有开局步骤统一为 `WAITING_REASON_OPENING`",
 			rationale: "protocol action names are compatibility projection, not room phases",
 		},
-		{
-			path:      "spec/player-journey.md",
-			forbid:    "已胡座位（`hued_seats` 含）不参与摸打轮转",
-			mustHave:  "本 spec 以默认规则 `sichuan_xuezhandaodi_huansanzhang` 的玩家旅程为主",
-			rationale: "player journey must mark Sichuan-specific behavior as default-rule projection",
-		},
 	}
 
 	for _, tc := range cases {
