@@ -111,20 +111,21 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		}
 	} else {
 		lb := roomsvc.NewLobby()
-		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID)
-		rs.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
-		rs.SetAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay)
-		rs.SetTimeoutConfig(roomsvc.TimeoutConfig{
-			OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
-			OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
-			ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
-			TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
-			Discard:         cfg.RoomTimeouts.Discard,
-			SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
-		})
+		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID,
+			roomsvc.WithMailboxCapacity(cfg.Runtime.RoomMailboxCapacity),
+			roomsvc.WithAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay),
+			roomsvc.WithTimeoutConfig(roomsvc.TimeoutConfig{
+				OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
+				OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
+				ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
+				TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
+				Discard:         cfg.RoomTimeouts.Discard,
+				SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
+			}),
+			roomsvc.WithOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline),
+		)
 		gateway = localadapter.NewLocalRoomGateway(rs, hub, sessMgr)
 		if local, ok := gateway.(*localadapter.LocalRoomGateway); ok {
-			local.SetOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline)
 			rs.SetAutoTimeoutHandler(local.BroadcastNotifications)
 		}
 		cleanup = func() {

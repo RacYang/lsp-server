@@ -89,14 +89,47 @@ func (cfg TimeoutConfig) withDefaults() TimeoutConfig {
 	return cfg
 }
 
+// Option 是 Service 的功能选项，用于在构造时设置可选配置。
+type Option func(*Service)
+
+// WithClock 注入时间源；主要供测试使用。
+func WithClock(c clock.Clock) Option {
+	return func(s *Service) { s.SetClock(c) }
+}
+
+// WithTimeoutConfig 覆盖房间托管时长。
+func WithTimeoutConfig(cfg TimeoutConfig) Option {
+	return func(s *Service) { s.SetTimeoutConfig(cfg) }
+}
+
+// WithMailboxCapacity 覆盖新建房间 actor 的 mailbox 容量。
+func WithMailboxCapacity(capacity int) Option {
+	return func(s *Service) { s.SetMailboxCapacity(capacity) }
+}
+
+// WithMaxHands 设置同房最多连开局数。
+func WithMaxHands(maxHands int32) Option {
+	return func(s *Service) { s.SetMaxHands(maxHands) }
+}
+
+// WithAllowLeaveDuringPlay 控制 playing 中 Leave 是否转换为 surrender。
+func WithAllowLeaveDuringPlay(allow bool) Option {
+	return func(s *Service) { s.SetAllowLeaveDuringPlay(allow) }
+}
+
+// WithOfflineSurrenderAfter 覆盖离线投降等待时长。
+func WithOfflineSurrenderAfter(d time.Duration) Option {
+	return func(s *Service) { s.SetOfflineSurrenderAfter(d) }
+}
+
 // NewService 创建房间服务（广播由 handler 在写完应答帧后调用 Hub 完成）。
-func NewService(l *RoomRegistry) *Service {
-	return NewServiceWithRule(l, "")
+func NewService(l *RoomRegistry, opts ...Option) *Service {
+	return NewServiceWithRule(l, "", opts...)
 }
 
 // NewServiceWithRule 使用指定规则装配房间服务；ruleID 为空时回退默认四川血战规则。
-func NewServiceWithRule(l *RoomRegistry, ruleID string) *Service {
-	return &Service{
+func NewServiceWithRule(l *RoomRegistry, ruleID string, opts ...Option) *Service {
+	s := &Service{
 		lobby:                l,
 		actors:               make(map[string]*roomActor),
 		engine:               NewEngine(ruleID),
@@ -106,6 +139,10 @@ func NewServiceWithRule(l *RoomRegistry, ruleID string) *Service {
 		mailboxCapacity:      defaultMailboxCapacity,
 		allowLeaveDuringPlay: true,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // SetClock 注入时间源；主要供测试使用。

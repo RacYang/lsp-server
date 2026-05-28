@@ -74,14 +74,18 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		logx.Error(ctx, "启用 etcd 房间恢复时必须同时配置 Redis", "err", "missing redis.addr")
 		return 1
 	}
-	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), cfg.RuleID)
-	svcCore.SetMailboxCapacity(cfg.Runtime.RoomMailboxCapacity)
-	svcCore.SetAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay)
-	svcCore.SetTimeoutConfig(roomsvc.TimeoutConfig{
-		OpeningDefault: cfg.RoomTimeouts.OpeningDefault, OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
-		ClaimWindow: cfg.RoomTimeouts.ClaimWindow, TsumoWindow: cfg.RoomTimeouts.TsumoWindow,
-		Discard: cfg.RoomTimeouts.Discard, SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
-	})
+	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), cfg.RuleID,
+		roomsvc.WithMailboxCapacity(cfg.Runtime.RoomMailboxCapacity),
+		roomsvc.WithAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay),
+		roomsvc.WithTimeoutConfig(roomsvc.TimeoutConfig{
+			OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
+			OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
+			ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,
+			TsumoWindow:     cfg.RoomTimeouts.TsumoWindow,
+			Discard:         cfg.RoomTimeouts.Discard,
+			SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
+		}),
+	)
 	svc := roomadapter.NewGRPCServer(svcCore, ev, gs, st, rcli)
 	svc.SetIdempotencyTTL(cfg.Runtime.RedisIdempotencyTTL)
 	if cfg.EtcdEndpoints != "" {
