@@ -5,15 +5,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
-
 	"racoo.cn/lsp/internal/clock"
 )
 
 // Hub 保存 user_id 到连接的映射，并提供按房间广播。
 type Hub struct {
 	mu               sync.Mutex
-	users            map[string]*websocket.Conn
+	users            map[string]Conn
 	rooms            map[string]map[string]struct{}
 	lastHeartbeat    map[string]time.Time
 	clk              clock.Clock
@@ -23,7 +21,7 @@ type Hub struct {
 // NewHub 创建 Hub。
 func NewHub() *Hub {
 	return &Hub{
-		users:            make(map[string]*websocket.Conn),
+		users:            make(map[string]Conn),
 		rooms:            make(map[string]map[string]struct{}),
 		lastHeartbeat:    make(map[string]time.Time),
 		clk:              clock.NewReal(),
@@ -52,7 +50,7 @@ func (h *Hub) SetHeartbeatTimeout(d time.Duration) {
 }
 
 // Register 注册连接并记录其所在房间。
-func (h *Hub) Register(userID, roomID string, c *websocket.Conn) {
+func (h *Hub) Register(userID, roomID string, c Conn) {
 	if h == nil {
 		return
 	}
@@ -147,7 +145,7 @@ func (h *Hub) Unregister(userID, roomID string) {
 //
 // WebSocket 断线清理可能晚于同一用户的新连接重连；如果只按 user_id 删除，会把新连接误删，
 // 造成后续按座位定向的私有事件发不到客户端。
-func (h *Hub) UnregisterConn(userID, roomID string, c *websocket.Conn) bool {
+func (h *Hub) UnregisterConn(userID, roomID string, c Conn) bool {
 	if h == nil || userID == "" {
 		return false
 	}
