@@ -93,6 +93,7 @@ lint:
       gateway: internal/gateway/**
       protocol: internal/protocol/**
       cluster: internal/cluster/**
+      contract: internal/contract/**
       handler: internal/handler/**
       store: internal/store/**
       service: internal/service/**
@@ -248,6 +249,8 @@ lint:
           - cmd
       - from: domain
         to: [protocol, cluster, handler, store, service, app, adapter, gateway, clock, metrics, cmd]
+      - from: contract
+        to: [protocol, cluster, handler, store, service, session, app, adapter, gateway, clock, metrics, cmd]
       - from: handler
         to: [store]
       - from: adapter

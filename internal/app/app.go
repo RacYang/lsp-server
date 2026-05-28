@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	localadapter "racoo.cn/lsp/internal/adapter/local"
 	"racoo.cn/lsp/internal/config"
 	remotegateway "racoo.cn/lsp/internal/gateway/remote"
 	"racoo.cn/lsp/internal/handler"
@@ -121,8 +122,8 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 			Discard:         cfg.RoomTimeouts.Discard,
 			SurrenderAction: cfg.Runtime.RoomSurrenderActionTimeout,
 		})
-		gateway = handler.NewLocalRoomGateway(rs, hub, sessMgr)
-		if local, ok := gateway.(*handler.LocalRoomGateway); ok {
+		gateway = localadapter.NewLocalRoomGateway(rs, hub, sessMgr)
+		if local, ok := gateway.(*localadapter.LocalRoomGateway); ok {
 			local.SetOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline)
 			rs.SetAutoTimeoutHandler(local.BroadcastNotifications)
 		}

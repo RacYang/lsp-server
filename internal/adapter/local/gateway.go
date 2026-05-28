@@ -1,4 +1,4 @@
-package handler
+package localadapter
 
 import (
 	"context"
@@ -7,7 +7,9 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
+	"racoo.cn/lsp/internal/contract"
 	"racoo.cn/lsp/internal/mahjong/rules"
+
 	"racoo.cn/lsp/internal/protocol"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	roomsvc "racoo.cn/lsp/internal/service/room"
@@ -349,7 +351,7 @@ func (g *LocalRoomGateway) BroadcastNotifications(_ context.Context, roomID stri
 }
 
 func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.Notification) {
-	outMsgID, ok := outboundMsgID(notification.Kind)
+	outMsgID, ok := localOutboundMsgID(notification.Kind)
 	if !ok || g == nil || g.hub == nil {
 		return
 	}
@@ -391,7 +393,7 @@ func (g *LocalRoomGateway) EnsureRoomEventSubscription(_ context.Context, _, _ s
 }
 
 // Resume 基于 Redis 会话与内存房间视图构造快照；无持久化游标时以会话 LastCursor 为准。
-func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*ResumeResult, error) {
+func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*contract.ResumeResult, error) {
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
@@ -403,7 +405,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 		return nil, err
 	}
 	if srec.RoomID == "" {
-		return &ResumeResult{UserID: uid, Resumed: false}, nil
+		return &contract.ResumeResult{UserID: uid, Resumed: false}, nil
 	}
 	players, state, _, ok := g.rooms.RoomSnapshot(srec.RoomID)
 	if !ok {
@@ -442,7 +444,7 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*Re
 	for seat := 0; seat < len(snap.Seats) && seat < len(view.HandsBySeat); seat++ {
 		snap.Seats[seat].HandCount = int32(len(view.HandsBySeat[seat])) //nolint:gosec // 座位手牌数量小于 20。
 	}
-	return &ResumeResult{
+	return &contract.ResumeResult{
 		UserID:              uid,
 		RoomID:              srec.RoomID,
 		Resumed:             true,
@@ -592,6 +594,26 @@ func roomViewTotalScores(scores []*rules.SeatScore) []*clientv1.SeatScore {
 		})
 	}
 	return out
+}
+
+// localOutboundMsgID 映射 room 通知种类到 WebSocket 协议消息 ID。
+func localOutboundMsgID(kind roomsvc.Kind) (uint16, bool) {
+	switch kind {
+	case roomsvc.KindInitialDeal:
+		return protocol.InitialDealNotify, true
+	case roomsvc.KindOpeningDone:
+		return protocol.OpeningDone, true
+	case roomsvc.KindStartGame:
+		return protocol.StartGame, true
+	case roomsvc.KindDrawTile:
+		return protocol.DrawTile, true
+	case roomsvc.KindAction:
+		return protocol.ActionNotify, true
+	case roomsvc.KindSettlement:
+		return protocol.Settlement, true
+	default:
+		return 0, false
+	}
 }
 
 func lobbyRuleMetaToClient(meta lobbysvc.RuleMeta) *clientv1.RuleMeta {

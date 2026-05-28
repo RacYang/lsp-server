@@ -10,7 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/contract"
 	"racoo.cn/lsp/internal/protocol"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
@@ -35,28 +35,8 @@ type Deps struct {
 	AllowedOrigins []string
 }
 
-// RoomGateway 抽象本地房间服务或远程 room/lobby gRPC 协调器。
-type RoomGateway interface {
-	Join(ctx context.Context, roomID, userID string) (int, error)
-	Ready(ctx context.Context, roomID, userID string) (func(), error)
-	Leave(ctx context.Context, roomID, userID string) (func(), error)
-	MarkSeatOffline(ctx context.Context, roomID, userID string) error
-	CancelOfflineSurrender(ctx context.Context, roomID, userID string) error
-	OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *clientv1.PhaseToken) (func(), error)
-	Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error)
-	Pong(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
-	Chi(ctx context.Context, roomID, userID string, tiles []string, tok *clientv1.PhaseToken) (func(), error)
-	Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error)
-	Hu(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
-	Pass(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
-	ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error)
-	ListRules(ctx context.Context) ([]*clientv1.RuleMeta, error)
-	AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error)
-	CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error)
-	AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, func(), error)
-	Resume(ctx context.Context, sessionToken string) (*ResumeResult, error)
-	EnsureRoomEventSubscription(ctx context.Context, roomID, sinceCursor string) error
-}
+// RoomGateway 是大厅/房间网关的类型别名，定义在 contract 包，避免 adapter/gateway → handler 反向依赖。
+type RoomGateway = contract.RoomGateway
 
 // wsConnState 跨帧维护的可变身份；handler 唯一允许写者，遵守"单写者"约定。
 type wsConnState struct {

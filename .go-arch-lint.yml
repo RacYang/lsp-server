@@ -39,6 +39,8 @@ components:
     in: internal/protocol/**
   cluster:
     in: internal/cluster/**
+  contract:
+    in: internal/contract/**
   handler:
     in: internal/handler/**
   store:
@@ -76,6 +78,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -93,6 +96,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -110,6 +114,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -127,6 +132,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -144,6 +150,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -161,6 +168,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -178,6 +186,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -195,6 +204,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -212,6 +222,7 @@ deps:
       - mahjong_hu
       - mahjong_analysis
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -229,6 +240,7 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - domain
+      - contract
       - config
       - log
       - pkg
@@ -246,6 +258,7 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - mahjong_analysis
+      - contract
       - session
       - config
       - log
@@ -269,6 +282,7 @@ deps:
       - domain
       - protocol
       - cluster
+      - contract
       - handler
       - store
       - service
@@ -284,6 +298,7 @@ deps:
     mayDependOn:
       - protocol
       - cluster
+      - contract
       - handler
       - store
       - session
@@ -298,6 +313,24 @@ deps:
     anyProjectDeps: true
   cluster:
     anyProjectDeps: true
+  contract:
+    mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen_client
+      - apigen_v1
   handler:
     mayDependOn:
       - mahjong_builtin
@@ -316,6 +349,7 @@ deps:
       - gateway
       - protocol
       - cluster
+      - contract
       - service
       - session
       - config
@@ -344,6 +378,7 @@ deps:
       - app
       - adapter
       - gateway
+      - contract
       - store
       - session
       - config
@@ -366,9 +401,12 @@ deps:
   cmd:
     anyProjectDeps: true
   pkg:
-    anyVendorDeps: true
+    mayDependOn:
+      - contract
   apigen_client:
-    anyVendorDeps: true
+    mayDependOn:
+      - contract
   apigen_v1:
     mayDependOn:
+      - contract
       - apigen_client

@@ -7,13 +7,13 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
-	"racoo.cn/lsp/internal/handler"
+	"racoo.cn/lsp/internal/contract"
 	"racoo.cn/lsp/internal/store/postgres"
 )
 
 // Resume 通过 Redis 会话与 room.SnapshotRoom 构造重连结果；
 // 不主动建立订阅（由 handler 在 Hub 注册后调用 EnsureRoomEventSubscription）。
-func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*handler.ResumeResult, error) {
+func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*contract.ResumeResult, error) {
 	if g == nil {
 		return nil, fmt.Errorf("nil remote room gateway")
 	}
@@ -25,11 +25,11 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		return nil, err
 	}
 	if srec.RoomID == "" {
-		return &handler.ResumeResult{UserID: uid, Resumed: false}, nil
+		return &contract.ResumeResult{UserID: uid, Resumed: false}, nil
 	}
 	roomClient, _, err := g.roomClientForRoom(ctx, srec.RoomID)
 	if err != nil {
-		return nil, &handler.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: err.Error()}
+		return nil, &contract.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: err.Error()}
 	}
 	var snapResp *svcv1.SnapshotRoomResponse
 	err = retryGRPC(ctx, func(callCtx context.Context) error {
@@ -43,7 +43,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		} else if ok {
 			return fallback, nil
 		}
-		return nil, &handler.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: fmt.Sprintf("快照房间失败: %v", err)}
+		return nil, &contract.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: fmt.Sprintf("快照房间失败: %v", err)}
 	}
 	if snapResp.GetError() != "" {
 		if fallback, ok, ferr := g.loadSettlementFallback(ctx, uid, srec.RoomID); ferr != nil {
@@ -51,7 +51,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		} else if ok {
 			return fallback, nil
 		}
-		return nil, &handler.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: snapResp.GetError()}
+		return nil, &contract.ResumeError{Code: clientv1.ErrorCode_ERROR_CODE_RECONNECTING, Message: snapResp.GetError()}
 	}
 	// SnapshotRoomResponse 所有字段已与 client.v1 类型统一，无须转译。
 	snap := &clientv1.SnapshotNotify{
@@ -95,7 +95,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 		}
 	}
 	since := snapResp.GetCursor()
-	return &handler.ResumeResult{
+	return &contract.ResumeResult{
 		UserID:              uid,
 		RoomID:              srec.RoomID,
 		Resumed:             true,
@@ -104,7 +104,7 @@ func (g *remoteRoomGateway) Resume(ctx context.Context, sessionToken string) (*h
 	}, nil
 }
 
-func (g *remoteRoomGateway) loadSettlementFallback(ctx context.Context, userID, roomID string) (*handler.ResumeResult, bool, error) {
+func (g *remoteRoomGateway) loadSettlementFallback(ctx context.Context, userID, roomID string) (*contract.ResumeResult, bool, error) {
 	if g == nil || g.settlementStore == nil || roomID == "" {
 		return nil, false, nil
 	}
@@ -115,7 +115,7 @@ func (g *remoteRoomGateway) loadSettlementFallback(ctx context.Context, userID, 
 		}
 		return nil, false, err
 	}
-	return &handler.ResumeResult{
+	return &contract.ResumeResult{
 		UserID:            userID,
 		RoomID:            roomID,
 		Resumed:           false,

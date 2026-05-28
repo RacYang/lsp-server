@@ -127,6 +127,11 @@ func joinRoomErrorCode(err error) clientv1.ErrorCode {
 	}
 }
 
+// OutboundMsgID 返回 room 通知种类对应的 WebSocket 协议消息 ID；供 adapter/local 复用。
+func OutboundMsgID(kind roomsvc.Kind) (uint16, bool) {
+	return outboundMsgID(kind)
+}
+
 func outboundMsgID(kind roomsvc.Kind) (uint16, bool) {
 	switch kind {
 	case roomsvc.KindInitialDeal:

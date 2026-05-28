@@ -17,14 +17,14 @@ import (
 
 	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
-	"racoo.cn/lsp/internal/handler"
+	"racoo.cn/lsp/internal/contract"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
 )
 
-// remoteRoomGateway 通过 gRPC 代理 handler.RoomGateway 接口至集群 lobby/room 服务。
+// remoteRoomGateway 通过 gRPC 代理 contract.RoomGateway 接口至集群 lobby/room 服务。
 type remoteRoomGateway struct {
 	lobby             svcv1.LobbyServiceClient
 	defaultRoomAddr   string
@@ -59,7 +59,7 @@ var grpcKeepaliveOpt = grpc.WithKeepaliveParams(keepalive.ClientParameters{
 })
 
 // New 根据配置构造远程房间网关，返回网关实例、清理函数和初始化错误。
-func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache *redis.Client, settlementStore *postgres.SettlementStore) (handler.RoomGateway, func(), error) {
+func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache *redis.Client, settlementStore *postgres.SettlementStore) (contract.RoomGateway, func(), error) {
 	lobbyConn, err := grpc.NewClient(cfg.ClusterLobbyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpcKeepaliveOpt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("dial lobby grpc: %w", err)
