@@ -110,6 +110,58 @@ func TestRoomEngineArchitectureGuard(t *testing.T) {
 	}
 }
 
+func TestMahjongLayerDoesNotImportClientV1(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("..", "..", "mahjong")
+	var goFiles []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		require.NoError(t, err)
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		goFiles = append(goFiles, path)
+		return nil
+	})
+	require.NoError(t, err)
+
+	const clientV1Import = `"racoo.cn/lsp/api/gen/go/client/v1"`
+	for _, file := range goFiles {
+		base := filepath.Base(file)
+		data, err := os.ReadFile(file)
+		require.NoError(t, err)
+		require.NotContains(t, string(data), clientV1Import,
+			"%s: mahjong 层禁止 import 传输层 client/v1 包（违反 internal/mahjong/CLAUDE.md 硬约束）", base)
+	}
+}
+
+func TestStoreLayerDoesNotImportServiceOrClientV1(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("..", "..", "store")
+	var goFiles []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		require.NoError(t, err)
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		goFiles = append(goFiles, path)
+		return nil
+	})
+	require.NoError(t, err)
+
+	for _, file := range goFiles {
+		base := filepath.Base(file)
+		data, err := os.ReadFile(file)
+		require.NoError(t, err)
+		src := string(data)
+		require.NotContains(t, src, `"racoo.cn/lsp/api/gen/go/client/v1"`,
+			"%s: store 层禁止 import 传输层 client/v1 包", base)
+		require.NotContains(t, src, `"racoo.cn/lsp/internal/service/`,
+			"%s: store 层禁止反向依赖 service 层", base)
+	}
+}
+
 func TestCommonRulesDoNotDeclareSichuanOpeningActions(t *testing.T) {
 	t.Parallel()
 
