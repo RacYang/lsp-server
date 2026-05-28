@@ -110,6 +110,23 @@ func TestRoomEngineArchitectureGuard(t *testing.T) {
 	}
 }
 
+func TestRoomStateStructsDoNotHoldClientV1Types(t *testing.T) {
+	t.Parallel()
+	// 确保 RoundState/RoundView/RoundFacts/RoundProgress 数据结构不再直接持有 clientv1 类型。
+	// 允许的例外：view_types.go（仅含 Proto() 转换方法），engine*.go（序列化边界函数）。
+	// 违规文件：engine.go 如出现新的 clientv1 字段声明，此测试将失败。
+	data, err := os.ReadFile(filepath.Join(".", "engine.go"))
+	require.NoError(t, err)
+	src := string(data)
+
+	// 数据结构字段不应声明 clientv1 类型
+	require.NotContains(t, src, "clientv1.Phase\n", "RoundView/RoundProgress 不应声明 clientv1.Phase 字段")
+	require.NotContains(t, src, "clientv1.SeatMelds", "RoundView/RoundFacts 不应声明 clientv1.SeatMelds 字段")
+	require.NotContains(t, src, "clientv1.LastActionInfo", "RoundState/RoundView 不应声明 clientv1.LastActionInfo 字段")
+	require.NotContains(t, src, "clientv1.RuleMeta", "RoundFacts 不应声明 clientv1.RuleMeta 字段")
+	require.NotContains(t, src, "clientv1.SeatScore", "RoundFacts 不应声明 clientv1.SeatScore 字段")
+}
+
 func TestMahjongLayerDoesNotImportClientV1(t *testing.T) {
 	t.Parallel()
 
