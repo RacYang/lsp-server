@@ -27,9 +27,11 @@ type roomActor struct {
 	// initialRound 用于冷启动恢复进行中的牌局。
 	initialRound *RoundState
 	round        *RoundState
-	// 当前实现保持”单房单命令在途”，避免房间关闭时遗留未消费命令造成悬挂。
+	// 当前实现保持"单房单命令在途"，避免房间关闭时遗留未消费命令造成悬挂。
 	ch chan any
-	// submitMu 串行化外部提交，保证房间关闭后不会再有新的发送者卡在无人接收的通道上。
+	// submitMu 串行化外部提交，保证 closed 置位与新发送之间无竞态。
+	// 注意：submit* 函数在成功发送到 ch 后立即释放锁，不持锁等待响应，
+	// 以避免与 run() 关闭时的排空操作产生死锁。
 	submitMu             sync.Mutex
 	closed               atomic.Bool
 	onExit               func(roomID string)
@@ -38,9 +40,12 @@ type roomActor struct {
 	onAuto               func(context.Context, string, []Notification)
 	onAfterCmd           func(roomID string)
 	allowLeaveDuringPlay bool
-	// offlineTimers 记录各座位的离线投降定时器；键为 userID。
+	// offlineTimers 记录各座位的离线投降计时器；键为 userID。
 	// 全部操作均在 actor run goroutine 内串行执行，无需额外同步。
 	offlineTimers map[string]*time.Timer
+	// offlineTimerGens 记录每个 userID 的定时器代号，用于作废旧回调。
+	// 全部操作均在 actor run goroutine 内串行执行，无需额外同步。
+	offlineTimerGens map[string]uint64
 	// offlineSurrenderAfter 为离线投降延迟；零值使用 DefaultOfflineSurrenderAfter。
 	offlineSurrenderAfter time.Duration
 }
@@ -57,6 +62,14 @@ type cmdMarkOffline struct {
 // cmdCancelOffline 通知 actor 玩家已重连，取消之前的投降定时器（fire-and-forget）。
 type cmdCancelOffline struct {
 	userID string
+}
+
+// cmdOfflineTimeout 是离线投降定时器到期后直接投递到 ch 的消息。
+// AfterFunc 回调不调用任何 submit*，只投递此消息，保证全部逻辑在 actor 串行上下文内执行。
+// gen 用于作废重置前已创建的旧定时器回调。
+type cmdOfflineTimeout struct {
+	userID string
+	gen    uint64
 }
 
 type cmdJoin struct {
@@ -353,6 +366,18 @@ func (a *roomActor) run() {
 		case cmdCancelOffline:
 			// 玩家重连：取消计时器（fire-and-forget，不需要响应）。
 			a.cancelOfflineTimer(m.userID)
+		case cmdOfflineTimeout:
+			// 定时器到期事件：在串行上下文内检查代号，过期回调直接忽略。
+			if a.offlineTimerGens[m.userID] == m.gen {
+				if err := a.doLeave(m.userID); err != nil {
+					ctx := logx.WithUserID(context.Background(), m.userID)
+					if a.room != nil {
+						ctx = logx.WithRoomID(ctx, a.room.ID)
+					}
+					logx.Warn(ctx, "离线投降 Leave 失败", "err", err.Error())
+				}
+				a.resetScheduler()
+			}
 		default:
 			// 到达此分支意味着某处向 actor 信道投递了未注册的命令类型，属于编程错误。
 			// panic 在开发期可立即暴露问题；生产环境中进程崩溃优于静默消费错误消息。
@@ -362,14 +387,31 @@ func (a *roomActor) run() {
 			a.onAfterCmd(a.room.ID)
 		}
 		if a.room != nil && a.room.FSM != nil && a.room.FSM.State() == domainroom.StateClosed {
+			// 在 submitMu 保护下置位，保证此后所有 submit* 调用都能观察到 closed=true。
+			a.submitMu.Lock()
 			a.closed.Store(true)
-			// 清理所有离线投降定时器，防止已调度的 AfterFunc 在关闭后仍然触发。
+			a.submitMu.Unlock()
+
+			// 排空 ch：对所有在途命令回写"房间已关闭"错误，解除等待 <-res 的 goroutine。
+			// 经 FIX-1，submit* 发送成功后立即释放 submitMu，此处排空不会与锁竞争。
+		drain:
+			for {
+				select {
+				case pending := <-a.ch:
+					a.rejectPendingMsg(pending)
+				default:
+					break drain
+				}
+			}
+
+			// 清理所有离线投降定时器。
 			for _, t := range a.offlineTimers {
 				if t != nil {
 					t.Stop()
 				}
 			}
 			a.offlineTimers = nil
+			a.offlineTimerGens = nil
 			if a.scheduler != nil {
 				a.scheduler.stop()
 			}
@@ -381,14 +423,53 @@ func (a *roomActor) run() {
 	}
 }
 
+// errRoomClosed 是房间关闭时统一回写给在途命令的哨兵错误。
+var errRoomClosed = errors.New("room closed")
+
+// rejectPendingMsg 对带 res channel 的命令回写"房间已关闭"错误。
+// 仅在 run() 排空 ch 时调用，保证等待 <-res 的 goroutine 能正常解除阻塞。
+func (a *roomActor) rejectPendingMsg(msg any) {
+	switch m := msg.(type) {
+	case cmdJoin:
+		m.res <- joinResult{seat: -1, err: errRoomClosed}
+	case cmdReady:
+		m.res <- readyResult{err: errRoomClosed}
+	case cmdLeave:
+		m.res <- errRoomClosed
+	case cmdRoundSnap:
+		m.res <- roundSnapResult{err: errRoomClosed}
+	case cmdRoundView:
+		m.res <- roundViewResult{}
+	case cmdRoomSnapshot:
+		m.res <- roomSnapshotResult{}
+	case cmdDiscard:
+		m.res <- actionResult{err: errRoomClosed}
+	case cmdPong:
+		m.res <- actionResult{err: errRoomClosed}
+	case cmdChi:
+		m.res <- actionResult{err: errRoomClosed}
+	case cmdGang:
+		m.res <- actionResult{err: errRoomClosed}
+	case cmdHu:
+		m.res <- actionResult{err: errRoomClosed}
+	case cmdPass:
+		m.res <- actionResult{err: errRoomClosed}
+	case cmdAutoTimeout:
+		m.res <- actionResult{err: errRoomClosed}
+	case cmdOpeningAction:
+		m.res <- actionResult{err: errRoomClosed}
+		// cmdMarkOffline、cmdCancelOffline、cmdOfflineTimeout 无 res，直接丢弃。
+	}
+}
+
 // submitJoin 向房间 actor 提交加入请求并同步等待结果（ctx 可取消防悬挂）。
 func (a *roomActor) submitJoin(ctx context.Context, userID string) (int, error) {
 	if a == nil {
 		return -1, fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
-	defer a.submitMu.Unlock()
 	if a.closed.Load() {
+		a.submitMu.Unlock()
 		return -1, fmt.Errorf("room closed")
 	}
 	res := make(chan joinResult, 1)
@@ -396,10 +477,13 @@ func (a *roomActor) submitJoin(ctx context.Context, userID string) (int, error) 
 	select {
 	case a.ch <- cmd:
 	default:
+		a.submitMu.Unlock()
 		return -1, ErrRateLimited
 	case <-ctx.Done():
+		a.submitMu.Unlock()
 		return -1, ctx.Err()
 	}
+	a.submitMu.Unlock()
 	select {
 	case jr := <-res:
 		return jr.seat, jr.err
@@ -414,8 +498,8 @@ func (a *roomActor) submitReady(ctx context.Context, userID string) ([]Notificat
 		return nil, fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
-	defer a.submitMu.Unlock()
 	if a.closed.Load() {
+		a.submitMu.Unlock()
 		return nil, fmt.Errorf("room closed")
 	}
 	res := make(chan readyResult, 1)
@@ -424,17 +508,21 @@ func (a *roomActor) submitReady(ctx context.Context, userID string) ([]Notificat
 		select {
 		case a.ch <- cmd:
 		case <-ctx.Done():
+			a.submitMu.Unlock()
 			return nil, ctx.Err()
 		}
 	} else {
 		select {
 		case a.ch <- cmd:
 		default:
+			a.submitMu.Unlock()
 			return nil, ErrRateLimited
 		case <-ctx.Done():
+			a.submitMu.Unlock()
 			return nil, ctx.Err()
 		}
 	}
+	a.submitMu.Unlock()
 	select {
 	case rr := <-res:
 		return rr.notifications, rr.err
@@ -448,8 +536,8 @@ func (a *roomActor) submitLeave(ctx context.Context, userID string) error {
 		return fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
-	defer a.submitMu.Unlock()
 	if a.closed.Load() {
+		a.submitMu.Unlock()
 		return fmt.Errorf("room closed")
 	}
 	res := make(chan error, 1)
@@ -457,10 +545,13 @@ func (a *roomActor) submitLeave(ctx context.Context, userID string) error {
 	select {
 	case a.ch <- cmd:
 	default:
+		a.submitMu.Unlock()
 		return ErrRateLimited
 	case <-ctx.Done():
+		a.submitMu.Unlock()
 		return ctx.Err()
 	}
+	a.submitMu.Unlock()
 	select {
 	case err := <-res:
 		return err
@@ -568,8 +659,8 @@ func (a *roomActor) submitRoundSnapJSON(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
-	defer a.submitMu.Unlock()
 	if a.closed.Load() {
+		a.submitMu.Unlock()
 		return nil, fmt.Errorf("room closed")
 	}
 	res := make(chan roundSnapResult, 1)
@@ -578,17 +669,21 @@ func (a *roomActor) submitRoundSnapJSON(ctx context.Context) ([]byte, error) {
 		select {
 		case a.ch <- cmd:
 		case <-ctx.Done():
+			a.submitMu.Unlock()
 			return nil, ctx.Err()
 		}
 	} else {
 		select {
 		case a.ch <- cmd:
 		default:
+			a.submitMu.Unlock()
 			return nil, ErrRateLimited
 		case <-ctx.Done():
+			a.submitMu.Unlock()
 			return nil, ctx.Err()
 		}
 	}
+	a.submitMu.Unlock()
 	select {
 	case rr := <-res:
 		return rr.data, rr.err
@@ -602,8 +697,8 @@ func (a *roomActor) submitRoundView(ctx context.Context) (RoundView, bool, error
 		return RoundView{}, false, fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
-	defer a.submitMu.Unlock()
 	if a.closed.Load() {
+		a.submitMu.Unlock()
 		return RoundView{}, false, fmt.Errorf("room closed")
 	}
 	res := make(chan roundViewResult, 1)
@@ -611,10 +706,13 @@ func (a *roomActor) submitRoundView(ctx context.Context) (RoundView, bool, error
 	select {
 	case a.ch <- cmd:
 	default:
+		a.submitMu.Unlock()
 		return RoundView{}, false, ErrRateLimited
 	case <-ctx.Done():
+		a.submitMu.Unlock()
 		return RoundView{}, false, ctx.Err()
 	}
+	a.submitMu.Unlock()
 	select {
 	case rr := <-res:
 		return rr.view, rr.ok, nil
@@ -628,8 +726,8 @@ func (a *roomActor) submitRoomSnapshot(ctx context.Context) ([]string, string, [
 		return nil, "", [4]bool{}, fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
-	defer a.submitMu.Unlock()
 	if a.closed.Load() {
+		a.submitMu.Unlock()
 		return nil, "", [4]bool{}, fmt.Errorf("room closed")
 	}
 	res := make(chan roomSnapshotResult, 1)
@@ -637,10 +735,13 @@ func (a *roomActor) submitRoomSnapshot(ctx context.Context) ([]string, string, [
 	select {
 	case a.ch <- cmd:
 	default:
+		a.submitMu.Unlock()
 		return nil, "", [4]bool{}, ErrRateLimited
 	case <-ctx.Done():
+		a.submitMu.Unlock()
 		return nil, "", [4]bool{}, ctx.Err()
 	}
+	a.submitMu.Unlock()
 	select {
 	case rr := <-res:
 		return rr.playerIDs, rr.fsmState, rr.ready, nil
@@ -654,78 +755,84 @@ func (a *roomActor) submitAction(ctx context.Context, cmd any) ([]Notification, 
 		return nil, fmt.Errorf("nil actor")
 	}
 	a.submitMu.Lock()
-	defer a.submitMu.Unlock()
 	if a.closed.Load() {
+		a.submitMu.Unlock()
 		return nil, fmt.Errorf("room closed")
 	}
 	if cap(a.ch) == 0 {
 		select {
 		case a.ch <- cmd:
 		case <-ctx.Done():
+			a.submitMu.Unlock()
 			return nil, ctx.Err()
 		}
 	} else {
 		select {
 		case a.ch <- cmd:
 		default:
+			a.submitMu.Unlock()
 			return nil, ErrRateLimited
 		case <-ctx.Done():
+			a.submitMu.Unlock()
 			return nil, ctx.Err()
 		}
 	}
+	a.submitMu.Unlock()
+	// 等待响应（无锁），ctx 可取消防悬挂。
+	var resCh chan actionResult
 	switch c := cmd.(type) {
 	case cmdDiscard:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	case cmdPong:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	case cmdChi:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	case cmdGang:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	case cmdHu:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	case cmdPass:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	case cmdAutoTimeout:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	case cmdOpeningAction:
-		rr := <-c.res
-		return rr.notifications, rr.err
+		resCh = c.res
 	default:
 		return nil, fmt.Errorf("unsupported action command")
+	}
+	select {
+	case rr := <-resCh:
+		return rr.notifications, rr.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
 // ensureOfflineTimer 在 actor goroutine 内启动（或重置）离线投降计时器。
-// 计时器触发后经 submitLeave 向自身邮箱投递 Leave 命令，保证串行化。
+// 定时器到期后直接向 ch 投递 cmdOfflineTimeout，保证全部投降逻辑在串行上下文内执行。
 func (a *roomActor) ensureOfflineTimer(userID string) {
 	if a.offlineTimers == nil {
 		a.offlineTimers = make(map[string]*time.Timer)
 	}
+	if a.offlineTimerGens == nil {
+		a.offlineTimerGens = make(map[string]uint64)
+	}
 	if t, ok := a.offlineTimers[userID]; ok {
 		t.Stop()
 	}
+	// 递增代号，作废旧定时器的回调（即使旧 AfterFunc 已触发，投递到 ch 的消息也会被代号检查拦截）。
+	a.offlineTimerGens[userID]++
+	gen := a.offlineTimerGens[userID]
 	delay := a.offlineSurrenderAfter
 	if delay <= 0 {
 		delay = DefaultOfflineSurrenderAfter
 	}
 	a.offlineTimers[userID] = time.AfterFunc(delay, func() {
-		// 计时器触发后通过邮箱投递 Leave，由 actor 主循环串行处理；
-		// 若 actor 已关闭，submitLeave 会静默返回 error，不阻塞。
-		ctx := context.Background()
-		if err := a.submitLeave(ctx, userID); err != nil {
-			logCtx := logx.WithUserID(ctx, userID)
-			if a.room != nil {
-				logCtx = logx.WithRoomID(logCtx, a.room.ID)
-			}
-			logx.Warn(logCtx, "离线投降 Leave 失败", "err", err.Error())
+		// 只投递消息，不调用任何 submit*，不等待响应，无死锁风险。
+		select {
+		case a.ch <- cmdOfflineTimeout{userID: userID, gen: gen}:
+		default:
+			// mailbox 满或已关闭时丢弃；run() 关闭后不会再消费，可安全忽略。
 		}
 	})
 }
@@ -735,6 +842,10 @@ func (a *roomActor) cancelOfflineTimer(userID string) {
 	if t, ok := a.offlineTimers[userID]; ok {
 		t.Stop()
 		delete(a.offlineTimers, userID)
+	}
+	// 递增代号，作废已投递到 ch 但尚未被消费的 cmdOfflineTimeout。
+	if a.offlineTimerGens != nil {
+		a.offlineTimerGens[userID]++
 	}
 }
 

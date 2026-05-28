@@ -174,35 +174,54 @@ def main() -> int:
     excludes = list(com["code_exclude"])
     facade_pkg = facades[0] if facades else ""
 
+    _otel_build_pat = re.compile(r"//go:build\s+\w*otel\w*")
+    _http_pat = re.compile(r"\bhttp\.Handle(Func)?\s*\(")
+    _level_pat = re.compile(r"\bAtomicLevel\b|\bSetLevel\s*\(|\.Level\s*\(")
+
     def check_file(path: Path) -> list[str]:
         rel = posix_rel(path)
         if is_facade_impl(rel, impl_globs):
             return []
-        src = path.read_text(encoding="utf-8")
+        src = path.read_text(encoding="utf-8", errors="ignore")
         literal_key_exempt = rel.endswith("_test.go") or "// logx:bridge" in src
-        alias = _facade_alias(src, facade_pkg) if facade_pkg else ""
-        if not alias:
-            return []
         errs: list[str] = []
-        for inner, fragment in _call_iter(src, alias):
-            msg = _extract_message(inner)
-            if msg is None:
-                errs.append(f"{path}: 无法解析日志 message，调用: {fragment[:120]!r}")
-                continue
-            r = cjk_ratio(msg, None)
-            if r + 1e-9 < min_msg:
-                errs.append(
-                    f"{path}: 日志 message 中文占比 {r:.3f} < {min_msg}，message={msg!r}"
-                )
-            for key in _extract_key_literals(inner):
-                if not literal_key_exempt and key in literal_forbidden:
-                    errs.append(f"{path}: 日志调用不得手写上下文字段 `{key}`，请通过 Context 注入")
-                if len(key) > max_key_len or not key_pattern.match(key):
-                    errs.append(f"{path}: 日志字段 `{key}` 不符合命名规则")
-                if key in forbidden_keys:
-                    errs.append(f"{path}: 日志字段 `{key}` 属于指标候选，请改用 Prometheus 指标")
-                if key in pii_keys:
-                    errs.append(f"{path}: 日志字段 `{key}` 属于敏感键，请使用脱敏派生字段")
+
+        # 日志调用规则（仅限使用了 logx 门面的文件）
+        alias = _facade_alias(src, facade_pkg) if facade_pkg else ""
+        if alias:
+            for inner, fragment in _call_iter(src, alias):
+                msg = _extract_message(inner)
+                if msg is None:
+                    errs.append(f"{path}: 无法解析日志 message，调用: {fragment[:120]!r}")
+                    continue
+                r = cjk_ratio(msg, None)
+                if r + 1e-9 < min_msg:
+                    errs.append(
+                        f"{path}: 日志 message 中文占比 {r:.3f} < {min_msg}，message={msg!r}"
+                    )
+                for key in _extract_key_literals(inner):
+                    if not literal_key_exempt and key in literal_forbidden:
+                        errs.append(f"{path}: 日志调用不得手写上下文字段 `{key}`，请通过 Context 注入")
+                    if len(key) > max_key_len or not key_pattern.match(key):
+                        errs.append(f"{path}: 日志字段 `{key}` 不符合命名规则")
+                    if key in forbidden_keys:
+                        errs.append(f"{path}: 日志字段 `{key}` 属于指标候选，请改用 Prometheus 指标")
+                    if key in pii_keys:
+                        errs.append(f"{path}: 日志字段 `{key}` 属于敏感键，请使用脱敏派生字段")
+
+        # OTel build-tag check（logging-otel-bridge 规则）
+        # 覆盖 --file 单文件模式与全扫模式，保持一致。
+        if "go.opentelemetry.io/otel" in src and not _otel_build_pat.search(src):
+            errs.append(
+                f"{path}: 未加 otel build tag 即 import OTel（违反 logging-otel-bridge 规则）"
+            )
+
+        # Dynamic-level HTTP check（logging-dynamic-level 规则）
+        if _http_pat.search(src) and _level_pat.search(src):
+            errs.append(
+                f"{path}: 文件同时含 HTTP handler 与日志级别 setter，须 ADR 评审（logging-dynamic-level 规则）"
+            )
+
         return errs
 
     if args.file:
@@ -215,35 +234,6 @@ def main() -> int:
     all_errs: list[str] = []
     for path in collect_by_patterns(paths, excludes):
         all_errs.extend(check_file(path))
-
-    # OTel build-tag check（logging-otel-bridge 规则）
-    # 扫描 internal/cmd/pkg 下 Go 文件：import OTel 但未加任何 build tag 则报错
-    _go_files = [
-        p
-        for subdir in ("internal", "cmd", "pkg")
-        for p in (ROOT / subdir).rglob("*.go")
-        if "gen" not in p.parts and "vendor" not in p.parts
-    ]
-    _otel_build_pat = re.compile(r"//go:build\s+\w*otel\w*")
-    for _path in _go_files:
-        _src = _path.read_text(encoding="utf-8", errors="ignore")
-        if "go.opentelemetry.io/otel" in _src and not _otel_build_pat.search(_src):
-            all_errs.append(
-                f"{_path}: 未加 otel build tag 即 import OTel"
-                "（违反 logging-otel-bridge 规则）"
-            )
-
-    # Dynamic-level HTTP check（logging-dynamic-level 规则）
-    # 同一文件同时含 HTTP handler 与日志级别 setter，须 ADR 评审
-    _http_pat = re.compile(r"\bhttp\.Handle(Func)?\s*\(")
-    _level_pat = re.compile(r"\bAtomicLevel\b|\bSetLevel\s*\(|\.Level\s*\(")
-    for _path in _go_files:
-        _src = _path.read_text(encoding="utf-8", errors="ignore")
-        if _http_pat.search(_src) and _level_pat.search(_src):
-            all_errs.append(
-                f"{_path}: 文件同时含 HTTP handler 与日志级别 setter"
-                "，须 ADR 评审（logging-dynamic-level 规则）"
-            )
 
     if all_errs:
         print("\n".join(all_errs), file=sys.stderr)

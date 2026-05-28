@@ -1278,7 +1278,10 @@ func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
-func TestSubmitActionReturnsActorResultAfterContextCanceled(t *testing.T) {
+func TestSubmitActionReturnsCtxErrAfterContextCanceled(t *testing.T) {
+	// 行为变更说明（FIX-1）：submit* 发送成功后立即释放 submitMu，等待 <-res 时已无锁。
+	// ctx 取消后 select 优先返回 ctx.Err()，不再持锁等待 actor 的迟到响应。
+	// 这是正确的 ctx 语义：调用方取消表示不再需要结果，迟到的 res 写入缓冲 channel 后被 GC 回收。
 	t.Parallel()
 
 	a := &roomActor{ch: make(chan any)}
@@ -1291,8 +1294,8 @@ func TestSubmitActionReturnsActorResultAfterContextCanceled(t *testing.T) {
 	}()
 
 	notifs, err := a.submitAction(ctx, cmdDiscard{userID: "u1", tile: "m1", res: make(chan actionResult, 1)})
-	require.NoError(t, err)
-	require.Len(t, notifs, 1)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, notifs)
 }
 
 func TestSubmitActionReturnsRateLimitedWhenMailboxFull(t *testing.T) {

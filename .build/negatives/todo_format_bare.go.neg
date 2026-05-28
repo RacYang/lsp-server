@@ -6,4 +6,6 @@ func badTodo() {
 	_ = 1
 	// TODO 另一个裸 TODO（无冒号无括号）
 	_ = 2
+	// TODO
+	_ = 3
 }

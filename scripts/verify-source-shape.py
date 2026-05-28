@@ -73,16 +73,16 @@ def check_rule_lines(path: pathlib.Path) -> list[str]:
             if line.strip() == "---":
                 fm_end = i + 1
                 break
-    # 正文：从 frontmatter 结束到参考三元组分隔线（--- 后紧跟 ADR/Enforcer/负例）
-    content: list[str] = []
-    for i in range(fm_end, len(lines)):
-        line = lines[i]
-        if line.strip() == "---":
+    # 逆向定位参考三元组分隔线（取最后一个满足条件的 ---），
+    # 避免正文中偶发的 --- 水平分割线导致提前截断而漏报超行规则。
+    body_end = len(lines)
+    for i in range(len(lines) - 1, fm_end - 1, -1):
+        if lines[i].strip() == "---":
             rest = "\n".join(lines[i + 1 :])
             if re.search(r"\*\*(ADR|Enforcer|负例)\*\*", rest[:300]):
+                body_end = i
                 break
-        if line.strip():
-            content.append(line)
+    content = [l for l in lines[fm_end:body_end] if l.strip()]
     if len(content) > 10:
         return [f"{path}: 规则正文 {len(content)} 行超过 10 行上限（ADR-0048）"]
     return []
@@ -92,8 +92,8 @@ def check_todo_format(path: pathlib.Path) -> list[str]:
     """// TODO 必须含括号注释人，格式 // TODO(<annotator>): ...（zero-debt-refactor）。"""
     errors: list[str] = []
     for i, line in enumerate(read(path).splitlines(), 1):
-        # 匹配 // TODO 后不带 ( 的裸 TODO
-        if re.search(r"//\s*TODO[^(]", line):
+        # \b 确保 TODOS 等复合词不触发；否定前瞻 (?!\s*\() 匹配行末裸 TODO 与无括号形式。
+        if re.search(r"//\s*TODO\b(?!\s*\()", line):
             errors.append(f"{path}:{i}: 裸 TODO 缺少注释人，应为 // TODO(<annotator>): ...")
     return errors
 

@@ -116,23 +116,149 @@ lint:
       apigen_v1: api/gen/go/v1/**
     deny:
       - from: mahjong_builtin
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_xuezhandaodi
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_rules
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_tile
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_wall
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_hand
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_hu
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_fan
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: mahjong_analysis
-        to: [protocol, cluster, handler, store, service, service_bot, session, app, adapter, gateway, clock, metrics, bot, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store
+          - service
+          - service_bot
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - bot
+          - cmd
       - from: domain
         to: [protocol, cluster, handler, store, service, service_bot, app, adapter, gateway, clock, metrics, bot, cmd]
       - from: handler
@@ -140,7 +266,24 @@ lint:
       - from: adapter
         to: [app, cmd, gateway]
       - from: gateway
-        to: [mahjong_builtin, mahjong_guobiao, mahjong_xuezhandaodi, mahjong_rules, mahjong_tile, mahjong_wall, mahjong_hand, mahjong_hu, mahjong_fan, mahjong_analysis, domain, bot, service, service_bot, app, adapter, cmd]
+        to:
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - domain
+          - bot
+          - service
+          - service_bot
+          - app
+          - adapter
+          - cmd
       - from: service_bot
         to: [protocol, cluster, handler, store, session, app, adapter, gateway, clock, metrics, cmd]
       - from: service
