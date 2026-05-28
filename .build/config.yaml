@@ -31,7 +31,9 @@ coverage:
     internal/protocol: 80
     internal/service/room: 67
     internal/adapter/lobby: 55
+    internal/adapter/local: 55
     internal/adapter/room: 45
+    internal/contract: 0
     cmd/all: 45
     cmd/gate: 45
     cmd/lobby: 55
