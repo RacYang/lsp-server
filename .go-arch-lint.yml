@@ -82,7 +82,22 @@ deps:
       - apigen_client
       - apigen_v1
   mahjong_guobiao:
-    anyProjectDeps: true
+    mayDependOn:
+      - mahjong_builtin
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - domain
+      - config
+      - log
+      - pkg
+      - apigen_client
+      - apigen_v1
   mahjong_xuezhandaodi:
     mayDependOn:
       - mahjong_builtin
