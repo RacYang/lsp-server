@@ -11,30 +11,17 @@ import (
 	"sync"
 	"time"
 
+	domainlobby "racoo.cn/lsp/internal/domain/lobby"
 	_ "racoo.cn/lsp/internal/mahjong/builtin" // 注册内置麻将规则。
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/pkg/logx"
 )
 
-// RoomRegistry 提供大厅房间状态的持久化接口，供进程重启后恢复房间列表。
-// 实现方负责序列化；nil 注册表退化为纯内存模式（与未配置 Redis 时等价）。
-type RoomRegistry interface {
-	UpsertRoom(ctx context.Context, rec RoomRecord) error
-	DeleteRoom(ctx context.Context, roomID string) error
-	ListAll(ctx context.Context) ([]RoomRecord, error)
-}
+// RoomRecord 是大厅房间持久化记录类型别名，定义在 domain/lobby，供 service 与 store 共享。
+type RoomRecord = domainlobby.RoomRecord
 
-// RoomRecord 是持久化到外部存储的房间完整快照，含座位分配。
-type RoomRecord struct {
-	RoomID      string           `json:"room_id"`
-	NodeID      string           `json:"node_id"`
-	RuleID      string           `json:"rule_id"`
-	DisplayName string           `json:"display_name"`
-	Private     bool             `json:"private"`
-	CreatedAtMs int64            `json:"created_at_ms"`
-	MaxSeats    int32            `json:"max_seats"`
-	Seats       map[string]int32 `json:"seats"`
-}
+// RoomRegistry 是大厅房间注册表接口别名，定义在 domain/lobby，避免 store→service 反向依赖。
+type RoomRegistry = domainlobby.RoomRegistry
 
 var (
 	// ErrRoomNotFound 表示房间尚未创建或已被移除。
