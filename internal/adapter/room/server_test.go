@@ -281,7 +281,7 @@ func TestClusterPhaseTokToRoom(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
-			got := clusterPhaseTokToRoom(tc.input)
+			got := roomsvc.PhaseTokenFromProto(tc.input)
 			if tc.wantNil {
 				require.Nil(t, got)
 				return

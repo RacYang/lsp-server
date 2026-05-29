@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	"racoo.cn/lsp/internal/metrics"
 	roomsvc "racoo.cn/lsp/internal/service/room"
@@ -65,26 +64,26 @@ func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventReques
 		}
 		return &svcv1.ApplyEventResponse{Accepted: true}, nil
 	case *svcv1.ApplyEventRequest_Discard:
-		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile(), clusterPhaseTokToRoom(req.GetPhaseToken()))
+		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile(), roomsvc.PhaseTokenFromProto(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Pong:
-		notifications, err := s.rooms.Pong(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
+		notifications, err := s.rooms.Pong(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Chi:
-		notifications, err := s.rooms.Chi(ctx, roomID, userID, req.GetChi().GetTiles(), clusterPhaseTokToRoom(req.GetPhaseToken()))
+		notifications, err := s.rooms.Chi(ctx, roomID, userID, req.GetChi().GetTiles(), roomsvc.PhaseTokenFromProto(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Gang:
-		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile(), clusterPhaseTokToRoom(req.GetPhaseToken()))
+		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile(), roomsvc.PhaseTokenFromProto(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Hu:
-		notifications, err := s.rooms.Hu(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
+		notifications, err := s.rooms.Hu(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Pass:
-		notifications, err := s.rooms.Pass(ctx, roomID, userID, clusterPhaseTokToRoom(req.GetPhaseToken()))
+		notifications, err := s.rooms.Pass(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_OpeningAction:
 		event := req.GetOpeningAction()
-		notifications, err := s.rooms.OpeningAction(ctx, roomID, userID, event.GetAction(), event.GetTiles(), event.GetDirection(), event.GetSuit(), event.GetParams(), clusterPhaseTokToRoom(req.GetPhaseToken()))
+		notifications, err := s.rooms.OpeningAction(ctx, roomID, userID, event.GetAction(), event.GetTiles(), event.GetDirection(), event.GetSuit(), event.GetParams(), roomsvc.PhaseTokenFromProto(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Leave:
 		if err := s.rooms.Leave(ctx, roomID, userID); err != nil {
@@ -107,30 +106,6 @@ func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventReques
 	default:
 		return &svcv1.ApplyEventResponse{Accepted: false, Error: "unsupported room event"}, nil
 	}
-}
-
-// clusterPhaseTokToRoom 把 client.v1.PhaseToken 映射到 room.PhaseToken；nil 时透传 nil。
-// proto 统一后 ApplyEventRequest.phase_token 直接使用 client.v1.PhaseToken，无须 cluster 层中转。
-func clusterPhaseTokToRoom(tok *clientv1.PhaseToken) *roomsvc.PhaseToken {
-	if tok == nil {
-		return nil
-	}
-	var reason roomsvc.WaitingReason
-	switch tok.GetReason() {
-	case clientv1.WaitingReason_WAITING_REASON_OPENING:
-		reason = roomsvc.ReasonOpening
-	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
-		reason = roomsvc.ReasonClaimWindow
-	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
-		reason = roomsvc.ReasonTsumo
-	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
-		reason = roomsvc.ReasonDiscard
-	case clientv1.WaitingReason_WAITING_REASON_SURRENDER:
-		reason = roomsvc.ReasonSurrender
-	default:
-		reason = roomsvc.ReasonNone
-	}
-	return &roomsvc.PhaseToken{Step: tok.GetStep(), Reason: reason}
 }
 
 func (s *GRPCServer) applyNotifications(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification, err error) (*svcv1.ApplyEventResponse, error) {
