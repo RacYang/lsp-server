@@ -23,6 +23,7 @@ type CommandHandler interface {
 // RoomQueries 是房间状态查询接口；适配层与持久化层调用此子集获取局面快照。
 type RoomQueries interface {
 	RoundView(ctx context.Context, roomID string) (RoundView, bool, error)
+	RoundPersistSnapshot(ctx context.Context, roomID string) ([]byte, error)
 	RoomSnapshot(roomID string) (playerIDs []string, fsmState string, ready [4]bool, ok bool)
 	PlayerIDs(roomID string) ([4]string, bool)
 	ActiveRoomCount() int
@@ -33,7 +34,6 @@ type RoomQueries interface {
 type RoomRecovery interface {
 	EnsureRoom(roomID string) error
 	RecoverRoom(roomID string, playerIDs []string, fsmState string, roundPersistJSON []byte) error
-	RoundPersistSnapshot(ctx context.Context, roomID string) ([]byte, error)
 }
 
 // RoomService 组合 CommandHandler 与 RoomQueries，供需要完整房间运行时访问的调用方使用。

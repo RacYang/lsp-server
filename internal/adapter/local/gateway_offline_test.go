@@ -16,10 +16,9 @@ func TestLocalGatewayOfflineThenSurrender(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	rooms := roomsvc.NewService(roomsvc.NewRoomRegistry())
+	rooms := roomsvc.NewService(roomsvc.NewRoomRegistry(), roomsvc.WithOfflineSurrenderAfter(10*time.Millisecond))
 	hub := session.NewHub()
 	gateway := NewLocalRoomGateway(rooms, hub, nil)
-	gateway.SetOfflineSurrenderAfter(10 * time.Millisecond)
 
 	_, err := gateway.Join(ctx, "room-offline", "user-1")
 	require.NoError(t, err)
@@ -68,10 +67,9 @@ func TestLocalGatewayReconnectBeforeSurrender(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	rooms := roomsvc.NewService(roomsvc.NewRoomRegistry())
+	rooms := roomsvc.NewService(roomsvc.NewRoomRegistry(), roomsvc.WithOfflineSurrenderAfter(30*time.Millisecond))
 	hub := session.NewHub()
 	gateway := NewLocalRoomGateway(rooms, hub, nil)
-	gateway.SetOfflineSurrenderAfter(30 * time.Millisecond)
 
 	_, err := gateway.Join(ctx, "room-reconnect", "user-1")
 	require.NoError(t, err)

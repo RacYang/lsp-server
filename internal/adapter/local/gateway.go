@@ -19,7 +19,7 @@ import (
 
 // LocalRoomGateway 适配进程内房间服务，供 `cmd/all` 与本地 gate 冒烟复用。
 type LocalRoomGateway struct {
-	rooms                 *roomsvc.Service
+	rooms                 roomsvc.RoomService
 	lobby                 *lobbysvc.Service
 	hub                   *session.Hub
 	sess                  *session.Manager
@@ -27,6 +27,7 @@ type LocalRoomGateway struct {
 }
 
 // NewLocalRoomGateway 创建进程内房间网关；sess 可为 nil 表示不启用 Redis 会话。
+// rooms 接收 *roomsvc.Service（构造时需注册超时回调），运行期以 RoomService 接口访问。
 func NewLocalRoomGateway(rooms *roomsvc.Service, hub *session.Hub, sess *session.Manager) *LocalRoomGateway {
 	g := &LocalRoomGateway{rooms: rooms, lobby: lobbysvc.New(), hub: hub, sess: sess, offlineSurrenderAfter: 30 * time.Second}
 	if rooms != nil {
@@ -35,16 +36,6 @@ func NewLocalRoomGateway(rooms *roomsvc.Service, hub *session.Hub, sess *session
 		})
 	}
 	return g
-}
-
-func (g *LocalRoomGateway) SetOfflineSurrenderAfter(d time.Duration) {
-	if g == nil || d <= 0 {
-		return
-	}
-	g.offlineSurrenderAfter = d
-	if g.rooms != nil {
-		g.rooms.SetOfflineSurrenderAfter(d)
-	}
 }
 
 // Join 直接走本地房间服务加入逻辑。

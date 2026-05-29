@@ -18,7 +18,7 @@ import (
 
 // GRPCServer 将 room 节点事件流暴露为 v1.RoomService。
 type GRPCServer struct {
-	rooms          *roomsvc.Service
+	rooms          roomsvc.RoomService
 	ev             *postgres.RoomEventStore
 	gs             *postgres.GameSummaryStore
 	st             *postgres.SettlementStore
