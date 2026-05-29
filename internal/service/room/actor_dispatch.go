@@ -63,7 +63,7 @@ func (a *roomActor) doReady(userID string) ([]Notification, error) {
 			return nil, err
 		}
 		a.round = round
-		if a.round != nil && a.round.closed {
+		if a.round != nil && a.round.IsClosed() {
 			a.closeRoomAfterRound()
 		}
 		return notifications, nil
@@ -89,10 +89,7 @@ func (a *roomActor) doLeave(userID string) error {
 		return err
 	}
 	if seat >= 0 && a.room.Surrendered[seat] && a.round != nil {
-		if len(a.round.surrendered) < 4 {
-			a.round.surrendered = make([]bool, 4)
-		}
-		a.round.surrendered[seat] = true
+		a.round.MarkSeatSurrendered(Seat(seat))
 	}
 	return nil
 }
@@ -106,7 +103,7 @@ func (a *roomActor) doDiscard(userID, tile string) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.round.closed {
+	if a.round.IsClosed() {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
@@ -122,7 +119,7 @@ func (a *roomActor) doPong(userID string) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.round.closed {
+	if a.round.IsClosed() {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
@@ -138,7 +135,7 @@ func (a *roomActor) doChi(userID string, tiles []string) ([]Notification, error)
 	if err != nil {
 		return nil, err
 	}
-	if a.round.closed {
+	if a.round.IsClosed() {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
@@ -154,7 +151,7 @@ func (a *roomActor) doGang(userID, tile string) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.round.closed {
+	if a.round.IsClosed() {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
@@ -170,7 +167,7 @@ func (a *roomActor) doHu(userID string) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.round.closed {
+	if a.round.IsClosed() {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
@@ -186,7 +183,7 @@ func (a *roomActor) doPass(userID string) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.round.closed {
+	if a.round.IsClosed() {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
@@ -199,7 +196,7 @@ func (a *roomActor) doAutoTimeout() ([]Notification, error) {
 		return nil, err
 	}
 	a.syncSurrenderedFromRound()
-	if a.round.closed {
+	if a.round.IsClosed() {
 		a.closeRoomAfterRound()
 		a.round = nil
 	}
@@ -210,8 +207,8 @@ func (a *roomActor) syncSurrenderedFromRound() {
 	if a == nil || a.room == nil || a.round == nil {
 		return
 	}
-	for seat := 0; seat < 4 && seat < len(a.round.surrendered); seat++ {
-		if a.round.surrendered[seat] {
+	for seat := 0; seat < int(SeatCount); seat++ {
+		if a.round.SurrenderedAt(seat) {
 			a.room.Surrendered[seat] = true
 		}
 	}
@@ -246,7 +243,7 @@ func (a *roomActor) closeRoomAfterRound() {
 	}
 	if a.round != nil {
 		var scores [4]int32
-		for seat, score := range seatBalancesFromScoreEvents(a.round.scoreEvents) {
+		for seat, score := range a.round.RoundScoreBalances() {
 			if seat < len(scores) {
 				scores[seat] = score
 			}

@@ -319,7 +319,7 @@ func (a *roomActor) run() {
 		case cmdAutoTimeout:
 			kind := "none"
 			if a.round != nil {
-				kind = a.round.waitingKind()
+				kind = a.round.WaitingKind()
 			}
 			notifications, err := a.doAutoTimeout()
 			if err == nil {
@@ -343,12 +343,12 @@ func (a *roomActor) run() {
 		case cmdRoundSnap:
 			var data []byte
 			var err error
-			if a.round != nil && !a.round.closed {
+			if a.round != nil && !a.round.IsClosed() {
 				data, err = a.round.MarshalRoundPersistJSON()
 			}
 			m.res <- roundSnapResult{data: data, err: err}
 		case cmdRoundView:
-			if a.round == nil || a.round.closed {
+			if a.round == nil || a.round.IsClosed() {
 				m.res <- roundViewResult{}
 				break
 			}
@@ -591,7 +591,7 @@ func (a *roomActor) checkPhaseToken(tok *PhaseToken) error {
 	if a == nil || a.round == nil {
 		return nil
 	}
-	return a.round.validatePhaseToken(tok)
+	return a.round.ValidatePhaseToken(tok)
 }
 
 func (a *roomActor) submitAutoTimeout(ctx context.Context) ([]Notification, error) {
@@ -629,8 +629,8 @@ func (a *roomActor) logActionRejected(ctx context.Context, userID, action string
 	phaseStep := int64(0)
 	phaseReason := "none"
 	if a != nil && a.round != nil {
-		phaseStep = int64(a.round.step)
-		phaseReason = a.round.phaseReason.String()
+		phaseStep = int64(a.round.Step())
+		phaseReason = a.round.PhaseReason().String()
 	}
 	drift := false
 	tokenStep := int64(0)
