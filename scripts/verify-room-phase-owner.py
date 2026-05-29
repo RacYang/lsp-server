@@ -17,9 +17,12 @@ from pathlib import Path
 ROOT = Path.cwd()
 TARGET_DIR = ROOT / "internal" / "service" / "room"
 ALLOWED_FILES = {"phase.go", "engine_persist.go"}
+# 使用 \. 而非 \brs\. 以覆盖所有变量名（包括 initialRound、rs 等），
+# 避免因变量命名差异导致漏检。同时补充 deadlineUnixMs 以完整覆盖 ADR-0045 保护字段。
 PATTERNS = [
-    re.compile(r"\brs\.phaseReason\s*="),
-    re.compile(r"\brs\.phaseStartUnixMs\s*="),
+    re.compile(r"\.phaseReason\s*="),
+    re.compile(r"\.phaseStartUnixMs\s*="),
+    re.compile(r"\.deadlineUnixMs\s*="),
 ]
 
 
