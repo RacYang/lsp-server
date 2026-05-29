@@ -97,7 +97,10 @@ lint:
       cluster: internal/cluster/**
       contract: internal/contract/**
       handler: internal/handler/**
-      store: internal/store/**
+      # store 拆为三个独立组件，避免子包 import 根包被误判为自引用
+      store_root: internal/store/
+      store_redis: internal/store/redis/**
+      store_postgres: internal/store/postgres/**
       service: internal/service/**
       session: internal/session/**
       config: internal/config/**
@@ -114,7 +117,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -128,7 +133,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -142,7 +149,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -156,7 +165,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -170,7 +181,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -184,7 +197,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -198,7 +213,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -212,7 +229,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -226,7 +245,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -240,7 +261,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -250,11 +273,41 @@ lint:
           - metrics
           - cmd
       - from: domain
-        to: [protocol, cluster, handler, store, service, app, adapter, gateway, clock, metrics, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store_root
+          - store_redis
+          - store_postgres
+          - service
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - cmd
       - from: contract
-        to: [protocol, cluster, handler, store, service, session, app, adapter, gateway, clock, metrics, cmd]
+        to:
+          - protocol
+          - cluster
+          - handler
+          - store_root
+          - store_redis
+          - store_postgres
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - clock
+          - metrics
+          - cmd
       - from: handler
-        to: [store]
+        to:
+          - store_root
+          - store_redis
+          - store_postgres
       - from: adapter
         to: [app, cmd, gateway]
       - from: gateway
@@ -280,7 +333,9 @@ lint:
         to:
           - domain
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -297,7 +352,9 @@ lint:
         to:
           - domain
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -313,7 +370,9 @@ lint:
         to:
           - domain
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - app
@@ -358,7 +417,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - config
@@ -387,7 +448,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - config
@@ -416,7 +479,9 @@ lint:
           - protocol
           - cluster
           - handler
-          - store
+          - store_root
+          - store_redis
+          - store_postgres
           - service
           - session
           - config
@@ -425,6 +490,78 @@ lint:
           - log
           - cmd
           - pkg
+      - from: store_root
+        to:
+          - store_redis
+          - store_postgres
+          - handler
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - cmd
+          - contract
+          - domain
+          - protocol
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+      - from: store_redis
+        to:
+          - store_postgres
+          - handler
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - cmd
+          - contract
+          - protocol
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+      - from: store_postgres
+        to:
+          - store_redis
+          - domain
+          - handler
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - cmd
+          - contract
+          - protocol
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
 
 deps:
   denylist:

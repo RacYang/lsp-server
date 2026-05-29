@@ -43,8 +43,12 @@ components:
     in: internal/contract/**
   handler:
     in: internal/handler/**
-  store:
-    in: internal/store/**
+  store_root:
+    in: internal/store/
+  store_redis:
+    in: internal/store/redis/**
+  store_postgres:
+    in: internal/store/postgres/**
   service:
     in: internal/service/**
   session:
@@ -284,7 +288,9 @@ deps:
       - cluster
       - contract
       - handler
-      - store
+      - store_root
+      - store_redis
+      - store_postgres
       - service
       - session
       - config
@@ -300,7 +306,9 @@ deps:
       - cluster
       - contract
       - handler
-      - store
+      - store_root
+      - store_redis
+      - store_postgres
       - session
       - config
       - clock
@@ -373,8 +381,36 @@ deps:
       - pkg
       - apigen_client
       - apigen_v1
-  store:
-    anyProjectDeps: true
+  store_root:
+    mayDependOn:
+      - config
+      - clock
+      - metrics
+      - log
+      - pkg
+      - apigen_client
+      - apigen_v1
+  store_redis:
+    mayDependOn:
+      - domain
+      - store_root
+      - config
+      - clock
+      - metrics
+      - log
+      - pkg
+      - apigen_client
+      - apigen_v1
+  store_postgres:
+    mayDependOn:
+      - store_root
+      - config
+      - clock
+      - metrics
+      - log
+      - pkg
+      - apigen_client
+      - apigen_v1
   service:
     mayDependOn:
       - mahjong_builtin
@@ -392,7 +428,9 @@ deps:
       - adapter
       - gateway
       - contract
-      - store
+      - store_root
+      - store_redis
+      - store_postgres
       - session
       - config
       - clock
@@ -413,7 +451,9 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - mahjong_analysis
-      - store
+      - store_root
+      - store_redis
+      - store_postgres
       - service
       - config
       - clock
