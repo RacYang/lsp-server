@@ -24,7 +24,7 @@ const RecoverTimeout = 120 * time.Second
 
 // RecoverOwnedRooms 从 etcd/Redis/Postgres 并发恢复本节点拥有的全部房间。
 // rt 或 rcli 为 nil 时静默返回；etcd 查询失败时向上传播。
-func RecoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID string, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service) error {
+func RecoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID string, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc roomsvc.RoomRecovery) error {
 	if rt == nil || rcli == nil || svc == nil {
 		return nil
 	}
@@ -54,7 +54,7 @@ func RecoverOwnedRooms(ctx context.Context, rt *cluster.EtcdRouter, rnodeID stri
 }
 
 // RecoverSingleRoom 恢复单个房间的状态；失败时返回 error。
-func RecoverSingleRoom(ctx context.Context, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc *roomsvc.Service, roomID string) error {
+func RecoverSingleRoom(ctx context.Context, rcli *redis.Client, ev *postgres.RoomEventStore, gs *postgres.GameSummaryStore, svc roomsvc.RoomRecovery, roomID string) error {
 	var (
 		players   []string
 		state     = "waiting"
