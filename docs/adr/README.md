@@ -72,3 +72,4 @@
 - [ADR-0047 CLI 纯中文 TUI 重设计](0047-cli-pure-chinese-redesign.md)：**已退役**；cmd/cli 删除后编号保留以维持序列连续性。
 - [ADR-0048 Agent 优先的治理文档格式](0048-agent-first-governance-format.md)：已采纳；治理资产以 agent 解析效率为优化目标，禁止散文，固定结构。
 - [ADR-0049 零债务重构策略](0049-zero-debt-refactor-strategy.md)：已采纳；所有变更前必须全系统梳理并找到最优落点，禁止补丁式修复。
+- [ADR-0050 各层职责矩阵与包边界约束](0050-layer-responsibility-matrix.md)：已采纳；定义七层模型、各层入口/出口契约与禁止事项、类型归属规则与迁移阶段。
