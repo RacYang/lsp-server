@@ -13,6 +13,7 @@ import (
 	"time"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
+	"racoo.cn/lsp/internal/clock"
 )
 
 // WaitingReason 表示房间当前等待的玩家动作类型。值域与 client.v1.WaitingReason 保持同语义；
@@ -219,6 +220,37 @@ func (rs *RoundState) Deadline() int64 {
 		return 0
 	}
 	return rs.deadlineUnixMs
+}
+
+// InjectRecoveryRuntime 是节点重启恢复路径的唯一 clk/tmo 注入入口。
+//
+// 注入完成后按如下规则重锚定 deadline（与 enterPhase 语义对齐）：
+//   - phaseReason == ReasonNone：不设 deadline，scheduler 停表。
+//   - phaseStartUnixMs == 0（老快照无锚点）：以当前时刻为起点重新计算。
+//   - phaseStartUnixMs > 0（新快照有锚点）：以快照时刻加 duration 计算；
+//     若 deadline 已过期，scheduler.armUntil 会立即触发 cmdAutoTimeout，
+//     与 ADR-0045 "重启后超时立即托管"约束一致。
+//
+// 调用方仅为 service.startActorLocked 的恢复分支；禁止在其他路径直接写
+// rs.clk / rs.tmo / rs.phaseStartUnixMs / rs.deadlineUnixMs。
+func (rs *RoundState) InjectRecoveryRuntime(clk clock.Clock, tmo TimeoutConfig) {
+	if rs == nil {
+		return
+	}
+	rs.clk = clk
+	rs.tmo = tmo
+	if rs.phaseReason == ReasonNone {
+		return
+	}
+	if rs.phaseStartUnixMs == 0 {
+		rs.phaseStartUnixMs = clk.Now().UnixMilli()
+	}
+	surrender := rs.surrenderedWaitingSeat(rs.phaseReason)
+	if dur := rs.phaseDuration(rs.phaseReason, surrender); dur > 0 {
+		rs.deadlineUnixMs = rs.phaseStartUnixMs + dur.Milliseconds()
+	} else {
+		rs.deadlineUnixMs = 0
+	}
 }
 
 // PhaseToken 是客户端动作请求中携带的轻量阶段令牌；详见 ADR-0045。

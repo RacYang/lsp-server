@@ -291,21 +291,7 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 		return
 	}
 	if initialRound != nil {
-		// 恢复路径注入 clk/tmo，并按当前时刻重锚定 phaseStart：
-		// 若 deadline 已过期，scheduler.armUntil 会立即触发 cmdAutoTimeout，
-		// 与 ADR-0045 的"重启后超时立即托管"约束一致。
-		initialRound.clk = s.clock
-		initialRound.tmo = s.tmo
-		if initialRound.phaseStartUnixMs == 0 && initialRound.phaseReason != ReasonNone {
-			initialRound.phaseStartUnixMs = s.clock.Now().UnixMilli()
-			if dur := initialRound.phaseDuration(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
-				initialRound.deadlineUnixMs = initialRound.phaseStartUnixMs + dur.Milliseconds()
-			}
-		} else if initialRound.phaseReason != ReasonNone {
-			if dur := initialRound.phaseDuration(initialRound.phaseReason, initialRound.surrenderedWaitingSeat(initialRound.phaseReason)); dur > 0 {
-				initialRound.deadlineUnixMs = initialRound.phaseStartUnixMs + dur.Milliseconds()
-			}
-		}
+		initialRound.InjectRecoveryRuntime(s.clock, s.tmo)
 	}
 	a := newRoomActorWithCapacity(r, initialRound, s.mailboxCapacity)
 	a.engine = s.engine
