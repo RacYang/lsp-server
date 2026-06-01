@@ -2,6 +2,7 @@
 title: 各层职责矩阵与包边界约束
 status: accepted
 date: 2026-05-29
+migration_completed: 2026-06-01
 ---
 
 # ADR-0050 各层职责矩阵与包边界约束
@@ -33,14 +34,14 @@ date: 2026-05-29
 - 入口：原始 WebSocket 帧。
 - 出口：反序列化后的 Go 命令对象，交给 L6。
 - 禁止：实现业务规则、维护游戏状态、直接调用 `store`。
-- 当前违反：限流逻辑（`ratelimit.go`）应下沉至 L6 adapter 中间件。
+- ~~当前违反：限流逻辑（`ratelimit.go`）应下沉至 L6 adapter 中间件。~~ **已修复（Phase E）**：限流逻辑迁移至 `pkg/ratelimit/`，handler 不再内嵌业务策略。
 
 #### L6 gateway / adapter
 
 - 入口：L7 命令对象 + L4 通知事件。
 - 出口：L4 接口调用结果序列化为 proto/frame；L4 通知推送给 L7 hub。
 - 禁止：持有游戏状态、执行会话重建业务逻辑、直接调用 `engine`。
-- 当前违反：`adapter/local/gateway.go::Resume` 承载会话恢复完整逻辑，应拆至独立 `ReconnectService`。
+- ~~当前违反：`adapter/local/gateway.go::Resume` 承载会话恢复完整逻辑，应拆至独立 `ReconnectService`。~~ **已修复（Phase D）**：业务逻辑迁移至 `service/reconnect`，adapter 仅保留 proto 投影。
 
 #### L5 contract
 
@@ -54,12 +55,13 @@ date: 2026-05-29
 - 禁止：序列化 proto 消息、知道 WebSocket/Hub 存在、创建 OS timer（委托给 scheduler）。
 - 当前违反：`service.go::startActorLocked` 已通过 `InjectRecoveryRuntime` 修正；无其他违反。
 
-#### L3 engine（待建子包）
+#### L3 engine
 
 - 入口：`Apply*(ctx, *RoundState, ...)` 调用。
 - 出口：`([]Notification, error)`；`RoundState` 通过 accessor 方法对外只读暴露。
 - 禁止：goroutine、timer、网络、持久化、import L4/L6/L7 任何包。
 - 类型归属：`Notification`、`Kind`、`RoundView`、`RoundProgress`、`PhaseToken`、`WaitingReason`、`Phase`、`PhaseDriftError` 的权威定义在 L3 engine。
+- **已建（Phase B）**：`internal/service/room/engine/` 子包，arch-lint 组件 `service_room_engine`。
 
 #### L2 domain
 
@@ -93,24 +95,24 @@ L7 → L5
 
 ### 5. 当前违反清单与迁移优先级
 
-| 违反 | 所在文件 | 正确落点 | 优先级 |
-|------|----------|----------|--------|
-| 限流策略在 L7 handler | `handler/ratelimit.go` | L6 adapter 中间件 | P1 |
-| 会话恢复逻辑在 L6 adapter | `adapter/local/gateway.go::Resume` | 独立 `service/reconnect` 或 session 层 | P1 |
-| engine 类型归属 L4（未建子包） | `service/room/engine.go` 等 | `service/room/engine/` 子包 | P1 |
-| `service/room` actor+engine 同包 | `actor.go`、`engine.go` | actor 子包与 engine 子包分离 | P1 |
-| anyProjectDeps 剩余 5 个组件 | `.go-arch-lint.yml` | 逐个补 deny 规则（app/cluster/config/log/cmd） | P2 |
-| `handler` mayDependOn 列表过宽 | `.go-arch-lint.yml` | 收缩至 contract/session/protocol/config/log | P2 |
+| 违反 | 所在文件 | 正确落点 | 优先级 | 状态 |
+|------|----------|----------|--------|------|
+| 限流策略在 L7 handler | `handler/ratelimit.go` | `pkg/ratelimit/` | P1 | ✅ Phase E |
+| 会话恢复逻辑在 L6 adapter | `adapter/local/gateway.go::Resume` | `service/reconnect` | P1 | ✅ Phase D |
+| engine 类型归属 L4（未建子包） | `service/room/engine.go` 等 | `service/room/engine/` 子包 | P1 | ✅ Phase B |
+| `service/room` actor+engine 同包 | `actor.go`、`engine.go` | actor 子包与 engine 子包分离 | P1 | ✅ Phase C |
+| anyProjectDeps 剩余 5 个组件 | `.go-arch-lint.yml` | 逐个补 deny 规则 | P2 | 待处理 |
+| `handler` mayDependOn 列表过宽 | `.go-arch-lint.yml` | 收缩至核心依赖 | P2 | ✅ Phase E（收缩至 10 个） |
 
 ### 6. 迁移阶段
 
-- **Phase A（本 ADR）**：写定职责矩阵，不动代码。
-- **Phase B**：建 `service/room/engine/` 子包，迁移 engine_*.go + phase.go + view_types.go + 相关类型；外部调用方 import 路径从 `service/room` 改为 `service/room/engine`（仅数据类型部分）。
-- **Phase C**：建 `service/room/actor/` 子包，迁移 actor.go + actor_dispatch.go + scheduler.go。
-- **Phase D**：将 `Resume` 逻辑从 `adapter/local` 分离至 `service/reconnect`。
-- **Phase E**：将 `handler` 限流下沉至 `adapter` 层；收缩 arch-lint 规则。
-
-每个 Phase 独立提交，Phase B 是高优先级起点。
+| Phase | 内容 | 提交 | 状态 |
+|-------|------|------|------|
+| A | 写定职责矩阵，不动代码 | `5b02c22` | ✅ |
+| B | 建 `service/room/engine/` 子包，迁移 engine_*.go + phase.go + view_types.go；`engine_bridge.go` 提供过渡期类型别名 | `4a4e394` | ✅ |
+| C | 建 `service/room/actor/` 子包，迁移 actor.go + actor_dispatch.go + scheduler.go；导出 `New(Config)`、`Run()`、`Submit*()` | `fe95942` | ✅ |
+| D | 将 `Resume` 业务逻辑从 `adapter/local` 分离至 `service/reconnect`；adapter 仅保留 proto 投影 | `0981919` | ✅ |
+| E | 限流迁移至 `pkg/ratelimit/`；消除 handler 对 service/room 的直接依赖；handler arch-lint 收缩至 10 个组件 | `86e0fc6` | ✅ |
 
 ## 后果
 
