@@ -12,13 +12,14 @@ import (
 
 	"racoo.cn/lsp/internal/clock"
 	domainroom "racoo.cn/lsp/internal/domain/room"
+	act "racoo.cn/lsp/internal/service/room/actor"
 )
 
-// Service 编排房间命令；每房间在内部通过 roomActor 单协程串行化变更。
+// Service 编排房间命令；每房间在内部通过 actor.Actor 单协程串行化变更。
 type Service struct {
 	lobby  *RoomRegistry
 	mu     sync.Mutex
-	actors map[string]*roomActor
+	actors map[string]*act.Actor
 	// activeCount 以无锁方式维护活跃房间数，供 ActiveRoomCount 无竞争读取。
 	activeCount          atomic.Int32
 	engine               *Engine
@@ -76,12 +77,12 @@ func NewService(l *RoomRegistry, opts ...Option) *Service {
 func NewServiceWithRule(l *RoomRegistry, ruleID string, opts ...Option) *Service {
 	s := &Service{
 		lobby:                l,
-		actors:               make(map[string]*roomActor),
+		actors:               make(map[string]*act.Actor),
 		engine:               NewEngine(ruleID),
 		clock:                clock.NewReal(),
 		tmo:                  DefaultTimeoutConfig(),
 		maxHands:             1,
-		mailboxCapacity:      defaultMailboxCapacity,
+		mailboxCapacity:      act.DefaultMailboxCapacity,
 		allowLeaveDuringPlay: true,
 	}
 	for _, opt := range opts {
@@ -118,7 +119,7 @@ func (s *Service) SetMailboxCapacity(capacity int) {
 		return
 	}
 	if capacity <= 0 {
-		capacity = defaultMailboxCapacity
+		capacity = act.DefaultMailboxCapacity
 	}
 	s.mailboxCapacity = capacity
 }
@@ -157,7 +158,7 @@ func (s *Service) MarkSeatOffline(roomID, userID string) {
 		return
 	}
 	if a := s.getActor(roomID); a != nil {
-		a.submitMarkOffline(userID)
+		a.SubmitMarkOffline(userID)
 	}
 }
 
@@ -167,7 +168,7 @@ func (s *Service) CancelOfflineSurrender(roomID, userID string) {
 		return
 	}
 	if a := s.getActor(roomID); a != nil {
-		a.submitCancelOffline(userID)
+		a.SubmitCancelOffline(userID)
 	}
 }
 
@@ -238,17 +239,19 @@ func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRou
 	if initialRound != nil {
 		initialRound.InjectRecoveryRuntime(s.clock, s.tmo)
 	}
-	a := newRoomActorWithCapacity(r, initialRound, s.mailboxCapacity)
-	a.engine = s.engine
-	a.onExit = s.removeActor
-	a.scheduler = newRoomScheduler(roomID, s.clock, a)
-	a.onAuto = s.onAuto
-	a.onAfterCmd = s.onAfterCmd
-	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
-	a.offlineSurrenderAfter = s.offlineSurrenderAfter
+	a := act.New(r, initialRound, act.Config{
+		Engine:                s.engine,
+		Clock:                 s.clock,
+		Capacity:              s.mailboxCapacity,
+		OnExit:                s.removeActor,
+		OnAutoTimeout:         s.onAuto,
+		OnAfterCmd:            s.onAfterCmd,
+		AllowLeaveDuringPlay:  s.allowLeaveDuringPlay,
+		OfflineSurrenderAfter: s.offlineSurrenderAfter,
+	})
 	s.actors[roomID] = a
 	s.activeCount.Add(1)
-	go a.run()
+	go a.Run()
 }
 
 func (s *Service) ensureActorForExistingRoom(roomID string) {
@@ -268,17 +271,19 @@ func (s *Service) ensureActorForExistingRoom(roomID string) {
 		s.mu.Unlock()
 		return
 	}
-	a := newRoomActorWithCapacity(r, nil, s.mailboxCapacity)
-	a.engine = s.engine
-	a.onExit = s.removeActor
-	a.scheduler = newRoomScheduler(roomID, s.clock, a)
-	a.onAuto = s.onAuto
-	a.onAfterCmd = s.onAfterCmd
-	a.allowLeaveDuringPlay = s.allowLeaveDuringPlay
-	a.offlineSurrenderAfter = s.offlineSurrenderAfter
+	a := act.New(r, nil, act.Config{
+		Engine:                s.engine,
+		Clock:                 s.clock,
+		Capacity:              s.mailboxCapacity,
+		OnExit:                s.removeActor,
+		OnAutoTimeout:         s.onAuto,
+		OnAfterCmd:            s.onAfterCmd,
+		AllowLeaveDuringPlay:  s.allowLeaveDuringPlay,
+		OfflineSurrenderAfter: s.offlineSurrenderAfter,
+	})
 	s.actors[roomID] = a
 	s.mu.Unlock()
-	go a.run()
+	go a.Run()
 }
 
 func (s *Service) removeActor(roomID string) {
@@ -295,7 +300,7 @@ func (s *Service) removeActor(roomID string) {
 	s.mu.Unlock()
 }
 
-func (s *Service) getActor(roomID string) *roomActor {
+func (s *Service) getActor(roomID string) *act.Actor {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.actors[roomID]
@@ -319,7 +324,7 @@ func (s *Service) Join(ctx context.Context, roomID, userID string) (int, error) 
 	if a == nil {
 		return -1, fmt.Errorf("room missing: %s", roomID)
 	}
-	return a.submitJoin(ctx, userID)
+	return a.SubmitJoin(ctx, userID)
 }
 
 // Ready 标记准备并尝试开局。
@@ -330,7 +335,7 @@ func (s *Service) Ready(ctx context.Context, roomID, userID string) ([]Notificat
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitReady(ctx, userID)
+	return a.SubmitReady(ctx, userID)
 }
 
 // Leave 将玩家从 waiting/ready 房间移除；playing 及以后状态返回错误。
@@ -339,7 +344,7 @@ func (s *Service) Leave(ctx context.Context, roomID, userID string) error {
 	if a == nil {
 		return fmt.Errorf("room not found")
 	}
-	return a.submitLeave(ctx, userID)
+	return a.SubmitLeave(ctx, userID)
 }
 
 // Discard 提交当前轮次出牌动作；tok 为客户端阶段令牌，nil 时跳过 drift 校验（旧客户端兼容）。
@@ -348,7 +353,7 @@ func (s *Service) Discard(ctx context.Context, roomID, userID, tile string, tok 
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitDiscard(ctx, userID, tile, tok)
+	return a.SubmitDiscard(ctx, userID, tile, tok)
 }
 
 // Pong 提交弃牌抢答窗口中的碰牌动作。
@@ -357,7 +362,7 @@ func (s *Service) Pong(ctx context.Context, roomID, userID string, tok *PhaseTok
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitPong(ctx, userID, tok)
+	return a.SubmitPong(ctx, userID, tok)
 }
 
 // Chi 提交弃牌抢答窗口中的吃牌动作。默认四川血战规则不会开放该动作。
@@ -366,7 +371,7 @@ func (s *Service) Chi(ctx context.Context, roomID, userID string, tiles []string
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitChi(ctx, userID, tiles, tok)
+	return a.SubmitChi(ctx, userID, tiles, tok)
 }
 
 // Gang 提交弃牌抢答窗口中的杠牌或当前座位自杠动作。
@@ -375,7 +380,7 @@ func (s *Service) Gang(ctx context.Context, roomID, userID, tile string, tok *Ph
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitGang(ctx, userID, tile, tok)
+	return a.SubmitGang(ctx, userID, tile, tok)
 }
 
 // Hu 提交胡牌动作（当前为自摸待决窗口）。
@@ -384,7 +389,7 @@ func (s *Service) Hu(ctx context.Context, roomID, userID string, tok *PhaseToken
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitHu(ctx, userID, tok)
+	return a.SubmitHu(ctx, userID, tok)
 }
 
 // Pass 放弃当前抢答或自摸选择，并由服务端推进下一等待态。
@@ -393,7 +398,7 @@ func (s *Service) Pass(ctx context.Context, roomID, userID string, tok *PhaseTok
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitPass(ctx, userID, tok)
+	return a.SubmitPass(ctx, userID, tok)
 }
 
 // AutoTimeout 执行当前等待态的服务端托管动作，供上层定时器到期后调用。
@@ -402,7 +407,7 @@ func (s *Service) AutoTimeout(ctx context.Context, roomID string) ([]Notificatio
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitAutoTimeout(ctx)
+	return a.SubmitAutoTimeout(ctx)
 }
 
 func (s *Service) OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *PhaseToken) ([]Notification, error) {
@@ -410,7 +415,7 @@ func (s *Service) OpeningAction(ctx context.Context, roomID, userID, action stri
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
 	}
-	return a.submitOpeningAction(ctx, userID, action, tiles, direction, suit, params, tok)
+	return a.SubmitOpeningAction(ctx, userID, action, tiles, direction, suit, params, tok)
 }
 
 // RoundPersistSnapshot 返回当前进行中牌局的最小可恢复快照。
@@ -419,7 +424,7 @@ func (s *Service) RoundPersistSnapshot(ctx context.Context, roomID string) ([]by
 	if a == nil {
 		return nil, nil
 	}
-	return a.submitRoundSnapJSON(ctx)
+	return a.SubmitRoundSnapJSON(ctx)
 }
 
 // RoundView 返回当前进行中局面的等待态摘要。
@@ -428,7 +433,7 @@ func (s *Service) RoundView(ctx context.Context, roomID string) (RoundView, bool
 	if a == nil {
 		return RoundView{}, false, nil
 	}
-	return a.submitRoundView(ctx)
+	return a.SubmitRoundView(ctx)
 }
 
 // RecoverRoom 基于 Redis snapmeta 恢复房间基础内存态，并重新挂起 actor。
@@ -494,7 +499,7 @@ func (s *Service) RoomSnapshot(roomID string) (playerIDs []string, fsmState stri
 		return nil, "", [4]bool{}, false
 	}
 	if a := s.getActor(roomID); a != nil {
-		players, state, ready, err := a.submitRoomSnapshot(context.Background())
+		players, state, ready, err := a.SubmitRoomSnapshot(context.Background())
 		if err == nil {
 			return players, state, ready, true
 		}

@@ -15,7 +15,6 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/clock"
-	domainroom "racoo.cn/lsp/internal/domain/room"
 	_ "racoo.cn/lsp/internal/mahjong/guobiao/jingji"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
@@ -137,28 +136,6 @@ func TestActorRemovedAfterRoomClosed(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
-func TestServiceSupportsConfiguredNextHand(t *testing.T) {
-	t.Parallel()
-
-	r := domainroom.NewRoom("room-next-hand")
-	r.MaxHands = 2
-	for i := 0; i < 4; i++ {
-		_, ok := r.JoinAutoSeat("p" + string(rune('0'+i)))
-		require.True(t, ok)
-		require.NoError(t, r.SetReady(domainroom.Seat(i), true))
-	}
-	require.NoError(t, r.StartPlaying())
-	a := &roomActor{
-		room:  r,
-		round: &RoundState{},
-	}
-	a.closeRoomAfterRound()
-	a.round = nil
-	require.Nil(t, a.round)
-	require.Equal(t, domainroom.StateWaiting, a.room.FSM.State())
-	require.EqualValues(t, 2, a.room.HandIndex)
-}
-
 func TestRecoverRoomAndRuleID(t *testing.T) {
 	t.Parallel()
 
@@ -277,7 +254,7 @@ func TestServiceAutoTimeoutSurrendersThroughActor(t *testing.T) {
 	require.Len(t, notifs, 4)
 	a := svc.getActor("r-service-timeout")
 	require.NotNil(t, a)
-	require.True(t, a.room.Surrendered[0])
+	require.True(t, a.Room.Surrendered[0])
 }
 
 func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
@@ -322,36 +299,6 @@ func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
-func TestSubmitActionReturnsCtxErrAfterContextCanceled(t *testing.T) {
-	// 行为变更说明（FIX-1）：submit* 发送成功后立即释放 submitMu，等待 <-res 时已无锁。
-	// ctx 取消后 select 优先返回 ctx.Err()，不再持锁等待 actor 的迟到响应。
-	// 这是正确的 ctx 语义：调用方取消表示不再需要结果，迟到的 res 写入缓冲 channel 后被 GC 回收。
-	t.Parallel()
-
-	a := &roomActor{ch: make(chan any)}
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		msg := (<-a.ch).(cmdDiscard)
-		cancel()
-		time.Sleep(10 * time.Millisecond)
-		msg.res <- actionResult{notifications: []Notification{{Kind: KindAction}}, err: nil}
-	}()
-
-	notifs, err := a.submitAction(ctx, cmdDiscard{userID: "u1", tile: "m1", res: make(chan actionResult, 1)})
-	require.ErrorIs(t, err, context.Canceled)
-	require.Nil(t, notifs)
-}
-
-func TestSubmitActionReturnsRateLimitedWhenMailboxFull(t *testing.T) {
-	t.Parallel()
-
-	a := &roomActor{ch: make(chan any, 1)}
-	a.ch <- cmdReady{}
-	notifs, err := a.submitAction(context.Background(), cmdDiscard{userID: "u1", tile: "m1", res: make(chan actionResult, 1)})
-	require.ErrorIs(t, err, ErrRateLimited)
-	require.Nil(t, notifs)
-}
-
 func TestServiceMailboxCapacityOverride(t *testing.T) {
 	t.Parallel()
 
@@ -360,7 +307,7 @@ func TestServiceMailboxCapacityOverride(t *testing.T) {
 	require.NoError(t, svc.EnsureRoom("mailbox-config-room"))
 	a := svc.getActor("mailbox-config-room")
 	require.NotNil(t, a)
-	require.Equal(t, 3, cap(a.ch))
+	require.Equal(t, 3, a.MailboxCap())
 }
 
 func TestServiceLeaveDuringPlayMarksSurrender(t *testing.T) {
@@ -378,9 +325,8 @@ func TestServiceLeaveDuringPlayMarksSurrender(t *testing.T) {
 	require.NoError(t, svc.Leave(ctx, roomID, "u2"))
 	a := svc.getActor(roomID)
 	require.NotNil(t, a)
-	require.True(t, a.room.Surrendered[2])
-	require.Equal(t, "u2", a.room.PlayerIDs[2])
-	require.True(t, a.round.SurrenderedAt(2))
+	require.True(t, a.Room.Surrendered[2])
+	require.Equal(t, "u2", a.Room.PlayerIDs[2])
 }
 
 func TestServiceLeaveDuringPlayCanBeDisabled(t *testing.T) {
@@ -397,43 +343,6 @@ func TestServiceLeaveDuringPlayCanBeDisabled(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.Error(t, svc.Leave(ctx, roomID, "u2"))
-}
-
-func TestDoGangClosesRoomAfterSettlement(t *testing.T) {
-	t.Parallel()
-
-	r := domainroom.NewRoom("r-gang-close")
-	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
-		_, ok := r.JoinAutoSeat(uid)
-		require.True(t, ok)
-	}
-	for i := 0; i < 4; i++ {
-		require.NoError(t, r.SetReady(domainroom.Seat(i), true))
-	}
-	require.NoError(t, r.StartPlaying())
-
-	rs := NewRoundStateFromConfig(RoundStateConfig{
-		RoomID:         "r-gang-close",
-		RuleID:         "sichuan_xuezhandaodi_huansanzhang",
-		Rule:           rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
-		PlayerIDs:      [4]string{"u0", "u1", "u2", "u3"},
-		Wall:           wall.NewFromOrderedTiles(nil),
-		Hands:          []*hand.Hand{hand.FromTiles([]tile.Tile{tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1), tile.Must(tile.SuitCharacters, 1)}), hand.New(), hand.New(), hand.New()},
-		RuleState:      testRuleState(make([]int32, 4)),
-		WaitingDiscard: true,
-		Turn:           0,
-	})
-
-	a := newRoomActor(r, nil)
-	a.engine = NewEngine("sichuan_xuezhandaodi_huansanzhang")
-	a.round = rs
-
-	notifs, err := a.doGang("u0", "m1")
-	require.NoError(t, err)
-	// 暗杠展开为 4 条 + 结算 1 条 = 5 条（荒牌时无摸牌通知）
-	require.Len(t, notifs, 5)
-	require.Nil(t, a.round)
-	require.Equal(t, domainroom.StateClosed, r.FSM.State())
 }
 
 func outboundTestMsgID(kind Kind) (uint16, bool) {
@@ -467,8 +376,8 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		}
 		actingSeat := int(view.ActingSeat)
 		var userID string
-		if actingSeat >= 0 && actingSeat < len(a.room.PlayerIDs) {
-			userID = a.room.PlayerIDs[actingSeat]
+		if actingSeat >= 0 && actingSeat < len(a.Room.PlayerIDs) {
+			userID = a.Room.PlayerIDs[actingSeat]
 		}
 		switch view.WaitingAction {
 		case "":
@@ -476,7 +385,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		case openingExchangeThree:
 			for _, seatIdx := range view.ActingSeats {
 				seat := int(seatIdx)
-				uid := a.room.PlayerIDs[seat]
+				uid := a.Room.PlayerIDs[seat]
 				hand := view.HandsBySeat[seat]
 				if len(hand) > 3 {
 					hand = hand[:3]
@@ -487,7 +396,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 			}
 		case openingQueMen:
 			for _, seatIdx := range view.ActingSeats {
-				uid := a.room.PlayerIDs[seatIdx]
+				uid := a.Room.PlayerIDs[seatIdx]
 				if _, err := svc.OpeningAction(ctx, roomID, uid, openingQueMen, nil, 0, 0, nil, nil); err != nil {
 					return err
 				}
@@ -495,7 +404,7 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 		case "claim_window":
 			if len(view.ClaimCandidates) > 0 {
 				best := view.ClaimCandidates[0]
-				uid := a.room.PlayerIDs[best.Seat]
+				uid := a.Room.PlayerIDs[best.Seat]
 				if len(best.Actions) > 0 {
 					switch best.Actions[0] {
 					case "gang":

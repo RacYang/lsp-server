@@ -8,7 +8,10 @@
 // 迁至 engine 包，且 service/room 包内部文件已改用 eng. 前缀。
 package room
 
-import eng "racoo.cn/lsp/internal/service/room/engine"
+import (
+	act "racoo.cn/lsp/internal/service/room/actor"
+	eng "racoo.cn/lsp/internal/service/room/engine"
+)
 
 // ── 基础类型 ──────────────────────────────────────────────────────────────────
 
@@ -86,6 +89,11 @@ const (
 // ── 错误变量 ──────────────────────────────────────────────────────────────────
 
 var ErrRoundPersistUnsupportedSchema = eng.ErrRoundPersistUnsupportedSchema
+
+var (
+	ErrRoomFull    = act.ErrRoomFull
+	ErrRateLimited = act.ErrRateLimited
+)
 
 // ── 构造函数与工具函数 ─────────────────────────────────────────────────────────
 
