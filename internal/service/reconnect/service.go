@@ -51,7 +51,10 @@ func (s *Service) Resume(ctx context.Context, sessionToken string) (*ReconnectRe
 	if !ok {
 		return nil, fmt.Errorf("房间不存在或已回收")
 	}
-	view, _, _ := s.rooms.RoundView(ctx, srec.RoomID)
+	view, _, err := s.rooms.RoundView(ctx, srec.RoomID)
+	if err != nil {
+		return nil, fmt.Errorf("读取局面视图失败: %w", err)
+	}
 	return &ReconnectResult{
 		UserID:     uid,
 		RoomID:     srec.RoomID,

@@ -216,7 +216,7 @@ func (g *LocalRoomGateway) Ready(ctx context.Context, roomID, userID string) (fu
 	}
 	notifications, err := g.rooms.Ready(ctx, roomID, userID)
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
@@ -232,7 +232,7 @@ func (g *LocalRoomGateway) Leave(ctx context.Context, roomID, userID string) (fu
 		}
 	}
 	if err := g.rooms.Leave(ctx, roomID, userID); err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return nil, nil
 }

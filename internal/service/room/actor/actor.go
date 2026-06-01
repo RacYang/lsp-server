@@ -626,6 +626,8 @@ func (a *Actor) SubmitPass(ctx context.Context, userID string, tok *PhaseToken) 
 // 以保证 (rs.step, rs.phaseReason) 读取与后续 do* 写入是同一时刻的原子组合。
 func (a *Actor) checkPhaseToken(tok *PhaseToken) error {
 	if a == nil || a.round == nil {
+		// 无进行中局面时放行：开局前客户端不持有合法令牌，
+		// 由后续 do* 的 round-nil 检查负责拦截非法动作。
 		return nil
 	}
 	return a.round.ValidatePhaseToken(tok)

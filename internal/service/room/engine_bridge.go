@@ -1,11 +1,11 @@
-// engine_bridge.go — Phase B 过渡期桥接文件。
+// engine_bridge.go — 过渡期桥接文件（ADR-0050 Phase B 引入）。
 //
-// 把 internal/service/room/engine 的导出类型重新暴露为 service/room 包成员，
-// 使现有外部调用方（adapter、handler、app）在 Phase B 期间无需修改 import 路径。
+// 把 internal/service/room/engine 与 internal/service/room/actor 的导出类型
+// 重新暴露为 service/room 包成员，使外部调用方无需修改 import 路径。
 //
-// TODO(debt): Phase C 完成后，外部调用方改为直接 import service/room/engine，
-// 届时删除本文件。回收条件：adapter/room、adapter/local、handler 的 import 全部
-// 迁至 engine 包，且 service/room 包内部文件已改用 eng. 前缀。
+// TODO(debt): 回收条件：adapter/room、adapter/local 的 roomsvc import 全部
+// 迁至直接引用 engine/actor 子包，且 service/room 内部文件改用 eng./act. 前缀。
+// 当前状态（Phase E 完成）：adapter/room 仍大量引用 roomsvc 类型；条件未满足。
 package room
 
 import (

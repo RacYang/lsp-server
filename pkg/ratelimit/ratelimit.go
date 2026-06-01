@@ -90,7 +90,11 @@ func (c *IdemCache) SeenOrStore(scope string, msgID uint16, userID, key string) 
 		if back == nil {
 			break
 		}
-		entry := back.Value.(idemEntry)
+		entry, ok2 := back.Value.(idemEntry)
+		if !ok2 {
+			c.order.Remove(back)
+			continue
+		}
 		delete(c.items, entry.key)
 		c.order.Remove(back)
 	}
