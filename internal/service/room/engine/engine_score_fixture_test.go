@@ -1,4 +1,4 @@
-package room
+package engine
 
 import (
 	"os"
@@ -37,7 +37,7 @@ type fixtureScoreEvent struct {
 
 func TestScoreEventYAMLFixtures(t *testing.T) {
 	var file scoreEventFixtureFile
-	data, err := os.ReadFile(filepath.Join("..", "..", "mahjong", "sichuan", "xuezhandaodi", "testdata", "score_event_cases.yaml"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "mahjong", "sichuan", "xuezhandaodi", "testdata", "score_event_cases.yaml"))
 	if err != nil {
 		t.Fatalf("read score event fixture: %v", err)
 	}

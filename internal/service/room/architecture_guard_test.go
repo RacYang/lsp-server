@@ -63,7 +63,7 @@ func TestRoomEngineArchitectureGuard(t *testing.T) {
 		require.NotContains(t, src, "HuAftermathPolicy", "%s must get hu aftermath from CapabilitySet.Turn", base)
 		require.NotContains(t, src, "SettlementBuilder", "%s must get settlement from CapabilitySet.Settlement", base)
 		require.NotContains(t, src, "rs.rule.(rules.", "%s must not type-assert rule runtime strategies", base)
-		if base != "engine.go" {
+		if base != "engine.go" && base != "round_builder.go" {
 			require.NotContains(t, src, "rules.CapabilitiesOf(rs.rule)", "%s must use RoundState.caps instead of re-querying rule capabilities", base)
 		}
 		require.NotContains(t, src, "rules.StandardSelfActionPolicy{}", "%s must get self-action legality from CapabilitySet.SelfActions, not room fallback", base)
@@ -115,7 +115,7 @@ func TestRoomStateStructsDoNotHoldClientV1Types(t *testing.T) {
 	// 确保 RoundState/RoundView/RoundFacts/RoundProgress 数据结构不再直接持有 clientv1 类型。
 	// 允许的例外：view_types.go（仅含 Proto() 转换方法），engine*.go（序列化边界函数）。
 	// 违规文件：engine.go 如出现新的 clientv1 字段声明，此测试将失败。
-	data, err := os.ReadFile(filepath.Join(".", "engine.go"))
+	data, err := os.ReadFile(filepath.Join(".", "engine", "engine.go"))
 	require.NoError(t, err)
 	src := string(data)
 
@@ -272,14 +272,16 @@ func TestOpeningLegacyProtocolDefinitionsRemoved(t *testing.T) {
 
 func roomGoFiles(t *testing.T) []string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(".", "*.go"))
-	require.NoError(t, err)
-	out := make([]string, 0, len(files))
-	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") {
-			continue
+	var out []string
+	for _, pattern := range []string{filepath.Join(".", "*.go"), filepath.Join(".", "engine", "*.go")} {
+		files, err := filepath.Glob(pattern)
+		require.NoError(t, err)
+		for _, file := range files {
+			if strings.HasSuffix(file, "_test.go") {
+				continue
+			}
+			out = append(out, file)
 		}
-		out = append(out, file)
 	}
 	return out
 }
@@ -293,7 +295,7 @@ func readRepoFile(t *testing.T, rel string) string {
 
 func isCompatRoomFile(base string) bool {
 	switch base {
-	case "engine.go", "engine_persist.go", "engine_contract.go":
+	case "engine.go", "engine_persist.go", "engine_contract.go", "round_builder.go":
 		return true
 	default:
 		return false

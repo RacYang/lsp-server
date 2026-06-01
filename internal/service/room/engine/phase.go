@@ -7,7 +7,7 @@
 //
 // engine 任何分支只允许通过 enterPhase 切换阶段；scheduler 仅按 Deadline() 对齐 OS 定时器，
 // 不再写入 RoundState。具体约束由 .cursor/rules/room-phase-owner.mdc 与 enforcer 校验。
-package room
+package engine
 
 import (
 	"time"

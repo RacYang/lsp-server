@@ -101,6 +101,8 @@ lint:
       store_root: internal/store/
       store_redis: internal/store/redis/**
       store_postgres: internal/store/postgres/**
+      # service/room/engine 单独注册，避免 service 组件内自引用被误判为违规
+      service_room_engine: internal/service/room/engine/**
       service: internal/service/**
       session: internal/session/**
       config: internal/config/**
@@ -329,6 +331,18 @@ lint:
           - cmd
       - from: service
         to: [protocol, handler, cluster, cmd]
+      - from: service_room_engine
+        to:
+          - handler
+          - service
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - cmd
+          - contract
+          - protocol
       - from: protocol
         to:
           - domain

@@ -1,4 +1,4 @@
-package room
+package engine
 
 import "racoo.cn/lsp/internal/mahjong/rules"
 
@@ -53,6 +53,43 @@ func (rs *RoundState) RoundScoreBalances() []int32 {
 		return make([]int32, 4)
 	}
 	return seatBalancesFromScoreEvents(rs.scoreEvents)
+}
+
+// WaitingOpening 报告当前是否处于开局等待窗口。
+func (rs *RoundState) WaitingOpening() bool {
+	if rs == nil {
+		return false
+	}
+	return rs.waitingOpening
+}
+
+// OpenClaimWindow 打开抢答窗口（供白盒测试设置局面使用）。
+func (rs *RoundState) OpenClaimWindow() {
+	rs.openClaimWindow()
+}
+
+// Turn 返回当前轮次的行动座位。
+func (rs *RoundState) Turn() Seat {
+	if rs == nil {
+		return SeatInvalid
+	}
+	return rs.turn
+}
+
+// WaitingTsumo 报告当前是否处于自摸等待窗口。
+func (rs *RoundState) WaitingTsumo() bool {
+	if rs == nil {
+		return false
+	}
+	return rs.waitingTsumo
+}
+
+// WaitingDiscard 报告当前是否处于出牌等待窗口。
+func (rs *RoundState) WaitingDiscard() bool {
+	if rs == nil {
+		return false
+	}
+	return rs.waitingDiscard
 }
 
 // ScoreEvents 返回本局计分事件切片的只读副本。

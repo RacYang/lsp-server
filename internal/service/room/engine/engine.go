@@ -1,4 +1,4 @@
-package room
+package engine
 
 import (
 	"context"
@@ -273,6 +273,14 @@ func (rs *RoundState) ensureRuleRuntime() {
 	rs.normalizeRuleState()
 }
 
+// RuleID 返回该引擎实例绑定的规则 ID。
+func (e *Engine) RuleID() string {
+	if e == nil {
+		return ""
+	}
+	return e.ruleID
+}
+
 // SetClock 注入引擎使用的时钟源，影响 enterPhase 写入的 phaseStartUnixMs。
 func (e *Engine) SetClock(clk clock.Clock) {
 	if e == nil || clk == nil {
@@ -286,7 +294,7 @@ func (e *Engine) SetTimeoutConfig(cfg TimeoutConfig) {
 	if e == nil {
 		return
 	}
-	e.tmo = cfg.withDefaults()
+	e.tmo = cfg.WithDefaults()
 }
 
 // StartRound 初始化交互式牌局，并推进到首个等待出牌的状态。

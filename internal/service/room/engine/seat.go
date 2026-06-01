@@ -1,4 +1,4 @@
-package room
+package engine
 
 import domainroom "racoo.cn/lsp/internal/domain/room"
 

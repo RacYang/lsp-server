@@ -1,4 +1,4 @@
-package room
+package engine
 
 import (
 	"racoo.cn/lsp/internal/mahjong/rules"

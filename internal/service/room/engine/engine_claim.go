@@ -1,4 +1,4 @@
-package room
+package engine
 
 import (
 	"context"
@@ -762,19 +762,6 @@ func (candidate claimCandidate) claimChoiceAction() string {
 	default:
 		return "claim_choice"
 	}
-}
-
-func (rs *RoundState) rawCanClaimGang(seat Seat) bool {
-	if rs == nil || rs.lastDiscard == 0 || rs.lastDiscardSeat < 0 || seat == rs.lastDiscardSeat || rs.isSeatOutAfterHu(seat) {
-		return false
-	}
-	count := 0
-	for _, t := range rs.hands[seat].Tiles() {
-		if t == rs.lastDiscard {
-			count++
-		}
-	}
-	return count >= 3
 }
 
 func (rs *RoundState) claimHuContext(seat Seat) rules.HuContext {

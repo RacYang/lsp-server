@@ -49,6 +49,8 @@ components:
     in: internal/store/redis/**
   store_postgres:
     in: internal/store/postgres/**
+  service_room_engine:
+    in: internal/service/room/engine/**
   service:
     in: internal/service/**
   session:
@@ -83,6 +85,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -101,6 +104,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -119,6 +123,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -137,6 +142,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -155,6 +161,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -173,6 +180,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -191,6 +199,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -209,6 +218,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -227,6 +237,7 @@ deps:
       - mahjong_analysis
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -245,6 +256,7 @@ deps:
       - mahjong_fan
       - domain
       - contract
+      - service_room_engine
       - config
       - log
       - pkg
@@ -263,6 +275,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - contract
+      - service_room_engine
       - session
       - config
       - log
@@ -291,6 +304,7 @@ deps:
       - store_root
       - store_redis
       - store_postgres
+      - service_room_engine
       - service
       - session
       - config
@@ -309,6 +323,7 @@ deps:
       - store_root
       - store_redis
       - store_postgres
+      - service_room_engine
       - session
       - config
       - clock
@@ -329,6 +344,7 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - mahjong_analysis
+      - service_room_engine
       - config
       - log
       - pkg
@@ -347,6 +363,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - service_room_engine
       - config
       - log
       - pkg
@@ -371,6 +388,7 @@ deps:
       - protocol
       - cluster
       - contract
+      - service_room_engine
       - service
       - session
       - config
@@ -383,6 +401,7 @@ deps:
       - apigen_v1
   store_root:
     mayDependOn:
+      - service_room_engine
       - config
       - clock
       - metrics
@@ -394,6 +413,7 @@ deps:
     mayDependOn:
       - domain
       - store_root
+      - service_room_engine
       - config
       - clock
       - metrics
@@ -404,6 +424,30 @@ deps:
   store_postgres:
     mayDependOn:
       - store_root
+      - service_room_engine
+      - config
+      - clock
+      - metrics
+      - log
+      - pkg
+      - apigen_client
+      - apigen_v1
+  service_room_engine:
+    mayDependOn:
+      - mahjong_builtin
+      - mahjong_guobiao
+      - mahjong_xuezhandaodi
+      - mahjong_rules
+      - mahjong_tile
+      - mahjong_wall
+      - mahjong_hand
+      - mahjong_hu
+      - mahjong_fan
+      - mahjong_analysis
+      - domain
+      - store_root
+      - store_redis
+      - store_postgres
       - config
       - clock
       - metrics
@@ -431,6 +475,7 @@ deps:
       - store_root
       - store_redis
       - store_postgres
+      - service_room_engine
       - session
       - config
       - clock
@@ -454,6 +499,7 @@ deps:
       - store_root
       - store_redis
       - store_postgres
+      - service_room_engine
       - service
       - config
       - clock
@@ -474,6 +520,7 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - mahjong_analysis
+      - service_room_engine
       - config
       - log
       - pkg
@@ -490,6 +537,7 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - protocol
+      - service_room_engine
       - config
       - log
       - pkg
@@ -500,10 +548,13 @@ deps:
   pkg:
     mayDependOn:
       - contract
+      - service_room_engine
   apigen_client:
     mayDependOn:
       - contract
+      - service_room_engine
   apigen_v1:
     mayDependOn:
       - contract
+      - service_room_engine
       - apigen_client

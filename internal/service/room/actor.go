@@ -605,7 +605,7 @@ func (a *roomActor) submitOpeningAction(ctx context.Context, userID, action stri
 		tiles:     append([]string(nil), tiles...),
 		direction: direction,
 		suit:      suit,
-		params:    cloneStringMap(params),
+		params:    cloneMap(params),
 		phaseTok:  tok,
 		ctx:       ctx,
 		res:       make(chan actionResult, 1),
@@ -874,4 +874,12 @@ func (a *roomActor) submitCancelOffline(userID string) {
 	case a.ch <- cmdCancelOffline{userID: userID}:
 	default:
 	}
+}
+
+func cloneMap(m map[string]string) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }

@@ -82,7 +82,7 @@ func (a *roomActor) resetScheduler() {
 		return
 	}
 	deadline := int64(0)
-	if a.round != nil && !a.round.closed {
+	if a.round != nil && !a.round.IsClosed() {
 		deadline = a.round.Deadline()
 	}
 	a.scheduler.armUntil(deadline)

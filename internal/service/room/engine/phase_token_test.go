@@ -5,7 +5,7 @@
 //  1. tok == nil：保持向后兼容，validate 应返回 nil；
 //  2. tok 与服务端权威 (step, reason) 完全一致：返回 nil；
 //  3. tok 过时（step/reason 任一不一致）：返回 *PhaseDriftError，Current 字段反映服务端权威。
-package room
+package engine
 
 import (
 	"errors"
