@@ -12,6 +12,7 @@ import (
 
 	"racoo.cn/lsp/internal/protocol"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
+	reconnectsvc "racoo.cn/lsp/internal/service/reconnect"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
@@ -23,13 +24,21 @@ type LocalRoomGateway struct {
 	lobby                 *lobbysvc.Service
 	hub                   *session.Hub
 	sess                  *session.Manager
+	reconnect             *reconnectsvc.Service
 	offlineSurrenderAfter time.Duration
 }
 
 // NewLocalRoomGateway 创建进程内房间网关；sess 可为 nil 表示不启用 Redis 会话。
 // rooms 接收 *roomsvc.Service（构造时需注册超时回调），运行期以 RoomService 接口访问。
 func NewLocalRoomGateway(rooms *roomsvc.Service, hub *session.Hub, sess *session.Manager) *LocalRoomGateway {
-	g := &LocalRoomGateway{rooms: rooms, lobby: lobbysvc.New(), hub: hub, sess: sess, offlineSurrenderAfter: 30 * time.Second}
+	g := &LocalRoomGateway{
+		rooms:                 rooms,
+		lobby:                 lobbysvc.New(),
+		hub:                   hub,
+		sess:                  sess,
+		reconnect:             reconnectsvc.New(rooms, sess),
+		offlineSurrenderAfter: 30 * time.Second,
+	}
 	if rooms != nil {
 		rooms.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []roomsvc.Notification) {
 			g.broadcastAfter(roomID, notifications)()
@@ -367,35 +376,38 @@ func (g *LocalRoomGateway) EnsureRoomEventSubscription(_ context.Context, _, _ s
 	return nil
 }
 
-// Resume 基于 Redis 会话与内存房间视图构造快照；无持久化游标时以会话 LastCursor 为准。
+// Resume 委托重连服务完成会话校验与房间状态读取，本层仅负责 proto 投影。
 func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*contract.ResumeResult, error) {
-	if g == nil || g.rooms == nil {
+	if g == nil || g.reconnect == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	if g.sess == nil {
-		return nil, fmt.Errorf("会话管理器未启用")
-	}
-	uid, srec, err := g.sess.Resume(ctx, sessionToken)
+	r, err := g.reconnect.Resume(ctx, sessionToken)
 	if err != nil {
 		return nil, err
 	}
-	if srec.RoomID == "" {
-		return &contract.ResumeResult{UserID: uid, Resumed: false}, nil
+	if !r.Resumed {
+		return &contract.ResumeResult{UserID: r.UserID, Resumed: false}, nil
 	}
-	players, state, _, ok := g.rooms.RoomSnapshot(srec.RoomID)
-	if !ok {
-		return nil, fmt.Errorf("房间不存在或已回收")
-	}
-	view, _, _ := g.rooms.RoundView(ctx, srec.RoomID)
-	mySeat := seatIndexForUser(players, uid)
-	queSuits := append([]int32(nil), view.QueBySeat...)
+	return &contract.ResumeResult{
+		UserID:              r.UserID,
+		RoomID:              r.RoomID,
+		Resumed:             true,
+		Snapshot:            buildSnapshotFromReconnect(r),
+		SnapshotSinceCursor: r.LastCursor,
+	}, nil
+}
+
+// buildSnapshotFromReconnect 将重连服务层结果投影为 SnapshotNotify proto。
+func buildSnapshotFromReconnect(r *reconnectsvc.ReconnectResult) *clientv1.SnapshotNotify {
+	view := r.View
+	mySeat := seatIndexForUser(r.Players, r.UserID)
 	snap := &clientv1.SnapshotNotify{
-		RoomId:           srec.RoomID,
-		PlayerIds:        append([]string(nil), players...),
-		Seats:            clientSeatsFromPlayerIDs(players),
-		QueSuitBySeat:    append([]int32(nil), queSuits...),
-		Cursor:           srec.LastCursor,
-		State:            state,
+		RoomId:           r.RoomID,
+		PlayerIds:        append([]string(nil), r.Players...),
+		Seats:            clientSeatsFromPlayerIDs(r.Players),
+		QueSuitBySeat:    append([]int32(nil), view.QueBySeat...),
+		Cursor:           r.LastCursor,
+		State:            r.State,
 		ActingSeat:       view.ActingSeat,
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
 		WaitingAction:    view.WaitingAction,
@@ -417,15 +429,9 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*co
 		RuleMeta:         roomViewRuleMeta(view.RuleMeta),
 	}
 	for seat := 0; seat < len(snap.Seats) && seat < len(view.HandsBySeat); seat++ {
-		snap.Seats[seat].HandCount = int32(len(view.HandsBySeat[seat])) //nolint:gosec // 座位手牌数量小于 20。
+		snap.Seats[seat].HandCount = int32(len(view.HandsBySeat[seat])) //nolint:gosec // 座位手牌数量小于 20
 	}
-	return &contract.ResumeResult{
-		UserID:              uid,
-		RoomID:              srec.RoomID,
-		Resumed:             true,
-		Snapshot:            snap,
-		SnapshotSinceCursor: srec.LastCursor,
-	}, nil
+	return snap
 }
 
 func clientSeatsFromPlayerIDs(players []string) []*clientv1.SeatInfo {
