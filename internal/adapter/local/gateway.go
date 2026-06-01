@@ -2,6 +2,7 @@ package localadapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -253,6 +254,18 @@ func (g *LocalRoomGateway) CancelOfflineSurrender(_ context.Context, roomID, use
 	return nil
 }
 
+// wrapActionErr 将 roomsvc.ErrRateLimited 转换为 contract.ErrRateLimited，
+// 使 handler 无需引用 service/room 即可识别限流错误。
+func wrapActionErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, roomsvc.ErrRateLimited) {
+		return contract.ErrRateLimited
+	}
+	return err
+}
+
 // Discard 触发本地房间推进一轮，并返回在响应之后执行的广播回调。
 func (g *LocalRoomGateway) Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error) {
 	if g == nil || g.rooms == nil {
@@ -260,7 +273,7 @@ func (g *LocalRoomGateway) Discard(ctx context.Context, roomID, userID, tile str
 	}
 	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
@@ -271,7 +284,7 @@ func (g *LocalRoomGateway) Pong(ctx context.Context, roomID, userID string, tok 
 	}
 	notifications, err := g.rooms.Pong(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
@@ -282,7 +295,7 @@ func (g *LocalRoomGateway) Chi(ctx context.Context, roomID, userID string, tiles
 	}
 	notifications, err := g.rooms.Chi(ctx, roomID, userID, tiles, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
@@ -293,7 +306,7 @@ func (g *LocalRoomGateway) Gang(ctx context.Context, roomID, userID, tile string
 	}
 	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
@@ -304,7 +317,7 @@ func (g *LocalRoomGateway) Hu(ctx context.Context, roomID, userID string, tok *c
 	}
 	notifications, err := g.rooms.Hu(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
@@ -315,7 +328,7 @@ func (g *LocalRoomGateway) Pass(ctx context.Context, roomID, userID string, tok 
 	}
 	notifications, err := g.rooms.Pass(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
@@ -326,7 +339,7 @@ func (g *LocalRoomGateway) OpeningAction(ctx context.Context, roomID, userID, ac
 	}
 	notifications, err := g.rooms.OpeningAction(ctx, roomID, userID, action, tiles, direction, suit, params, roomsvc.PhaseTokenFromProto(tok))
 	if err != nil {
-		return nil, err
+		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }

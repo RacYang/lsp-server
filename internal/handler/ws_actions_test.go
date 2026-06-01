@@ -15,9 +15,10 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
+	"racoo.cn/lsp/internal/contract"
 	"racoo.cn/lsp/internal/protocol"
-	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
+	"racoo.cn/lsp/pkg/ratelimit"
 )
 
 // actionStubGateway 让所有动作返回可配置的错误与 after，便于驱动 handler 中的成功/失败分支。
@@ -224,8 +225,7 @@ func actionCases() []actionCase {
 
 // TestActionHandlersHappyPath：所有动作 handler 在 stub 网关返回成功时必须给客户端写 UNSPECIFIED 响应并执行 after 闭包。
 func TestActionHandlersHappyPath(t *testing.T) {
-	defaultWSRateLimiter.Store(newUserRateLimiter(1000, 1000))
-	defaultWSIdemCache.Store(newIdemCache(64))
+	ratelimit.Configure(1000, 1000, 64)
 
 	for _, c := range actionCases() {
 		c := c
@@ -252,8 +252,7 @@ func TestActionHandlersHappyPath(t *testing.T) {
 
 // TestActionHandlersInvalidStateError：网关返回普通错误时必须把错误码映射成 INVALID_STATE，并保留原始消息。
 func TestActionHandlersInvalidStateError(t *testing.T) {
-	defaultWSRateLimiter.Store(newUserRateLimiter(1000, 1000))
-	defaultWSIdemCache.Store(newIdemCache(64))
+	ratelimit.Configure(1000, 1000, 64)
 
 	for _, c := range actionCases() {
 		c := c
@@ -280,10 +279,9 @@ func TestActionHandlersInvalidStateError(t *testing.T) {
 
 // TestActionHandlersRateLimitedFromService：service 层抛 ErrRateLimited 时入口应回 RATE_LIMITED 给客户端。
 func TestActionHandlersRateLimitedFromService(t *testing.T) {
-	defaultWSRateLimiter.Store(newUserRateLimiter(1000, 1000))
-	defaultWSIdemCache.Store(newIdemCache(64))
+	ratelimit.Configure(1000, 1000, 64)
 
-	gateway := &actionStubGateway{joinSeat: 0, actionErr: fmt.Errorf("wrap: %w", roomsvc.ErrRateLimited)}
+	gateway := &actionStubGateway{joinSeat: 0, actionErr: fmt.Errorf("wrap: %w", contract.ErrRateLimited)}
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: gateway, Hub: hub})
 	defer srv.Close()
@@ -302,8 +300,7 @@ func TestActionHandlersRateLimitedFromService(t *testing.T) {
 // TestActionHandlersDropWhenNotInRoom：未进房或 oneof 缺失时 handler 必须静默丢弃，避免后续 actor 推进；
 // 这里同时覆盖 LeaveRoomReq 在没有 roomID 时回 INVALID_STATE 的 writeLeaveRoomError 分支。
 func TestActionHandlersDropWhenNotInRoom(t *testing.T) {
-	defaultWSRateLimiter.Store(newUserRateLimiter(1000, 1000))
-	defaultWSIdemCache.Store(newIdemCache(64))
+	ratelimit.Configure(1000, 1000, 64)
 
 	gateway := &actionStubGateway{joinSeat: 0}
 	hub := session.NewHub()
@@ -331,8 +328,7 @@ func TestActionHandlersDropWhenNotInRoom(t *testing.T) {
 // TestActionHandlersIdempotencyHits：动作幂等键命中后必须直接静默丢弃，不再调用 gateway。
 // 这里以 Discard 为代表，覆盖 shouldDropRequest 在 idempotency 命中时的行为路径。
 func TestActionHandlersIdempotencyHits(t *testing.T) {
-	defaultWSRateLimiter.Store(newUserRateLimiter(1000, 1000))
-	defaultWSIdemCache.Store(newIdemCache(64))
+	ratelimit.Configure(1000, 1000, 64)
 
 	gateway := &actionStubGateway{joinSeat: 0}
 	hub := session.NewHub()

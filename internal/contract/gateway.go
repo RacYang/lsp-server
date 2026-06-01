@@ -4,9 +4,18 @@ package contract
 
 import (
 	"context"
+	"errors"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 )
+
+// ErrRateLimited 表示网关动作被限流拒绝；adapter 实现在触发限流时返回此错误。
+var ErrRateLimited = errors.New("rate limited")
+
+// PhaseUpdater 由 PhaseDriftError 实现，供 handler 在不引用 engine 类型的情况下提取 PhaseUpdate。
+type PhaseUpdater interface {
+	PhaseUpdate() *clientv1.PhaseUpdate
+}
 
 // ResumeResult 为断线重连恢复结果，供 WebSocket 登录分支下发快照与后续订阅。
 type ResumeResult struct {

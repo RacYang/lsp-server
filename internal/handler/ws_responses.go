@@ -6,8 +6,7 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
-	"racoo.cn/lsp/internal/protocol"
-	roomsvc "racoo.cn/lsp/internal/service/room"
+	"racoo.cn/lsp/internal/contract"
 )
 
 func discardErrEnvelope(reqID string, after func(), err error) (*clientv1.Envelope, func()) {
@@ -88,23 +87,23 @@ func openingActionErrEnvelope(reqID string, after func(), err error) (*clientv1.
 }
 
 func actionErrorCode(err error) clientv1.ErrorCode {
-	if errors.Is(err, roomsvc.ErrRateLimited) {
+	if errors.Is(err, contract.ErrRateLimited) {
 		rateLimitedTotal.WithLabelValues("room").Inc()
 		return clientv1.ErrorCode_ERROR_CODE_RATE_LIMITED
 	}
-	var drift *roomsvc.PhaseDriftError
-	if errors.As(err, &drift) {
+	var pu contract.PhaseUpdater
+	if errors.As(err, &pu) {
 		return clientv1.ErrorCode_ERROR_CODE_PHASE_DRIFTED
 	}
 	return clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 }
 
 func phaseUpdateFromActionError(err error) *clientv1.PhaseUpdate {
-	var drift *roomsvc.PhaseDriftError
-	if !errors.As(err, &drift) {
+	var pu contract.PhaseUpdater
+	if !errors.As(err, &pu) {
 		return nil
 	}
-	return drift.PhaseUpdate()
+	return pu.PhaseUpdate()
 }
 
 // joinRoomErrorCode 将进房失败映射为客户端 ErrorCode；未知错误使用 UNSPECIFIED，避免误报「房间已满」。
@@ -124,29 +123,5 @@ func joinRoomErrorCode(err error) clientv1.ErrorCode {
 		return clientv1.ErrorCode_ERROR_CODE_INVALID_STATE
 	default:
 		return clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED
-	}
-}
-
-// OutboundMsgID 返回 room 通知种类对应的 WebSocket 协议消息 ID；供 adapter/local 复用。
-func OutboundMsgID(kind roomsvc.Kind) (uint16, bool) {
-	return outboundMsgID(kind)
-}
-
-func outboundMsgID(kind roomsvc.Kind) (uint16, bool) {
-	switch kind {
-	case roomsvc.KindInitialDeal:
-		return protocol.InitialDealNotify, true
-	case roomsvc.KindOpeningDone:
-		return protocol.OpeningDone, true
-	case roomsvc.KindStartGame:
-		return protocol.StartGame, true
-	case roomsvc.KindDrawTile:
-		return protocol.DrawTile, true
-	case roomsvc.KindAction:
-		return protocol.ActionNotify, true
-	case roomsvc.KindSettlement:
-		return protocol.Settlement, true
-	default:
-		return 0, false
 	}
 }

@@ -312,6 +312,26 @@ lint:
           - store_root
           - store_redis
           - store_postgres
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - domain
+          - app
+          - adapter
+          - gateway
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - service
+          - cluster
+          - cmd
       - from: adapter
         to: [app, cmd, gateway]
       - from: gateway

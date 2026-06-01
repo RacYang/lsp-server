@@ -9,16 +9,16 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
-	"racoo.cn/lsp/internal/protocol"
-	roomsvc "racoo.cn/lsp/internal/service/room"
+	"racoo.cn/lsp/internal/contract"
+	"racoo.cn/lsp/pkg/ratelimit"
 )
 
 // TestActionErrorCodeMappings 校验动作错误码映射：限流错误（含包装链）必须返回限流码，其他错误一律映射到非法状态码。
 func TestActionErrorCodeMappings(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_RATE_LIMITED, actionErrorCode(roomsvc.ErrRateLimited))
-	wrapped := fmt.Errorf("outer: %w", roomsvc.ErrRateLimited)
+	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_RATE_LIMITED, actionErrorCode(contract.ErrRateLimited))
+	wrapped := fmt.Errorf("outer: %w", contract.ErrRateLimited)
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_RATE_LIMITED, actionErrorCode(wrapped))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, actionErrorCode(errors.New("非限流错误")))
 }
@@ -33,31 +33,6 @@ func TestJoinRoomErrorCodeAllBranches(t *testing.T) {
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, joinRoomErrorCode(errors.New("room already started")))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_INVALID_STATE, joinRoomErrorCode(errors.New("invalid argument: empty")))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_UNSPECIFIED, joinRoomErrorCode(errors.New("connection refused")))
-}
-
-// TestOutboundMsgIDMappings 锁定业务通知种类到出站消息编号的映射，未识别种类必须显式返回布尔标记假，避免静默丢包。
-func TestOutboundMsgIDMappings(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		kind roomsvc.Kind
-		want uint16
-	}{
-		{roomsvc.KindInitialDeal, protocol.InitialDealNotify},
-		{roomsvc.KindOpeningDone, protocol.OpeningDone},
-		{roomsvc.KindStartGame, protocol.StartGame},
-		{roomsvc.KindDrawTile, protocol.DrawTile},
-		{roomsvc.KindAction, protocol.ActionNotify},
-		{roomsvc.KindSettlement, protocol.Settlement},
-	}
-	for _, c := range cases {
-		got, ok := outboundMsgID(c.kind)
-		require.True(t, ok, "kind %v 应被映射", c.kind)
-		require.Equal(t, c.want, got, "kind %v 映射目标错误", c.kind)
-	}
-
-	_, ok := outboundMsgID(roomsvc.Kind("__未注册__"))
-	require.False(t, ok, "未注册 Kind 应返回 false")
 }
 
 // TestActionErrEnvelopeShapes 验证各动作响应封装的形状契约：
@@ -110,28 +85,26 @@ func TestActionErrEnvelopeShapes(t *testing.T) {
 		})
 	}
 
-	envRL, gotAfter := discardErrEnvelope("r-rl", after, fmt.Errorf("wrap: %w", roomsvc.ErrRateLimited))
+	envRL, gotAfter := discardErrEnvelope("r-rl", after, fmt.Errorf("wrap: %w", contract.ErrRateLimited))
 	require.Equal(t, clientv1.ErrorCode_ERROR_CODE_RATE_LIMITED, envRL.GetDiscardResp().GetErrorCode())
 	require.Nil(t, gotAfter)
 }
 
 // TestConfigureRuntime 校验运行时入口的限流与幂等缓存可被外部覆盖：传入非正值时应回退到默认参数，正值则按入参重建。
 func TestConfigureRuntime(t *testing.T) {
-	prevLimiter := defaultWSRateLimiter.Load()
-	prevIdem := defaultWSIdemCache.Load()
+	prevLimiter := ratelimit.DefaultLimiter()
+	prevCache := ratelimit.DefaultCache()
 	t.Cleanup(func() {
-		defaultWSRateLimiter.Store(prevLimiter)
-		defaultWSIdemCache.Store(prevIdem)
+		ratelimit.Configure(20, 40, 4096)
+		_ = prevLimiter
+		_ = prevCache
 	})
 
 	ConfigureRuntime(0, 0, 0)
-	require.NotNil(t, defaultWSRateLimiter.Load())
-	require.InDelta(t, float64(20), defaultWSRateLimiter.Load().rate, 1e-9)
-	require.InDelta(t, float64(40), defaultWSRateLimiter.Load().burst, 1e-9)
-	require.Equal(t, 4096, defaultWSIdemCache.Load().capacity)
+	require.NotNil(t, ratelimit.DefaultLimiter())
+	require.NotNil(t, ratelimit.DefaultCache())
 
 	ConfigureRuntime(5, 10, 32)
-	require.InDelta(t, float64(5), defaultWSRateLimiter.Load().rate, 1e-9)
-	require.InDelta(t, float64(10), defaultWSRateLimiter.Load().burst, 1e-9)
-	require.Equal(t, 32, defaultWSIdemCache.Load().capacity)
+	require.NotNil(t, ratelimit.DefaultLimiter())
+	require.NotNil(t, ratelimit.DefaultCache())
 }

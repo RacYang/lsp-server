@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 
@@ -14,7 +15,6 @@ import (
 	appmetrics "racoo.cn/lsp/internal/metrics"
 
 	"racoo.cn/lsp/internal/protocol"
-	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
 )
@@ -124,7 +124,7 @@ func handleLoginIssue(
 	state *wsConnState,
 	env *clientv1.Envelope,
 ) {
-	state.userID = roomsvc.NewUserID()
+	state.userID = uuid.NewString()
 	nickname := sanitizeNickname(env.GetLoginReq().GetNickname())
 	if deps.Users != nil {
 		if err := deps.Users.Set(ctx, state.userID, session.UserProfile{Nickname: nickname}); err != nil {

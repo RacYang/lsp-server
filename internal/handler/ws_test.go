@@ -24,6 +24,7 @@ import (
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	redisstore "racoo.cn/lsp/internal/store/redis"
+	"racoo.cn/lsp/pkg/ratelimit"
 )
 
 type fakeResumeGateway struct {
@@ -313,8 +314,8 @@ func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 }
 
 func TestHandleWebSocketIdempotencyKeyDropsReplay(t *testing.T) {
-	defaultWSRateLimiter.Store(newUserRateLimiter(1000, 1000))
-	defaultWSIdemCache.Store(newIdemCache(16))
+	ratelimit.Configure(1000, 1000, 16)
+	t.Cleanup(func() { ratelimit.Configure(20, 40, 4096) })
 	gateway := &joinStubGateway{joinSeat: 0}
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: gateway, Hub: hub})
