@@ -9,7 +9,7 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
-	localadapter "racoo.cn/lsp/internal/adapter/local"
+	localgateway "racoo.cn/lsp/internal/gateway/local"
 	"racoo.cn/lsp/internal/protocol"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
@@ -20,7 +20,7 @@ func TestWebSocketLobbyCreateListAndAutoMatch(t *testing.T) {
 	roomRegistry := roomsvc.NewRoomRegistry()
 	roomService := roomsvc.NewService(roomRegistry)
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
 
 	creator := dialWS(t, srv)
 	loginOnly(t, creator, "creator")
@@ -58,7 +58,7 @@ func TestWebSocketAutoMatchWithBotsReadyEmitsOpeningEvents(t *testing.T) {
 	roomRegistry := roomsvc.NewRoomRegistry()
 	roomService := roomsvc.NewService(roomRegistry)
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
 
 	conn := dialWS(t, srv)
 	loginOnly(t, conn, "matcher")
@@ -84,7 +84,7 @@ func TestWebSocketPrivateRoomHiddenFromList(t *testing.T) {
 	roomRegistry := roomsvc.NewRoomRegistry()
 	roomService := roomsvc.NewService(roomRegistry)
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
 
 	conn := dialWS(t, srv)
 	loginOnly(t, conn, "private-creator")

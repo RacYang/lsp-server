@@ -19,7 +19,7 @@ import (
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
-	localadapter "racoo.cn/lsp/internal/adapter/local"
+	localgateway "racoo.cn/lsp/internal/gateway/local"
 	"racoo.cn/lsp/internal/protocol"
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
@@ -233,7 +233,7 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 	lobby := roomsvc.NewRoomRegistry()
 	hub := session.NewHub()
 	svc := roomsvc.NewService(lobby)
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 
 	conn := dialWS(t, srv)
@@ -301,7 +301,7 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	if err := conn.WriteMessage(websocket.BinaryMessage, []byte{0, 0, 0}); err != nil {
@@ -349,7 +349,7 @@ func TestHandleWebSocketIdempotencyKeyDropsReplay(t *testing.T) {
 func TestHandleWebSocketUnknownMsgID(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
@@ -369,7 +369,7 @@ func TestHandleWebSocketUnknownMsgID(t *testing.T) {
 func TestHandleWebSocketRejectsCrossOriginByDefault(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 
 	u := "ws" + strings.TrimPrefix(srv.URL, "http")
@@ -388,7 +388,7 @@ func TestHandleWebSocketAllowsConfiguredOrigin(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{
-		Rooms:          localadapter.NewLocalRoomGateway(svc, hub, nil),
+		Rooms:          localgateway.NewLocalRoomGateway(svc, hub, nil),
 		Hub:            hub,
 		AllowedOrigins: []string{"https://trusted.example"},
 	})
@@ -407,7 +407,7 @@ func TestHandleWebSocketAllowsConfiguredOrigin(t *testing.T) {
 func TestHandleWebSocketHeartbeat(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 
@@ -426,7 +426,7 @@ func TestHandleWebSocketLeaveRoom(t *testing.T) {
 	lobby := roomsvc.NewRoomRegistry()
 	hub := session.NewHub()
 	svc := roomsvc.NewService(lobby)
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, sess), Hub: hub, Session: sess})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, sess), Hub: hub, Session: sess})
 	defer srv.Close()
 
 	conn := dialWS(t, srv)
@@ -470,7 +470,7 @@ func TestHandleWebSocketJoinRoomFull(t *testing.T) {
 	lobby := roomsvc.NewRoomRegistry()
 	svc := roomsvc.NewService(lobby)
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 
 	for i := 0; i < 4; i++ {
@@ -562,7 +562,7 @@ func TestJoinRoomBindSessionFailureReturnsInvalidState(t *testing.T) {
 func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	jr := &clientv1.Envelope{ReqId: "y", Body: &clientv1.Envelope_JoinRoomReq{
@@ -579,7 +579,7 @@ func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	login := &clientv1.Envelope{ReqId: "1", Body: &clientv1.Envelope_LoginReq{LoginReq: &clientv1.LoginRequest{}}}
@@ -599,7 +599,7 @@ func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 func TestHandleWebSocketInvalidLoginPayload(t *testing.T) {
 	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
-	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
+	srv := wsTestServer(t, Deps{Rooms: localgateway.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
 	conn := dialWS(t, srv)
 	_ = conn.WriteMessage(websocket.BinaryMessage, mustEncodeFrame(protocol.LoginReq, []byte{0xff}))

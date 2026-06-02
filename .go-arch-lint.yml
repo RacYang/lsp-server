@@ -218,11 +218,14 @@ deps:
       - apigen_v1
   gateway:
     mayDependOn:
+      - mahjong_rules
       - protocol
       - cluster
       - contract
       - store_redis
       - store_postgres
+      - service_reconnect
+      - service
       - session
       - config
       - pkg

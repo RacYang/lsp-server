@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	localadapter "racoo.cn/lsp/internal/adapter/local"
 	"racoo.cn/lsp/internal/config"
+	localgateway "racoo.cn/lsp/internal/gateway/local"
 	remotegateway "racoo.cn/lsp/internal/gateway/remote"
 	"racoo.cn/lsp/internal/handler"
 	roomsvc "racoo.cn/lsp/internal/service/room"
@@ -124,8 +124,8 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 			}),
 			roomsvc.WithOfflineSurrenderAfter(cfg.Runtime.RoomSurrenderAfterOffline),
 		)
-		gateway = localadapter.NewLocalRoomGateway(rs, hub, sessMgr)
-		if local, ok := gateway.(*localadapter.LocalRoomGateway); ok {
+		gateway = localgateway.NewLocalRoomGateway(rs, hub, sessMgr)
+		if local, ok := gateway.(*localgateway.LocalRoomGateway); ok {
 			rs.SetAutoTimeoutHandler(local.BroadcastNotifications)
 		}
 		cleanup = func() {

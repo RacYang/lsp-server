@@ -1,4 +1,4 @@
-package localadapter
+package local
 
 import (
 	"context"
