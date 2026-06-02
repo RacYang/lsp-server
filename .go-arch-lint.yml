@@ -1,4 +1,4 @@
-# GENERATED from .build/config.yaml - DO NOT EDIT.
+# GENERATED from .build/config.yaml - DO NOT EDIT
 version: 3
 workdir: .
 allow:
