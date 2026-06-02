@@ -41,15 +41,22 @@ func (e *ResumeError) Error() string {
 	return e.Message
 }
 
-// RoomGateway 抽象本地房间服务或远程 room/lobby gRPC 协调器。
-// 定义在 contract 包，handler 与 adapter/local、gateway/remote 均引用此接口，
-// 避免 adapter/gateway → handler 的反向依赖。
-type RoomGateway interface {
+// LobbyGateway 大厅元数据读取与房间编排。
+// 对应 ws_handlers_lobby.go 的调用场景。
+type LobbyGateway interface {
+	ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error)
+	ListRules(ctx context.Context) ([]*clientv1.RuleMeta, error)
+	AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error)
+	CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error)
+	AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, func(), error)
+}
+
+// GameGateway 局内玩家动作。
+// 对应 ws_handlers_room.go 的调用场景。
+type GameGateway interface {
 	Join(ctx context.Context, roomID, userID string) (int, error)
 	Ready(ctx context.Context, roomID, userID string) (func(), error)
 	Leave(ctx context.Context, roomID, userID string) (func(), error)
-	MarkSeatOffline(ctx context.Context, roomID, userID string) error
-	CancelOfflineSurrender(ctx context.Context, roomID, userID string) error
 	OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *clientv1.PhaseToken) (func(), error)
 	Discard(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error)
 	Pong(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
@@ -57,11 +64,23 @@ type RoomGateway interface {
 	Gang(ctx context.Context, roomID, userID, tile string, tok *clientv1.PhaseToken) (func(), error)
 	Hu(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
 	Pass(ctx context.Context, roomID, userID string, tok *clientv1.PhaseToken) (func(), error)
-	ListRooms(ctx context.Context, pageSize int32, pageToken string) ([]*clientv1.RoomMeta, string, error)
-	ListRules(ctx context.Context) ([]*clientv1.RuleMeta, error)
-	AutoMatch(ctx context.Context, ruleID, userID string, padWithBots bool) (string, int, error)
-	CreateRoom(ctx context.Context, ruleID, displayName string, private bool, userID string) (string, int, error)
-	AddBot(ctx context.Context, roomID, userID string, count int32, difficulty, opID string) ([]*clientv1.SeatInfo, func(), error)
+}
+
+// SessionGateway 会话恢复与连接生命周期。
+// 对应 ws_handlers_session.go 与 ws.go 的调用场景。
+type SessionGateway interface {
 	Resume(ctx context.Context, sessionToken string) (*ResumeResult, error)
 	EnsureRoomEventSubscription(ctx context.Context, roomID, sinceCursor string) error
+	MarkSeatOffline(ctx context.Context, roomID, userID string) error
+	CancelOfflineSurrender(ctx context.Context, roomID, userID string) error
+}
+
+// RoomGateway 抽象本地房间服务或远程 room/lobby gRPC 协调器。
+// 由 LobbyGateway、GameGateway、SessionGateway 三个子集组合而成；
+// 定义在 contract 包，handler 与 adapter/local、gateway/remote 均引用此接口，
+// 避免 adapter/gateway → handler 的反向依赖。
+type RoomGateway interface {
+	LobbyGateway
+	GameGateway
+	SessionGateway
 }
