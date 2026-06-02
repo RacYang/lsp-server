@@ -132,6 +132,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_guobiao
         to:
           - protocol
@@ -148,6 +157,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_xuezhandaodi
         to:
           - protocol
@@ -164,6 +182,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_rules
         to:
           - protocol
@@ -180,6 +207,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_tile
         to:
           - protocol
@@ -196,6 +232,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_wall
         to:
           - protocol
@@ -212,6 +257,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_hand
         to:
           - protocol
@@ -228,6 +282,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_hu
         to:
           - protocol
@@ -244,6 +307,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_fan
         to:
           - protocol
@@ -260,6 +332,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: mahjong_analysis
         to:
           - protocol
@@ -276,6 +357,15 @@ lint:
           - clock
           - metrics
           - cmd
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: domain
         to:
           - protocol
@@ -291,6 +381,26 @@ lint:
           - clock
           - metrics
           - cmd
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - contract
+          - session
+          - config
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: contract
         to:
           - protocol
@@ -307,6 +417,24 @@ lint:
           - clock
           - metrics
           - cmd
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - domain
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - config
+          - log
+          - pkg
+          - apigen_v1
       - from: handler
         to:
           - store_root
@@ -332,8 +460,31 @@ lint:
           - service
           - cluster
           - cmd
+          - config
+          - clock
+          - log
+          - apigen_v1
       - from: adapter
-        to: [app, cmd, gateway]
+        to:
+          - app
+          - cmd
+          - gateway
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - domain
+          - handler
+          - store_root
+          - service_room_engine
+          - service_room_actor
+          - config
+          - clock
+          - log
       - from: gateway
         to:
           - mahjong_builtin
@@ -351,8 +502,39 @@ lint:
           - app
           - adapter
           - cmd
+          - handler
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - store_root
+          - clock
+          - metrics
+          - log
       - from: service
-        to: [protocol, handler, cluster, cmd]
+        to:
+          - protocol
+          - handler
+          - cluster
+          - cmd
+          - adapter
+          - gateway
+          - app
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - contract
+          - service_reconnect
+          - session
+          - config
+          - metrics
+          - log
+          - apigen_client
+          - apigen_v1
       - from: service_reconnect
         to:
           - handler
@@ -362,6 +544,30 @@ lint:
           - protocol
           - cluster
           - cmd
+          - app
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - domain
+          - store_root
+          - store_redis
+          - store_postgres
+          - service_room_engine
+          - service_room_actor
+          - config
+          - clock
+          - metrics
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: service_room_actor
         to:
           - handler
@@ -373,6 +579,25 @@ lint:
           - cmd
           - contract
           - protocol
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - store_root
+          - store_redis
+          - store_postgres
+          - service_reconnect
+          - service
+          - config
+          - log
+          - apigen_client
+          - apigen_v1
       - from: service_room_engine
         to:
           - handler
@@ -385,6 +610,20 @@ lint:
           - cmd
           - contract
           - protocol
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_hu
+          - mahjong_analysis
+          - store_root
+          - store_redis
+          - store_postgres
+          - service_reconnect
+          - service_room_actor
+          - config
+          - log
+          - pkg
+          - apigen_v1
       - from: protocol
         to:
           - domain
@@ -404,6 +643,21 @@ lint:
           - apigen_client
           - apigen_v1
           - contract
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - log
+          - pkg
       - from: metrics
         to:
           - domain
@@ -422,6 +676,22 @@ lint:
           - apigen_client
           - apigen_v1
           - contract
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - protocol
+          - log
+          - pkg
       - from: clock
         to:
           - domain
@@ -441,6 +711,21 @@ lint:
           - apigen_client
           - apigen_v1
           - contract
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - log
+          - pkg
       - from: session
         to:
           - domain
@@ -454,6 +739,26 @@ lint:
           - apigen_client
           - apigen_v1
           - contract
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - service
+          - store_root
+          - store_postgres
+          - config
+          - metrics
+          - log
+          - pkg
       - from: pkg
         to:
           - mahjong_builtin
@@ -571,6 +876,12 @@ lint:
           - mahjong_hu
           - mahjong_fan
           - mahjong_analysis
+          - config
+          - clock
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: store_redis
         to:
           - store_postgres
@@ -594,6 +905,12 @@ lint:
           - mahjong_hu
           - mahjong_fan
           - mahjong_analysis
+          - config
+          - clock
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
       - from: store_postgres
         to:
           - store_redis
@@ -618,6 +935,12 @@ lint:
           - mahjong_hu
           - mahjong_fan
           - mahjong_analysis
+          - config
+          - clock
+          - log
+          - pkg
+          - apigen_client
+          - apigen_v1
 
 deps:
   denylist:

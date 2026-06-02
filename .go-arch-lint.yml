@@ -1,4 +1,4 @@
-# GENERATED from .build/config.yaml - DO NOT EDIT
+# GENERATED from .build/config.yaml - DO NOT EDIT.
 version: 3
 workdir: .
 allow:
@@ -88,15 +88,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_guobiao:
     mayDependOn:
       - mahjong_builtin
@@ -109,15 +100,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_xuezhandaodi:
     mayDependOn:
       - mahjong_builtin
@@ -130,15 +112,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_rules:
     mayDependOn:
       - mahjong_builtin
@@ -151,15 +124,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_tile:
     mayDependOn:
       - mahjong_builtin
@@ -172,15 +136,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_wall:
     mayDependOn:
       - mahjong_builtin
@@ -193,15 +148,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_hand:
     mayDependOn:
       - mahjong_builtin
@@ -214,15 +160,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_hu:
     mayDependOn:
       - mahjong_builtin
@@ -235,15 +172,6 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_fan:
     mayDependOn:
       - mahjong_builtin
@@ -256,15 +184,6 @@ deps:
       - mahjong_hu
       - mahjong_analysis
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   mahjong_analysis:
     mayDependOn:
       - mahjong_builtin
@@ -277,68 +196,23 @@ deps:
       - mahjong_hu
       - mahjong_fan
       - domain
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   domain:
-    mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - contract
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - session
-      - config
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
+    anyVendorDeps: true
   app:
     anyProjectDeps: true
   adapter:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
       - mahjong_xuezhandaodi
       - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - domain
       - protocol
       - cluster
       - contract
-      - handler
-      - store_root
       - store_redis
       - store_postgres
-      - service_room_engine
-      - service_room_actor
       - service_reconnect
       - service
       - session
-      - config
-      - clock
       - metrics
-      - log
       - pkg
       - apigen_client
       - apigen_v1
@@ -347,86 +221,35 @@ deps:
       - protocol
       - cluster
       - contract
-      - handler
-      - store_root
       - store_redis
       - store_postgres
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
       - session
       - config
-      - clock
-      - metrics
-      - log
       - pkg
       - apigen_client
       - apigen_v1
   protocol:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
       - config
-      - log
-      - pkg
   cluster:
     anyProjectDeps: true
   contract:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - domain
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - config
-      - log
-      - pkg
       - apigen_client
-      - apigen_v1
   handler:
     mayDependOn:
       - protocol
       - contract
       - session
-      - config
-      - clock
       - metrics
-      - log
       - pkg
       - apigen_client
-      - apigen_v1
   store_root:
     mayDependOn:
       - service_room_engine
       - service_room_actor
       - service_reconnect
-      - config
-      - clock
       - metrics
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   store_redis:
     mayDependOn:
       - domain
@@ -434,199 +257,60 @@ deps:
       - service_room_engine
       - service_room_actor
       - service_reconnect
-      - config
-      - clock
       - metrics
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   store_postgres:
     mayDependOn:
       - store_root
       - service_room_engine
       - service_room_actor
       - service_reconnect
-      - config
-      - clock
       - metrics
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   service_room_engine:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
       - mahjong_hand
-      - mahjong_hu
       - mahjong_fan
-      - mahjong_analysis
       - domain
-      - store_root
-      - store_redis
-      - store_postgres
-      - service_room_actor
-      - service_reconnect
-      - config
       - clock
       - metrics
-      - log
-      - pkg
       - apigen_client
-      - apigen_v1
   service_room_actor:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
       - domain
-      - store_root
-      - store_redis
-      - store_postgres
       - service_room_engine
-      - service_reconnect
-      - service
-      - config
       - clock
       - metrics
-      - log
       - pkg
-      - apigen_client
-      - apigen_v1
   service_reconnect:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - domain
-      - app
-      - store_root
-      - store_redis
-      - store_postgres
-      - service_room_engine
-      - service_room_actor
       - service
       - session
-      - config
-      - clock
-      - metrics
-      - log
-      - pkg
-      - apigen_client
-      - apigen_v1
   service:
     mayDependOn:
       - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
       - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
       - domain
-      - app
-      - adapter
-      - gateway
-      - contract
       - store_root
       - store_redis
       - store_postgres
       - service_room_engine
       - service_room_actor
-      - service_reconnect
-      - session
-      - config
       - clock
-      - metrics
-      - log
       - pkg
-      - apigen_client
-      - apigen_v1
   session:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - store_root
       - store_redis
-      - store_postgres
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
-      - service
-      - config
       - clock
-      - metrics
-      - log
-      - pkg
   config:
     anyProjectDeps: true
   clock:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
       - config
-      - log
-      - pkg
   metrics:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
-      - protocol
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
       - config
-      - log
-      - pkg
   log:
     anyProjectDeps: true
   cmd:
