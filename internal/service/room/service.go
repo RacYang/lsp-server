@@ -10,8 +10,6 @@ import (
 
 	eng "racoo.cn/lsp/internal/service/room/engine"
 
-	"github.com/google/uuid"
-
 	"racoo.cn/lsp/internal/clock"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	act "racoo.cn/lsp/internal/service/room/actor"
@@ -525,9 +523,4 @@ func (s *Service) RuleID() string {
 		return ""
 	}
 	return s.engine.RuleID()
-}
-
-// NewUserID 生成用户 ID（登录用）。
-func NewUserID() string {
-	return uuid.NewString()
 }
