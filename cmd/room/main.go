@@ -74,7 +74,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		logx.Error(ctx, "启用 etcd 房间恢复时必须同时配置 Redis", "err", "missing redis.addr")
 		return 1
 	}
-	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), cfg.RuleID,
+	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), cfg.RuleID,
 		roomsvc.WithMailboxCapacity(cfg.Runtime.RoomMailboxCapacity),
 		roomsvc.WithAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay),
 		roomsvc.WithTimeoutConfig(roomsvc.TimeoutConfig{

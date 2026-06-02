@@ -17,7 +17,7 @@ import (
 
 func TestWebSocketLobbyCreateListAndAutoMatch(t *testing.T) {
 	t.Parallel()
-	roomRegistry := roomsvc.NewLobby()
+	roomRegistry := roomsvc.NewRoomRegistry()
 	roomService := roomsvc.NewService(roomRegistry)
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
@@ -55,7 +55,7 @@ func TestWebSocketLobbyCreateListAndAutoMatch(t *testing.T) {
 
 func TestWebSocketAutoMatchWithBotsReadyEmitsOpeningEvents(t *testing.T) {
 	t.Parallel()
-	roomRegistry := roomsvc.NewLobby()
+	roomRegistry := roomsvc.NewRoomRegistry()
 	roomService := roomsvc.NewService(roomRegistry)
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})
@@ -81,7 +81,7 @@ func TestWebSocketAutoMatchWithBotsReadyEmitsOpeningEvents(t *testing.T) {
 
 func TestWebSocketPrivateRoomHiddenFromList(t *testing.T) {
 	t.Parallel()
-	roomRegistry := roomsvc.NewLobby()
+	roomRegistry := roomsvc.NewRoomRegistry()
 	roomService := roomsvc.NewService(roomRegistry)
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(roomService, hub, nil), Hub: hub})

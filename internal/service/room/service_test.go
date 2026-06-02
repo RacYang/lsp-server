@@ -36,7 +36,7 @@ func (f *fakeBC) Broadcast(roomID string, msgID uint16, payload []byte) {
 }
 
 func TestReadyTriggersBroadcast(t *testing.T) {
-	l := NewLobby()
+	l := NewRoomRegistry()
 	f := &fakeBC{}
 	svc := NewService(l)
 	ctx := context.Background()
@@ -70,7 +70,7 @@ func TestReadyTriggersBroadcast(t *testing.T) {
 }
 
 func TestJoinRejectsAfterRoundStarted(t *testing.T) {
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	ctx := context.Background()
 	const roomID = "room-started"
 	for _, uid := range []string{"p0", "p1", "p2", "p3"} {
@@ -94,7 +94,7 @@ func TestJoinRejectsAfterRoundStarted(t *testing.T) {
 func TestEnsureRoomConcurrentFirstJoin(t *testing.T) {
 	t.Parallel()
 
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	ctx := context.Background()
 	const roomID = "room-race"
 
@@ -119,7 +119,7 @@ func TestEnsureRoomConcurrentFirstJoin(t *testing.T) {
 func TestActorRemovedAfterRoomClosed(t *testing.T) {
 	t.Parallel()
 
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	ctx := context.Background()
 	const roomID = "room-close"
 	for _, uid := range []string{"p0", "p1", "p2", "p3"} {
@@ -139,7 +139,7 @@ func TestActorRemovedAfterRoomClosed(t *testing.T) {
 func TestRecoverRoomAndRuleID(t *testing.T) {
 	t.Parallel()
 
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	err := svc.RecoverRoom("room-recover", []string{"u1", "u2", "u3", "u4"}, "ready", nil)
 	require.NoError(t, err)
 
@@ -153,7 +153,7 @@ func TestRecoverRoomAndRuleID(t *testing.T) {
 func TestRecoverRoomPlayingRequiresRoundSnapshot(t *testing.T) {
 	t.Parallel()
 
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	err := svc.RecoverRoom("room-playing-missing", []string{"u1", "u2", "u3", "u4"}, "playing", nil)
 	require.Error(t, err)
 }
@@ -181,7 +181,7 @@ func TestRecoverRoomFSMStates(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+			svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 			roomID := "room-recover-" + tc.fsmInput
 			if roomID == "room-recover-" {
 				roomID = "room-recover-empty"
@@ -205,7 +205,7 @@ func TestRecoverRoomReadyDoesNotChainTransitions(t *testing.T) {
 	// 但通过 RecoverRoom("settling", ...) 应当成功一次性置位。
 	t.Parallel()
 
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	err := svc.RecoverRoom("room-direct-settling", []string{"u1", "u2", "u3", "u4"}, "settling", nil)
 	require.NoError(t, err)
 	_, state, _, ok := svc.RoomSnapshot("room-direct-settling")
@@ -216,7 +216,7 @@ func TestRecoverRoomReadyDoesNotChainTransitions(t *testing.T) {
 func TestRecoverRoomIdempotentForExistingRoom(t *testing.T) {
 	t.Parallel()
 
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	const rid = "room-recover-idem"
 	require.NoError(t, svc.RecoverRoom(rid, []string{"u1", "u2", "u3", "u4"}, "ready", nil))
 
@@ -246,7 +246,7 @@ func TestServiceAutoTimeoutSurrendersThroughActor(t *testing.T) {
 	data, err := rs.MarshalRoundPersistJSON()
 	require.NoError(t, err)
 
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	require.NoError(t, svc.RecoverRoom("r-service-timeout", []string{"u0", "u1", "u2", "u3"}, "playing", data))
 	notifs, err := svc.AutoTimeout(context.Background(), "r-service-timeout")
 	require.NoError(t, err)
@@ -259,7 +259,7 @@ func TestServiceAutoTimeoutSurrendersThroughActor(t *testing.T) {
 
 func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
 	fc := clock.NewFake(time.Unix(0, 0))
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	svc.SetClock(fc)
 	svc.SetTimeoutConfig(TimeoutConfig{
 		OpeningDefault: time.Second,
@@ -302,7 +302,7 @@ func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
 func TestServiceMailboxCapacityOverride(t *testing.T) {
 	t.Parallel()
 
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	svc.SetMailboxCapacity(3)
 	require.NoError(t, svc.EnsureRoom("mailbox-config-room"))
 	a := svc.getActor("mailbox-config-room")
@@ -312,7 +312,7 @@ func TestServiceMailboxCapacityOverride(t *testing.T) {
 
 func TestServiceLeaveDuringPlayMarksSurrender(t *testing.T) {
 	ctx := context.Background()
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	roomID := "r-leave-playing"
 	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
 		_, err := svc.Join(ctx, roomID, uid)
@@ -331,7 +331,7 @@ func TestServiceLeaveDuringPlayMarksSurrender(t *testing.T) {
 
 func TestServiceLeaveDuringPlayCanBeDisabled(t *testing.T) {
 	ctx := context.Background()
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	svc.SetAllowLeaveDuringPlay(false)
 	roomID := "r-leave-disabled"
 	for _, uid := range []string{"u0", "u1", "u2", "u3"} {

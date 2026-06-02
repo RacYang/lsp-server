@@ -1,4 +1,3 @@
-// Package store 提供 Redis 与 PostgreSQL 共享的存储弹性辅助函数。
 package store
 
 import (

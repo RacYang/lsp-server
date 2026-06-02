@@ -13,7 +13,7 @@ type RoomRegistry struct {
 	rooms map[string]*domainroom.Room
 }
 
-// Lobby 是 RoomRegistry 的兼容别名；新代码应优先使用 RoomRegistry。
+// Deprecated: 使用 RoomRegistry。
 type Lobby = RoomRegistry
 
 // NewRoomRegistry 创建空房间索引。
@@ -21,7 +21,7 @@ func NewRoomRegistry() *RoomRegistry {
 	return &RoomRegistry{rooms: make(map[string]*domainroom.Room)}
 }
 
-// NewLobby 创建空房间索引，保留旧名称以兼容现有调用点。
+// Deprecated: 使用 NewRoomRegistry。
 func NewLobby() *RoomRegistry {
 	return NewRoomRegistry()
 }

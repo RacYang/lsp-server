@@ -1,4 +1,3 @@
-// Package lobby 定义大厅领域类型，供 service/lobby 与 store/redis 共享，避免反向依赖。
 package lobby
 
 import "context"

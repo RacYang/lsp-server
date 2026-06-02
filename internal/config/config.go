@@ -1,4 +1,3 @@
-// Package config 负责加载运行时配置（Phase 1 使用 viper 读取 YAML）。
 package config
 
 import (

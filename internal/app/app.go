@@ -110,7 +110,7 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 			}
 		}
 	} else {
-		lb := roomsvc.NewLobby()
+		lb := roomsvc.NewRoomRegistry()
 		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID,
 			roomsvc.WithMailboxCapacity(cfg.Runtime.RoomMailboxCapacity),
 			roomsvc.WithAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay),

@@ -27,7 +27,7 @@ func TestRecoverOwnedRoomsEtcdCliNil(t *testing.T) {
 	rt := cluster.NewEtcdRouter(nil, "/lsp") // 外层非 nil，内部 cli 为 nil
 	rcli, err := redis.NewClient("127.0.0.1:9999")
 	require.NoError(t, err)
-	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "")
+	svc := roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "")
 	err = RecoverOwnedRooms(ctx, rt, "room-local", rcli, nil, nil, svc)
 	require.Error(t, err, "etcd 客户端内部为 nil 时应返回错误")
 }
@@ -124,7 +124,7 @@ func TestDeriveRecoveredState(t *testing.T) {
 // redis.Client 对 nil 接收者有保护，返回 "nil redis client" 错误。
 func TestRecoverSingleRoomNilRcli(t *testing.T) {
 	t.Parallel()
-	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "")
+	svc := roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "")
 	err := RecoverSingleRoom(context.Background(), nil, nil, nil, svc, "room-nil-rcli")
 	require.Error(t, err)
 }
@@ -135,7 +135,7 @@ func TestRecoverSingleRoomUnreachableRedis(t *testing.T) {
 	t.Parallel()
 	rcli, err := redis.NewClient("127.0.0.1:9999")
 	require.NoError(t, err)
-	svc := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "")
+	svc := roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "")
 	err = RecoverSingleRoom(context.Background(), rcli, nil, nil, svc, "room-unreachable")
 	require.Error(t, err)
 }

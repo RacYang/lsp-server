@@ -11,7 +11,7 @@ import (
 
 func TestServiceSetters(t *testing.T) {
 	t.Parallel()
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 
 	// 测试最大局数设置
 	svc.SetMaxHands(3)
@@ -49,7 +49,7 @@ func TestServiceNilReceivers(t *testing.T) {
 func TestServicePlayerIDs(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	require.NoError(t, svc.EnsureRoom("r-pids"))
 	_, _ = svc.Join(ctx, "r-pids", "p0")
 
@@ -63,7 +63,7 @@ func TestServicePlayerIDs(t *testing.T) {
 
 func TestServiceActiveRoomCount(t *testing.T) {
 	t.Parallel()
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	require.Equal(t, 0, svc.ActiveRoomCount())
 	require.NoError(t, svc.EnsureRoom("r-count"))
 	require.Equal(t, 1, svc.ActiveRoomCount())
@@ -71,7 +71,7 @@ func TestServiceActiveRoomCount(t *testing.T) {
 
 func TestServiceMarkOfflineAndCancel(t *testing.T) {
 	t.Parallel()
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	ctx := context.Background()
 	_, _ = svc.Join(ctx, "r-offline", "u-offline")
 
@@ -84,7 +84,7 @@ func TestServiceMarkOfflineAndCancel(t *testing.T) {
 
 func TestServiceChiGangHuPass(t *testing.T) {
 	t.Parallel()
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	ctx := context.Background()
 
 	// 路由层覆盖：actor 不存在时均返回错误
@@ -100,7 +100,7 @@ func TestServiceChiGangHuPass(t *testing.T) {
 
 func TestServiceEnsureRoomIdempotent(t *testing.T) {
 	t.Parallel()
-	svc := NewService(NewLobby())
+	svc := NewService(NewRoomRegistry())
 	require.NoError(t, svc.EnsureRoom("r-idem2"))
 	require.NoError(t, svc.EnsureRoom("r-idem2")) // 已存在，走 ensureActorForExistingRoom
 	require.Equal(t, 1, svc.ActiveRoomCount())
@@ -108,7 +108,7 @@ func TestServiceEnsureRoomIdempotent(t *testing.T) {
 
 func TestServiceOpeningActionNoRoom(t *testing.T) {
 	t.Parallel()
-	svc := NewServiceWithRule(NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	ctx := context.Background()
 	_, err := svc.OpeningAction(ctx, "no-room", "u", "exchange_three", nil, 0, 0, nil, nil)
 	require.Error(t, err)

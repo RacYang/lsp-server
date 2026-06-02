@@ -1,4 +1,3 @@
-// Package clock 提供可注入时间源，避免房间定时器测试依赖真实 sleep。
 package clock
 
 import (

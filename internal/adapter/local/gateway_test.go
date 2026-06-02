@@ -58,7 +58,7 @@ func TestLocalRoomGatewayNilErrors(t *testing.T) {
 
 func TestLocalRoomGatewayJoinSmoke(t *testing.T) {
 	t.Parallel()
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	g := NewLocalRoomGateway(svc, session.NewHub(), nil)
 	seat, err := g.Join(context.Background(), "local-room", "u-local")
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestLocalRoomGatewayJoinSmoke(t *testing.T) {
 
 func TestLocalRoomGatewayResumeRequiresSession(t *testing.T) {
 	t.Parallel()
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	g := NewLocalRoomGateway(svc, session.NewHub(), nil)
 	_, err := g.Resume(context.Background(), "any-token")
 	require.Error(t, err)
@@ -75,7 +75,7 @@ func TestLocalRoomGatewayResumeRequiresSession(t *testing.T) {
 
 func TestLocalRoomGatewayEnsureSubscriptionNoOp(t *testing.T) {
 	t.Parallel()
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	g := NewLocalRoomGateway(svc, session.NewHub(), nil)
 	require.NoError(t, g.EnsureRoomEventSubscription(context.Background(), "r", "c"))
 }
@@ -83,7 +83,7 @@ func TestLocalRoomGatewayEnsureSubscriptionNoOp(t *testing.T) {
 func TestLocalRoomGatewaySendsPerSeatNotifications(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	for _, uid := range []string{"u0", "u1", "u2", "u3"} {
 		_, err := svc.Join(ctx, "project-room", uid)
 		require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 	cli := redis.NewClientFromUniversal(rcli)
 	mgr := session.NewManager(cli)
 
-	lobby := roomsvc.NewLobby()
+	lobby := roomsvc.NewRoomRegistry()
 	svc := roomsvc.NewService(lobby)
 	hub := session.NewHub()
 	gw := NewLocalRoomGateway(svc, hub, mgr)
@@ -162,7 +162,7 @@ func TestLocalRoomGatewayResumeWithRedisSession(t *testing.T) {
 
 func TestLocalRoomGatewayReadyBroadcastSkippedWhenHubNil(t *testing.T) {
 	t.Parallel()
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	gw := NewLocalRoomGateway(svc, nil, nil)
 	ctx := context.Background()
 
@@ -185,7 +185,7 @@ func TestLocalRoomGatewayAddBotReturnsAuthoritativeSeatInfo(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	gw := NewLocalRoomGateway(svc, nil, nil)
 
 	_, err := gw.Join(ctx, "bot-room", "human")
@@ -211,7 +211,7 @@ func TestLocalRoomGatewayResumeRoomMissing(t *testing.T) {
 	cli := redis.NewClientFromUniversal(rcli)
 	mgr := session.NewManager(cli)
 
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	gw := NewLocalRoomGateway(svc, session.NewHub(), mgr)
 	ctx := context.Background()
 
@@ -266,7 +266,7 @@ func TestPlayerJourney_L3_1_RoomAcceptsAutoMatchLocal(t *testing.T) {
 // 这里大厅与房服都空，AutoMatch 应当回落到 CreateRoom 路径并返回 seat=0。
 func TestPlayerJourney_L3_2_AutoMatchFallsBackToCreateRoomLocal(t *testing.T) {
 	t.Parallel()
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	gw := NewLocalRoomGateway(svc, session.NewHub(), nil)
 
 	roomID, seat, err := gw.AutoMatch(context.Background(), "sichuan_xuezhandaodi_huansanzhang", "u-quickstart", false)
@@ -294,7 +294,7 @@ func TestLocalRoomGatewayResumeLobbySession(t *testing.T) {
 	cli := redis.NewClientFromUniversal(rcli)
 	mgr := session.NewManager(cli)
 
-	gw := NewLocalRoomGateway(roomsvc.NewService(roomsvc.NewLobby()), session.NewHub(), mgr)
+	gw := NewLocalRoomGateway(roomsvc.NewService(roomsvc.NewRoomRegistry()), session.NewHub(), mgr)
 	ctx := context.Background()
 
 	tok, err := mgr.Issue(ctx, "lobby-user")

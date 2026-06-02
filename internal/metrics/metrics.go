@@ -1,4 +1,3 @@
-// Package metrics 集中定义跨层业务指标，避免各层重复注册。
 package metrics
 
 import (

@@ -12,11 +12,17 @@ DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 HAS_GO := $(shell find . -type f -name '*.go' -not -path './.build/negatives/*' -not -path '*/gen/*' -print -quit 2>/dev/null)
 HAS_PROTO := $(shell find api -type f -name '*.proto' -print -quit 2>/dev/null)
 
-.PHONY: bootstrap generate fix fix-file sync-agent-governance verify verify-fast verify-pre-commit verify-image verify-bench \
+.PHONY: clean bootstrap generate fix fix-file sync-agent-governance verify verify-fast verify-pre-commit verify-image verify-bench \
 	verify-fmt verify-lint verify-arch verify-deps verify-proto verify-proto-break \
 	verify-test-fast verify-test verify-test-integration verify-test-integration-nodocker verify-test-integration-pg verify-cover verify-vuln verify-tidy verify-secrets \
 	verify-meta verify-agent-governance-sync verify-config verify-config-schema verify-tools verify-determinism verify-commit-msg verify-lang verify-nolint-policy verify-domain verify-redis-keys verify-metrics-naming verify-observability verify-postgres-migrations verify-gate-session-routing verify-skeleton \
 	verify-mahjong-rule-ids verify-git-repo verify-git-local verify-git-push
+
+clean:
+	@rm -f coverage.out
+	@rm -f *.test
+	@rm -f all bot cli gate loadgen lobby room
+	@rm -rf dist/ tmp/
 
 bootstrap:
 	@bash scripts/install-tools.sh

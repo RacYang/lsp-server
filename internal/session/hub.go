@@ -1,4 +1,3 @@
-// Package session 管理连接注册与房间级广播（Phase 1 内存实现）。
 package session
 
 import (

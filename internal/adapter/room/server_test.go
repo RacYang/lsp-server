@@ -40,7 +40,7 @@ func TestRoomGRPCServerApplyEventAndStream(t *testing.T) {
 	defer func() { _ = ln.Close() }()
 
 	grpcSrv := grpc.NewServer()
-	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
 	RegisterService(grpcSrv, srv)
 	go func() { _ = grpcSrv.Serve(ln) }()
 	defer grpcSrv.Stop()
@@ -157,7 +157,7 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 	t.Cleanup(func() { _ = rcli.Close() })
 	rdb := redis.NewClientFromUniversal(rcli)
 
-	s := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
+	s := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, rdb)
 	ctx := context.Background()
 
 	s.SetReady(false)
@@ -193,7 +193,7 @@ func TestApplyEventIdempotencyRetryAfterFailure(t *testing.T) {
 func TestSnapshotRoomIncludesRoundView(t *testing.T) {
 	t.Parallel()
 
-	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang"), nil, nil, nil, nil)
 	ctx := context.Background()
 	for _, userID := range []string{"u1", "u2", "u3", "u4"} {
 		_, err := srv.ApplyEvent(ctx, &svcv1.ApplyEventRequest{
@@ -477,7 +477,7 @@ func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 	t.Cleanup(func() { _ = rcli.Close() })
 	rdb := redis.NewClientFromUniversal(rcli)
 
-	rooms := roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang")
+	rooms := roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	for _, uid := range []string{"u1", "u2", "u3", "u4"} {
 		_, err := rooms.Join(context.Background(), "r-meta", uid)
 		require.NoError(t, err)
@@ -540,7 +540,7 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 	rdb2 := redis.NewClientFromUniversal(rcli2)
 
 	ev := postgres.NewRoomEventStore(mock)
-	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewLobby(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, rdb2)
+	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, rdb2)
 
 	resp, err := srv.applyNotifications(context.Background(), "r-batch", "", []roomsvc.Notification{
 		{Kind: roomsvc.KindDrawTile, Payload: []byte("draw"), TargetSeat: roomsvc.BroadcastSeat},

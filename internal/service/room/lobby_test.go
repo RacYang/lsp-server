@@ -8,7 +8,7 @@ import (
 )
 
 func TestLobbyCreateGet(t *testing.T) {
-	l := NewLobby()
+	l := NewRoomRegistry()
 	r := domainroom.NewRoom("x")
 	if err := l.CreateRoom("x", r); err != nil {
 		t.Fatal(err)

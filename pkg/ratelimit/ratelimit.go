@@ -1,4 +1,3 @@
-// Package ratelimit 提供 WebSocket 入口令牌桶限流与内存幂等缓存（ADR-0050 L6 下沉）。
 package ratelimit
 
 import (

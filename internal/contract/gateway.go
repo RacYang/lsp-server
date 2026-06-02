@@ -1,5 +1,3 @@
-// Package contract 定义 handler、gateway、adapter 之间的共享契约类型，
-// 解耦 handler（传输层）与实现层（adapter/local、gateway/remote）。
 package contract
 
 import (

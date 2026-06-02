@@ -230,7 +230,7 @@ func readUntilEnv(t *testing.T, conn *websocket.Conn, wantMsg uint16, maxFrames 
 }
 
 func TestHandleWebSocketLoginJoinReady(t *testing.T) {
-	lobby := roomsvc.NewLobby()
+	lobby := roomsvc.NewRoomRegistry()
 	hub := session.NewHub()
 	svc := roomsvc.NewService(lobby)
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
@@ -299,7 +299,7 @@ func TestHandleWebSocketLoginJoinReady(t *testing.T) {
 }
 
 func TestHandleWebSocketBadFrameIgnored(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
@@ -347,7 +347,7 @@ func TestHandleWebSocketIdempotencyKeyDropsReplay(t *testing.T) {
 }
 
 func TestHandleWebSocketUnknownMsgID(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
@@ -367,7 +367,7 @@ func TestHandleWebSocketUnknownMsgID(t *testing.T) {
 }
 
 func TestHandleWebSocketRejectsCrossOriginByDefault(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
@@ -385,7 +385,7 @@ func TestHandleWebSocketRejectsCrossOriginByDefault(t *testing.T) {
 }
 
 func TestHandleWebSocketAllowsConfiguredOrigin(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{
 		Rooms:          localadapter.NewLocalRoomGateway(svc, hub, nil),
@@ -405,7 +405,7 @@ func TestHandleWebSocketAllowsConfiguredOrigin(t *testing.T) {
 }
 
 func TestHandleWebSocketHeartbeat(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
@@ -423,7 +423,7 @@ func TestHandleWebSocketHeartbeat(t *testing.T) {
 func TestHandleWebSocketLeaveRoom(t *testing.T) {
 	rcli, _ := newTestRedisClient(t)
 	sess := session.NewManager(rcli)
-	lobby := roomsvc.NewLobby()
+	lobby := roomsvc.NewRoomRegistry()
 	hub := session.NewHub()
 	svc := roomsvc.NewService(lobby)
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, sess), Hub: hub, Session: sess})
@@ -467,7 +467,7 @@ func TestHandleWebSocketLeaveRoom(t *testing.T) {
 }
 
 func TestHandleWebSocketJoinRoomFull(t *testing.T) {
-	lobby := roomsvc.NewLobby()
+	lobby := roomsvc.NewRoomRegistry()
 	svc := roomsvc.NewService(lobby)
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
@@ -560,7 +560,7 @@ func TestJoinRoomBindSessionFailureReturnsInvalidState(t *testing.T) {
 }
 
 func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
@@ -577,7 +577,7 @@ func TestHandleWebSocketJoinBeforeLoginSkipped(t *testing.T) {
 }
 
 func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
@@ -597,7 +597,7 @@ func TestHandleWebSocketJoinEmptyBody(t *testing.T) {
 }
 
 func TestHandleWebSocketInvalidLoginPayload(t *testing.T) {
-	svc := roomsvc.NewService(roomsvc.NewLobby())
+	svc := roomsvc.NewService(roomsvc.NewRoomRegistry())
 	hub := session.NewHub()
 	srv := wsTestServer(t, Deps{Rooms: localadapter.NewLocalRoomGateway(svc, hub, nil), Hub: hub})
 	defer srv.Close()
