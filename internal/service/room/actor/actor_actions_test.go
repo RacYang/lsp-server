@@ -28,8 +28,7 @@ func setupDiscardActor(t *testing.T, roomID string) (*Actor, [4]string) {
 	r := newPlayingRoom(roomID, pids)
 	rs := discardWaitingRound(roomID, pids)
 	a := New(r, rs, Config{Engine: newTestEngine()})
-	t.Cleanup(func() {}) // actor 在 ch 关闭后自动退出
-	go a.Run()
+	startActor(t, a)
 	return a, pids
 }
 
@@ -48,10 +47,9 @@ func TestActorSubmitPongAfterDiscard(t *testing.T) {
 	t.Parallel()
 	pids := [4]string{"p0", "p1", "p2", "p3"}
 	r := newPlayingRoom("r-pong", pids)
-	// 出牌态：u0 出牌，其余人可以抢
 	rs := discardWaitingRound("r-pong", pids)
 	a := New(r, rs, Config{Engine: newTestEngine()})
-	go a.Run()
+	startActor(t, a)
 
 	ctx := context.Background()
 	// 先出牌，触发 claim window
@@ -68,8 +66,6 @@ func TestActorSubmitHuAfterDiscard(t *testing.T) {
 	t.Parallel()
 	pids := [4]string{"h0", "h1", "h2", "h3"}
 	r := newPlayingRoom("r-hu", pids)
-	// 配置一副能直接胡的手牌（已有3张万一，需再凑一张）
-	// 此处借助暗杠让局面关闭来间接覆盖 doHu
 	rs := eng.NewRoundStateFromConfig(eng.RoundStateConfig{
 		RoomID:    "r-hu",
 		RuleID:    testRule,
@@ -86,16 +82,16 @@ func TestActorSubmitHuAfterDiscard(t *testing.T) {
 			hand.New(), hand.New(), hand.New(),
 		},
 		RuleState:    testRuleState(make([]int32, 4)),
-		WaitingTsumo: true, // 等待自摸判断
+		WaitingTsumo: true,
 		Turn:         0,
 	})
 	a := New(r, rs, Config{Engine: newTestEngine()})
-	go a.Run()
+	startActor(t, a)
 	ctx := context.Background()
 
-	// h0 自摸或 pass，覆盖 SubmitHu 路径（可能成功也可能错误，都走到了 doHu）
+	// 4 张相同的牌不构成合法胡牌型，应返回错误
 	_, err := a.SubmitHu(ctx, "h0", nil)
-	_ = err // 结果可能成功（胡）或失败（牌型无效），只要不 panic 即可
+	require.Error(t, err, "4 张相同的牌不构成合法胡牌型")
 }
 
 func TestActorSubmitAutoTimeout(t *testing.T) {
@@ -104,7 +100,7 @@ func TestActorSubmitAutoTimeout(t *testing.T) {
 	r := newPlayingRoom("r-timeout", pids)
 	rs := discardWaitingRound("r-timeout", pids)
 	a := New(r, rs, Config{Engine: newTestEngine()})
-	go a.Run()
+	startActor(t, a)
 
 	ctx := context.Background()
 	// AutoTimeout 在 WaitingDiscard 状态下代替 t0 出牌
@@ -121,7 +117,7 @@ func TestActorOpeningAction(t *testing.T) {
 	}
 
 	a := New(r, nil, Config{Engine: newTestEngine()})
-	go a.Run()
+	startActor(t, a)
 
 	ctx := context.Background()
 	// 加入并准备，触发开局（血战到底有开局阶段）
@@ -152,13 +148,13 @@ func TestActorPhaseTokenRejection(t *testing.T) {
 	r := newPlayingRoom("r-phase-tok", pids)
 	rs := discardWaitingRound("r-phase-tok", pids)
 	a := New(r, rs, Config{Engine: newTestEngine()})
-	go a.Run()
+	startActor(t, a)
 
 	ctx := context.Background()
-	// 伪造一个过期的令牌触发 logActionRejected
-	fakeToken := &PhaseToken{} // 零值令牌与当前阶段不符
+	// 伪造 step=1/Reason=ReasonDiscard：与局面的 step=0/ReasonNone 不符，应被拒绝
+	fakeToken := &PhaseToken{Step: 1, Reason: eng.ReasonDiscard}
 	_, err := a.SubmitDiscard(ctx, "pk0", "m1", fakeToken)
-	_ = err // 可能成功（nil token 放行）或失败（drift error），覆盖 checkPhaseToken
+	require.Error(t, err, "令牌 step/reason 与当前局面不符，应返回 PhaseDriftError")
 }
 
 func TestActorCloneMap(t *testing.T) {
@@ -167,7 +163,7 @@ func TestActorCloneMap(t *testing.T) {
 	pids := [4]string{"cm0", "cm1", "cm2", "cm3"}
 	r := newPlayingRoom("r-clone", pids)
 	a := New(r, nil, Config{Engine: newTestEngine()})
-	go a.Run()
+	startActor(t, a)
 	ctx := context.Background()
 	_, _, _, err := a.SubmitRoomSnapshot(ctx)
 	require.NoError(t, err)
@@ -182,7 +178,7 @@ func TestActorLeaveDuringPlay(t *testing.T) {
 		Engine:               newTestEngine(),
 		AllowLeaveDuringPlay: true,
 	})
-	go a.Run()
+	startActor(t, a)
 	ctx := context.Background()
 	// lp1 在游戏中离开（被标记为投降）
 	err := a.SubmitLeave(ctx, "lp1")

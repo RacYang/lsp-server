@@ -126,6 +126,7 @@ func TestResumeSuccess(t *testing.T) {
 	require.Equal(t, "u1", r.UserID)
 	require.Equal(t, "room-1", r.RoomID)
 	require.Equal(t, "playing", r.State)
+	require.Equal(t, stub.snapshot, r.Players, "Players 应由 RoomSnapshot 快照组装")
 }
 
 func TestResumeInvalidToken(t *testing.T) {

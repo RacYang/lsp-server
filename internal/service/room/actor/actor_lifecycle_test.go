@@ -3,7 +3,6 @@ package actor
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -35,8 +34,8 @@ func newPlayingRoom(roomID string, playerIDs [4]string) *domainroom.Room {
 func discardWaitingRound(roomID string, playerIDs [4]string) *RoundState {
 	return eng.NewRoundStateFromConfig(eng.RoundStateConfig{
 		RoomID:    roomID,
-		RuleID:    "sichuan_xuezhandaodi_huansanzhang",
-		Rule:      rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
+		RuleID:    testRule,
+		Rule:      rules.MustGet(testRule),
 		PlayerIDs: playerIDs,
 		Wall:      wall.NewFromOrderedTiles(nil),
 		Hands: []*hand.Hand{
@@ -48,21 +47,28 @@ func discardWaitingRound(roomID string, playerIDs [4]string) *RoundState {
 			}),
 			hand.New(), hand.New(), hand.New(),
 		},
-		RuleState: func() rules.RuleState {
-			state := struct {
-				MissingSuits []int32                  `json:"missing_suits,omitempty"`
-				Selections   map[string][][]tile.Tile `json:"selections,omitempty"`
-				Direction    map[string]int32         `json:"direction,omitempty"`
-			}{
-				MissingSuits: make([]int32, 4),
-				Selections:   map[string][][]tile.Tile{},
-				Direction:    map[string]int32{"sichuan.exchange": -1},
-			}
-			data, _ := json.Marshal(state)
-			return rules.RuleState{Data: data}
-		}(),
+		RuleState:      testRuleState(make([]int32, 4)),
 		WaitingDiscard: true,
 		Turn:           0,
+	})
+}
+
+// startActor 启动 actor 的 Run() 事件循环，并注册 t.Cleanup 保证 goroutine 在测试结束前退出。
+func startActor(t *testing.T, a *Actor) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		a.Run()
+		close(done)
+	}()
+	t.Cleanup(func() {
+		a.submitMu.Lock()
+		if !a.closed.Load() {
+			a.closed.Store(true)
+			close(a.ch)
+		}
+		a.submitMu.Unlock()
+		<-done
 	})
 }
 
@@ -88,8 +94,8 @@ func TestActorNewAndMailboxCap(t *testing.T) {
 func TestActorJoinAndLeave(t *testing.T) {
 	t.Parallel()
 	r := domainroom.NewRoom("r-join-leave")
-	a := New(r, nil, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a.Run()
+	a := New(r, nil, Config{Engine: newTestEngine()})
+	startActor(t, a)
 
 	ctx := context.Background()
 
@@ -110,8 +116,8 @@ func TestActorRoomSnapshot(t *testing.T) {
 	t.Parallel()
 	pids := [4]string{"s0", "s1", "s2", "s3"}
 	r := newPlayingRoom("r-snap", pids)
-	a := New(r, nil, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a.Run()
+	a := New(r, nil, Config{Engine: newTestEngine()})
+	startActor(t, a)
 
 	ctx := context.Background()
 	players, state, ready, err := a.SubmitRoomSnapshot(ctx)
@@ -125,8 +131,8 @@ func TestActorRoomSnapshot(t *testing.T) {
 func TestActorRoundViewNoRound(t *testing.T) {
 	t.Parallel()
 	r := domainroom.NewRoom("r-noround")
-	a := New(r, nil, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a.Run()
+	a := New(r, nil, Config{Engine: newTestEngine()})
+	startActor(t, a)
 
 	ctx := context.Background()
 	_, ok, err := a.SubmitRoundView(ctx)
@@ -140,8 +146,8 @@ func TestActorRoundViewWithRound(t *testing.T) {
 	r := newPlayingRoom("r-view", pids)
 	rs := discardWaitingRound("r-view", pids)
 
-	a := New(r, rs, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a.Run()
+	a := New(r, rs, Config{Engine: newTestEngine()})
+	startActor(t, a)
 
 	ctx := context.Background()
 	view, ok, err := a.SubmitRoundView(ctx)
@@ -156,8 +162,8 @@ func TestActorRoundSnapJSON(t *testing.T) {
 	r := newPlayingRoom("r-snap-json", pids)
 	rs := discardWaitingRound("r-snap-json", pids)
 
-	a := New(r, rs, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a.Run()
+	a := New(r, rs, Config{Engine: newTestEngine()})
+	startActor(t, a)
 
 	ctx := context.Background()
 	data, err := a.SubmitRoundSnapJSON(ctx)
@@ -166,8 +172,8 @@ func TestActorRoundSnapJSON(t *testing.T) {
 
 	// 无局面时返回 nil
 	r2 := domainroom.NewRoom("r-no-json")
-	a2 := New(r2, nil, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a2.Run()
+	a2 := New(r2, nil, Config{Engine: newTestEngine()})
+	startActor(t, a2)
 	data2, err := a2.SubmitRoundSnapJSON(ctx)
 	require.NoError(t, err)
 	require.Nil(t, data2)
@@ -181,10 +187,10 @@ func TestActorGangClosesRoom(t *testing.T) {
 
 	exited := make(chan string, 1)
 	a := New(r, rs, Config{
-		Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang"),
+		Engine: newTestEngine(),
 		OnExit: func(id string) { exited <- id },
 	})
-	go a.Run()
+	startActor(t, a)
 
 	ctx := context.Background()
 	notifs, err := a.SubmitGang(ctx, "g0", "m1", nil)
@@ -205,8 +211,8 @@ func TestActorSubmitReady(t *testing.T) {
 	for _, uid := range []string{"r0", "r1", "r2", "r3"} {
 		_, _ = r.JoinAutoSeat(uid)
 	}
-	a := New(r, nil, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a.Run()
+	a := New(r, nil, Config{Engine: newTestEngine()})
+	startActor(t, a)
 
 	ctx := context.Background()
 	// 前三人 ready（未开局，无通知）
@@ -226,28 +232,33 @@ func TestActorMarkAndCancelOffline(t *testing.T) {
 	r := domainroom.NewRoom("r-offline")
 	_, _ = r.JoinAutoSeat("u-offline")
 	a := New(r, nil, Config{
-		Engine:                eng.NewEngine("sichuan_xuezhandaodi_huansanzhang"),
+		Engine:                newTestEngine(),
 		OfflineSurrenderAfter: 30 * time.Second,
 	})
-	go a.Run()
+	startActor(t, a)
 
 	// fire-and-forget，只验证不 panic
 	a.SubmitMarkOffline("u-offline")
 	a.SubmitCancelOffline("u-offline")
-	time.Sleep(10 * time.Millisecond) // 让消息被消费
 }
 
 func TestActorClosedRejectsJoin(t *testing.T) {
 	t.Parallel()
 	r := domainroom.NewRoom("r-closed")
-	a := New(r, nil, Config{Engine: eng.NewEngine("sichuan_xuezhandaodi_huansanzhang")})
-	go a.Run()
-	time.Sleep(5 * time.Millisecond)
+	a := New(r, nil, Config{Engine: newTestEngine()})
+	done := make(chan struct{})
+	go func() {
+		a.Run()
+		close(done)
+	}()
 
-	close(a.ch)                       // 强制关闭 channel
-	time.Sleep(10 * time.Millisecond) // 让 Run() 退出
+	// 正确关闭顺序：先在 submitMu 保护下置 closed，再关闭 channel，最后等待 Run() 退出。
+	a.submitMu.Lock()
+	a.closed.Store(true)
+	close(a.ch)
+	a.submitMu.Unlock()
+	<-done
 
-	a.closed.Store(true) // 标记 closed，使 submit 路径走 room closed
 	ctx := context.Background()
 	_, err := a.SubmitJoin(ctx, "u")
 	require.Error(t, err)
@@ -257,8 +268,8 @@ func TestActorContextCancelDuringJoin(t *testing.T) {
 	t.Parallel()
 	r := domainroom.NewRoom("r-ctx")
 	a := New(r, nil, Config{
-		Engine:   eng.NewEngine("sichuan_xuezhandaodi_huansanzhang"),
-		Capacity: 0, // 无缓冲，让 submit 阻塞
+		Engine:   newTestEngine(),
+		Capacity: 0, // 零容量回退 DefaultMailboxCapacity，SubmitJoin 阻塞在 <-res
 	})
 	// 不启动 Run()，让命令无人消费
 
@@ -290,10 +301,10 @@ func TestActorOnAfterCmdHook(t *testing.T) {
 	_, _ = r.JoinAutoSeat("u-hook")
 	called := make(chan string, 1)
 	a := New(r, nil, Config{
-		Engine:     eng.NewEngine("sichuan_xuezhandaodi_huansanzhang"),
+		Engine:     newTestEngine(),
 		OnAfterCmd: func(id string) { called <- id },
 	})
-	go a.Run()
+	startActor(t, a)
 
 	ctx := context.Background()
 	_, _ = a.SubmitJoin(ctx, "extra")
