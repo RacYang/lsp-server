@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
-	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/pkg/logx"
 )
 
 // PersistPublishAndFinalize 持久化通知列表，打幂等戳，再通过 Redis RPUSH 发布事件。
 // 引擎已在生成时展开 per-seat 通知（每条携带独立 Payload），此处无须再做展开。
-func (s *GRPCServer) PersistPublishAndFinalize(ctx context.Context, roomID, idemKey string, notifications []roomsvc.Notification) error {
+func (s *GRPCServer) PersistPublishAndFinalize(ctx context.Context, roomID, idemKey string, notifications []eng.Notification) error {
 	events, err := s.persistNotifications(ctx, roomID, notifications)
 	if err != nil {
 		return err
@@ -49,7 +50,7 @@ type persistedEvent struct {
 	evt    *svcv1.RoomServiceStreamEventsResponse
 }
 
-func (s *GRPCServer) persistNotifications(ctx context.Context, roomID string, notifications []roomsvc.Notification) ([]persistedEvent, error) {
+func (s *GRPCServer) persistNotifications(ctx context.Context, roomID string, notifications []eng.Notification) ([]persistedEvent, error) {
 	if len(notifications) == 0 {
 		return nil, nil
 	}
@@ -87,7 +88,7 @@ func (s *GRPCServer) persistNotifications(ctx context.Context, roomID string, no
 	return out, nil
 }
 
-func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification roomsvc.Notification, evt *svcv1.RoomServiceStreamEventsResponse, cursor string) {
+func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification eng.Notification, evt *svcv1.RoomServiceStreamEventsResponse, cursor string) {
 	s.persistRoomMeta(ctx, roomID, parseSinceSeq(roomID, cursor), &notification)
 	if s.gs != nil {
 		players, _, _, ok := s.rooms.RoomSnapshot(roomID)
@@ -97,13 +98,13 @@ func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, n
 			}
 		}
 	}
-	if notification.Kind == roomsvc.KindSettlement && s.st != nil && evt.GetSettlement() != nil {
+	if notification.Kind == eng.KindSettlement && s.st != nil && evt.GetSettlement() != nil {
 		rec := buildSettlementRecord(roomID, notification.Payload, evt.GetSettlement())
 		if err := s.st.AppendSettlement(ctx, rec); err != nil {
 			logx.Error(logx.WithRoomID(ctx, roomID), "结算数据持久化失败", "err", err.Error())
 		}
 	}
-	if notification.Kind == roomsvc.KindSettlement && s.gs != nil {
+	if notification.Kind == eng.KindSettlement && s.gs != nil {
 		if err := s.gs.EndGameSummary(ctx, roomID, time.Now().UTC()); err != nil {
 			logx.Error(logx.WithRoomID(ctx, roomID), "结束对局摘要失败", "err", err.Error())
 		}
@@ -111,7 +112,7 @@ func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, n
 }
 
 func mapPGRowToEvent(roomID string, row postgres.RoomEventRow) (*svcv1.RoomServiceStreamEventsResponse, error) {
-	n := roomsvc.Notification{Kind: roomsvc.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...), TargetSeat: roomsvc.Seat(row.TargetSeat)}
+	n := eng.Notification{Kind: eng.Kind(row.Kind), Payload: append([]byte(nil), row.Payload...), TargetSeat: eng.Seat(row.TargetSeat)}
 	cur := fmt.Sprintf("%s:%d", roomID, row.Seq)
 	return mapNotificationToEvent(roomID, cur, n)
 }

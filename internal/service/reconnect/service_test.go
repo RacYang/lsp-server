@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"testing"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	miniredis "github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
-	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 	redisstore "racoo.cn/lsp/internal/store/redis"
 )
@@ -25,8 +26,8 @@ type stubRoomQueries struct {
 func (s *stubRoomQueries) RoomSnapshot(_ string) ([]string, string, [4]bool, bool) {
 	return s.snapshot, s.fsmState, [4]bool{}, s.snapshotOK
 }
-func (s *stubRoomQueries) RoundView(_ context.Context, _ string) (roomsvc.RoundView, bool, error) {
-	return roomsvc.RoundView{}, false, s.viewErr
+func (s *stubRoomQueries) RoundView(_ context.Context, _ string) (eng.RoundView, bool, error) {
+	return eng.RoundView{}, false, s.viewErr
 }
 func (s *stubRoomQueries) RoundPersistSnapshot(_ context.Context, _ string) ([]byte, error) {
 	return nil, nil

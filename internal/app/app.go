@@ -16,6 +16,7 @@ import (
 	remotegateway "racoo.cn/lsp/internal/gateway/remote"
 	"racoo.cn/lsp/internal/handler"
 	roomsvc "racoo.cn/lsp/internal/service/room"
+	eng "racoo.cn/lsp/internal/service/room/engine"
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
@@ -114,7 +115,7 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		rs = roomsvc.NewServiceWithRule(lb, cfg.RuleID,
 			roomsvc.WithMailboxCapacity(cfg.Runtime.RoomMailboxCapacity),
 			roomsvc.WithAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay),
-			roomsvc.WithTimeoutConfig(roomsvc.TimeoutConfig{
+			roomsvc.WithTimeoutConfig(eng.TimeoutConfig{
 				OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
 				OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
 				ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,

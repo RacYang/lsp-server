@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	"github.com/google/uuid"
 
 	"racoo.cn/lsp/internal/clock"
@@ -22,12 +24,12 @@ type Service struct {
 	actors map[string]*act.Actor
 	// activeCount 以无锁方式维护活跃房间数，供 ActiveRoomCount 无竞争读取。
 	activeCount          atomic.Int32
-	engine               *Engine
+	engine               *eng.Engine
 	clock                clock.Clock
-	tmo                  TimeoutConfig
+	tmo                  eng.TimeoutConfig
 	maxHands             int32
 	mailboxCapacity      int
-	onAuto               func(context.Context, string, []Notification)
+	onAuto               func(context.Context, string, []eng.Notification)
 	allowLeaveDuringPlay bool
 	// onAfterCmd 在 actor 处理完一条命令后触发，BotSupervisor 借此接力推动机器人座位。
 	// 这条回调必须自身保持非阻塞（典型实现是丢给独立 goroutine 处理），否则会拖慢 actor 主循环。
@@ -44,7 +46,7 @@ func WithClock(c clock.Clock) Option {
 }
 
 // WithTimeoutConfig 覆盖房间托管时长。
-func WithTimeoutConfig(cfg TimeoutConfig) Option {
+func WithTimeoutConfig(cfg eng.TimeoutConfig) Option {
 	return func(s *Service) { s.SetTimeoutConfig(cfg) }
 }
 
@@ -78,9 +80,9 @@ func NewServiceWithRule(l *RoomRegistry, ruleID string, opts ...Option) *Service
 	s := &Service{
 		lobby:                l,
 		actors:               make(map[string]*act.Actor),
-		engine:               NewEngine(ruleID),
+		engine:               eng.NewEngine(ruleID),
 		clock:                clock.NewReal(),
-		tmo:                  DefaultTimeoutConfig(),
+		tmo:                  eng.DefaultTimeoutConfig(),
 		maxHands:             1,
 		mailboxCapacity:      act.DefaultMailboxCapacity,
 		allowLeaveDuringPlay: true,
@@ -103,7 +105,7 @@ func (s *Service) SetClock(c clock.Clock) {
 }
 
 // SetTimeoutConfig 覆盖房间托管时长。
-func (s *Service) SetTimeoutConfig(cfg TimeoutConfig) {
+func (s *Service) SetTimeoutConfig(cfg eng.TimeoutConfig) {
 	if s == nil {
 		return
 	}
@@ -173,7 +175,7 @@ func (s *Service) CancelOfflineSurrender(roomID, userID string) {
 }
 
 // SetAutoTimeoutHandler 注册后台托管通知处理器。
-func (s *Service) SetAutoTimeoutHandler(fn func(context.Context, string, []Notification)) {
+func (s *Service) SetAutoTimeoutHandler(fn func(context.Context, string, []eng.Notification)) {
 	if s == nil {
 		return
 	}
@@ -230,7 +232,7 @@ func (s *Service) EnsureRoom(roomID string) error {
 	return nil
 }
 
-func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRound *RoundState) {
+func (s *Service) startActorLocked(roomID string, r *domainroom.Room, initialRound *eng.RoundState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.actors[roomID]; ok {
@@ -330,7 +332,7 @@ func (s *Service) Join(ctx context.Context, roomID, userID string) (int, error) 
 // Ready 标记准备并尝试开局。
 // 返回值：非空载荷表示须在调用方写完准备应答帧之后再调用 Hub.Broadcast，避免与同一
 // WebSocket 连接上的其它写操作并发（gorilla/websocket 要求单写者）。
-func (s *Service) Ready(ctx context.Context, roomID, userID string) ([]Notification, error) {
+func (s *Service) Ready(ctx context.Context, roomID, userID string) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -348,7 +350,7 @@ func (s *Service) Leave(ctx context.Context, roomID, userID string) error {
 }
 
 // Discard 提交当前轮次出牌动作；tok 为客户端阶段令牌，nil 时跳过 drift 校验（旧客户端兼容）。
-func (s *Service) Discard(ctx context.Context, roomID, userID, tile string, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) Discard(ctx context.Context, roomID, userID, tile string, tok *eng.PhaseToken) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -357,7 +359,7 @@ func (s *Service) Discard(ctx context.Context, roomID, userID, tile string, tok 
 }
 
 // Pong 提交弃牌抢答窗口中的碰牌动作。
-func (s *Service) Pong(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) Pong(ctx context.Context, roomID, userID string, tok *eng.PhaseToken) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -366,7 +368,7 @@ func (s *Service) Pong(ctx context.Context, roomID, userID string, tok *PhaseTok
 }
 
 // Chi 提交弃牌抢答窗口中的吃牌动作。默认四川血战规则不会开放该动作。
-func (s *Service) Chi(ctx context.Context, roomID, userID string, tiles []string, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) Chi(ctx context.Context, roomID, userID string, tiles []string, tok *eng.PhaseToken) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -375,7 +377,7 @@ func (s *Service) Chi(ctx context.Context, roomID, userID string, tiles []string
 }
 
 // Gang 提交弃牌抢答窗口中的杠牌或当前座位自杠动作。
-func (s *Service) Gang(ctx context.Context, roomID, userID, tile string, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) Gang(ctx context.Context, roomID, userID, tile string, tok *eng.PhaseToken) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -384,7 +386,7 @@ func (s *Service) Gang(ctx context.Context, roomID, userID, tile string, tok *Ph
 }
 
 // Hu 提交胡牌动作（当前为自摸待决窗口）。
-func (s *Service) Hu(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) Hu(ctx context.Context, roomID, userID string, tok *eng.PhaseToken) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -393,7 +395,7 @@ func (s *Service) Hu(ctx context.Context, roomID, userID string, tok *PhaseToken
 }
 
 // Pass 放弃当前抢答或自摸选择，并由服务端推进下一等待态。
-func (s *Service) Pass(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) Pass(ctx context.Context, roomID, userID string, tok *eng.PhaseToken) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -402,7 +404,7 @@ func (s *Service) Pass(ctx context.Context, roomID, userID string, tok *PhaseTok
 }
 
 // AutoTimeout 执行当前等待态的服务端托管动作，供上层定时器到期后调用。
-func (s *Service) AutoTimeout(ctx context.Context, roomID string) ([]Notification, error) {
+func (s *Service) AutoTimeout(ctx context.Context, roomID string) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -410,7 +412,7 @@ func (s *Service) AutoTimeout(ctx context.Context, roomID string) ([]Notificatio
 	return a.SubmitAutoTimeout(ctx)
 }
 
-func (s *Service) OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *PhaseToken) ([]Notification, error) {
+func (s *Service) OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *eng.PhaseToken) ([]eng.Notification, error) {
 	a := s.getActor(roomID)
 	if a == nil {
 		return nil, fmt.Errorf("room not found")
@@ -427,11 +429,11 @@ func (s *Service) RoundPersistSnapshot(ctx context.Context, roomID string) ([]by
 	return a.SubmitRoundSnapJSON(ctx)
 }
 
-// RoundView 返回当前进行中局面的等待态摘要。
-func (s *Service) RoundView(ctx context.Context, roomID string) (RoundView, bool, error) {
+// eng.RoundView 返回当前进行中局面的等待态摘要。
+func (s *Service) RoundView(ctx context.Context, roomID string) (eng.RoundView, bool, error) {
 	a := s.getActor(roomID)
 	if a == nil {
-		return RoundView{}, false, nil
+		return eng.RoundView{}, false, nil
 	}
 	return a.SubmitRoundView(ctx)
 }
@@ -455,7 +457,7 @@ func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string
 			continue
 		}
 		if _, ok := r.JoinAutoSeat(userID); !ok {
-			return fmt.Errorf("recover room %s: %w", roomID, ErrRoomFull)
+			return fmt.Errorf("recover room %s: %w", roomID, act.ErrRoomFull)
 		}
 	}
 	if err := restoreFSMForRecover(r, fsmState); err != nil {
@@ -464,9 +466,9 @@ func (s *Service) RecoverRoom(roomID string, playerIDs []string, fsmState string
 	if err := s.lobby.CreateRoom(roomID, r); err != nil {
 		return err
 	}
-	var initialRound *RoundState
+	var initialRound *eng.RoundState
 	if domainroom.State(fsmState) == domainroom.StatePlaying && len(roundPersistJSON) > 0 {
-		rs, err := RestoreRoundFromPersistJSON(roomID, roundPersistJSON)
+		rs, err := eng.RestoreRoundFromPersistJSON(roomID, roundPersistJSON)
 		if err != nil {
 			return fmt.Errorf("restore round: %w", err)
 		}

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	act "racoo.cn/lsp/internal/service/room/actor"
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
 	"racoo.cn/lsp/internal/contract"
@@ -39,7 +42,7 @@ func NewLocalRoomGateway(rooms *roomsvc.Service, hub *session.Hub, sess *session
 		offlineSurrenderAfter: 30 * time.Second,
 	}
 	if rooms != nil {
-		rooms.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []roomsvc.Notification) {
+		rooms.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []eng.Notification) {
 			g.broadcastAfter(roomID, notifications)()
 		})
 	}
@@ -184,7 +187,7 @@ func (g *LocalRoomGateway) AddBot(ctx context.Context, roomID, userID string, co
 		return nil, nil, err
 	}
 	out := make([]*clientv1.SeatInfo, 0, len(added))
-	var notifications []roomsvc.Notification
+	var notifications []eng.Notification
 	for _, bot := range added {
 		if _, err := g.rooms.Join(ctx, roomID, bot.UserID); err != nil {
 			return nil, nil, err
@@ -252,13 +255,13 @@ func (g *LocalRoomGateway) CancelOfflineSurrender(_ context.Context, roomID, use
 	return nil
 }
 
-// wrapActionErr 将 roomsvc.ErrRateLimited 转换为 contract.ErrRateLimited，
+// wrapActionErr 将 act.ErrRateLimited 转换为 contract.ErrRateLimited，
 // 使 handler 无需引用 service/room 即可识别限流错误。
 func wrapActionErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, roomsvc.ErrRateLimited) {
+	if errors.Is(err, act.ErrRateLimited) {
 		return contract.ErrRateLimited
 	}
 	return err
@@ -269,7 +272,7 @@ func (g *LocalRoomGateway) Discard(ctx context.Context, roomID, userID, tile str
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile, eng.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -280,7 +283,7 @@ func (g *LocalRoomGateway) Pong(ctx context.Context, roomID, userID string, tok 
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Pong(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Pong(ctx, roomID, userID, eng.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -291,7 +294,7 @@ func (g *LocalRoomGateway) Chi(ctx context.Context, roomID, userID string, tiles
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Chi(ctx, roomID, userID, tiles, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Chi(ctx, roomID, userID, tiles, eng.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -302,7 +305,7 @@ func (g *LocalRoomGateway) Gang(ctx context.Context, roomID, userID, tile string
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile, eng.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -313,7 +316,7 @@ func (g *LocalRoomGateway) Hu(ctx context.Context, roomID, userID string, tok *c
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Hu(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Hu(ctx, roomID, userID, eng.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -324,7 +327,7 @@ func (g *LocalRoomGateway) Pass(ctx context.Context, roomID, userID string, tok 
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Pass(ctx, roomID, userID, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Pass(ctx, roomID, userID, eng.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -335,14 +338,14 @@ func (g *LocalRoomGateway) OpeningAction(ctx context.Context, roomID, userID, ac
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.OpeningAction(ctx, roomID, userID, action, tiles, direction, suit, params, roomsvc.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.OpeningAction(ctx, roomID, userID, action, tiles, direction, suit, params, eng.PhaseTokenFromProto(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
 	return g.broadcastAfter(roomID, notifications), nil
 }
 
-func (g *LocalRoomGateway) broadcastAfter(roomID string, notifications []roomsvc.Notification) func() {
+func (g *LocalRoomGateway) broadcastAfter(roomID string, notifications []eng.Notification) func() {
 	return func() {
 		for _, notification := range notifications {
 			g.sendNotification(roomID, notification)
@@ -354,14 +357,14 @@ func (g *LocalRoomGateway) broadcastAfter(roomID string, notifications []roomsvc
 //
 // 常规玩家动作通过各 handler 在响应后调用 broadcastAfter；进程内 bot supervisor 不经过
 // WebSocket handler，因此需要这个显式入口复用同一套隐私投影与座位定向逻辑。
-func (g *LocalRoomGateway) BroadcastNotifications(_ context.Context, roomID string, notifications []roomsvc.Notification) {
+func (g *LocalRoomGateway) BroadcastNotifications(_ context.Context, roomID string, notifications []eng.Notification) {
 	if g == nil || roomID == "" || len(notifications) == 0 {
 		return
 	}
 	g.broadcastAfter(roomID, notifications)()
 }
 
-func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.Notification) {
+func (g *LocalRoomGateway) sendNotification(roomID string, notification eng.Notification) {
 	outMsgID, ok := localOutboundMsgID(notification.Kind)
 	if !ok || g == nil || g.hub == nil {
 		return
@@ -370,7 +373,7 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification roomsvc.
 	if encErr != nil {
 		return
 	}
-	if notification.TargetSeat == roomsvc.BroadcastSeat {
+	if notification.TargetSeat == eng.BroadcastSeat {
 		g.hub.Broadcast(roomID, encoded)
 		return
 	}
@@ -409,19 +412,19 @@ func (g *LocalRoomGateway) Resume(ctx context.Context, sessionToken string) (*co
 }
 
 // localOutboundMsgID 映射 room 通知种类到 WebSocket 协议消息 ID。
-func localOutboundMsgID(kind roomsvc.Kind) (uint16, bool) {
+func localOutboundMsgID(kind eng.Kind) (uint16, bool) {
 	switch kind {
-	case roomsvc.KindInitialDeal:
+	case eng.KindInitialDeal:
 		return protocol.InitialDealNotify, true
-	case roomsvc.KindOpeningDone:
+	case eng.KindOpeningDone:
 		return protocol.OpeningDone, true
-	case roomsvc.KindStartGame:
+	case eng.KindStartGame:
 		return protocol.StartGame, true
-	case roomsvc.KindDrawTile:
+	case eng.KindDrawTile:
 		return protocol.DrawTile, true
-	case roomsvc.KindAction:
+	case eng.KindAction:
 		return protocol.ActionNotify, true
-	case roomsvc.KindSettlement:
+	case eng.KindSettlement:
 		return protocol.Settlement, true
 	default:
 		return 0, false

@@ -480,8 +480,6 @@ lint:
           - domain
           - handler
           - store_root
-          - service_room_engine
-          - service_room_actor
           - config
           - clock
           - log
@@ -501,8 +499,6 @@ lint:
           - adapter
           - cmd
           - handler
-          - service_room_engine
-          - service_room_actor
           - store_root
           - clock
           - metrics

@@ -5,7 +5,7 @@ import (
 	"racoo.cn/lsp/internal/mahjong/rules"
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	reconnectsvc "racoo.cn/lsp/internal/service/reconnect"
-	roomsvc "racoo.cn/lsp/internal/service/room"
+	eng "racoo.cn/lsp/internal/service/room/engine"
 )
 
 // buildSnapshotFromReconnect 将重连服务层结果投影为 SnapshotNotify proto。
@@ -97,7 +97,7 @@ func stringMatrixToClientSeatTiles(items [][]string) []*clientv1.SeatTiles {
 }
 
 // roomClaimCandidatesToClient 将抢答候选列表投影为客户端 proto。
-func roomClaimCandidatesToClient(candidates []roomsvc.RoundClaimCandidate) []*clientv1.ClaimCandidate {
+func roomClaimCandidatesToClient(candidates []eng.RoundClaimCandidate) []*clientv1.ClaimCandidate {
 	out := make([]*clientv1.ClaimCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		out = append(out, &clientv1.ClaimCandidate{
@@ -136,7 +136,7 @@ func lobbyRuleMetasToClient(rules []lobbysvc.RuleMeta) []*clientv1.RuleMeta {
 }
 
 // roomViewRuleMeta 将局面规则摘要投影为客户端 proto；nil 时返回 nil。
-func roomViewRuleMeta(m *roomsvc.RuleMeta) *clientv1.RuleMeta {
+func roomViewRuleMeta(m *eng.RuleMeta) *clientv1.RuleMeta {
 	if m == nil {
 		return nil
 	}
@@ -150,7 +150,7 @@ func roomViewRuleMeta(m *roomsvc.RuleMeta) *clientv1.RuleMeta {
 }
 
 // roomViewLastAction 将最后操作信息投影为客户端 proto；nil 时返回 nil。
-func roomViewLastAction(a *roomsvc.LastActionInfo) *clientv1.LastActionInfo {
+func roomViewLastAction(a *eng.LastActionInfo) *clientv1.LastActionInfo {
 	if a == nil {
 		return nil
 	}
@@ -166,7 +166,7 @@ func roomViewLastAction(a *roomsvc.LastActionInfo) *clientv1.LastActionInfo {
 }
 
 // roomViewMeldInfosBySeat 将按座位组织的面子信息投影为客户端 proto。
-func roomViewMeldInfosBySeat(seats []*roomsvc.SeatMelds) []*clientv1.SeatMelds {
+func roomViewMeldInfosBySeat(seats []*eng.SeatMelds) []*clientv1.SeatMelds {
 	out := make([]*clientv1.SeatMelds, 0, len(seats))
 	for _, s := range seats {
 		pm := &clientv1.SeatMelds{SeatIndex: s.SeatIndex}

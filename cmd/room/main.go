@@ -16,6 +16,7 @@ import (
 	"racoo.cn/lsp/internal/cluster"
 	"racoo.cn/lsp/internal/config"
 	roomsvc "racoo.cn/lsp/internal/service/room"
+	eng "racoo.cn/lsp/internal/service/room/engine"
 	"racoo.cn/lsp/internal/store/postgres"
 	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
@@ -77,7 +78,7 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	svcCore := roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), cfg.RuleID,
 		roomsvc.WithMailboxCapacity(cfg.Runtime.RoomMailboxCapacity),
 		roomsvc.WithAllowLeaveDuringPlay(cfg.Runtime.RoomAllowLeaveDuringPlay),
-		roomsvc.WithTimeoutConfig(roomsvc.TimeoutConfig{
+		roomsvc.WithTimeoutConfig(eng.TimeoutConfig{
 			OpeningDefault:  cfg.RoomTimeouts.OpeningDefault,
 			OpeningByAction: cfg.RoomTimeouts.OpeningByAction,
 			ClaimWindow:     cfg.RoomTimeouts.ClaimWindow,

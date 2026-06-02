@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/session"
 )
@@ -17,7 +19,7 @@ type ReconnectResult struct {
 	Players    []string
 	State      string
 	LastCursor string
-	View       roomsvc.RoundView
+	View       eng.RoundView
 }
 
 // Service 处理断线重连业务逻辑：会话校验与内存房间状态读取。

@@ -31,7 +31,7 @@ func TestMultiRuleDocumentationDoesNotDescribeLegacyFieldsAsRoomModel(t *testing
 		},
 		{
 			path:      "adr/0039-sichuan-xuezhandaodi-authoritative-round-contract.md",
-			forbid:    "换三张方向是 `RoundState.exchangeDirection` 的局共识字段",
+			forbid:    "换三张方向是 `eng.RoundState.exchangeDirection` 的局共识字段",
 			mustHave:  "四川规则包保存在 opaque `rule_state` 中",
 			rationale: "Sichuan opening state must be documented as rule-private state projection",
 		},

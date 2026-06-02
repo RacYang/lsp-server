@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	miniredis "github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
@@ -90,13 +92,13 @@ func TestLocalRoomGatewaySendsPerSeatNotifications(t *testing.T) {
 	}
 	g := NewLocalRoomGateway(svc, session.NewHub(), nil)
 	// 引擎已在生成时展开为每座位一条独立通知；此处模拟四条逐一调用
-	for seat := roomsvc.Seat(0); seat < 4; seat++ {
+	for seat := eng.Seat(0); seat < 4; seat++ {
 		payload, err := proto.Marshal(&clientv1.Envelope{
 			Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{SeatIndex: int32(seat), Tile: ""}},
 		})
 		require.NoError(t, err)
-		g.sendNotification("project-room", roomsvc.Notification{
-			Kind:       roomsvc.KindDrawTile,
+		g.sendNotification("project-room", eng.Notification{
+			Kind:       eng.KindDrawTile,
 			Payload:    payload,
 			TargetSeat: seat,
 		})

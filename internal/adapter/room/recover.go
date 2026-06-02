@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"racoo.cn/lsp/internal/cluster"
@@ -109,7 +111,7 @@ func RecoverSingleRoom(ctx context.Context, rcli *redis.Client, ev *postgres.Roo
 		state = "ready"
 	}
 	if err := svc.RecoverRoom(roomID, players, state, roundJSON); err != nil {
-		if errors.Is(err, roomsvc.ErrRoundPersistUnsupportedSchema) {
+		if errors.Is(err, eng.ErrRoundPersistUnsupportedSchema) {
 			return svc.RecoverRoom(roomID, players, "ready", nil)
 		}
 		return err
@@ -125,10 +127,10 @@ func DeriveRecoveredState(current string, rows []postgres.RoomEventRow) (state s
 	var afterSettlement bool
 	for _, row := range rows {
 		switch row.Kind {
-		case string(roomsvc.KindSettlement):
+		case string(eng.KindSettlement):
 			state = "closed"
 			afterSettlement = true
-		case string(roomsvc.KindOpeningDone), string(roomsvc.KindStartGame), string(roomsvc.KindDrawTile), string(roomsvc.KindAction):
+		case string(eng.KindOpeningDone), string(eng.KindStartGame), string(eng.KindDrawTile), string(eng.KindAction):
 			state = "playing"
 			if afterSettlement {
 				// settlement 后紧跟开局事件，说明新一局已开始，旧快照不适用。

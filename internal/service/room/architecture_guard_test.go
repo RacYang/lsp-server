@@ -64,7 +64,7 @@ func TestRoomEngineArchitectureGuard(t *testing.T) {
 		require.NotContains(t, src, "SettlementBuilder", "%s must get settlement from CapabilitySet.Settlement", base)
 		require.NotContains(t, src, "rs.rule.(rules.", "%s must not type-assert rule runtime strategies", base)
 		if base != "engine.go" && base != "round_builder.go" {
-			require.NotContains(t, src, "rules.CapabilitiesOf(rs.rule)", "%s must use RoundState.caps instead of re-querying rule capabilities", base)
+			require.NotContains(t, src, "rules.CapabilitiesOf(rs.rule)", "%s must use eng.RoundState.caps instead of re-querying rule capabilities", base)
 		}
 		require.NotContains(t, src, "rules.StandardSelfActionPolicy{}", "%s must get self-action legality from CapabilitySet.SelfActions, not room fallback", base)
 		require.NotContains(t, src, "caps.Settlement != nil", "%s must require SettlementPolicy at capability assembly time", base)
@@ -79,7 +79,7 @@ func TestRoomEngineArchitectureGuard(t *testing.T) {
 		require.NotContains(t, src, "rules.ScoreEntry", "%s must use generic ScoreEvent, not legacy score entry", base)
 		require.NotContains(t, src, "ScoreEntry", "%s must use generic ScoreEvent, not legacy score entry", base)
 		require.NotContains(t, src, "migratePersistToCurrent", "%s must reject non-current persist schema instead of migrating it", base)
-		require.NotContains(t, src, "QueSuitsFromPersistJSON", "%s must project que suits from restored RoundState, not raw JSON", base)
+		require.NotContains(t, src, "QueSuitsFromPersistJSON", "%s must project que suits from restored eng.RoundState, not raw JSON", base)
 		if base == "engine_auto.go" {
 			require.NotContains(t, src, "exchangeThree(", "%s must not hard-code Sichuan exchange flow", base)
 			require.NotContains(t, src, "chooseExchangeTiles(", "%s must let OpeningPolicy choose auto exchange tiles", base)
@@ -112,7 +112,7 @@ func TestRoomEngineArchitectureGuard(t *testing.T) {
 
 func TestRoomStateStructsDoNotHoldClientV1Types(t *testing.T) {
 	t.Parallel()
-	// 确保 RoundState/RoundView/RoundFacts/RoundProgress 数据结构不再直接持有 clientv1 类型。
+	// 确保 eng.RoundState/eng.RoundView/eng.RoundFacts/eng.RoundProgress 数据结构不再直接持有 clientv1 类型。
 	// 允许的例外：view_types.go（仅含 Proto() 转换方法），engine*.go（序列化边界函数）。
 	// 违规文件：engine.go 如出现新的 clientv1 字段声明，此测试将失败。
 	data, err := os.ReadFile(filepath.Join(".", "engine", "engine.go"))
@@ -120,11 +120,11 @@ func TestRoomStateStructsDoNotHoldClientV1Types(t *testing.T) {
 	src := string(data)
 
 	// 数据结构字段不应声明 clientv1 类型
-	require.NotContains(t, src, "clientv1.Phase\n", "RoundView/RoundProgress 不应声明 clientv1.Phase 字段")
-	require.NotContains(t, src, "clientv1.SeatMelds", "RoundView/RoundFacts 不应声明 clientv1.SeatMelds 字段")
-	require.NotContains(t, src, "clientv1.LastActionInfo", "RoundState/RoundView 不应声明 clientv1.LastActionInfo 字段")
-	require.NotContains(t, src, "clientv1.RuleMeta", "RoundFacts 不应声明 clientv1.RuleMeta 字段")
-	require.NotContains(t, src, "clientv1.SeatScore", "RoundFacts 不应声明 clientv1.SeatScore 字段")
+	require.NotContains(t, src, "clientv1.Phase\n", "eng.RoundView/eng.RoundProgress 不应声明 clientv1.Phase 字段")
+	require.NotContains(t, src, "clientv1.SeatMelds", "eng.RoundView/eng.RoundFacts 不应声明 clientv1.SeatMelds 字段")
+	require.NotContains(t, src, "clientv1.LastActionInfo", "eng.RoundState/eng.RoundView 不应声明 clientv1.LastActionInfo 字段")
+	require.NotContains(t, src, "clientv1.RuleMeta", "eng.RoundFacts 不应声明 clientv1.RuleMeta 字段")
+	require.NotContains(t, src, "clientv1.SeatScore", "eng.RoundFacts 不应声明 clientv1.SeatScore 字段")
 }
 
 func TestMahjongLayerDoesNotImportClientV1(t *testing.T) {

@@ -3,14 +3,15 @@ package roomadapter
 import (
 	"context"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-	roomsvc "racoo.cn/lsp/internal/service/room"
 	"racoo.cn/lsp/internal/store/redis"
 	"racoo.cn/lsp/pkg/logx"
 )
 
-func (s *GRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq int64, notification *roomsvc.Notification) {
+func (s *GRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq int64, notification *eng.Notification) {
 	if s == nil || s.rdb == nil {
 		return
 	}
@@ -46,8 +47,8 @@ func (s *GRPCServer) persistRoomMeta(ctx context.Context, roomID string, seq int
 	}
 }
 
-func queSuitsFromNotification(n roomsvc.Notification) []int32 {
-	if n.Kind != roomsvc.KindOpeningDone {
+func queSuitsFromNotification(n eng.Notification) []int32 {
+	if n.Kind != eng.KindOpeningDone {
 		return nil
 	}
 	var env clientv1.Envelope
@@ -78,7 +79,7 @@ func pickLastQueSuits(ctx context.Context, s *GRPCServer, roomID string) []int32
 		return nil
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if rows[i].Kind != string(roomsvc.KindOpeningDone) {
+		if rows[i].Kind != string(eng.KindOpeningDone) {
 			continue
 		}
 		var env clientv1.Envelope

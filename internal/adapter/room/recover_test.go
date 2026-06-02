@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	"github.com/stretchr/testify/require"
 
 	"racoo.cn/lsp/internal/cluster"
@@ -55,14 +57,14 @@ func TestDeriveRecoveredState(t *testing.T) {
 		{
 			name:      "start_game 推导为 playing",
 			current:   "ready",
-			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindStartGame)}},
+			rows:      []postgres.RoomEventRow{{Kind: string(eng.KindStartGame)}},
 			wantState: "playing",
 			wantClear: false,
 		},
 		{
 			name:      "settlement 推导为 closed",
 			current:   "ready",
-			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindSettlement)}},
+			rows:      []postgres.RoomEventRow{{Kind: string(eng.KindSettlement)}},
 			wantState: "closed",
 			wantClear: false,
 		},
@@ -70,8 +72,8 @@ func TestDeriveRecoveredState(t *testing.T) {
 			name:    "连续事件取最后状态",
 			current: "ready",
 			rows: []postgres.RoomEventRow{
-				{Kind: string(roomsvc.KindStartGame)},
-				{Kind: string(roomsvc.KindSettlement)},
+				{Kind: string(eng.KindStartGame)},
+				{Kind: string(eng.KindSettlement)},
 			},
 			wantState: "closed",
 			wantClear: false,
@@ -80,9 +82,9 @@ func TestDeriveRecoveredState(t *testing.T) {
 			name:    "settlement 后开局表示新一局 clearRound 为 true",
 			current: "ready",
 			rows: []postgres.RoomEventRow{
-				{Kind: string(roomsvc.KindStartGame)},
-				{Kind: string(roomsvc.KindSettlement)},
-				{Kind: string(roomsvc.KindStartGame)},
+				{Kind: string(eng.KindStartGame)},
+				{Kind: string(eng.KindSettlement)},
+				{Kind: string(eng.KindStartGame)},
 			},
 			wantState: "playing",
 			wantClear: true,
@@ -90,21 +92,21 @@ func TestDeriveRecoveredState(t *testing.T) {
 		{
 			name:      "opening_done 推导为 playing",
 			current:   "waiting",
-			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindOpeningDone)}},
+			rows:      []postgres.RoomEventRow{{Kind: string(eng.KindOpeningDone)}},
 			wantState: "playing",
 			wantClear: false,
 		},
 		{
 			name:      "draw_tile 推导为 playing",
 			current:   "waiting",
-			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindDrawTile)}},
+			rows:      []postgres.RoomEventRow{{Kind: string(eng.KindDrawTile)}},
 			wantState: "playing",
 			wantClear: false,
 		},
 		{
 			name:      "action 推导为 playing",
 			current:   "waiting",
-			rows:      []postgres.RoomEventRow{{Kind: string(roomsvc.KindAction)}},
+			rows:      []postgres.RoomEventRow{{Kind: string(eng.KindAction)}},
 			wantState: "playing",
 			wantClear: false,
 		},

@@ -209,6 +209,8 @@ deps:
       - contract
       - store_redis
       - store_postgres
+      - service_room_engine
+      - service_room_actor
       - service_reconnect
       - service
       - session
@@ -224,6 +226,8 @@ deps:
       - contract
       - store_redis
       - store_postgres
+      - service_room_engine
+      - service_room_actor
       - service_reconnect
       - service
       - session

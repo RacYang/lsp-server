@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	miniredis "github.com/alicebob/miniredis/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v3"
@@ -236,44 +238,44 @@ func TestClusterPhaseTokToRoom(t *testing.T) {
 		desc       string
 		input      *clientv1.PhaseToken
 		wantNil    bool
-		wantReason roomsvc.WaitingReason
+		wantReason eng.WaitingReason
 		wantStep   int64
 	}{
 		{desc: "nil 透传 nil", input: nil, wantNil: true},
 		{
 			desc:       "开局阶段",
 			input:      &clientv1.PhaseToken{Step: 1, Reason: clientv1.WaitingReason_WAITING_REASON_OPENING},
-			wantReason: roomsvc.ReasonOpening,
+			wantReason: eng.ReasonOpening,
 			wantStep:   1,
 		},
 		{
 			desc:       "抢杠窗口",
 			input:      &clientv1.PhaseToken{Step: 2, Reason: clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW},
-			wantReason: roomsvc.ReasonClaimWindow,
+			wantReason: eng.ReasonClaimWindow,
 			wantStep:   2,
 		},
 		{
 			desc:       "摸牌自摸",
 			input:      &clientv1.PhaseToken{Step: 3, Reason: clientv1.WaitingReason_WAITING_REASON_TSUMO},
-			wantReason: roomsvc.ReasonTsumo,
+			wantReason: eng.ReasonTsumo,
 			wantStep:   3,
 		},
 		{
 			desc:       "弃牌阶段",
 			input:      &clientv1.PhaseToken{Step: 4, Reason: clientv1.WaitingReason_WAITING_REASON_DISCARD},
-			wantReason: roomsvc.ReasonDiscard,
+			wantReason: eng.ReasonDiscard,
 			wantStep:   4,
 		},
 		{
 			desc:       "投降阶段",
 			input:      &clientv1.PhaseToken{Step: 5, Reason: clientv1.WaitingReason_WAITING_REASON_SURRENDER},
-			wantReason: roomsvc.ReasonSurrender,
+			wantReason: eng.ReasonSurrender,
 			wantStep:   5,
 		},
 		{
 			desc:       "未知原因回退 None",
 			input:      &clientv1.PhaseToken{Step: 6, Reason: clientv1.WaitingReason_WAITING_REASON_NONE},
-			wantReason: roomsvc.ReasonNone,
+			wantReason: eng.ReasonNone,
 			wantStep:   6,
 		},
 	}
@@ -281,7 +283,7 @@ func TestClusterPhaseTokToRoom(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
-			got := roomsvc.PhaseTokenFromProto(tc.input)
+			got := eng.PhaseTokenFromProto(tc.input)
 			if tc.wantNil {
 				require.Nil(t, got)
 				return
@@ -298,32 +300,32 @@ func TestWaitingReasonFromRoundView(t *testing.T) {
 
 	tests := []struct {
 		desc string
-		view roomsvc.RoundView
+		view eng.RoundView
 		want clientv1.WaitingReason
 	}{
 		{
 			desc: "开局阶段映射",
-			view: roomsvc.RoundView{Phase: roomsvc.PhaseOpening},
+			view: eng.RoundView{Phase: eng.PhaseOpening},
 			want: clientv1.WaitingReason_WAITING_REASON_OPENING,
 		},
 		{
 			desc: "吃碰杠抢窗口映射",
-			view: roomsvc.RoundView{Phase: roomsvc.PhaseClaim, WaitingAction: "claim_window"},
+			view: eng.RoundView{Phase: eng.PhaseClaim, WaitingAction: "claim_window"},
 			want: clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW,
 		},
 		{
 			desc: "自摸窗口映射",
-			view: roomsvc.RoundView{Phase: roomsvc.PhaseTsumo, WaitingAction: "tsumo_window"},
+			view: eng.RoundView{Phase: eng.PhaseTsumo, WaitingAction: "tsumo_window"},
 			want: clientv1.WaitingReason_WAITING_REASON_TSUMO,
 		},
 		{
 			desc: "弃牌映射",
-			view: roomsvc.RoundView{Phase: roomsvc.PhaseDiscard, WaitingAction: "discard"},
+			view: eng.RoundView{Phase: eng.PhaseDiscard, WaitingAction: "discard"},
 			want: clientv1.WaitingReason_WAITING_REASON_DISCARD,
 		},
 		{
 			desc: "其它动作回退 None",
-			view: roomsvc.RoundView{Phase: roomsvc.PhaseDraw, WaitingAction: "unknown"},
+			view: eng.RoundView{Phase: eng.PhaseDraw, WaitingAction: "unknown"},
 			want: clientv1.WaitingReason_WAITING_REASON_NONE,
 		},
 	}
@@ -345,7 +347,7 @@ func TestMapPGRowToEvent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	evt, err := mapPGRowToEvent("r-pg", postgres.RoomEventRow{Seq: 7, Kind: string(roomsvc.KindStartGame), Payload: payload})
+	evt, err := mapPGRowToEvent("r-pg", postgres.RoomEventRow{Seq: 7, Kind: string(eng.KindStartGame), Payload: payload})
 	require.NoError(t, err)
 	require.Equal(t, "r-pg:7", evt.GetCursor())
 	require.EqualValues(t, 2, evt.GetStartGame().GetDealerSeat())
@@ -356,22 +358,22 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		kind   roomsvc.Kind
+		kind   eng.Kind
 		env    *clientv1.Envelope
 		assert func(*testing.T, *svcv1.RoomServiceStreamEventsResponse)
 	}{
 		{
 			name: "start",
-			kind: roomsvc.KindStartGame,
+			kind: eng.KindStartGame,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
-				Phase:         roomsvc.PhaseDraw.Proto(),
+				Phase:         eng.PhaseDraw.Proto(),
 				Step:          10,
 				ActingSeats:   []int32{0},
 				WallRemaining: 55,
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, roomsvc.PhaseDraw.Proto(), evt.GetStartGame().GetPhase())
+				require.Equal(t, eng.PhaseDraw.Proto(), evt.GetStartGame().GetPhase())
 				require.EqualValues(t, 10, evt.GetStartGame().GetStep())
 				require.Equal(t, []int32{0}, evt.GetStartGame().GetActingSeats())
 				require.EqualValues(t, 55, evt.GetStartGame().GetWallRemaining())
@@ -379,9 +381,9 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "draw",
-			kind: roomsvc.KindDrawTile,
+			kind: eng.KindDrawTile,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
-				Phase:          roomsvc.PhaseDiscard.Proto(),
+				Phase:          eng.PhaseDiscard.Proto(),
 				Step:           11,
 				ActingSeats:    []int32{1},
 				WallRemaining:  54,
@@ -389,7 +391,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, roomsvc.PhaseDiscard.Proto(), evt.GetDrawTile().GetPhase())
+				require.Equal(t, eng.PhaseDiscard.Proto(), evt.GetDrawTile().GetPhase())
 				require.EqualValues(t, 11, evt.GetDrawTile().GetStep())
 				require.Equal(t, []int32{1}, evt.GetDrawTile().GetActingSeats())
 				require.EqualValues(t, 54, evt.GetDrawTile().GetWallRemaining())
@@ -398,36 +400,36 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "action",
-			kind: roomsvc.KindAction,
+			kind: eng.KindAction,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_Action{Action: &clientv1.ActionNotify{
 				SeatIndex:   1,
 				Action:      "discard",
 				Tile:        "p9",
-				Phase:       roomsvc.PhaseDraw.Proto(),
+				Phase:       eng.PhaseDraw.Proto(),
 				Step:        12,
 				ActingSeats: []int32{2},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, roomsvc.PhaseDraw.Proto(), evt.GetAction().GetPhase())
+				require.Equal(t, eng.PhaseDraw.Proto(), evt.GetAction().GetPhase())
 				require.EqualValues(t, 12, evt.GetAction().GetStep())
 				require.Equal(t, []int32{2}, evt.GetAction().GetActingSeats())
 			},
 		},
 		{
 			name: "exchange",
-			kind: roomsvc.KindOpeningDone,
+			kind: eng.KindOpeningDone,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
 				Action:      "exchange_three",
 				Kind:        "exchange_done",
 				Params:      map[string]string{"direction": "3"},
-				Phase:       roomsvc.PhaseOpening.Proto(),
+				Phase:       eng.PhaseOpening.Proto(),
 				Step:        13,
 				ActingSeats: []int32{0, 1, 2, 3},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, roomsvc.PhaseOpening.Proto(), evt.GetOpeningDone().GetPhase())
+				require.Equal(t, eng.PhaseOpening.Proto(), evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 13, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0, 1, 2, 3}, evt.GetOpeningDone().GetActingSeats())
 				require.Equal(t, "3", evt.GetOpeningDone().GetParams()["direction"])
@@ -435,17 +437,17 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 		},
 		{
 			name: "que",
-			kind: roomsvc.KindOpeningDone,
+			kind: eng.KindOpeningDone,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
 				Action:      "que_men",
 				Kind:        "missing_suit_done",
-				Phase:       roomsvc.PhaseDraw.Proto(),
+				Phase:       eng.PhaseDraw.Proto(),
 				Step:        14,
 				ActingSeats: []int32{0},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, roomsvc.PhaseDraw.Proto(), evt.GetOpeningDone().GetPhase())
+				require.Equal(t, eng.PhaseDraw.Proto(), evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 14, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0}, evt.GetOpeningDone().GetActingSeats())
 			},
@@ -456,10 +458,10 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			payload, err := proto.Marshal(tc.env)
 			require.NoError(t, err)
 
-			evt, err := mapNotificationToEvent("r-progress", "r-progress:12", roomsvc.Notification{
+			evt, err := mapNotificationToEvent("r-progress", "r-progress:12", eng.Notification{
 				Kind:       tc.kind,
 				Payload:    payload,
-				TargetSeat: roomsvc.BroadcastSeat,
+				TargetSeat: eng.BroadcastSeat,
 			})
 			require.NoError(t, err)
 			tc.assert(t, evt)
@@ -504,8 +506,8 @@ func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	srv.persistRoomMeta(ctx, "r-meta", 1, &roomsvc.Notification{Kind: roomsvc.KindOpeningDone, Payload: quePayload})
-	srv.persistRoomMeta(ctx, "r-meta", 2, &roomsvc.Notification{Kind: roomsvc.KindAction, Payload: actionPayload})
+	srv.persistRoomMeta(ctx, "r-meta", 1, &eng.Notification{Kind: eng.KindOpeningDone, Payload: quePayload})
+	srv.persistRoomMeta(ctx, "r-meta", 2, &eng.Notification{Kind: eng.KindAction, Payload: actionPayload})
 
 	meta, ok, err := rdb.GetRoomSnapMeta(ctx, "r-meta")
 	require.NoError(t, err)
@@ -525,10 +527,10 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 		WithArgs("r-batch").
 		WillReturnRows(pgxmock.NewRows([]string{"seq"}).AddRow(int64(0)))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("r-batch", int64(1), string(roomsvc.KindDrawTile), []byte("draw"), int32(-1)).
+		WithArgs("r-batch", int64(1), string(eng.KindDrawTile), []byte("draw"), int32(-1)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec("INSERT INTO room_events").
-		WithArgs("r-batch", int64(2), string(roomsvc.KindAction), []byte("action"), int32(-1)).
+		WithArgs("r-batch", int64(2), string(eng.KindAction), []byte("action"), int32(-1)).
 		WillReturnError(context.DeadlineExceeded)
 	mock.ExpectRollback()
 
@@ -542,9 +544,9 @@ func TestApplyNotificationsDoesNotPublishPartialEventsOnPersistFailure(t *testin
 	ev := postgres.NewRoomEventStore(mock)
 	srv := NewGRPCServer(roomsvc.NewServiceWithRule(roomsvc.NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang"), ev, nil, nil, rdb2)
 
-	resp, err := srv.applyNotifications(context.Background(), "r-batch", "", []roomsvc.Notification{
-		{Kind: roomsvc.KindDrawTile, Payload: []byte("draw"), TargetSeat: roomsvc.BroadcastSeat},
-		{Kind: roomsvc.KindAction, Payload: []byte("action"), TargetSeat: roomsvc.BroadcastSeat},
+	resp, err := srv.applyNotifications(context.Background(), "r-batch", "", []eng.Notification{
+		{Kind: eng.KindDrawTile, Payload: []byte("draw"), TargetSeat: eng.BroadcastSeat},
+		{Kind: eng.KindAction, Payload: []byte("action"), TargetSeat: eng.BroadcastSeat},
 	}, nil)
 	require.NoError(t, err)
 	require.False(t, resp.GetAccepted())

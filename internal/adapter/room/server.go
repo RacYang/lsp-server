@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
@@ -38,7 +40,7 @@ func NewGRPCServer(rooms *roomsvc.Service, ev *postgres.RoomEventStore, gs *post
 		rdb:   rdb,
 	}
 	if rooms != nil {
-		rooms.SetAutoTimeoutHandler(func(ctx context.Context, roomID string, notifications []roomsvc.Notification) {
+		rooms.SetAutoTimeoutHandler(func(ctx context.Context, roomID string, notifications []eng.Notification) {
 			if err := srv.PersistPublishAndFinalize(ctx, roomID, "", notifications); err != nil {
 				logx.Error(logx.WithRoomID(ctx, roomID), "超时回调持久化失败", "err", err.Error())
 			}
@@ -80,9 +82,9 @@ func (s *GRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRe
 	if !ok {
 		if s.rdb != nil {
 			if meta, okm, _ := s.rdb.GetRoomSnapMeta(ctx, roomID); okm {
-				view := roomsvc.RoundView{}
+				view := eng.RoundView{}
 				if meta.RoundJSON != "" {
-					if v, err := roomsvc.RoundViewFromPersistJSON(roomID, []byte(meta.RoundJSON)); err == nil {
+					if v, err := eng.RoundViewFromPersistJSON(roomID, []byte(meta.RoundJSON)); err == nil {
 						view = v
 					}
 				}
@@ -188,7 +190,7 @@ func handForSeat(hands [][]string, seat int) []string {
 
 // phaseUpdateFromRoundView 从 RoundView 派生 PhaseUpdate；
 // view.Phase 调用 .Proto() 转换为传输层枚举；waitingReasonFromRoundView 同。
-func phaseUpdateFromRoundView(view roomsvc.RoundView) *clientv1.PhaseUpdate {
+func phaseUpdateFromRoundView(view eng.RoundView) *clientv1.PhaseUpdate {
 	return &clientv1.PhaseUpdate{
 		Phase:            view.Phase.Proto(),
 		Step:             view.LastStep,
@@ -200,8 +202,8 @@ func phaseUpdateFromRoundView(view roomsvc.RoundView) *clientv1.PhaseUpdate {
 	}
 }
 
-func waitingReasonFromRoundView(view roomsvc.RoundView) clientv1.WaitingReason {
-	if view.Phase == roomsvc.PhaseOpening {
+func waitingReasonFromRoundView(view eng.RoundView) clientv1.WaitingReason {
+	if view.Phase == eng.PhaseOpening {
 		return clientv1.WaitingReason_WAITING_REASON_OPENING
 	}
 	switch view.WaitingAction {
@@ -217,7 +219,7 @@ func waitingReasonFromRoundView(view roomsvc.RoundView) clientv1.WaitingReason {
 }
 
 // viewRuleMeta 将 service 层内部 RuleMeta 转换为传输层 proto 类型。
-func viewRuleMeta(m *roomsvc.RuleMeta) *clientv1.RuleMeta {
+func viewRuleMeta(m *eng.RuleMeta) *clientv1.RuleMeta {
 	if m == nil {
 		return nil
 	}
@@ -231,7 +233,7 @@ func viewRuleMeta(m *roomsvc.RuleMeta) *clientv1.RuleMeta {
 }
 
 // viewLastAction 将 service 层内部 LastActionInfo 转换为传输层 proto 类型。
-func viewLastAction(a *roomsvc.LastActionInfo) *clientv1.LastActionInfo {
+func viewLastAction(a *eng.LastActionInfo) *clientv1.LastActionInfo {
 	if a == nil {
 		return nil
 	}
@@ -247,7 +249,7 @@ func viewLastAction(a *roomsvc.LastActionInfo) *clientv1.LastActionInfo {
 }
 
 // viewMeldInfosBySeat 将 service 层内部 SeatMelds 切片转换为传输层 proto 类型。
-func viewMeldInfosBySeat(seats []*roomsvc.SeatMelds) []*clientv1.SeatMelds {
+func viewMeldInfosBySeat(seats []*eng.SeatMelds) []*clientv1.SeatMelds {
 	out := make([]*clientv1.SeatMelds, 0, len(seats))
 	for _, s := range seats {
 		pm := &clientv1.SeatMelds{SeatIndex: s.SeatIndex}
@@ -325,7 +327,7 @@ func stringMatrixToClientSeatTiles(items [][]string) []*clientv1.SeatTiles {
 }
 
 // clientClaimCandidates 把当前回合可碰/杠/胡的候选列表转换为协议格式。
-func clientClaimCandidates(candidates []roomsvc.RoundClaimCandidate) []*clientv1.ClaimCandidate {
+func clientClaimCandidates(candidates []eng.RoundClaimCandidate) []*clientv1.ClaimCandidate {
 	out := make([]*clientv1.ClaimCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		out = append(out, &clientv1.ClaimCandidate{
@@ -338,7 +340,7 @@ func clientClaimCandidates(candidates []roomsvc.RoundClaimCandidate) []*clientv1
 
 // mapNotificationToEvent 将 room worker 产出的通知封装为流式事件帧；
 // proto 统一后 body 字段直接使用客户端消息类型，无须字段转译。
-func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.Notification) (*svcv1.RoomServiceStreamEventsResponse, error) {
+func mapNotificationToEvent(roomID string, cursor string, notification eng.Notification) (*svcv1.RoomServiceStreamEventsResponse, error) {
 	var env clientv1.Envelope
 	if err := proto.Unmarshal(notification.Payload, &env); err != nil {
 		return nil, fmt.Errorf("unmarshal room notification: %w", err)
@@ -349,27 +351,27 @@ func mapNotificationToEvent(roomID string, cursor string, notification roomsvc.N
 		TargetSeat: notification.TargetSeat.Proto(),
 	}
 	switch notification.Kind {
-	case roomsvc.KindInitialDeal:
+	case eng.KindInitialDeal:
 		resp.Body = &svcv1.RoomServiceStreamEventsResponse_InitialDeal{
 			InitialDeal: env.GetInitialDeal(),
 		}
-	case roomsvc.KindOpeningDone:
+	case eng.KindOpeningDone:
 		resp.Body = &svcv1.RoomServiceStreamEventsResponse_OpeningDone{
 			OpeningDone: env.GetOpeningDone(),
 		}
-	case roomsvc.KindStartGame:
+	case eng.KindStartGame:
 		resp.Body = &svcv1.RoomServiceStreamEventsResponse_StartGame{
 			StartGame: env.GetStartGame(),
 		}
-	case roomsvc.KindDrawTile:
+	case eng.KindDrawTile:
 		resp.Body = &svcv1.RoomServiceStreamEventsResponse_DrawTile{
 			DrawTile: env.GetDrawTile(),
 		}
-	case roomsvc.KindAction:
+	case eng.KindAction:
 		resp.Body = &svcv1.RoomServiceStreamEventsResponse_Action{
 			Action: env.GetAction(),
 		}
-	case roomsvc.KindSettlement:
+	case eng.KindSettlement:
 		resp.Body = &svcv1.RoomServiceStreamEventsResponse_Settlement{
 			Settlement: env.GetSettlement(),
 		}

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	eng "racoo.cn/lsp/internal/service/room/engine"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -231,7 +233,7 @@ func TestRecoverRoomIdempotentForExistingRoom(t *testing.T) {
 func TestServiceAutoTimeoutSurrendersThroughActor(t *testing.T) {
 	t.Parallel()
 
-	rs := NewRoundStateFromConfig(RoundStateConfig{
+	rs := eng.NewRoundStateFromConfig(eng.RoundStateConfig{
 		RoomID:          "r-service-timeout",
 		RuleID:          "sichuan_xuezhandaodi_huansanzhang",
 		Rule:            rules.MustGet("sichuan_xuezhandaodi_huansanzhang"),
@@ -261,7 +263,7 @@ func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
 	fc := clock.NewFake(time.Unix(0, 0))
 	svc := NewServiceWithRule(NewRoomRegistry(), "sichuan_xuezhandaodi_huansanzhang")
 	svc.SetClock(fc)
-	svc.SetTimeoutConfig(TimeoutConfig{
+	svc.SetTimeoutConfig(eng.TimeoutConfig{
 		OpeningDefault: time.Second,
 		OpeningByAction: map[string]time.Duration{
 			openingExchangeThree: time.Second,
@@ -271,8 +273,8 @@ func TestSchedulerAutoTimeoutUsesFakeClock(t *testing.T) {
 		TsumoWindow: time.Second,
 		Discard:     time.Second,
 	})
-	got := make(chan []Notification, 1)
-	svc.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []Notification) {
+	got := make(chan []eng.Notification, 1)
+	svc.SetAutoTimeoutHandler(func(_ context.Context, roomID string, notifications []eng.Notification) {
 		if roomID == "r-scheduler" {
 			got <- notifications
 		}
@@ -345,24 +347,24 @@ func TestServiceLeaveDuringPlayCanBeDisabled(t *testing.T) {
 	require.Error(t, svc.Leave(ctx, roomID, "u2"))
 }
 
-func outboundTestMsgID(kind Kind) (uint16, bool) {
+func outboundTestMsgID(kind eng.Kind) (uint16, bool) {
 	switch kind {
-	case KindOpeningDone:
+	case eng.KindOpeningDone:
 		return protocol.OpeningDone, true
-	case KindStartGame:
+	case eng.KindStartGame:
 		return protocol.StartGame, true
-	case KindDrawTile:
+	case eng.KindDrawTile:
 		return protocol.DrawTile, true
-	case KindAction:
+	case eng.KindAction:
 		return protocol.ActionNotify, true
-	case KindSettlement:
+	case eng.KindSettlement:
 		return protocol.Settlement, true
 	default:
 		return 0, false
 	}
 }
 
-// driveRoundToClose 通过公开 API（RoundView + Service 命令）驱动牌局直至结算，
+// driveRoundToClose 通过公开 API（eng.RoundView + Service 命令）驱动牌局直至结算，
 // 不依赖引擎内部字段，适用于白盒服务层测试。
 func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 	for i := 0; i < 512; i++ {
@@ -474,9 +476,9 @@ func roundClosedErr(err error) bool {
 	return err != nil && bytes.Contains([]byte(err.Error()), []byte("round closed"))
 }
 
-func containsSettlement(notifications []Notification) bool {
+func containsSettlement(notifications []eng.Notification) bool {
 	for _, notification := range notifications {
-		if notification.Kind == KindSettlement {
+		if notification.Kind == eng.KindSettlement {
 			return true
 		}
 		var env clientv1.Envelope

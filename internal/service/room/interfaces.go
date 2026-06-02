@@ -1,28 +1,32 @@
 package room
 
-import "context"
+import (
+	"context"
+
+	eng "racoo.cn/lsp/internal/service/room/engine"
+)
 
 // CommandHandler 是房间游戏命令接口；gateway/adapter 调用此子集驱动局内状态机。
 // 声明在 service/room 包，由 Service 实现，供注入测试用替身。
 type CommandHandler interface {
 	Join(ctx context.Context, roomID, userID string) (int, error)
-	Ready(ctx context.Context, roomID, userID string) ([]Notification, error)
+	Ready(ctx context.Context, roomID, userID string) ([]eng.Notification, error)
 	Leave(ctx context.Context, roomID, userID string) error
-	Discard(ctx context.Context, roomID, userID, tile string, tok *PhaseToken) ([]Notification, error)
-	Pong(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error)
-	Chi(ctx context.Context, roomID, userID string, tiles []string, tok *PhaseToken) ([]Notification, error)
-	Gang(ctx context.Context, roomID, userID, tile string, tok *PhaseToken) ([]Notification, error)
-	Hu(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error)
-	Pass(ctx context.Context, roomID, userID string, tok *PhaseToken) ([]Notification, error)
-	OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *PhaseToken) ([]Notification, error)
-	AutoTimeout(ctx context.Context, roomID string) ([]Notification, error)
+	Discard(ctx context.Context, roomID, userID, tile string, tok *eng.PhaseToken) ([]eng.Notification, error)
+	Pong(ctx context.Context, roomID, userID string, tok *eng.PhaseToken) ([]eng.Notification, error)
+	Chi(ctx context.Context, roomID, userID string, tiles []string, tok *eng.PhaseToken) ([]eng.Notification, error)
+	Gang(ctx context.Context, roomID, userID, tile string, tok *eng.PhaseToken) ([]eng.Notification, error)
+	Hu(ctx context.Context, roomID, userID string, tok *eng.PhaseToken) ([]eng.Notification, error)
+	Pass(ctx context.Context, roomID, userID string, tok *eng.PhaseToken) ([]eng.Notification, error)
+	OpeningAction(ctx context.Context, roomID, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *eng.PhaseToken) ([]eng.Notification, error)
+	AutoTimeout(ctx context.Context, roomID string) ([]eng.Notification, error)
 	MarkSeatOffline(roomID, userID string)
 	CancelOfflineSurrender(roomID, userID string)
 }
 
 // RoomQueries 是房间状态查询接口；适配层与持久化层调用此子集获取局面快照。
 type RoomQueries interface {
-	RoundView(ctx context.Context, roomID string) (RoundView, bool, error)
+	RoundView(ctx context.Context, roomID string) (eng.RoundView, bool, error)
 	RoundPersistSnapshot(ctx context.Context, roomID string) ([]byte, error)
 	RoomSnapshot(roomID string) (playerIDs []string, fsmState string, ready [4]bool, ok bool)
 	PlayerIDs(roomID string) ([4]string, bool)
