@@ -137,15 +137,21 @@ func openingProjectionToNotification(projection rules.OpeningNotification, progr
 	}
 	progressData := progress.ToCodecData()
 	if len(projection.Done.LocalTiles) > 0 {
-		return perSeatNotifications(KindOpeningDone, func(target Seat) []byte {
+		var buildErr error
+		notifications := perSeatNotifications(KindOpeningDone, func(target Seat) []byte {
 			d := done
 			d.LocalTiles = localTilesForSeat(projection.Done.LocalTiles, target)
 			payload, err := codec.BuildOpeningDone("opening-done", d, progressData)
 			if err != nil {
+				buildErr = err
 				return nil
 			}
 			return payload
-		}), nil
+		})
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		return notifications, nil
 	}
 	payload, err := codec.BuildOpeningDone("opening-done", done, progressData)
 	if err != nil {

@@ -134,8 +134,7 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 		if !roomAcceptsAutoMatchLocal(g.rooms, room.RoomID) {
 			continue
 		}
-		seat, joinErr := g.lobby.JoinRoom(ctx, room.RoomID, userID)
-		if joinErr != nil {
+		if _, joinErr := g.lobby.JoinRoom(ctx, room.RoomID, userID); joinErr != nil {
 			continue
 		}
 		// 再次复核：lobby.JoinRoom 与 rooms.Join 之间存在 FSM 推进的窗口，
@@ -147,14 +146,15 @@ func (g *LocalRoomGateway) AutoMatch(ctx context.Context, ruleID, userID string,
 			}
 			continue
 		}
-		if _, err := g.rooms.Join(ctx, room.RoomID, userID); err != nil {
+		engineSeat, err := g.rooms.Join(ctx, room.RoomID, userID)
+		if err != nil {
 			if leaveErr := g.lobby.LeaveRoom(ctx, room.RoomID, userID); leaveErr != nil {
 				logCtx := logx.WithRoomID(logx.WithUserID(ctx, userID), room.RoomID)
 				logx.Warn(logCtx, "自动匹配加入失败后退出大厅房间失败", "err", leaveErr.Error())
 			}
 			continue
 		}
-		return room.RoomID, int(seat), nil
+		return room.RoomID, engineSeat, nil
 	}
 	roomID, _, err := g.lobby.CreateRoomWithMeta(ctx, ruleID, "", false, userID)
 	if err != nil {
@@ -417,6 +417,8 @@ func (g *LocalRoomGateway) sendNotification(roomID string, notification eng.Noti
 	players, _, _, ok := g.rooms.RoomSnapshot(roomID)
 	targetSeat := int(notification.TargetSeat)
 	if !ok || targetSeat >= len(players) || targetSeat < 0 {
+		logx.Warn(logx.WithRoomID(context.Background(), roomID), "定向通知丢弃：RoomSnapshot 未命中或座位越界",
+			"kind", string(notification.Kind), "target_seat", targetSeat)
 		return
 	}
 	g.hub.SendToUser(players[targetSeat], encoded)

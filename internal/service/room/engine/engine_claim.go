@@ -291,10 +291,22 @@ func (e *Engine) ApplyPass(_ context.Context, rs *RoundState, seat Seat) ([]Noti
 			return nil, fmt.Errorf("missing pending draw")
 		}
 		metrics.ClaimWindowTotal.WithLabelValues("pass").Inc()
-		rs.hands[seat].Add(rs.pendingDraw)
+		drawn := rs.pendingDraw
+		rs.hands[seat].Add(drawn)
 		rs.pendingDraw = 0
+		rs.step++
+		detail := rs.makeCodecDetail(seat, "pass", drawn, SeatInvalid, seat)
 		rs.enterPhase(ReasonDiscard)
-		return nil, nil
+		progress := rs.roundProgress()
+		payload, err := codec.BuildAction(
+			fmt.Sprintf("pass-%d", rs.step),
+			seat.Proto(), "pass", drawn.String(),
+			detail, progress.ToCodecData(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return []Notification{{Kind: KindAction, Payload: payload, TargetSeat: BroadcastSeat}}, nil
 	default:
 		return nil, fmt.Errorf("pass not allowed")
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"racoo.cn/lsp/internal/clock"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // scheduler 仅负责按 RoundState.Deadline() 对齐 OS 定时器；
@@ -67,7 +68,11 @@ func (s *scheduler) fire() {
 		return
 	}
 	notifications, err := s.actor.SubmitAutoTimeout(context.Background())
-	if err != nil || len(notifications) == 0 {
+	if err != nil {
+		logx.Error(logx.WithRoomID(context.Background(), s.roomID), "超时事件提交失败，阶段到期未处理", "err", err.Error())
+		return
+	}
+	if len(notifications) == 0 {
 		return
 	}
 	if s.actor.onAuto != nil {

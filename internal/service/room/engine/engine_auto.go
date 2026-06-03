@@ -132,7 +132,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		WinEvents:   winEvents,
 		ScoreEvents: scoreEvents,
 	})
-	settlementPayload, err := buildSettlementNotification(roomID, settlement)
+	settlementPayload, err := buildSettlementNotification("settlement-auto", roomID, settlement)
 	if err != nil {
 		return nil, err
 	}

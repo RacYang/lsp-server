@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"time"
+
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	codec "racoo.cn/lsp/internal/service/room/engine/codec"
@@ -106,20 +108,22 @@ func (rs *RoundState) makeCodecDetail(actor Seat, action string, t tile.Tile, ta
 		tileText = t.String()
 	}
 	detail := codec.ActionDetail{
-		Step:       int64(rs.step),
-		ActorSeat:  int32(actor),
-		Action:     action,
-		Tile:       tileText,
-		TargetSeat: int32(target),
-		SourceSeat: int32(source),
+		Step:        int64(rs.step),
+		ActorSeat:   int32(actor),
+		Action:      action,
+		Tile:        tileText,
+		TargetSeat:  int32(target),
+		SourceSeat:  int32(source),
+		CreatedAtMs: time.Now().UnixMilli(),
 	}
 	rs.lastAction = &LastActionInfo{
-		Step:       detail.Step,
-		ActorSeat:  detail.ActorSeat,
-		Action:     detail.Action,
-		Tile:       detail.Tile,
-		TargetSeat: detail.TargetSeat,
-		SourceSeat: detail.SourceSeat,
+		Step:        detail.Step,
+		ActorSeat:   detail.ActorSeat,
+		Action:      detail.Action,
+		Tile:        detail.Tile,
+		TargetSeat:  detail.TargetSeat,
+		SourceSeat:  detail.SourceSeat,
+		CreatedAtMs: detail.CreatedAtMs,
 	}
 	return detail
 }

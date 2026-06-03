@@ -48,12 +48,12 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	}
 	rs.lastDiscardAfterGang = rs.lastGangFollowUp
 	rs.lastGangFollowUp = false
-	detail := rs.makeCodecDetail(seat, "discard", discard, SeatInvalid, seat)
 	rs.recordDiscard(seat, discard)
 	rs.step++
+	detail := rs.makeCodecDetail(seat, "discard", discard, SeatInvalid, seat)
 	if rs.shouldFinishRound() {
 		progress := rs.roundProgress()
-		actionPayload, err := codec.BuildAction(fmt.Sprintf("discard-%d", rs.step-1), seat.Proto(), "discard", discard.String(), detail, progress.ToCodecData())
+		actionPayload, err := codec.BuildAction(fmt.Sprintf("discard-%d", rs.step), seat.Proto(), "discard", discard.String(), detail, progress.ToCodecData())
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +75,7 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 		rs.closeOpeningClaimWindow()
 		progress = rs.drawTransitionProgress()
 	}
-	actionPayload, err := codec.BuildAction(fmt.Sprintf("discard-%d", rs.step-1), seat.Proto(), "discard", discard.String(), detail, progress.ToCodecData())
+	actionPayload, err := codec.BuildAction(fmt.Sprintf("discard-%d", rs.step), seat.Proto(), "discard", discard.String(), detail, progress.ToCodecData())
 	if err != nil {
 		return nil, err
 	}

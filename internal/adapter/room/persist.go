@@ -21,11 +21,11 @@ func (s *GRPCServer) PersistPublishAndFinalize(ctx context.Context, roomID, idem
 	if err != nil {
 		return err
 	}
-	s.markIdempotency(ctx, roomID, idemKey)
 	for idx, event := range events {
 		s.afterEventSideEffects(ctx, roomID, notifications[idx], event.evt, event.cursor)
 		s.publishToRedis(ctx, roomID, event.evt)
 	}
+	s.markIdempotency(ctx, roomID, idemKey)
 	return nil
 }
 

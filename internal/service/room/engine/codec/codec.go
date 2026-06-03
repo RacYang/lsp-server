@@ -53,7 +53,7 @@ type ClaimCandidateData struct {
 	Actions []string
 }
 
-// ActionDetail 是 engine.LastActionInfo 的基础类型镜像（不含 CreatedAtMs）。
+// ActionDetail 是 engine.LastActionInfo 的基础类型镜像。
 type ActionDetail struct {
 	Step        int64
 	ActorSeat   int32
@@ -341,9 +341,9 @@ func BuildOpeningDone(reqID string, done OpeningDoneData, progress ProgressData)
 }
 
 // BuildSettlement 构造并序列化结算通知，包含每座位得分、惩罚与胡牌番种明细。
-func BuildSettlement(roomID string, data SettlementData) ([]byte, error) {
+func BuildSettlement(reqID, roomID string, data SettlementData) ([]byte, error) {
 	return marshalEnvelope(&clientv1.Envelope{
-		ReqId: "settlement",
+		ReqId: reqID,
 		Body: &clientv1.Envelope_Settlement{
 			Settlement: &clientv1.SettlementNotify{
 				RoomId:             roomID,
@@ -367,12 +367,13 @@ func marshalEnvelope(env *clientv1.Envelope) ([]byte, error) {
 
 func toProtoActionDetail(d ActionDetail) *clientv1.ActionDetail {
 	return &clientv1.ActionDetail{
-		Step:       d.Step,
-		ActorSeat:  d.ActorSeat,
-		Action:     d.Action,
-		Tile:       d.Tile,
-		TargetSeat: d.TargetSeat,
-		SourceSeat: d.SourceSeat,
+		Step:        d.Step,
+		ActorSeat:   d.ActorSeat,
+		Action:      d.Action,
+		Tile:        d.Tile,
+		TargetSeat:  d.TargetSeat,
+		SourceSeat:  d.SourceSeat,
+		CreatedAtMs: d.CreatedAtMs,
 	}
 }
 

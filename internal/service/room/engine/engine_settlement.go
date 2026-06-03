@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"fmt"
+
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/metrics"
 	codec "racoo.cn/lsp/internal/service/room/engine/codec"
@@ -11,7 +13,7 @@ func (rs *RoundState) finishRound() (Notification, error) {
 	for _, penalty := range settlement.Penalties {
 		metrics.SettlementPenaltyTotal.WithLabelValues(penalty.Reason).Inc()
 	}
-	settlementPayload, err := buildSettlementNotification(rs.roomID, settlement)
+	settlementPayload, err := buildSettlementNotification(fmt.Sprintf("settlement-%d", rs.step), rs.roomID, settlement)
 	if err != nil {
 		return Notification{}, err
 	}
@@ -38,7 +40,7 @@ func (rs *RoundState) buildSettlement() rules.SettlementResult {
 	})
 }
 
-func buildSettlementNotification(roomID string, settlement rules.SettlementResult) ([]byte, error) {
+func buildSettlementNotification(reqID, roomID string, settlement rules.SettlementResult) ([]byte, error) {
 	data := codec.SettlementData{
 		WinnerUserIDs:       append([]string(nil), settlement.WinnerUserIDs...),
 		TotalFan:            sumPositiveSeatScores(settlement.SeatScores),
@@ -47,7 +49,7 @@ func buildSettlementNotification(roomID string, settlement rules.SettlementResul
 		DetailText:          settlement.DetailText,
 		PerWinnerBreakdowns: toCodecWinnerBreakdowns(settlement.PerWinnerBreakdown),
 	}
-	return codec.BuildSettlement(roomID, data)
+	return codec.BuildSettlement(reqID, roomID, data)
 }
 
 func winnerUserIDs(playerIDs [4]string, winnerSeats []Seat) []string {
