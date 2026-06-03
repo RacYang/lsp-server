@@ -1,4 +1,3 @@
-// Package hu 提供和牌判定：标准形（四面子一对将）与七对子。
 package hu
 
 import "racoo.cn/lsp/internal/mahjong/tile"

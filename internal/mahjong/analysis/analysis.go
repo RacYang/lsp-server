@@ -1,4 +1,3 @@
-// Package analysis 提供麻将牌形分析、进张估算与机器人策略可复用的轻量启发式。
 package analysis
 
 import (

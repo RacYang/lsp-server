@@ -1,4 +1,3 @@
-// Package rules 定义可插拔麻将规则接口与注册表；具体变体放在子目录中实现。
 package rules
 
 import (

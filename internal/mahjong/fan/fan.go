@@ -1,4 +1,3 @@
-// Package fan 提供番种枚举与分数分解；Phase 1 仅覆盖川麻 MVP 常用项。
 package fan
 
 // Kind 表示番种类型。

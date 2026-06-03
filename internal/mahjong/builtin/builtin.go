@@ -1,4 +1,3 @@
-// Package builtin 统一注册生产可用的麻将规则包。
 package builtin
 
 import (

@@ -1,9 +1,9 @@
 package engine
 
 import (
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 )
 
 func (rs *RoundState) wallRemaining() int32 {
@@ -28,6 +28,20 @@ func (rs *RoundState) ruleMeta() *RuleMeta {
 		ShortDesc:       meta.ShortDesc,
 		EnabledFeatures: append([]string(nil), meta.EnabledFeatures...),
 		MaxHands:        meta.MaxHands,
+	}
+}
+
+// ToCodecData 将 RuleMeta 转换为 codec.RuleMetaData；供序列化边界使用。
+func (m *RuleMeta) ToCodecData() *codec.RuleMetaData {
+	if m == nil {
+		return nil
+	}
+	return &codec.RuleMetaData{
+		RuleID:          m.RuleID,
+		DisplayName:     m.DisplayName,
+		ShortDesc:       m.ShortDesc,
+		EnabledFeatures: append([]string(nil), m.EnabledFeatures...),
+		MaxHands:        m.MaxHands,
 	}
 }
 
@@ -84,82 +98,30 @@ func (rs *RoundState) drawTransitionProgress() RoundProgress {
 	return progress
 }
 
-func (p RoundProgress) applyToAction(action *clientv1.ActionNotify) {
-	if action == nil {
-		return
-	}
-	action.Phase = p.Phase.Proto()
-	action.Step = p.Step
-	action.ActingSeats = append([]int32(nil), p.ActingSeats...)
-	action.WallRemaining = p.WallRemaining
-	action.DeadlineUnixMs = p.DeadlineUnixMs
-	action.PhaseUpdate = p.toPhaseUpdate()
-}
-
-func (p RoundProgress) applyToDraw(draw *clientv1.DrawTileNotify) {
-	if draw == nil {
-		return
-	}
-	draw.Phase = p.Phase.Proto()
-	draw.Step = p.Step
-	draw.ActingSeats = append([]int32(nil), p.ActingSeats...)
-	draw.WallRemaining = p.WallRemaining
-	draw.DeadlineUnixMs = p.DeadlineUnixMs
-	draw.PhaseUpdate = p.toPhaseUpdate()
-}
-
-func (p RoundProgress) applyToStart(start *clientv1.StartGameNotify) {
-	if start == nil {
-		return
-	}
-	start.Phase = p.Phase.Proto()
-	start.Step = p.Step
-	start.ActingSeats = append([]int32(nil), p.ActingSeats...)
-	start.WallRemaining = p.WallRemaining
-	start.PhaseUpdate = p.toPhaseUpdate()
-}
-
-func (p RoundProgress) applyToOpeningDone(done *clientv1.OpeningDoneNotify) {
-	if done == nil {
-		return
-	}
-	done.Phase = p.Phase.Proto()
-	done.Step = p.Step
-	done.ActingSeats = append([]int32(nil), p.ActingSeats...)
-	done.PhaseUpdate = p.toPhaseUpdate()
-}
-
-func (rs *RoundState) actionDetail(actor Seat, action string, t tile.Tile, target Seat, source Seat) *clientv1.ActionDetail {
-	if rs == nil {
-		return nil
-	}
+// makeCodecDetail 构造 codec.ActionDetail 并同步更新 lastAction；
+// 合并了原 actionDetail() 与 rememberLastAction() 的职责。
+func (rs *RoundState) makeCodecDetail(actor Seat, action string, t tile.Tile, target, source Seat) codec.ActionDetail {
 	tileText := ""
 	if t != 0 {
 		tileText = t.String()
 	}
-	return &clientv1.ActionDetail{
+	detail := codec.ActionDetail{
 		Step:       int64(rs.step),
-		ActorSeat:  actor.Proto(),
+		ActorSeat:  int32(actor),
 		Action:     action,
 		Tile:       tileText,
-		TargetSeat: target.Proto(),
-		SourceSeat: source.Proto(),
-	}
-}
-
-func (rs *RoundState) rememberLastAction(detail *clientv1.ActionDetail) {
-	if rs == nil || detail == nil {
-		return
+		TargetSeat: int32(target),
+		SourceSeat: int32(source),
 	}
 	rs.lastAction = &LastActionInfo{
-		Step:        detail.GetStep(),
-		ActorSeat:   detail.GetActorSeat(),
-		Action:      detail.GetAction(),
-		Tile:        detail.GetTile(),
-		TargetSeat:  detail.GetTargetSeat(),
-		SourceSeat:  detail.GetSourceSeat(),
-		CreatedAtMs: detail.GetCreatedAtMs(),
+		Step:       detail.Step,
+		ActorSeat:  detail.ActorSeat,
+		Action:     detail.Action,
+		Tile:       detail.Tile,
+		TargetSeat: detail.TargetSeat,
+		SourceSeat: detail.SourceSeat,
 	}
+	return detail
 }
 
 func (rs *RoundState) meldInfosBySeat() []*SeatMelds {

@@ -1,4 +1,3 @@
-// Package hand 提供手牌计数、增删与和牌用计数表转换，不包含网络语义。
 package hand
 
 import (

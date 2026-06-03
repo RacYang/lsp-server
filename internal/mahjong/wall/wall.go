@@ -1,4 +1,3 @@
-// Package wall 负责麻将牌墙的构建、洗牌与摸牌，支持注入随机源以便测试复现。
 package wall
 
 import (

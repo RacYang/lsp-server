@@ -1,4 +1,3 @@
-// Package tile 定义麻将牌面编码与解析。
 package tile
 
 import (
