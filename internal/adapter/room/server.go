@@ -7,6 +7,7 @@ import (
 	"time"
 
 	eng "racoo.cn/lsp/internal/service/room/engine"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 
 	"google.golang.org/protobuf/proto"
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
@@ -105,7 +106,7 @@ func (s *GRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRe
 					State:            meta.State,
 					ActingSeat:       view.ActingSeat,
 					WaitingAction:    view.WaitingAction,
-					Phase:            view.Phase.Proto(),
+					Phase:            codec.PhaseToProto(int(view.Phase)),
 					ActingSeats:      append([]int32(nil), view.ActingSeats...),
 					LastStep:         view.LastStep,
 					PendingTile:      view.PendingTile,
@@ -151,7 +152,7 @@ func (s *GRPCServer) SnapshotRoom(ctx context.Context, req *svcv1.SnapshotRoomRe
 		State:            state,
 		ActingSeat:       view.ActingSeat,
 		WaitingAction:    view.WaitingAction,
-		Phase:            view.Phase.Proto(),
+		Phase:            codec.PhaseToProto(int(view.Phase)),
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
 		LastStep:         view.LastStep,
 		PendingTile:      view.PendingTile,
@@ -192,7 +193,7 @@ func handForSeat(hands [][]string, seat int) []string {
 // view.Phase 调用 .Proto() 转换为传输层枚举；waitingReasonFromRoundView 同。
 func phaseUpdateFromRoundView(view eng.RoundView) *clientv1.PhaseUpdate {
 	return &clientv1.PhaseUpdate{
-		Phase:            view.Phase.Proto(),
+		Phase:            codec.PhaseToProto(int(view.Phase)),
 		Step:             view.LastStep,
 		Reason:           waitingReasonFromRoundView(view),
 		DeadlineUnixMs:   view.DeadlineUnixMs,

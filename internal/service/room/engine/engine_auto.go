@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 )
 
 const autoRoundStepLimit = 256
@@ -42,14 +42,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	out := append([]Notification(nil), openingNotifications...)
 
 	startProgress := autoDrawProgress(0, Seat(0), w.Remaining())
-	start := &clientv1.StartGameNotify{RoomId: roomID, DealerSeat: 0}
-	startProgress.applyToStart(start)
-	startPayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: "start",
-		Body: &clientv1.Envelope_StartGame{
-			StartGame: start,
-		},
-	})
+	startPayload, err := codec.BuildStartGame("start", roomID, 0, 0, 0, nil, startProgress.ToCodecData())
 	if err != nil {
 		return nil, err
 	}
@@ -66,14 +59,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		}
 		seatIndex := turn.Proto()
 		drawProgress := autoDrawProgress(step, turn, w.Remaining())
-		draw := &clientv1.DrawTileNotify{SeatIndex: seatIndex, Tile: drawn.String()}
-		drawProgress.applyToDraw(draw)
-		drawPayload, err := marshalEnvelope(&clientv1.Envelope{
-			ReqId: fmt.Sprintf("draw-%d", step),
-			Body: &clientv1.Envelope_DrawTile{
-				DrawTile: draw,
-			},
-		})
+		drawPayload, err := codec.BuildDrawTile(fmt.Sprintf("draw-%d", step), seatIndex, drawn.String(), drawProgress.ToCodecData())
 		if err != nil {
 			return nil, err
 		}
@@ -105,14 +91,12 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 					TotalFan: int32(breakdown.Total), //nolint:gosec // 番数很小
 					FanNames: fanLabels(breakdown),
 				})
-				action := &clientv1.ActionNotify{SeatIndex: seatIndex, Action: "hu", Tile: drawn.String()}
-				drawProgress.applyToAction(action)
-				huPayload, err := marshalEnvelope(&clientv1.Envelope{
-					ReqId: fmt.Sprintf("hu-%d", step),
-					Body: &clientv1.Envelope_Action{
-						Action: action,
-					},
-				})
+				huPayload, err := codec.BuildAction(
+					fmt.Sprintf("hu-%d", step),
+					seatIndex, "hu", drawn.String(),
+					codec.ActionDetail{Step: int64(step), ActorSeat: int32(turn), Action: "hu", Tile: drawn.String()},
+					drawProgress.ToCodecData(),
+				)
 				if err != nil {
 					return nil, err
 				}
@@ -129,14 +113,12 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 		if err := hands[turn].Remove(discard); err != nil {
 			return nil, err
 		}
-		action := &clientv1.ActionNotify{SeatIndex: seatIndex, Action: "discard", Tile: discard.String()}
-		drawProgress.applyToAction(action)
-		actionPayload, err := marshalEnvelope(&clientv1.Envelope{
-			ReqId: fmt.Sprintf("discard-%d", step),
-			Body: &clientv1.Envelope_Action{
-				Action: action,
-			},
-		})
+		actionPayload, err := codec.BuildAction(
+			fmt.Sprintf("discard-%d", step),
+			seatIndex, "discard", discard.String(),
+			codec.ActionDetail{Step: int64(step), ActorSeat: int32(turn), Action: "discard", Tile: discard.String()},
+			drawProgress.ToCodecData(),
+		)
 		if err != nil {
 			return nil, err
 		}

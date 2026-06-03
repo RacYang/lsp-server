@@ -100,7 +100,7 @@ func TestRoundViewIncludesAuthoritativeTUIFields(t *testing.T) {
 		lastDiscardSeat: -1,
 		deadlineUnixMs:  12345,
 	}
-	rs.rememberLastAction(rs.actionDetail(0, "discard", tile.Must(tile.SuitCharacters, 3), SeatInvalid, 0))
+	rs.makeCodecDetail(Seat(0), "discard", tile.Must(tile.SuitCharacters, 3), SeatInvalid, Seat(0))
 
 	view := rs.SnapshotView()
 	require.EqualValues(t, 2, view.WallRemaining)

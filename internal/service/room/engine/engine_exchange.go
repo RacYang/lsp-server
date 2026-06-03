@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 )
 
 func (e *Engine) ApplyOpeningActionByPlayer(_ context.Context, rs *RoundState, seat Seat, action string, tiles []string, direction, suit int32, params map[string]string) ([]Notification, error) {
@@ -25,20 +25,12 @@ func (e *Engine) initRoundNotifications(ctx context.Context, rs *RoundState) ([]
 func (e *Engine) completeOpening(ctx context.Context, rs *RoundState) ([]Notification, error) {
 	rs.enterPhase(ReasonNone)
 	progress := rs.drawTransitionProgress()
-	start := &clientv1.StartGameNotify{
-		RoomId:     rs.roomID,
-		DealerSeat: rs.dealerSeat.Proto(),
-		RoundIndex: 0,
-		HandIndex:  0,
-		RuleMeta:   toProtoRuleMeta(rs.ruleMeta()),
-	}
-	progress.applyToStart(start)
-	startPayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: "start",
-		Body: &clientv1.Envelope_StartGame{
-			StartGame: start,
-		},
-	})
+	startPayload, err := codec.BuildStartGame(
+		"start", rs.roomID,
+		rs.dealerSeat.Proto(), 0, 0,
+		rs.ruleMeta().ToCodecData(),
+		progress.ToCodecData(),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -135,81 +127,69 @@ func (rs *RoundState) openingProjectionNotifications(projection rules.OpeningNot
 }
 
 func openingProjectionToNotification(projection rules.OpeningNotification, progress RoundProgress) ([]Notification, error) {
-	payload, err := marshalOpeningProjection(projection.Done, progress, -1)
-	if err != nil {
-		return nil, err
+	done := codec.OpeningDoneData{
+		Action:    projection.Done.Action,
+		StepID:    projection.Done.StepID,
+		Kind:      projection.Done.Kind,
+		Params:    cloneStringMap(projection.Done.Params),
+		SeatTiles: toCodecSeatTiles(projection.Done.SeatTiles),
+		SeatInts:  toCodecSeatInts(projection.Done.SeatInts),
 	}
+	progressData := progress.ToCodecData()
 	if len(projection.Done.LocalTiles) > 0 {
 		return perSeatNotifications(KindOpeningDone, func(target Seat) []byte {
-			if !target.Valid() {
-				return payload
-			}
-			projected, err := marshalOpeningProjection(projection.Done, progress, target)
+			d := done
+			d.LocalTiles = localTilesForSeat(projection.Done.LocalTiles, target)
+			payload, err := codec.BuildOpeningDone("opening-done", d, progressData)
 			if err != nil {
-				return payload
+				return nil
 			}
-			return projected
+			return payload
 		}), nil
+	}
+	payload, err := codec.BuildOpeningDone("opening-done", done, progressData)
+	if err != nil {
+		return nil, err
 	}
 	return []Notification{{Kind: KindOpeningDone, Payload: payload, TargetSeat: BroadcastSeat}}, nil
 }
 
-func marshalOpeningProjection(done rules.OpeningDoneProjection, progress RoundProgress, target Seat) ([]byte, error) {
-	if done.Action == "" || done.Kind == "" {
-		return nil, fmt.Errorf("unsupported opening projection")
-	}
-	payload := &clientv1.OpeningDoneNotify{
-		Action:     done.Action,
-		StepId:     done.StepID,
-		Kind:       done.Kind,
-		Params:     cloneStringMap(done.Params),
-		SeatTiles:  openingSeatTilesToProto(done.SeatTiles),
-		SeatInts:   openingSeatIntsToProto(done.SeatInts),
-		LocalTiles: openingLocalTilesToProto(done.LocalTiles, target),
-	}
-	progress.applyToOpeningDone(payload)
-	return marshalEnvelope(&clientv1.Envelope{
-		ReqId: "opening-done",
-		Body:  &clientv1.Envelope_OpeningDone{OpeningDone: payload},
-	})
-}
-
-func openingSeatTilesToProto(in map[string][]rules.OpeningSeatTilesProjection) []*clientv1.OpeningSeatTiles {
+func toCodecSeatTiles(in map[string][]rules.OpeningSeatTilesProjection) []codec.SeatTilesData {
 	keys := make([]string, 0, len(in))
 	for key := range in {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	out := make([]*clientv1.OpeningSeatTiles, 0, len(keys))
+	out := make([]codec.SeatTilesData, 0, len(keys))
 	for _, key := range keys {
 		items := append([]rules.OpeningSeatTilesProjection(nil), in[key]...)
 		sort.SliceStable(items, func(i, j int) bool { return items[i].Seat < items[j].Seat })
-		seats := make([]*clientv1.SeatTiles, 0, len(items))
+		seats := make([]codec.SeatTilesItemData, 0, len(items))
 		for _, item := range items {
-			seats = append(seats, &clientv1.SeatTiles{
-				SeatIndex: item.Seat.Proto(),
-				Tiles:     append([]string(nil), item.Tiles...),
+			seats = append(seats, codec.SeatTilesItemData{
+				Seat:  item.Seat.Proto(),
+				Tiles: append([]string(nil), item.Tiles...),
 			})
 		}
-		out = append(out, &clientv1.OpeningSeatTiles{Key: key, Seats: seats})
+		out = append(out, codec.SeatTilesData{Key: key, Seats: seats})
 	}
 	return out
 }
 
-func openingSeatIntsToProto(in map[string][]int32) []*clientv1.OpeningSeatInts {
+func toCodecSeatInts(in map[string][]int32) []codec.SeatIntsData {
 	keys := make([]string, 0, len(in))
 	for key := range in {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	out := make([]*clientv1.OpeningSeatInts, 0, len(keys))
+	out := make([]codec.SeatIntsData, 0, len(keys))
 	for _, key := range keys {
-		out = append(out, &clientv1.OpeningSeatInts{Key: key, Values: append([]int32(nil), in[key]...)})
+		out = append(out, codec.SeatIntsData{Key: key, Values: append([]int32(nil), in[key]...)})
 	}
 	return out
 }
 
-func openingLocalTilesToProto(in map[Seat]map[string][]string, target Seat) []*clientv1.OpeningLocalTiles {
+func localTilesForSeat(in map[Seat]map[string][]string, target Seat) []codec.LocalTilesData {
 	if !target.Valid() {
 		return nil
 	}
@@ -219,9 +199,9 @@ func openingLocalTilesToProto(in map[Seat]map[string][]string, target Seat) []*c
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	out := make([]*clientv1.OpeningLocalTiles, 0, len(keys))
+	out := make([]codec.LocalTilesData, 0, len(keys))
 	for _, key := range keys {
-		out = append(out, &clientv1.OpeningLocalTiles{Key: key, Tiles: append([]string(nil), items[key]...)})
+		out = append(out, codec.LocalTilesData{Key: key, Tiles: append([]string(nil), items[key]...)})
 	}
 	return out
 }
@@ -245,21 +225,21 @@ func openingWaitingReason(step *rules.OpeningStep) WaitingReason {
 }
 
 func (rs *RoundState) promptSeatActions(action string) []Notification {
-	out := make([]Notification, 0, 4)
 	progress := rs.roundProgress()
+	progressData := progress.ToCodecData()
+	out := make([]Notification, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		seatIndex := SeatFromInt(seat).Proto()
-		notify := &clientv1.ActionNotify{
-			SeatIndex: seatIndex,
+		detail := codec.ActionDetail{
+			Step:      progress.Step,
+			ActorSeat: seatIndex,
 			Action:    action,
 		}
-		progress.applyToAction(notify)
-		payload, err := marshalEnvelope(&clientv1.Envelope{
-			ReqId: fmt.Sprintf("%s-%d", action, seat),
-			Body: &clientv1.Envelope_Action{
-				Action: notify,
-			},
-		})
+		payload, err := codec.BuildAction(
+			fmt.Sprintf("%s-%d", action, seat),
+			seatIndex, action, "",
+			detail, progressData,
+		)
 		if err != nil {
 			continue
 		}

@@ -1,8 +1,7 @@
 package engine
 
-import clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
-
 // Phase 表示局内阶段，与传输层协议解耦的内部枚举。
+// proto 转换由 codec.PhaseToProto 完成，不在此处定义。
 type Phase int
 
 const (
@@ -14,26 +13,6 @@ const (
 	PhaseClosed
 	PhaseDraw
 )
-
-// Proto 返回对应的 client.v1.Phase 枚举值，仅在序列化边界调用。
-func (p Phase) Proto() clientv1.Phase {
-	switch p {
-	case PhaseOpening:
-		return clientv1.Phase_PHASE_OPENING
-	case PhaseClaim:
-		return clientv1.Phase_PHASE_CLAIM
-	case PhaseTsumo:
-		return clientv1.Phase_PHASE_TSUMO
-	case PhaseDiscard:
-		return clientv1.Phase_PHASE_DISCARD
-	case PhaseClosed:
-		return clientv1.Phase_PHASE_CLOSED
-	case PhaseDraw:
-		return clientv1.Phase_PHASE_DRAW
-	default:
-		return clientv1.Phase_PHASE_UNSPECIFIED
-	}
-}
 
 // RuleMeta 是规则元数据的内部投影，与传输层协议解耦。
 type RuleMeta struct {

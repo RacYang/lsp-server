@@ -6,6 +6,7 @@ import (
 	lobbysvc "racoo.cn/lsp/internal/service/lobby"
 	reconnectsvc "racoo.cn/lsp/internal/service/reconnect"
 	eng "racoo.cn/lsp/internal/service/room/engine"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 )
 
 // buildSnapshotFromReconnect 将重连服务层结果投影为 SnapshotNotify proto。
@@ -22,7 +23,7 @@ func buildSnapshotFromReconnect(r *reconnectsvc.ReconnectResult) *clientv1.Snaps
 		ActingSeat:       view.ActingSeat,
 		ActingSeats:      append([]int32(nil), view.ActingSeats...),
 		WaitingAction:    view.WaitingAction,
-		Phase:            view.Phase.Proto(),
+		Phase:            codec.PhaseToProto(int(view.Phase)),
 		LastStep:         view.LastStep,
 		PendingTile:      view.PendingTile,
 		AvailableActions: append([]string(nil), view.AvailableActions...),

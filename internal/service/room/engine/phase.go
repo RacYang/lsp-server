@@ -12,11 +12,10 @@ package engine
 import (
 	"time"
 
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/clock"
 )
 
-// WaitingReason 表示房间当前等待的玩家动作类型。值域与 client.v1.WaitingReason 保持同语义；
+// WaitingReason 表示房间当前等待的玩家动作类型。值域与 codec.Reason* 常量保持一致；
 // ReasonNone 表示无等待（如 settling 与 closed），此时 Deadline() 返回 0。
 type WaitingReason int
 
@@ -45,42 +44,6 @@ func (r WaitingReason) String() string {
 		return "surrender"
 	default:
 		return "none"
-	}
-}
-
-// Proto 返回与 client.v1.WaitingReason 对齐的 proto 枚举值。
-func (r WaitingReason) Proto() clientv1.WaitingReason {
-	switch r {
-	case ReasonOpening:
-		return clientv1.WaitingReason_WAITING_REASON_OPENING
-	case ReasonClaimWindow:
-		return clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW
-	case ReasonTsumo:
-		return clientv1.WaitingReason_WAITING_REASON_TSUMO
-	case ReasonDiscard:
-		return clientv1.WaitingReason_WAITING_REASON_DISCARD
-	case ReasonSurrender:
-		return clientv1.WaitingReason_WAITING_REASON_SURRENDER
-	default:
-		return clientv1.WaitingReason_WAITING_REASON_NONE
-	}
-}
-
-// WaitingReasonFromProto 将 proto 枚举映射回 Go 枚举。
-func WaitingReasonFromProto(p clientv1.WaitingReason) WaitingReason {
-	switch p {
-	case clientv1.WaitingReason_WAITING_REASON_OPENING:
-		return ReasonOpening
-	case clientv1.WaitingReason_WAITING_REASON_CLAIM_WINDOW:
-		return ReasonClaimWindow
-	case clientv1.WaitingReason_WAITING_REASON_TSUMO:
-		return ReasonTsumo
-	case clientv1.WaitingReason_WAITING_REASON_DISCARD:
-		return ReasonDiscard
-	case clientv1.WaitingReason_WAITING_REASON_SURRENDER:
-		return ReasonSurrender
-	default:
-		return ReasonNone
 	}
 }
 
@@ -264,6 +227,7 @@ type PhaseToken struct {
 
 // PhaseDriftError 表示客户端令牌与服务端当前阶段不一致；Current 字段总是非 nil，
 // 调用方据此回写最新阶段视图给客户端，避免客户端基于陈旧 UI 再次提交。
+// proto 转换由 gateway 层的 driftWrapper 完成，本类型不直接依赖 proto 包。
 type PhaseDriftError struct {
 	Token    PhaseToken
 	Current  PhaseToken
@@ -273,19 +237,6 @@ type PhaseDriftError struct {
 // Error 描述 drift 的关键字段，便于日志与单测断言。
 func (e *PhaseDriftError) Error() string {
 	return "phase drifted"
-}
-
-func (e *PhaseDriftError) PhaseUpdate() *clientv1.PhaseUpdate {
-	if e == nil {
-		return nil
-	}
-	if e.Progress.Step != 0 || e.Progress.Phase != PhaseUnspecified || e.Progress.Reason != ReasonNone {
-		return e.Progress.toPhaseUpdate()
-	}
-	return &clientv1.PhaseUpdate{
-		Step:   e.Current.Step,
-		Reason: e.Current.Reason.Proto(),
-	}
 }
 
 // validatePhaseToken 在 actor 处理任意状态变更动作前调用。
@@ -305,14 +256,6 @@ func (rs *RoundState) validatePhaseToken(tok *PhaseToken) error {
 		Current:  PhaseToken{Step: int64(rs.step), Reason: rs.phaseReason},
 		Progress: rs.roundProgress(),
 	}
-}
-
-// PhaseTokenFromProto 将 proto PhaseToken 映射为 Go 侧值；nil 输入返回 nil。
-func PhaseTokenFromProto(p *clientv1.PhaseToken) *PhaseToken {
-	if p == nil {
-		return nil
-	}
-	return &PhaseToken{Step: p.GetStep(), Reason: WaitingReasonFromProto(p.GetReason())}
 }
 
 // PhaseTransition 描述 engine 单步推进产生的阶段切换；P3 actor 模板使用。

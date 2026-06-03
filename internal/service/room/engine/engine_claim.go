@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"google.golang.org/protobuf/proto"
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/metrics"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 )
 
 // ApplyPong 兼容旧调用方，按玩家显式碰牌处理。
@@ -51,23 +50,9 @@ func (e *Engine) ApplyPongByPlayer(_ context.Context, rs *RoundState, seat Seat)
 	rs.lastDiscard = 0
 	rs.lastDiscardSeat = SeatInvalid
 	rs.enterPhase(ReasonDiscard)
-	seatIndex := seat.Proto()
-	detail := rs.actionDetail(seat, "pong", claimedTile, seat, claimedFromSeat)
-	rs.rememberLastAction(detail)
+	detail := rs.makeCodecDetail(seat, "pong", claimedTile, seat, claimedFromSeat)
 	progress := rs.roundProgress()
-	action := &clientv1.ActionNotify{
-		SeatIndex: seatIndex,
-		Action:    "pong",
-		Tile:      claimedTile.String(),
-		Detail:    detail,
-	}
-	progress.applyToAction(action)
-	payload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: fmt.Sprintf("pong-%d", rs.step),
-		Body: &clientv1.Envelope_Action{
-			Action: action,
-		},
-	})
+	payload, err := codec.BuildAction(fmt.Sprintf("pong-%d", rs.step), seat.Proto(), "pong", claimedTile.String(), detail, progress.ToCodecData())
 	if err != nil {
 		return nil, err
 	}
@@ -141,20 +126,9 @@ func (e *Engine) ApplyChi(_ context.Context, rs *RoundState, seat Seat, tileText
 	rs.lastDiscard = 0
 	rs.lastDiscardSeat = SeatInvalid
 	rs.enterPhase(ReasonDiscard)
-	detail := rs.actionDetail(seat, "chi", claimedTile, seat, claimedFromSeat)
-	rs.rememberLastAction(detail)
+	detail := rs.makeCodecDetail(seat, "chi", claimedTile, seat, claimedFromSeat)
 	progress := rs.roundProgress()
-	action := &clientv1.ActionNotify{
-		SeatIndex: seat.Proto(),
-		Action:    "chi",
-		Tile:      claimedTile.String(),
-		Detail:    detail,
-	}
-	progress.applyToAction(action)
-	payload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: fmt.Sprintf("chi-%d", rs.step),
-		Body:  &clientv1.Envelope_Action{Action: action},
-	})
+	payload, err := codec.BuildAction(fmt.Sprintf("chi-%d", rs.step), seat.Proto(), "chi", claimedTile.String(), detail, progress.ToCodecData())
 	if err != nil {
 		return nil, err
 	}
@@ -244,40 +218,20 @@ func (e *Engine) finishGangAction(rs *RoundState, seat Seat, gangTile tile.Tile,
 	rs.pendingGangSeat = SeatInvalid
 	rs.pendingGangTile = 0
 	rs.enterPhase(ReasonNone)
-	seatIndex := seat.Proto()
-	detail := rs.actionDetail(seat, meldKind, gangTile, seat, SeatInvalid)
+	sourceSeat := SeatInvalid
 	if gangFromSeat.Valid() {
-		detail.SourceSeat = gangFromSeat.Proto()
+		sourceSeat = gangFromSeat
 	}
-	rs.rememberLastAction(detail)
+	detail := rs.makeCodecDetail(seat, meldKind, gangTile, seat, sourceSeat)
 	progress := rs.drawTransitionProgress()
-	action := &clientv1.ActionNotify{
-		SeatIndex: seatIndex,
-		Action:    "gang",
-		Tile:      gangTile.String(),
-		Detail:    detail,
-	}
-	progress.applyToAction(action)
-	payload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: fmt.Sprintf("gang-%d", rs.step),
-		Body: &clientv1.Envelope_Action{
-			Action: action,
-		},
-	})
+	reqID := fmt.Sprintf("gang-%d", rs.step)
+	payload, err := codec.BuildAction(reqID, seat.Proto(), "gang", gangTile.String(), detail, progress.ToCodecData())
 	if err != nil {
 		return nil, err
 	}
 	var out []Notification
 	if meldKind == "an_gang" {
-		hiddenAction := proto.Clone(action).(*clientv1.ActionNotify)
-		hiddenAction.Tile = ""
-		if hiddenAction.Detail != nil {
-			hiddenAction.Detail.Tile = ""
-		}
-		hiddenPayload, err := marshalEnvelope(&clientv1.Envelope{
-			ReqId: fmt.Sprintf("gang-%d", rs.step),
-			Body:  &clientv1.Envelope_Action{Action: hiddenAction},
-		})
+		hiddenPayload, err := codec.BuildHiddenAction(reqID, seat.Proto(), "gang", detail, progress.ToCodecData())
 		if err != nil {
 			return nil, err
 		}
@@ -705,20 +659,13 @@ func (rs *RoundState) claimPromptNotifications(discard tile.Tile) ([]Notificatio
 		return nil, nil
 	}
 	claimAction := candidate.claimChoiceAction()
-	claimSeatIndex := candidate.seat.Proto()
 	progress := rs.roundProgress()
-	action := &clientv1.ActionNotify{
-		SeatIndex: claimSeatIndex,
-		Action:    claimAction,
-		Tile:      discard.String(),
-	}
-	progress.applyToAction(action)
-	claimPayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: fmt.Sprintf("claim-%d-%d", rs.step, candidate.seat),
-		Body: &clientv1.Envelope_Action{
-			Action: action,
-		},
-	})
+	claimPayload, err := codec.BuildAction(
+		fmt.Sprintf("claim-%d-%d", rs.step, candidate.seat),
+		candidate.seat.Proto(), claimAction, discard.String(),
+		codec.ActionDetail{Step: int64(rs.step), ActorSeat: int32(candidate.seat), Action: claimAction, Tile: discard.String()},
+		progress.ToCodecData(),
+	)
 	if err != nil {
 		return nil, err
 	}

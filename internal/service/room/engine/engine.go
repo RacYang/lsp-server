@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"hash/fnv"
 
-	"google.golang.org/protobuf/proto"
-
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/clock"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/mahjong/wall"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 )
 
 // ErrRoundPersistUnsupportedSchema 表示持久化局面版本超过当前服务可理解范围。
@@ -203,16 +201,28 @@ type RoundProgress struct {
 	ServerNowUnixMs  int64
 }
 
-// toPhaseUpdate 构造嵌入到 Notify / Response 的 PhaseUpdate；详见 ADR-0045。
-func (p RoundProgress) toPhaseUpdate() *clientv1.PhaseUpdate {
-	return &clientv1.PhaseUpdate{
-		Phase:            p.Phase.Proto(),
-		Step:             p.Step,
-		Reason:           p.Reason.Proto(),
-		DeadlineUnixMs:   p.DeadlineUnixMs,
-		ServerNowUnixMs:  p.ServerNowUnixMs,
+// ToCodecData 将 RoundProgress 转换为 codec.ProgressData，供序列化边界使用。
+func (p RoundProgress) ToCodecData() codec.ProgressData {
+	candidates := make([]codec.ClaimCandidateData, 0, len(p.ClaimCandidates))
+	for _, c := range p.ClaimCandidates {
+		candidates = append(candidates, codec.ClaimCandidateData{
+			Seat:    c.Seat,
+			Actions: append([]string(nil), c.Actions...),
+		})
+	}
+	return codec.ProgressData{
+		ActingSeat:       p.ActingSeat,
 		ActingSeats:      append([]int32(nil), p.ActingSeats...),
+		WaitingAction:    p.WaitingAction,
+		Phase:            int(p.Phase),
+		Step:             p.Step,
+		PendingTile:      p.PendingTile,
 		AvailableActions: append([]string(nil), p.AvailableActions...),
+		ClaimCandidates:  candidates,
+		WallRemaining:    p.WallRemaining,
+		DeadlineUnixMs:   p.DeadlineUnixMs,
+		Reason:           int(p.Reason),
+		ServerNowUnixMs:  p.ServerNowUnixMs,
 	}
 }
 
@@ -357,30 +367,18 @@ func (rs *RoundState) initialDealNotifications() ([]Notification, error) {
 	out := make([]Notification, 0, 4)
 	for seat := 0; seat < 4; seat++ {
 		seatID := Seat(seat)
-		seatIndex := seatID.Proto()
-		payload, err := marshalEnvelope(&clientv1.Envelope{
-			ReqId: fmt.Sprintf("initial-deal-%d", seat),
-			Body: &clientv1.Envelope_InitialDeal{
-				InitialDeal: &clientv1.InitialDealNotify{
-					SeatIndex: seatIndex,
-					Tiles:     tilesToStrings(rs.hands[seat].Tiles()),
-					Step:      int64(rs.step),
-				},
-			},
-		})
+		payload, err := codec.BuildInitialDeal(
+			fmt.Sprintf("initial-deal-%d", seat),
+			seatID.Proto(),
+			tilesToStrings(rs.hands[seat].Tiles()),
+			int64(rs.step),
+		)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, Notification{Kind: KindInitialDeal, Payload: payload, TargetSeat: seatID})
 	}
 	return out, nil
-}
-
-func marshalEnvelope(env *clientv1.Envelope) ([]byte, error) {
-	if env == nil {
-		return nil, fmt.Errorf("nil envelope")
-	}
-	return proto.Marshal(env)
 }
 
 func seedFromRoomID(roomID string) uint64 {

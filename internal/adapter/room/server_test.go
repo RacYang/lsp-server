@@ -7,6 +7,7 @@ import (
 	"time"
 
 	eng "racoo.cn/lsp/internal/service/room/engine"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 
 	miniredis "github.com/alicebob/miniredis/v2"
 	"github.com/jackc/pgx/v5"
@@ -283,7 +284,7 @@ func TestClusterPhaseTokToRoom(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
-			got := eng.PhaseTokenFromProto(tc.input)
+			got := protoToEnginePhaseToken(tc.input)
 			if tc.wantNil {
 				require.Nil(t, got)
 				return
@@ -366,14 +367,14 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			name: "start",
 			kind: eng.KindStartGame,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_StartGame{StartGame: &clientv1.StartGameNotify{
-				Phase:         eng.PhaseDraw.Proto(),
+				Phase:         codec.PhaseToProto(int(eng.PhaseDraw)),
 				Step:          10,
 				ActingSeats:   []int32{0},
 				WallRemaining: 55,
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, eng.PhaseDraw.Proto(), evt.GetStartGame().GetPhase())
+				require.Equal(t, codec.PhaseToProto(int(eng.PhaseDraw)), evt.GetStartGame().GetPhase())
 				require.EqualValues(t, 10, evt.GetStartGame().GetStep())
 				require.Equal(t, []int32{0}, evt.GetStartGame().GetActingSeats())
 				require.EqualValues(t, 55, evt.GetStartGame().GetWallRemaining())
@@ -383,7 +384,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			name: "draw",
 			kind: eng.KindDrawTile,
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_DrawTile{DrawTile: &clientv1.DrawTileNotify{
-				Phase:          eng.PhaseDiscard.Proto(),
+				Phase:          codec.PhaseToProto(int(eng.PhaseDiscard)),
 				Step:           11,
 				ActingSeats:    []int32{1},
 				WallRemaining:  54,
@@ -391,7 +392,7 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, eng.PhaseDiscard.Proto(), evt.GetDrawTile().GetPhase())
+				require.Equal(t, codec.PhaseToProto(int(eng.PhaseDiscard)), evt.GetDrawTile().GetPhase())
 				require.EqualValues(t, 11, evt.GetDrawTile().GetStep())
 				require.Equal(t, []int32{1}, evt.GetDrawTile().GetActingSeats())
 				require.EqualValues(t, 54, evt.GetDrawTile().GetWallRemaining())
@@ -405,13 +406,13 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				SeatIndex:   1,
 				Action:      "discard",
 				Tile:        "p9",
-				Phase:       eng.PhaseDraw.Proto(),
+				Phase:       codec.PhaseToProto(int(eng.PhaseDraw)),
 				Step:        12,
 				ActingSeats: []int32{2},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, eng.PhaseDraw.Proto(), evt.GetAction().GetPhase())
+				require.Equal(t, codec.PhaseToProto(int(eng.PhaseDraw)), evt.GetAction().GetPhase())
 				require.EqualValues(t, 12, evt.GetAction().GetStep())
 				require.Equal(t, []int32{2}, evt.GetAction().GetActingSeats())
 			},
@@ -423,13 +424,13 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 				Action:      "exchange_three",
 				Kind:        "exchange_done",
 				Params:      map[string]string{"direction": "3"},
-				Phase:       eng.PhaseOpening.Proto(),
+				Phase:       codec.PhaseToProto(int(eng.PhaseOpening)),
 				Step:        13,
 				ActingSeats: []int32{0, 1, 2, 3},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, eng.PhaseOpening.Proto(), evt.GetOpeningDone().GetPhase())
+				require.Equal(t, codec.PhaseToProto(int(eng.PhaseOpening)), evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 13, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0, 1, 2, 3}, evt.GetOpeningDone().GetActingSeats())
 				require.Equal(t, "3", evt.GetOpeningDone().GetParams()["direction"])
@@ -441,13 +442,13 @@ func TestMapNotificationToEventCarriesRoundProgress(t *testing.T) {
 			env: &clientv1.Envelope{Body: &clientv1.Envelope_OpeningDone{OpeningDone: &clientv1.OpeningDoneNotify{
 				Action:      "que_men",
 				Kind:        "missing_suit_done",
-				Phase:       eng.PhaseDraw.Proto(),
+				Phase:       codec.PhaseToProto(int(eng.PhaseDraw)),
 				Step:        14,
 				ActingSeats: []int32{0},
 			}}},
 			assert: func(t *testing.T, evt *svcv1.RoomServiceStreamEventsResponse) {
 				t.Helper()
-				require.Equal(t, eng.PhaseDraw.Proto(), evt.GetOpeningDone().GetPhase())
+				require.Equal(t, codec.PhaseToProto(int(eng.PhaseDraw)), evt.GetOpeningDone().GetPhase())
 				require.EqualValues(t, 14, evt.GetOpeningDone().GetStep())
 				require.Equal(t, []int32{0}, evt.GetOpeningDone().GetActingSeats())
 			},

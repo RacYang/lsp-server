@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"sort"
 
-	"google.golang.org/protobuf/proto"
-
-	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
 	"racoo.cn/lsp/internal/mahjong/tile"
 	"racoo.cn/lsp/internal/metrics"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 )
 
 // ApplyDiscard 推进当前轮次出牌，并在需要时继续发出下一次摸牌或结算。
@@ -50,68 +48,45 @@ func (e *Engine) ApplyDiscard(ctx context.Context, rs *RoundState, seat Seat, ti
 	}
 	rs.lastDiscardAfterGang = rs.lastGangFollowUp
 	rs.lastGangFollowUp = false
-	seatIndex := seat.Proto()
-	detail := rs.actionDetail(seat, "discard", discard, SeatInvalid, seat)
-	rs.rememberLastAction(detail)
-	actionPayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: fmt.Sprintf("discard-%d", rs.step),
-		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{
-				SeatIndex:     seatIndex,
-				Action:        "discard",
-				Tile:          discard.String(),
-				Phase:         clientv1.Phase_PHASE_CLAIM,
-				Step:          int64(rs.step),
-				Detail:        detail,
-				WallRemaining: rs.wallRemaining(),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
+	detail := rs.makeCodecDetail(seat, "discard", discard, SeatInvalid, seat)
 	rs.recordDiscard(seat, discard)
-	out := []Notification{{Kind: KindAction, Payload: actionPayload, TargetSeat: BroadcastSeat}}
 	rs.step++
 	if rs.shouldFinishRound() {
+		progress := rs.roundProgress()
+		actionPayload, err := codec.BuildAction(fmt.Sprintf("discard-%d", rs.step-1), seat.Proto(), "discard", discard.String(), detail, progress.ToCodecData())
+		if err != nil {
+			return nil, err
+		}
 		settlement, err := rs.finishRound()
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, settlement)
-		return out, nil
+		return []Notification{{Kind: KindAction, Payload: actionPayload, TargetSeat: BroadcastSeat}, settlement}, nil
 	}
 	rs.lastDiscard = discard
 	rs.lastDiscardSeat = seat
 	rs.turn = rs.nextActiveSeat(seat)
 	rs.openClaimWindow()
-	progress := rs.drawTransitionProgress()
+	var progress RoundProgress
 	if len(rs.claimCandidates) > 0 {
 		progress = rs.roundProgress()
-		if actionEnv := new(clientv1.Envelope); proto.Unmarshal(actionPayload, actionEnv) == nil {
-			if action := actionEnv.GetAction(); action != nil {
-				progress.applyToAction(action)
-				if payload, err := marshalEnvelope(actionEnv); err == nil {
-					out[0].Payload = payload
-				}
-			}
-		}
+	} else {
+		rs.clearClaimWindow()
+		rs.closeOpeningClaimWindow()
+		progress = rs.drawTransitionProgress()
+	}
+	actionPayload, err := codec.BuildAction(fmt.Sprintf("discard-%d", rs.step-1), seat.Proto(), "discard", discard.String(), detail, progress.ToCodecData())
+	if err != nil {
+		return nil, err
+	}
+	out := []Notification{{Kind: KindAction, Payload: actionPayload, TargetSeat: BroadcastSeat}}
+	if len(rs.claimCandidates) > 0 {
 		metrics.ClaimWindowTotal.WithLabelValues("open").Inc()
 		claimPrompts, err := rs.claimPromptNotifications(discard)
 		if err != nil {
 			return nil, err
 		}
 		return append(out, claimPrompts...), nil
-	}
-	rs.clearClaimWindow()
-	rs.closeOpeningClaimWindow()
-	if actionEnv := new(clientv1.Envelope); proto.Unmarshal(actionPayload, actionEnv) == nil {
-		if action := actionEnv.GetAction(); action != nil {
-			progress.applyToAction(action)
-			if payload, err := marshalEnvelope(actionEnv); err == nil {
-				out[0].Payload = payload
-			}
-		}
 	}
 	next, err := e.drawForCurrentTurn(rs)
 	if err != nil {
@@ -213,33 +188,13 @@ func (e *Engine) ApplyHu(ctx context.Context, rs *RoundState, seat Seat) ([]Noti
 	if source != rules.HuSourceTsumo {
 		metrics.ClaimWindowTotal.WithLabelValues("hu").Inc()
 	}
-	seatIndex := seat.Proto()
-	detail := rs.actionDetail(seat, "hu", winTile, seat, payer)
-	rs.rememberLastAction(detail)
+	detail := rs.makeCodecDetail(seat, "hu", winTile, seat, payer)
 	progress := rs.roundProgress()
-	huPayload, err := marshalEnvelope(&clientv1.Envelope{
-		ReqId: fmt.Sprintf("hu-%d", rs.step),
-		Body: &clientv1.Envelope_Action{
-			Action: &clientv1.ActionNotify{
-				SeatIndex: seatIndex,
-				Action:    "hu",
-				Tile:      winTile.String(),
-				Detail:    detail,
-			},
-		},
-	})
+	huPayload, err := codec.BuildAction(fmt.Sprintf("hu-%d", rs.step), seat.Proto(), "hu", winTile.String(), detail, progress.ToCodecData())
 	if err != nil {
 		return nil, err
 	}
 	out := []Notification{{Kind: KindAction, Payload: huPayload, TargetSeat: BroadcastSeat}}
-	if actionEnv := new(clientv1.Envelope); proto.Unmarshal(out[0].Payload, actionEnv) == nil {
-		if action := actionEnv.GetAction(); action != nil {
-			progress.applyToAction(action)
-			if payload, err := marshalEnvelope(actionEnv); err == nil {
-				out[0].Payload = payload
-			}
-		}
-	}
 	if rs.shouldFinishRound() {
 		settlement, err := rs.finishRound()
 		if err != nil {
@@ -314,11 +269,12 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 		rs.pendingDraw = drawn
 		rs.enterPhase(ReasonTsumo)
 		progress := rs.roundProgress()
-		drawPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, true)
+		progressData := progress.ToCodecData()
+		drawPayload, err := codec.BuildDrawTile(reqID, seatIndex, drawn.String(), progressData)
 		if err != nil {
 			return nil, err
 		}
-		hiddenPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, false)
+		hiddenPayload, err := codec.BuildDrawTile(reqID, seatIndex, "", progressData)
 		if err != nil {
 			return nil, err
 		}
@@ -328,16 +284,12 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 			}
 			return hiddenPayload
 		})
-		choice := &clientv1.ActionNotify{
-			SeatIndex: seatIndex,
-			Action:    "tsumo_choice",
-			Tile:      drawn.String(),
-		}
-		progress.applyToAction(choice)
-		choicePayload, err := marshalEnvelope(&clientv1.Envelope{
-			ReqId: fmt.Sprintf("tsumo-choice-%d", rs.step),
-			Body:  &clientv1.Envelope_Action{Action: choice},
-		})
+		choiceDetail := codec.ActionDetail{Step: int64(rs.step), ActorSeat: int32(turn), Action: "tsumo_choice", Tile: drawn.String()}
+		choicePayload, err := codec.BuildAction(
+			fmt.Sprintf("tsumo-choice-%d", rs.step),
+			seatIndex, "tsumo_choice", drawn.String(),
+			choiceDetail, progressData,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -346,11 +298,12 @@ func (e *Engine) drawForCurrentTurn(rs *RoundState) ([]Notification, error) {
 	rs.hands[turn].Add(drawn)
 	rs.enterPhase(ReasonDiscard)
 	progress := rs.roundProgress()
-	drawPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, true)
+	progressData := progress.ToCodecData()
+	drawPayload, err := codec.BuildDrawTile(reqID, seatIndex, drawn.String(), progressData)
 	if err != nil {
 		return nil, err
 	}
-	hiddenPayload, err := drawTilePayload(reqID, seatIndex, drawn.String(), progress, false)
+	hiddenPayload, err := codec.BuildDrawTile(reqID, seatIndex, "", progressData)
 	if err != nil {
 		return nil, err
 	}
@@ -387,23 +340,6 @@ func (rs *RoundState) recordFlower(seat Seat, drawn tile.Tile) {
 		rs.flowers = make([][]tile.Tile, 4)
 	}
 	rs.flowers[seat] = append(rs.flowers[seat], drawn)
-}
-
-func drawTilePayload(reqID string, seatIndex int32, tileText string, progress RoundProgress, visible bool) ([]byte, error) {
-	if !visible {
-		tileText = ""
-	}
-	draw := &clientv1.DrawTileNotify{
-		SeatIndex: seatIndex,
-		Tile:      tileText,
-	}
-	progress.applyToDraw(draw)
-	return marshalEnvelope(&clientv1.Envelope{
-		ReqId: reqID,
-		Body: &clientv1.Envelope_DrawTile{
-			DrawTile: draw,
-		},
-	})
 }
 
 func (rs *RoundState) isHaiDi() bool {

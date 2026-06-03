@@ -9,11 +9,24 @@ import (
 
 	act "racoo.cn/lsp/internal/service/room/actor"
 	eng "racoo.cn/lsp/internal/service/room/engine"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 
+	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 	"racoo.cn/lsp/internal/metrics"
 	"racoo.cn/lsp/internal/store/redis"
 )
+
+// protoToEnginePhaseToken 将 proto PhaseToken 转换为 engine.PhaseToken；nil 输入返回 nil。
+func protoToEnginePhaseToken(p *clientv1.PhaseToken) *eng.PhaseToken {
+	if p == nil {
+		return nil
+	}
+	return &eng.PhaseToken{
+		Step:   p.GetStep(),
+		Reason: eng.WaitingReason(codec.WaitingReasonFromProto(p.GetReason())),
+	}
+}
 
 // ApplyEvent 通过 room.Service 驱动真实房间 worker，并把产出的通知桥接到订阅流。
 func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventRequest) (*svcv1.ApplyEventResponse, error) {
@@ -66,26 +79,26 @@ func (s *GRPCServer) ApplyEvent(ctx context.Context, req *svcv1.ApplyEventReques
 		}
 		return &svcv1.ApplyEventResponse{Accepted: true}, nil
 	case *svcv1.ApplyEventRequest_Discard:
-		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile(), eng.PhaseTokenFromProto(req.GetPhaseToken()))
+		notifications, err := s.rooms.Discard(ctx, roomID, userID, req.GetDiscard().GetTile(), protoToEnginePhaseToken(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Pong:
-		notifications, err := s.rooms.Pong(ctx, roomID, userID, eng.PhaseTokenFromProto(req.GetPhaseToken()))
+		notifications, err := s.rooms.Pong(ctx, roomID, userID, protoToEnginePhaseToken(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Chi:
-		notifications, err := s.rooms.Chi(ctx, roomID, userID, req.GetChi().GetTiles(), eng.PhaseTokenFromProto(req.GetPhaseToken()))
+		notifications, err := s.rooms.Chi(ctx, roomID, userID, req.GetChi().GetTiles(), protoToEnginePhaseToken(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Gang:
-		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile(), eng.PhaseTokenFromProto(req.GetPhaseToken()))
+		notifications, err := s.rooms.Gang(ctx, roomID, userID, req.GetGang().GetTile(), protoToEnginePhaseToken(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Hu:
-		notifications, err := s.rooms.Hu(ctx, roomID, userID, eng.PhaseTokenFromProto(req.GetPhaseToken()))
+		notifications, err := s.rooms.Hu(ctx, roomID, userID, protoToEnginePhaseToken(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Pass:
-		notifications, err := s.rooms.Pass(ctx, roomID, userID, eng.PhaseTokenFromProto(req.GetPhaseToken()))
+		notifications, err := s.rooms.Pass(ctx, roomID, userID, protoToEnginePhaseToken(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_OpeningAction:
 		event := req.GetOpeningAction()
-		notifications, err := s.rooms.OpeningAction(ctx, roomID, userID, event.GetAction(), event.GetTiles(), event.GetDirection(), event.GetSuit(), event.GetParams(), eng.PhaseTokenFromProto(req.GetPhaseToken()))
+		notifications, err := s.rooms.OpeningAction(ctx, roomID, userID, event.GetAction(), event.GetTiles(), event.GetDirection(), event.GetSuit(), event.GetParams(), protoToEnginePhaseToken(req.GetPhaseToken()))
 		return s.applyNotifications(ctx, roomID, idemKey, notifications, err)
 	case *svcv1.ApplyEventRequest_Leave:
 		if err := s.rooms.Leave(ctx, roomID, userID); err != nil {

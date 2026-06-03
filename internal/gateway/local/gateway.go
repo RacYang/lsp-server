@@ -8,6 +8,7 @@ import (
 
 	act "racoo.cn/lsp/internal/service/room/actor"
 	eng "racoo.cn/lsp/internal/service/room/engine"
+	codec "racoo.cn/lsp/internal/service/room/engine/codec"
 
 	clientv1 "racoo.cn/lsp/api/gen/go/client/v1"
 
@@ -19,6 +20,37 @@ import (
 	"racoo.cn/lsp/internal/session"
 	"racoo.cn/lsp/pkg/logx"
 )
+
+// protoToEnginePhaseToken 将 proto PhaseToken 转换为 engine.PhaseToken；nil 输入返回 nil。
+func protoToEnginePhaseToken(p *clientv1.PhaseToken) *eng.PhaseToken {
+	if p == nil {
+		return nil
+	}
+	return &eng.PhaseToken{
+		Step:   p.GetStep(),
+		Reason: eng.WaitingReason(codec.WaitingReasonFromProto(p.GetReason())),
+	}
+}
+
+// driftWrapper 将 engine.PhaseDriftError 包装为实现 contract.PhaseUpdater 的适配器。
+type driftWrapper struct {
+	drift *eng.PhaseDriftError
+}
+
+func (w *driftWrapper) Error() string { return w.drift.Error() }
+
+func (w *driftWrapper) Unwrap() error { return w.drift }
+
+func (w *driftWrapper) PhaseUpdate() *clientv1.PhaseUpdate {
+	if w == nil || w.drift == nil {
+		return nil
+	}
+	p := w.drift.Progress
+	if p.Step != 0 || p.Phase != eng.PhaseUnspecified || p.Reason != eng.ReasonNone {
+		return codec.PhaseUpdateFromProgress(p.ToCodecData())
+	}
+	return codec.PhaseUpdateForDrift(w.drift.Current.Step, int(w.drift.Current.Reason))
+}
 
 // LocalRoomGateway 适配进程内房间服务，供 `cmd/all` 与本地 gate 冒烟复用。
 type LocalRoomGateway struct {
@@ -255,14 +287,19 @@ func (g *LocalRoomGateway) CancelOfflineSurrender(_ context.Context, roomID, use
 	return nil
 }
 
-// wrapActionErr 将 act.ErrRateLimited 转换为 contract.ErrRateLimited，
-// 使 handler 无需引用 service/room 即可识别限流错误。
+// wrapActionErr 将 engine 错误转换为 contract 可识别的类型：
+//   - act.ErrRateLimited → contract.ErrRateLimited
+//   - *eng.PhaseDriftError → driftWrapper（实现 contract.PhaseUpdater）
 func wrapActionErr(err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, act.ErrRateLimited) {
 		return contract.ErrRateLimited
+	}
+	var drift *eng.PhaseDriftError
+	if errors.As(err, &drift) {
+		return &driftWrapper{drift: drift}
 	}
 	return err
 }
@@ -272,7 +309,7 @@ func (g *LocalRoomGateway) Discard(ctx context.Context, roomID, userID, tile str
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile, eng.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Discard(ctx, roomID, userID, tile, protoToEnginePhaseToken(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -283,7 +320,7 @@ func (g *LocalRoomGateway) Pong(ctx context.Context, roomID, userID string, tok 
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Pong(ctx, roomID, userID, eng.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Pong(ctx, roomID, userID, protoToEnginePhaseToken(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -294,7 +331,7 @@ func (g *LocalRoomGateway) Chi(ctx context.Context, roomID, userID string, tiles
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Chi(ctx, roomID, userID, tiles, eng.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Chi(ctx, roomID, userID, tiles, protoToEnginePhaseToken(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -305,7 +342,7 @@ func (g *LocalRoomGateway) Gang(ctx context.Context, roomID, userID, tile string
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile, eng.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Gang(ctx, roomID, userID, tile, protoToEnginePhaseToken(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -316,7 +353,7 @@ func (g *LocalRoomGateway) Hu(ctx context.Context, roomID, userID string, tok *c
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Hu(ctx, roomID, userID, eng.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Hu(ctx, roomID, userID, protoToEnginePhaseToken(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -327,7 +364,7 @@ func (g *LocalRoomGateway) Pass(ctx context.Context, roomID, userID string, tok 
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.Pass(ctx, roomID, userID, eng.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.Pass(ctx, roomID, userID, protoToEnginePhaseToken(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
@@ -338,7 +375,7 @@ func (g *LocalRoomGateway) OpeningAction(ctx context.Context, roomID, userID, ac
 	if g == nil || g.rooms == nil {
 		return nil, fmt.Errorf("nil local room gateway")
 	}
-	notifications, err := g.rooms.OpeningAction(ctx, roomID, userID, action, tiles, direction, suit, params, eng.PhaseTokenFromProto(tok))
+	notifications, err := g.rooms.OpeningAction(ctx, roomID, userID, action, tiles, direction, suit, params, protoToEnginePhaseToken(tok))
 	if err != nil {
 		return nil, wrapActionErr(err)
 	}
