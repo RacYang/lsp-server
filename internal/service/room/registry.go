@@ -13,17 +13,9 @@ type RoomRegistry struct {
 	rooms map[string]*domainroom.Room
 }
 
-// Deprecated: 使用 RoomRegistry。
-type Lobby = RoomRegistry
-
 // NewRoomRegistry 创建空房间索引。
 func NewRoomRegistry() *RoomRegistry {
 	return &RoomRegistry{rooms: make(map[string]*domainroom.Room)}
-}
-
-// Deprecated: 使用 NewRoomRegistry。
-func NewLobby() *RoomRegistry {
-	return NewRoomRegistry()
 }
 
 // CreateRoom 创建房间；roomID 由调用方生成。
