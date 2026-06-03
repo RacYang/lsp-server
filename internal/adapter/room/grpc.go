@@ -10,18 +10,18 @@ import (
 	svcv1 "racoo.cn/lsp/api/gen/go/v1"
 )
 
-// RoomService 为 gRPC 注册桥接所需的接口。
-type RoomService interface {
+// RoomGRPCHandlers 是 gRPC 注册桥接所需的方法集；区别于 service/room.RoomService（业务接口）。
+type RoomGRPCHandlers interface {
 	ApplyEvent(context.Context, *svcv1.ApplyEventRequest) (*svcv1.ApplyEventResponse, error)
 	SnapshotRoom(context.Context, *svcv1.SnapshotRoomRequest) (*svcv1.SnapshotRoomResponse, error)
 	GetRoomEvents(context.Context, *svcv1.GetRoomEventsRequest) (*svcv1.GetRoomEventsResponse, error)
 }
 
 // RegisterService 手工注册 ServiceDesc，避免命令层直接依赖生成 server 接口。
-func RegisterService(s grpc.ServiceRegistrar, srv RoomService) {
+func RegisterService(s grpc.ServiceRegistrar, srv RoomGRPCHandlers) {
 	s.RegisterService(&grpc.ServiceDesc{
 		ServiceName: "v1.RoomService",
-		HandlerType: (*RoomService)(nil),
+		HandlerType: (*RoomGRPCHandlers)(nil),
 		Methods: []grpc.MethodDesc{
 			{MethodName: "ApplyEvent", Handler: roomApplyEventHandler},
 			{MethodName: "SnapshotRoom", Handler: roomSnapshotRoomHandler},
@@ -39,11 +39,11 @@ func roomApplyEventHandler(srv interface{}, ctx context.Context, dec func(interf
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RoomService).ApplyEvent(ctx, in)
+		return srv.(RoomGRPCHandlers).ApplyEvent(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.RoomService/ApplyEvent"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RoomService).ApplyEvent(ctx, req.(*svcv1.ApplyEventRequest))
+		return srv.(RoomGRPCHandlers).ApplyEvent(ctx, req.(*svcv1.ApplyEventRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -54,11 +54,11 @@ func roomSnapshotRoomHandler(srv interface{}, ctx context.Context, dec func(inte
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RoomService).SnapshotRoom(ctx, in)
+		return srv.(RoomGRPCHandlers).SnapshotRoom(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.RoomService/SnapshotRoom"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RoomService).SnapshotRoom(ctx, req.(*svcv1.SnapshotRoomRequest))
+		return srv.(RoomGRPCHandlers).SnapshotRoom(ctx, req.(*svcv1.SnapshotRoomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -69,11 +69,11 @@ func roomGetRoomEventsHandler(srv interface{}, ctx context.Context, dec func(int
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RoomService).GetRoomEvents(ctx, in)
+		return srv.(RoomGRPCHandlers).GetRoomEvents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/v1.RoomService/GetRoomEvents"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RoomService).GetRoomEvents(ctx, req.(*svcv1.GetRoomEventsRequest))
+		return srv.(RoomGRPCHandlers).GetRoomEvents(ctx, req.(*svcv1.GetRoomEventsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

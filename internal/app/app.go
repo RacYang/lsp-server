@@ -37,7 +37,10 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 }
 
 // NewAllInProcess 装配本地单进程聚合入口，供 `cmd/all` 冒烟和开发自测使用。
+// 强制清除集群地址，确保始终使用进程内 LocalRoomGateway，而非远程 gRPC 网关。
 func NewAllInProcess(ctx context.Context, cfg config.Config) (*App, error) {
+	cfg.ClusterLobbyAddr = ""
+	cfg.ClusterRoomAddr = ""
 	return NewGate(ctx, cfg)
 }
 
