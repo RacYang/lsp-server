@@ -132,6 +132,7 @@ raw = subprocess.check_output(["yq", "-o=json", ".lint.arch", config_file])
 arch = json.loads(raw)
 layers = arch.get("layers") or {}
 deny_rules = arch.get("deny") or []
+deep_scan = arch.get("deep_scan", True)
 
 layer_names = list(layers.keys())
 layer_set = set(layer_names)
@@ -148,13 +149,19 @@ denied = {name: set() for name in layer_names}
 for rule in deny_rules:
     denied[rule["from"]].update(rule.get("to") or [])
 
+allow_lines = [
+    "allow:",
+    "  depOnAnyVendor: true",
+    "  ignoreNotFoundComponents: true",
+]
+if not deep_scan:
+    allow_lines.append("  deepScan: false")
+
 lines = [
     header,
     "version: 3",
     "workdir: .",
-    "allow:",
-    "  depOnAnyVendor: true",
-    "  ignoreNotFoundComponents: true",
+    *allow_lines,
     "excludeFiles:",
     "  - \"^.*_test\\\\.go$\"",
     "components:",

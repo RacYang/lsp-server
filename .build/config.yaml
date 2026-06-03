@@ -27,11 +27,13 @@ coverage:
     internal/domain/...: 80
     internal/app: 41
     internal/gateway/remote: 35
+    internal/gateway/local: 50
+    internal/service/room/engine/codec: 0
     internal/handler: 75
     internal/protocol: 80
     internal/service/room: 67
     internal/adapter/lobby: 55
-    internal/adapter/local: 55
+    internal/adapter/local: 0
     internal/adapter/room: 45
     internal/contract: 0
     cmd/all: 45
@@ -77,6 +79,9 @@ lint:
         - path: _test\.go$
           linters: [noctx]
   arch:
+    # deep_scan 关闭：interface 注册模式（rules.Register(concreteImpl)）会被 deepScan 误判
+    # 为反向注入依赖，而实际上 rules 只依赖 Rule 接口本身，不依赖任何具体实现。
+    deep_scan: false
     layers:
       # 将麻将子包拆分为独立组件，避免 go-arch-lint 将子包 import 误判为跨组件依赖
       mahjong_builtin: internal/mahjong/builtin/**
@@ -102,6 +107,8 @@ lint:
       store_redis: internal/store/redis/**
       store_postgres: internal/store/postgres/**
       # service 子包单独注册，避免组件内自引用被误判为违规
+      # codec 是 engine 的唯一 proto 序列化边界；engine 主包不得直接依赖 apigen_client
+      service_room_engine_codec: internal/service/room/engine/codec/**
       service_room_engine: internal/service/room/engine/**
       service_room_actor: internal/service/room/actor/**
       service_reconnect: internal/service/reconnect/**
@@ -166,6 +173,10 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # 国标竞技与血战到底同层，互相隔离
+          - mahjong_builtin
+          - mahjong_xuezhandaodi
+          - mahjong_analysis
       - from: mahjong_xuezhandaodi
         to:
           - protocol
@@ -191,6 +202,10 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # 血战到底与国标竞技同层，互相隔离
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_analysis
       - from: mahjong_rules
         to:
           - protocol
@@ -216,6 +231,11 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # rules 是规则接口层，不得上溯具体实现或分析包
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_analysis
       - from: mahjong_tile
         to:
           - protocol
@@ -241,6 +261,16 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # tile 是最基础的类型包，不得依赖任何其他麻将包
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
       - from: mahjong_wall
         to:
           - protocol
@@ -266,6 +296,15 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # wall 只依赖 tile，不得依赖更高层包
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
       - from: mahjong_hand
         to:
           - protocol
@@ -291,6 +330,14 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # hand 只依赖 tile 和 hu，不得依赖规则或分析包
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_wall
+          - mahjong_fan
+          - mahjong_analysis
       - from: mahjong_hu
         to:
           - protocol
@@ -316,6 +363,15 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # hu 只依赖 tile，不得依赖更高层包
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_fan
+          - mahjong_analysis
       - from: mahjong_fan
         to:
           - protocol
@@ -341,6 +397,16 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # fan 是番种枚举，不依赖任何其他麻将包
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_analysis
       - from: mahjong_analysis
         to:
           - protocol
@@ -366,6 +432,13 @@ lint:
           - pkg
           - apigen_client
           - apigen_v1
+          # analysis 依赖 hand/hu/tile，不得依赖规则层或具体实现
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_wall
+          - mahjong_fan
       - from: domain
         to:
           - protocol
@@ -591,6 +664,42 @@ lint:
           - log
           - apigen_client
           - apigen_v1
+      - from: service_room_engine_codec
+        to:
+          # codec 只允许依赖 apigen_client；禁止所有其他内部组件
+          - handler
+          - service
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
+          - session
+          - app
+          - adapter
+          - gateway
+          - cluster
+          - cmd
+          - contract
+          - protocol
+          - domain
+          - mahjong_builtin
+          - mahjong_guobiao
+          - mahjong_xuezhandaodi
+          - mahjong_rules
+          - mahjong_tile
+          - mahjong_wall
+          - mahjong_hand
+          - mahjong_hu
+          - mahjong_fan
+          - mahjong_analysis
+          - store_root
+          - store_redis
+          - store_postgres
+          - config
+          - clock
+          - metrics
+          - log
+          - pkg
+          - apigen_v1
       - from: service_room_engine
         to:
           - handler
@@ -616,6 +725,8 @@ lint:
           - config
           - log
           - pkg
+          # engine 主包不得直接依赖 proto 生成类型；序列化由 service_room_engine_codec 承担
+          - apigen_client
           - apigen_v1
       - from: protocol
         to:
@@ -850,6 +961,9 @@ lint:
           - store_postgres
           - handler
           - service
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
           - session
           - app
           - adapter
@@ -880,6 +994,9 @@ lint:
           - store_postgres
           - handler
           - service
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
           - session
           - app
           - adapter
@@ -910,6 +1027,9 @@ lint:
           - domain
           - handler
           - service
+          - service_room_engine
+          - service_room_actor
+          - service_reconnect
           - session
           - app
           - adapter

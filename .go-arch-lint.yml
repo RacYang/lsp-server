@@ -4,6 +4,7 @@ workdir: .
 allow:
   depOnAnyVendor: true
   ignoreNotFoundComponents: true
+  deepScan: false
 excludeFiles:
   - "^.*_test\\.go$"
 components:
@@ -49,6 +50,8 @@ components:
     in: internal/store/redis/**
   store_postgres:
     in: internal/store/postgres/**
+  service_room_engine_codec:
+    in: internal/service/room/engine/codec/**
   service_room_engine:
     in: internal/service/room/engine/**
   service_room_actor:
@@ -88,116 +91,70 @@ deps:
       - mahjong_fan
       - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_guobiao:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_xuezhandaodi
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_xuezhandaodi:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
       - mahjong_rules
       - mahjong_tile
       - mahjong_wall
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_rules:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
       - mahjong_tile
       - mahjong_wall
       - mahjong_hand
       - mahjong_hu
       - mahjong_fan
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_tile:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_wall:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
       - mahjong_tile
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_hand:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
       - mahjong_tile
-      - mahjong_wall
       - mahjong_hu
-      - mahjong_fan
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_hu:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
       - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_fan
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_fan:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
-      - mahjong_tile
-      - mahjong_wall
-      - mahjong_hand
-      - mahjong_hu
-      - mahjong_analysis
       - domain
+      - service_room_engine_codec
   mahjong_analysis:
     mayDependOn:
-      - mahjong_builtin
-      - mahjong_guobiao
-      - mahjong_xuezhandaodi
-      - mahjong_rules
       - mahjong_tile
-      - mahjong_wall
       - mahjong_hand
       - mahjong_hu
-      - mahjong_fan
       - domain
+      - service_room_engine_codec
   domain:
-    anyVendorDeps: true
+    mayDependOn:
+      - service_room_engine_codec
   app:
     anyProjectDeps: true
   adapter:
@@ -209,6 +166,7 @@ deps:
       - contract
       - store_redis
       - store_postgres
+      - service_room_engine_codec
       - service_room_engine
       - service_room_actor
       - service_reconnect
@@ -226,6 +184,7 @@ deps:
       - contract
       - store_redis
       - store_postgres
+      - service_room_engine_codec
       - service_room_engine
       - service_room_actor
       - service_reconnect
@@ -237,41 +196,41 @@ deps:
       - apigen_v1
   protocol:
     mayDependOn:
+      - service_room_engine_codec
       - config
   cluster:
     anyProjectDeps: true
   contract:
     mayDependOn:
+      - service_room_engine_codec
       - apigen_client
   handler:
     mayDependOn:
       - protocol
       - contract
+      - service_room_engine_codec
       - session
       - metrics
       - pkg
       - apigen_client
   store_root:
     mayDependOn:
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
+      - service_room_engine_codec
       - metrics
   store_redis:
     mayDependOn:
       - domain
       - store_root
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
+      - service_room_engine_codec
       - metrics
   store_postgres:
     mayDependOn:
       - store_root
-      - service_room_engine
-      - service_room_actor
-      - service_reconnect
+      - service_room_engine_codec
       - metrics
+  service_room_engine_codec:
+    mayDependOn:
+      - apigen_client
   service_room_engine:
     mayDependOn:
       - mahjong_rules
@@ -280,18 +239,20 @@ deps:
       - mahjong_hand
       - mahjong_fan
       - domain
+      - service_room_engine_codec
       - clock
       - metrics
-      - apigen_client
   service_room_actor:
     mayDependOn:
       - domain
+      - service_room_engine_codec
       - service_room_engine
       - clock
       - metrics
       - pkg
   service_reconnect:
     mayDependOn:
+      - service_room_engine_codec
       - service
       - session
   service:
@@ -302,6 +263,7 @@ deps:
       - store_root
       - store_redis
       - store_postgres
+      - service_room_engine_codec
       - service_room_engine
       - service_room_actor
       - clock
@@ -309,14 +271,17 @@ deps:
   session:
     mayDependOn:
       - store_redis
+      - service_room_engine_codec
       - clock
   config:
     anyProjectDeps: true
   clock:
     mayDependOn:
+      - service_room_engine_codec
       - config
   metrics:
     mayDependOn:
+      - service_room_engine_codec
       - config
   log:
     anyProjectDeps: true
@@ -325,18 +290,21 @@ deps:
   pkg:
     mayDependOn:
       - contract
+      - service_room_engine_codec
       - service_room_engine
       - service_room_actor
       - service_reconnect
   apigen_client:
     mayDependOn:
       - contract
+      - service_room_engine_codec
       - service_room_engine
       - service_room_actor
       - service_reconnect
   apigen_v1:
     mayDependOn:
       - contract
+      - service_room_engine_codec
       - service_room_engine
       - service_room_actor
       - service_reconnect

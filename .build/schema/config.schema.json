@@ -201,6 +201,10 @@
             "deny"
           ],
           "properties": {
+            "deep_scan": {
+              "type": "boolean",
+              "description": "是否启用 go-arch-lint deepScan（方法调用与依赖注入检查）；默认 true。"
+            },
             "layers": {
               "type": "object",
               "patternProperties": {
