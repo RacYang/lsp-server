@@ -20,6 +20,7 @@ tmp/
 # === 本地配置（不入库）===
 deploy/compose/.env
 .claude/settings.local.json
+.claude/memory/
 
 # === 测试与压测产物 ===
 bench/runs/
