@@ -454,10 +454,15 @@ func (a *Actor) Run() {
 
 			// 排空 ch：对所有在途命令回写"房间已关闭"错误，解除等待 <-res 的 goroutine。
 			// 经 FIX-1，Submit* 发送成功后立即释放 submitMu，此处排空不会与锁竞争。
+			// 必须用 comma-ok 区分"信道已被外部关闭"：已关闭信道的接收永远立即就绪，
+			// 缺少该检查会在 drain 中无限读出零值自旋，Run 永不退出。
 		drain:
 			for {
 				select {
-				case pending := <-a.ch:
+				case pending, ok := <-a.ch:
+					if !ok {
+						break drain
+					}
 					a.rejectPendingMsg(pending)
 				default:
 					break drain

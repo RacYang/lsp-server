@@ -94,3 +94,33 @@ func TestRejectPendingShutdownTimers(t *testing.T) {
 		t.Fatal("排空路径应确认挂起的停机命令")
 	}
 }
+
+// TestRunExitsWhenChannelClosedDuringDrain 断言关闭分支排空循环对"信道已被外部
+// 关闭"健壮：Run 必须退出，而不是从已关闭信道无限读零值自旋（CI 曾以 10 分钟
+// 包超时暴露：房间因末次命令关闭与测试 cleanup 关闭信道竞态时命中）。
+func TestRunExitsWhenChannelClosedDuringDrain(t *testing.T) {
+	t.Parallel()
+
+	r := domainroom.NewRoom("r-drain-closed-ch")
+	// CloseRoom 在非 settling 态是静默空操作，这里直接做 waiting→closed 的合法迁移。
+	require.NoError(t, r.FSM.Transition(domainroom.StateClosed))
+	require.Equal(t, domainroom.StateClosed, r.FSM.State())
+	a := New(r, nil, Config{Engine: newTestEngine()})
+
+	// 预投递一条命令并立即关闭信道：Run 处理该命令后进入关闭分支排空，
+	// 此时信道已关闭且为空，缺少 comma-ok 检查的排空实现会无限自旋。
+	res := make(chan joinResult, 1)
+	a.ch <- cmdJoin{userID: "u1", res: res}
+	close(a.ch)
+
+	done := make(chan struct{})
+	go func() {
+		a.Run()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run 在信道关闭后未退出：关闭分支排空循环自旋")
+	}
+}
