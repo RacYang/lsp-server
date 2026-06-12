@@ -1,4 +1,5 @@
-// remote room gateway 中纯函数与转换器的单元测试，避免起 grpc 依赖。
+// 远程房间网关中纯函数与转换器的单元测试：只验证编解码、投影与重试等无副作用逻辑，
+// 不拉起任何真实集群依赖，保证测试快速且可并行。
 package remote
 
 import (
@@ -25,7 +26,7 @@ import (
 	"racoo.cn/lsp/pkg/logx"
 )
 
-// TestWithOutgoingTrace 校验 trace_id 的注入：缺少 trace_id 时透传 ctx，存在则写入 outgoing metadata。
+// TestWithOutgoingTrace 校验追踪标识的注入：上下文缺少追踪标识时原样透传，存在时写入出站元数据。
 func TestWithOutgoingTrace(t *testing.T) {
 	t.Parallel()
 	ctxNoTrace := context.Background()
@@ -357,7 +358,7 @@ func TestClientSeatInfoHandCount(t *testing.T) {
 	require.Equal(t, "ready", seats[0].GetStatus())
 }
 
-// TestRetryGRPC 校验 retryGRPC 的三条主要路径：成功立即返回、非可重试错误立刻返回、ctx 取消快速返回。
+// TestRetryGRPC 校验重试辅助函数的三条主要路径：成功立即返回、不可重试错误立刻返回、上下文取消时快速返回。
 func TestRetryGRPC(t *testing.T) {
 	t.Parallel()
 
