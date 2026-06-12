@@ -200,6 +200,29 @@ func (h *Hub) IsRegistered(userID, roomID string) bool {
 	return ok
 }
 
+// CloseAll 断开所有在线连接并清空注册表，返回断开的连接数。
+// 用于 gate 进程优雅停机：传输层停止接受新连接后主动断开存量连接，
+// 促使客户端立即向集群其它 gate 发起会话恢复，而不是等进程退出时的不定时瞬断。
+// 只调用 Close 不写关闭帧：写帧会与每连接写协程竞争（同 CloseExpiredHeartbeats）。
+func (h *Hub) CloseAll() int {
+	if h == nil {
+		return 0
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	closed := 0
+	for uid, c := range h.users {
+		if c != nil {
+			_ = c.Close()
+			closed++
+		}
+		delete(h.users, uid)
+		delete(h.lastHeartbeat, uid)
+	}
+	h.rooms = make(map[string]map[string]struct{})
+	return closed
+}
+
 // CloseExpiredHeartbeats 关闭超过心跳阈值的连接，但不改变房间业务状态。
 func (h *Hub) CloseExpiredHeartbeats() []string {
 	if h == nil {
