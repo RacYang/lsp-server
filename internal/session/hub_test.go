@@ -254,3 +254,53 @@ func TestWriteBinaryQueueAndClose(t *testing.T) {
 		t.Fatal("未收到消息")
 	}
 }
+
+type closableFakeConn struct {
+	mu     sync.Mutex
+	closed bool
+}
+
+func (c *closableFakeConn) WriteMessage(int, []byte) error { return nil }
+
+func (c *closableFakeConn) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	return nil
+}
+
+func (c *closableFakeConn) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
+// TestHubCloseAllDisconnectsAndClears 断言优雅停机语义：CloseAll 断开全部连接、
+// 清空用户与房间注册表，且对空 Hub 幂等安全。
+func TestHubCloseAllDisconnectsAndClears(t *testing.T) {
+	h := NewHub()
+	c1 := &closableFakeConn{}
+	c2 := &closableFakeConn{}
+	h.Register("u1", "r1", c1)
+	h.Register("u2", "r1", c2)
+
+	if got := h.CloseAll(); got != 2 {
+		t.Fatalf("应断开 2 条连接，实际 %d", got)
+	}
+	if !c1.isClosed() || !c2.isClosed() {
+		t.Fatal("CloseAll 后连接应已关闭")
+	}
+	if h.SendToUser("u1", []byte{1}) {
+		t.Fatal("CloseAll 后不应再能向用户发送")
+	}
+	if h.IsRegistered("u2", "r1") {
+		t.Fatal("CloseAll 后房间注册表应已清空")
+	}
+	if got := h.CloseAll(); got != 0 {
+		t.Fatalf("重复 CloseAll 应为空操作，实际 %d", got)
+	}
+	var nilHub *Hub
+	if got := nilHub.CloseAll(); got != 0 {
+		t.Fatal("nil Hub 的 CloseAll 应安全返回 0")
+	}
+}

@@ -28,6 +28,7 @@ type App struct {
 	srv     *http.Server
 	ln      net.Listener
 	rooms   *roomsvc.Service
+	hub     *session.Hub
 	cleanup func()
 }
 
@@ -168,7 +169,7 @@ func NewGate(ctx context.Context, cfg config.Config) (*App, error) {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	return &App{srv: srv, ln: ln, rooms: rs, cleanup: cleanup}, nil
+	return &App{srv: srv, ln: ln, rooms: rs, hub: hub, cleanup: cleanup}, nil
 }
 
 // Addr 返回已绑定的监听地址（用于测试与运维探测）。
@@ -198,6 +199,17 @@ func (a *App) Run(ctx context.Context) error {
 		shCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = a.srv.Shutdown(shCtx)
+		if a.rooms != nil {
+			// 停机顺序契约：传输层排空后停掉房间自驱动定时器，再由 cleanup 关闭存储依赖。
+			a.rooms.Shutdown(shCtx)
+		}
+		if a.hub != nil {
+			// WebSocket 是被劫持连接，http.Server.Shutdown 不会等待或通知；
+			// 主动断开促使客户端立即向其它 gate 发起会话恢复。
+			if closed := a.hub.CloseAll(); closed > 0 {
+				logx.Info(ctx, "停机断开存量 WebSocket 连接", "count", closed)
+			}
+		}
 		return ctx.Err()
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {

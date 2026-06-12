@@ -21,16 +21,19 @@ type GRPCApp struct {
 }
 
 // NewGRPC 根据监听地址与注册回调装配 gRPC 服务。
-func NewGRPC(ctx context.Context, addr string, register func(*grpc.Server)) (*GRPCApp, error) {
+// extraOpts 供进程装配注入传输凭据等服务端选项（凭据构造统一经 internal/cluster）。
+func NewGRPC(ctx context.Context, addr string, register func(*grpc.Server), extraOpts ...grpc.ServerOption) (*GRPCApp, error) {
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("监听 gRPC 地址失败: %w", err)
 	}
-	srv := grpc.NewServer(
+	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(traceUnaryServerInterceptor()),
 		grpc.ChainStreamInterceptor(traceStreamServerInterceptor()),
-	)
+	}
+	opts = append(opts, extraOpts...)
+	srv := grpc.NewServer(opts...)
 	if register != nil {
 		register(srv)
 	}

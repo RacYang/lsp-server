@@ -18,6 +18,10 @@ type scheduler struct {
 
 	mu    sync.Mutex
 	timer clock.Timer
+	// draining 置位后不再 arm 定时器、不再发起新 fire，用于进程优雅停机；
+	// 已在途的 fire 由 inflight 计数，waitInflight 等待其完成。
+	draining bool
+	inflight sync.WaitGroup
 }
 
 func newRoomScheduler(roomID string, clk clock.Clock, actor *Actor) *scheduler {
@@ -39,7 +43,7 @@ func (s *scheduler) armUntil(deadlineUnixMs int64) {
 		s.timer.Stop()
 		s.timer = nil
 	}
-	if deadlineUnixMs <= 0 {
+	if s.draining || deadlineUnixMs <= 0 {
 		return
 	}
 	d := time.Duration(deadlineUnixMs-s.clk.Now().UnixMilli()) * time.Millisecond
@@ -63,10 +67,41 @@ func (s *scheduler) stop() {
 	}
 }
 
+// markDraining 停掉未触发的定时器并拒绝后续 arm 与新 fire；已在途的 fire 不受影响。
+func (s *scheduler) markDraining() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.draining = true
+	if s.timer != nil {
+		s.timer.Stop()
+		s.timer = nil
+	}
+}
+
+// waitInflight 等待已在途的超时回调（含其持久化副作用）执行完毕。
+// 不得在 actor run goroutine 内调用：fire 需要 actor 循环消费命令才能完成。
+func (s *scheduler) waitInflight() {
+	if s == nil {
+		return
+	}
+	s.inflight.Wait()
+}
+
 func (s *scheduler) fire() {
 	if s == nil || s.actor == nil {
 		return
 	}
+	s.mu.Lock()
+	if s.draining {
+		s.mu.Unlock()
+		return
+	}
+	s.inflight.Add(1)
+	s.mu.Unlock()
+	defer s.inflight.Done()
 	notifications, err := s.actor.SubmitAutoTimeout(context.Background())
 	if err != nil {
 		logx.Error(logx.WithRoomID(context.Background(), s.roomID), "超时事件提交失败，阶段到期未处理", "err", err.Error())

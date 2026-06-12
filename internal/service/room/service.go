@@ -13,6 +13,7 @@ import (
 	"racoo.cn/lsp/internal/clock"
 	domainroom "racoo.cn/lsp/internal/domain/room"
 	act "racoo.cn/lsp/internal/service/room/actor"
+	"racoo.cn/lsp/pkg/logx"
 )
 
 // Service 编排房间命令；每房间在内部通过 actor.Actor 单协程串行化变更。
@@ -313,6 +314,26 @@ func (s *Service) ActiveRoomCount() int {
 		return 0
 	}
 	return int(s.activeCount.Load())
+}
+
+// Shutdown 停止全部房间的自驱动定时器（阶段超时与离线投降）并等待在途超时回调排空。
+// 属于进程优雅停机契约的"停自驱动源"一步：在传输层排空之后、存储依赖关闭之前调用，
+// 保证此后不再有定时器驱动的状态变更与持久化和资源关闭竞争。
+func (s *Service) Shutdown(ctx context.Context) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	actors := make(map[string]*act.Actor, len(s.actors))
+	for roomID, a := range s.actors {
+		actors[roomID] = a
+	}
+	s.mu.Unlock()
+	for roomID, a := range actors {
+		if err := a.Shutdown(ctx); err != nil {
+			logx.Warn(logx.WithRoomID(ctx, roomID), "房间定时器停机超时，可能遗留在途超时回调", "err", err.Error())
+		}
+	}
 }
 
 // Join 自动占座并返回座位号。

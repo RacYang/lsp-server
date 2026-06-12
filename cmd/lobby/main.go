@@ -9,7 +9,6 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	lobbyadapter "racoo.cn/lsp/internal/adapter/lobby"
 	"racoo.cn/lsp/internal/app"
@@ -56,15 +55,15 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		selector cluster.RoomNodeSelector
 	)
 	if cfg.EtcdEndpoints != "" {
-		cli, err := clientv3.New(clientv3.Config{
-			Endpoints:   cluster.ParseEndpoints(cfg.EtcdEndpoints),
-			DialTimeout: 5 * time.Second,
-		})
+		cli, err := cluster.NewEtcdClient(cfg.EtcdEndpoints, cfg.EtcdTLS.CertFile, cfg.EtcdTLS.KeyFile, cfg.EtcdTLS.CAFile, cfg.EtcdTLS.ServerName)
 		if err != nil {
 			logx.Error(ctx, "大厅服务 etcd 客户端初始化失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
+		if !cfg.EtcdTLS.Enabled() {
+			logx.Warn(ctx, "etcd 客户端未配置 TLS，控制面连接使用明文")
+		}
 		disco := cluster.NewEtcdDiscovery(cli, cfg.EtcdPrefix, 30)
 		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindLobby, cluster.NewNodeID(), cluster.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,
@@ -75,14 +74,28 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
+		// 摘增量先于排空：收到停机信号立即注销节点发现，gate 不再把新请求路由到本节点；
+		// 在途请求仍由 GRPCApp 的 GracefulStop 排空。重复 Stop 幂等（撤销同一租约）。
+		go func() {
+			<-ctx.Done()
+			_ = reg.Stop(context.Background())
+		}()
 		claimer = cluster.NewEtcdRouter(cli, cfg.EtcdPrefix)
 		selector = cluster.NewLeastRoomsSelector(disco)
+	}
+	serverCreds, err := cluster.NewServerTransportCredentials(cfg.ClusterTLS.CertFile, cfg.ClusterTLS.KeyFile, cfg.ClusterTLS.CAFile)
+	if err != nil {
+		logx.Error(ctx, "大厅服务集群凭据构造失败", "err", err.Error())
+		return 1
+	}
+	if !cfg.ClusterTLS.Enabled() {
+		logx.Warn(ctx, "集群 gRPC 未配置 mTLS，大厅服务以明文监听")
 	}
 	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
 		srv := lobbyadapter.NewGRPCServer(svc, claimer, defaultRoomNodeID)
 		srv.SetRoomNodeSelector(selector)
 		lobbyadapter.RegisterService(s, srv)
-	})
+	}, grpc.Creds(serverCreds))
 	if err != nil {
 		logx.Error(ctx, "大厅服务装配失败", "err", err.Error())
 		return 1

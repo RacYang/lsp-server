@@ -2,9 +2,10 @@ package engine
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash/fnv"
 
 	"racoo.cn/lsp/internal/clock"
 	"racoo.cn/lsp/internal/mahjong/hand"
@@ -50,6 +51,9 @@ type Engine struct {
 	ruleID string
 	clk    clock.Clock
 	tmo    TimeoutConfig
+	// wallSeed 提供真实对局的开局牌墙种子；默认取 CSPRNG（cryptoWallSeed），
+	// 测试可通过 SetWallSeedSource 注入确定值。回放路径不走该来源（见 engine_auto.go）。
+	wallSeed func() int64
 }
 
 // RoundState 保存交互式单局运行态，仅在 room actor 内被串行访问。
@@ -61,12 +65,15 @@ type RoundState struct {
 	rule        rules.Rule
 	caps        rules.CapabilitySet
 	wall        *wall.Wall
-	hands       []*hand.Hand
-	ruleState   rules.RuleState
-	discards    [][]tile.Tile
-	flowers     [][]tile.Tile
-	melds       [][]string
-	lastAction  *LastActionInfo
+	// wallSeed 是本局开局牌墙种子，仅用于审计与赛后复盘；玩法与恢复路径都不依赖它
+	// （牌墙按剩余牌序持久化）。旧快照恢复后为 0，表示种子未知。
+	wallSeed   int64
+	hands      []*hand.Hand
+	ruleState  rules.RuleState
+	discards   [][]tile.Tile
+	flowers    [][]tile.Tile
+	melds      [][]string
+	lastAction *LastActionInfo
 
 	waitingOpening         bool
 	waitingDiscard         bool
@@ -147,6 +154,8 @@ type roundPersist struct {
 	Flowers                [][]string              `json:"flowers,omitempty"`
 	Melds                  [][]string              `json:"melds,omitempty"`
 	WallRemaining          []string                `json:"wall_remaining"`
+	// WallSeed 是开局牌墙种子的审计字段，schema v7 兼容增量字段；老快照为零表示种子未知。
+	WallSeed int64 `json:"wall_seed,omitempty"`
 	// PhaseReason 与 PhaseStartUnixMs 由 ADR-0045 引入；为 schema v3 兼容增量字段。
 	// 老快照该两字段为零；恢复路径在 finalizeRoundInvariants 中由 waiting flags 派生 PhaseReason，
 	// PhaseStartUnixMs=0 表示无锚点，scheduler.armUntil 触发立即超时（cmdAutoTimeout）。
@@ -262,7 +271,7 @@ func NewEngine(ruleID string) *Engine {
 	if ruleID == "" {
 		ruleID = "sichuan_xuezhandaodi_huansanzhang"
 	}
-	return &Engine{ruleID: ruleID, clk: clock.NewReal(), tmo: DefaultTimeoutConfig()}
+	return &Engine{ruleID: ruleID, clk: clock.NewReal(), tmo: DefaultTimeoutConfig(), wallSeed: cryptoWallSeed}
 }
 
 func (rs *RoundState) ensureRuleRuntime() {
@@ -314,6 +323,7 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 	}
 	rule := rules.MustGet(e.ruleID)
 	caps := rules.CapabilitiesOf(rule)
+	seed := e.nextWallSeed()
 	rs := &RoundState{
 		roomID:          roomID,
 		ruleID:          e.ruleID,
@@ -321,7 +331,8 @@ func (e *Engine) StartRound(ctx context.Context, roomID string, playerIDs [4]str
 		surrendered:     make([]bool, 4),
 		rule:            rule,
 		caps:            caps,
-		wall:            caps.TileSet.BuildWall(ctx, int64(seedFromRoomID(roomID)&0x7fff_ffff_ffff_ffff)), //nolint:gosec // 已清零最高位
+		wallSeed:        seed,
+		wall:            caps.TileSet.BuildWall(ctx, seed),
 		hands:           make([]*hand.Hand, 4),
 		ruleState:       newInitialRuleState(caps),
 		discards:        make([][]tile.Tile, 4),
@@ -381,8 +392,28 @@ func (rs *RoundState) initialDealNotifications() ([]Notification, error) {
 	return out, nil
 }
 
-func seedFromRoomID(roomID string) uint64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(roomID))
-	return h.Sum64()
+// SetWallSeedSource 注入开局牌墙的种子来源，仅供测试构造确定性对局；
+// 生产装配不得调用——真实对局必须保持 CSPRNG 默认值（不可预测性是公平性不变量）。
+func (e *Engine) SetWallSeedSource(fn func() int64) {
+	if e == nil || fn == nil {
+		return
+	}
+	e.wallSeed = fn
+}
+
+// nextWallSeed 返回一次性的开局牌墙种子；零值 Engine 兜底到 CSPRNG。
+func (e *Engine) nextWallSeed() int64 {
+	if e == nil || e.wallSeed == nil {
+		return cryptoWallSeed()
+	}
+	return e.wallSeed()
+}
+
+// cryptoWallSeed 从系统熵源取 64 位随机数并清零符号位，保证 BuildWall 收到非负种子。
+// 禁止改回从 roomID 等客户端可见信息派生：那会让房间内玩家离线推算整副牌墙。
+func cryptoWallSeed() int64 {
+	var b [8]byte
+	// Go 1.24 起 crypto/rand.Read 保证不返回错误（熵源不可用时由运行时直接中止进程）。
+	_, _ = rand.Read(b[:])
+	return int64(binary.BigEndian.Uint64(b[:]) & 0x7fff_ffff_ffff_ffff) //nolint:gosec // G115：已清零最高位
 }

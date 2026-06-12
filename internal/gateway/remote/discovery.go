@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -103,7 +102,11 @@ func (g *remoteRoomGateway) roomClientForAddr(addr string) (svcv1.RoomServiceCli
 	if client := g.roomClients[addr]; client != nil {
 		return client, nil
 	}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpcKeepaliveOpt)
+	if g.dialCreds == nil {
+		// 凭据决策归属构造期（New）；未经装配的实例禁止静默以明文外呼。
+		return nil, fmt.Errorf("集群客户端凭据未注入: %s", addr)
+	}
+	conn, err := grpc.NewClient(addr, g.dialCreds, grpcKeepaliveOpt)
 	if err != nil {
 		return nil, fmt.Errorf("dial room grpc %s: %w", addr, err)
 	}
@@ -117,19 +120,6 @@ func (g *remoteRoomGateway) roomClientForAddr(addr string) (svcv1.RoomServiceCli
 	g.roomConnMap[addr] = conn
 	g.roomClients[addr] = client
 	return client, nil
-}
-
-// splitCommaSeparated 将逗号分隔字符串拆分为非空部分并去除空白。
-func splitCommaSeparated(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
 }
 
 // retryGRPC 对 Unavailable 与 DeadlineExceeded 错误最多重试 8 次，每次间隔 100ms。

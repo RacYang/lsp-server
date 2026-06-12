@@ -6,6 +6,13 @@ rule:
 cluster:
   lobby_addr: ""
   room_addr: ""
+  # 集群内 gRPC 双向 TLS：三项证书材料齐备时启用 mTLS；
+  # 全空表示明文（仅限可信网络）；半配置会拒绝启动。
+  tls:
+    cert_file: ""
+    key_file: ""
+    ca_file: ""
+    server_name: ""
 redis:
   addr: ""
 postgres:
@@ -15,6 +22,13 @@ obs:
 etcd:
   endpoints: ""
   prefix: "/lsp"
+  # 控制面 etcd 客户端 TLS：与集群 gRPC 属不同信任域，证书材料独立配置；
+  # 三态语义同 cluster.tls（齐备启用、全空明文、半配置拒绝启动）。
+  tls:
+    cert_file: ""
+    key_file: ""
+    ca_file: ""
+    server_name: ""
 runtime:
   gate:
     ws_rate_limit_per_second: 20

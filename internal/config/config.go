@@ -17,6 +17,9 @@ type Config struct {
 	ClusterRoomAddr  string
 	// ClusterAdvertiseAddr 是当前节点对其它集群进程公布的可连接地址。
 	ClusterAdvertiseAddr string
+	// ClusterTLS 是集群内 gRPC 的传输凭据配置；凭据构造统一经 internal/cluster，
+	// 调用点不得自行决定凭据形态。
+	ClusterTLS ClusterTLS
 	// RedisAddr 非空时启用会话、快照元数据等数据面（Phase 3）。
 	RedisAddr string
 	// PostgresDSN 非空时启用对局事件与结算持久化（Phase 3）。
@@ -26,9 +29,28 @@ type Config struct {
 	// EtcdEndpoints 逗号分隔的 etcd 端点；空表示不启用控制面客户端（单测与本地默认）。
 	EtcdEndpoints string
 	// EtcdPrefix 是 etcd 键空间前缀，默认 /lsp；多套环境共享同一 etcd 时需设置不同前缀。
-	EtcdPrefix   string
+	EtcdPrefix string
+	// EtcdTLS 是控制面 etcd 客户端的传输凭据配置；etcd 与集群 gRPC 属不同信任域，
+	// 证书材料独立配置，构造统一经 internal/cluster。
+	EtcdTLS      ClusterTLS
 	RoomTimeouts RoomTimeouts
 	Runtime      RuntimeConfig
+}
+
+// ClusterTLS 定义集群内 gRPC 双向 TLS 的证书材料路径。
+// 三项文件齐备时启用 mTLS；全空表示明文（Alpha 可信网络默认）；
+// 半配置由凭据构造点拒绝启动，不静默降级。
+type ClusterTLS struct {
+	CertFile string
+	KeyFile  string
+	CAFile   string
+	// ServerName 仅在服务端证书 SAN 与拨号地址不一致时需要。
+	ServerName string
+}
+
+// Enabled 返回是否已完整配置 mTLS 证书材料。
+func (c ClusterTLS) Enabled() bool {
+	return c.CertFile != "" && c.KeyFile != "" && c.CAFile != ""
 }
 
 // RoomTimeouts 定义房间各等待态服务端托管超时。
@@ -165,11 +187,23 @@ func Load(path string) (Config, error) {
 		ClusterLobbyAddr:     v.GetString("cluster.lobby_addr"),
 		ClusterRoomAddr:      v.GetString("cluster.room_addr"),
 		ClusterAdvertiseAddr: v.GetString("cluster.advertise_addr"),
-		RedisAddr:            v.GetString("redis.addr"),
-		PostgresDSN:          v.GetString("postgres.dsn"),
-		ObsAddr:              v.GetString("obs.addr"),
-		EtcdEndpoints:        v.GetString("etcd.endpoints"),
-		EtcdPrefix:           v.GetString("etcd.prefix"),
+		ClusterTLS: ClusterTLS{
+			CertFile:   v.GetString("cluster.tls.cert_file"),
+			KeyFile:    v.GetString("cluster.tls.key_file"),
+			CAFile:     v.GetString("cluster.tls.ca_file"),
+			ServerName: v.GetString("cluster.tls.server_name"),
+		},
+		RedisAddr:     v.GetString("redis.addr"),
+		PostgresDSN:   v.GetString("postgres.dsn"),
+		ObsAddr:       v.GetString("obs.addr"),
+		EtcdEndpoints: v.GetString("etcd.endpoints"),
+		EtcdPrefix:    v.GetString("etcd.prefix"),
+		EtcdTLS: ClusterTLS{
+			CertFile:   v.GetString("etcd.tls.cert_file"),
+			KeyFile:    v.GetString("etcd.tls.key_file"),
+			CAFile:     v.GetString("etcd.tls.ca_file"),
+			ServerName: v.GetString("etcd.tls.server_name"),
+		},
 		RoomTimeouts: RoomTimeouts{
 			OpeningDefault:  v.GetDuration("room.timeout.opening"),
 			OpeningByAction: roomTimeoutActionDurations(v.GetStringMapString("room.timeout.opening_by_action")),

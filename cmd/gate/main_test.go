@@ -39,10 +39,3 @@ func TestRunWithCanceledEtcdContext(t *testing.T) {
 		t.Fatal("expected non-zero exit code")
 	}
 }
-
-func TestSplitEtcdEndpoints(t *testing.T) {
-	got := splitEtcdEndpoints(" a, ,b ")
-	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
-		t.Fatalf("%+v", got)
-	}
-}

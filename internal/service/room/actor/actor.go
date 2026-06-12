@@ -68,6 +68,9 @@ type Actor struct {
 	offlineTimerGens map[string]uint64
 	// offlineSurrenderAfter 为离线投降延迟；零值使用 DefaultOfflineSurrenderAfter。
 	offlineSurrenderAfter time.Duration
+	// draining 在 cmdShutdownTimers 处理后置位，阻止离线投降定时器再被创建；
+	// 仅在 actor run goroutine 内读写，无需额外同步。
+	draining bool
 }
 
 // DefaultOfflineSurrenderAfter 是离线投降的默认等待时长。
@@ -90,6 +93,11 @@ type cmdCancelOffline struct {
 type cmdOfflineTimeout struct {
 	userID string
 	gen    uint64
+}
+
+// cmdShutdownTimers 在进程优雅停机时停止本房间全部自驱动定时器（阶段超时与离线投降）。
+type cmdShutdownTimers struct {
+	res chan struct{}
 }
 
 type cmdJoin struct {
@@ -403,6 +411,21 @@ func (a *Actor) Run() {
 		case cmdCancelOffline:
 			// 玩家重连：取消计时器（fire-and-forget，不需要响应）。
 			a.cancelOfflineTimer(m.userID)
+		case cmdShutdownTimers:
+			// 优雅停机：置 draining 阻止新定时器，停掉已有定时器；
+			// 已在途的超时回调由 scheduler.waitInflight 在 actor 循环外等待。
+			a.draining = true
+			for _, t := range a.offlineTimers {
+				if t != nil {
+					t.Stop()
+				}
+			}
+			a.offlineTimers = nil
+			a.offlineTimerGens = nil
+			if a.scheduler != nil {
+				a.scheduler.markDraining()
+			}
+			m.res <- struct{}{}
 		case cmdOfflineTimeout:
 			// 定时器到期事件：在串行上下文内检查代号，过期回调直接忽略。
 			if a.offlineTimerGens[m.userID] == m.gen {
@@ -431,10 +454,15 @@ func (a *Actor) Run() {
 
 			// 排空 ch：对所有在途命令回写"房间已关闭"错误，解除等待 <-res 的 goroutine。
 			// 经 FIX-1，Submit* 发送成功后立即释放 submitMu，此处排空不会与锁竞争。
+			// 必须用 comma-ok 区分"信道已被外部关闭"：已关闭信道的接收永远立即就绪，
+			// 缺少该检查会在 drain 中无限读出零值自旋，Run 永不退出。
 		drain:
 			for {
 				select {
-				case pending := <-a.ch:
+				case pending, ok := <-a.ch:
+					if !ok {
+						break drain
+					}
 					a.rejectPendingMsg(pending)
 				default:
 					break drain
@@ -495,6 +523,9 @@ func (a *Actor) rejectPendingMsg(msg any) {
 		m.res <- actionResult{err: errRoomClosed}
 	case cmdOpeningAction:
 		m.res <- actionResult{err: errRoomClosed}
+	case cmdShutdownTimers:
+		// 房间关闭分支已清理全部定时器，停机语义天然达成，直接确认。
+		m.res <- struct{}{}
 		// cmdMarkOffline、cmdCancelOffline、cmdOfflineTimeout 无 res，直接丢弃。
 	}
 }
@@ -635,6 +666,37 @@ func (a *Actor) checkPhaseToken(tok *PhaseToken) error {
 
 func (a *Actor) SubmitAutoTimeout(ctx context.Context) ([]Notification, error) {
 	return a.SubmitAction(ctx, cmdAutoTimeout{ctx: ctx, res: make(chan actionResult, 1)})
+}
+
+// Shutdown 停止本房间全部自驱动定时器并等待已在途的超时回调（含其持久化副作用）完成。
+// 属于进程优雅停机契约的"停自驱动源"一步：必须在传输层排空之后、存储依赖关闭之前调用。
+// 已关闭房间的定时器在关闭分支已清理，直接返回。
+func (a *Actor) Shutdown(ctx context.Context) error {
+	if a == nil {
+		return nil
+	}
+	a.submitMu.Lock()
+	if a.closed.Load() {
+		a.submitMu.Unlock()
+		return nil
+	}
+	res := make(chan struct{}, 1)
+	select {
+	case a.ch <- cmdShutdownTimers{res: res}:
+	case <-ctx.Done():
+		a.submitMu.Unlock()
+		return ctx.Err()
+	}
+	a.submitMu.Unlock()
+	select {
+	case <-res:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if a.scheduler != nil {
+		a.scheduler.waitInflight()
+	}
+	return nil
 }
 
 func (a *Actor) SubmitOpeningAction(ctx context.Context, userID, action string, tiles []string, direction, suit int32, params map[string]string, tok *PhaseToken) ([]Notification, error) {
@@ -850,6 +912,9 @@ func (a *Actor) SubmitAction(ctx context.Context, cmd any) ([]Notification, erro
 // ensureOfflineTimer 在 actor goroutine 内启动（或重置）离线投降计时器。
 // 定时器到期后直接向 ch 投递 cmdOfflineTimeout，保证全部投降逻辑在串行上下文内执行。
 func (a *Actor) ensureOfflineTimer(userID string) {
+	if a.draining {
+		return
+	}
 	if a.offlineTimers == nil {
 		a.offlineTimers = make(map[string]*time.Timer)
 	}

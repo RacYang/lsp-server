@@ -57,3 +57,31 @@ func TestLoadTempFile(t *testing.T) {
 		t.Fatalf("%+v", cfg.Runtime.Logging)
 	}
 }
+
+func TestLoadClusterTLS(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "tls.yaml")
+	content := "server:\n  addr: \":19999\"\ncluster:\n  tls:\n    cert_file: \"/etc/lsp/tls/node.pem\"\n    key_file: \"/etc/lsp/tls/node.key\"\n    ca_file: \"/etc/lsp/tls/ca.pem\"\n    server_name: \"lsp-cluster\"\netcd:\n  tls:\n    cert_file: \"/etc/lsp/tls/etcd.pem\"\n    key_file: \"/etc/lsp/tls/etcd.key\"\n    ca_file: \"/etc/lsp/tls/etcd-ca.pem\"\n"
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ClusterTLS.CertFile != "/etc/lsp/tls/node.pem" ||
+		cfg.ClusterTLS.KeyFile != "/etc/lsp/tls/node.key" ||
+		cfg.ClusterTLS.CAFile != "/etc/lsp/tls/ca.pem" ||
+		cfg.ClusterTLS.ServerName != "lsp-cluster" {
+		t.Fatalf("%+v", cfg.ClusterTLS)
+	}
+	if !cfg.ClusterTLS.Enabled() {
+		t.Fatalf("三项证书材料齐备时 Enabled 应为真: %+v", cfg.ClusterTLS)
+	}
+	if cfg.EtcdTLS.CertFile != "/etc/lsp/tls/etcd.pem" ||
+		cfg.EtcdTLS.KeyFile != "/etc/lsp/tls/etcd.key" ||
+		cfg.EtcdTLS.CAFile != "/etc/lsp/tls/etcd-ca.pem" ||
+		!cfg.EtcdTLS.Enabled() {
+		t.Fatalf("%+v", cfg.EtcdTLS)
+	}
+}
