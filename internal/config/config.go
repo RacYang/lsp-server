@@ -29,7 +29,10 @@ type Config struct {
 	// EtcdEndpoints 逗号分隔的 etcd 端点；空表示不启用控制面客户端（单测与本地默认）。
 	EtcdEndpoints string
 	// EtcdPrefix 是 etcd 键空间前缀，默认 /lsp；多套环境共享同一 etcd 时需设置不同前缀。
-	EtcdPrefix   string
+	EtcdPrefix string
+	// EtcdTLS 是控制面 etcd 客户端的传输凭据配置；etcd 与集群 gRPC 属不同信任域，
+	// 证书材料独立配置，构造统一经 internal/cluster。
+	EtcdTLS      ClusterTLS
 	RoomTimeouts RoomTimeouts
 	Runtime      RuntimeConfig
 }
@@ -195,6 +198,12 @@ func Load(path string) (Config, error) {
 		ObsAddr:       v.GetString("obs.addr"),
 		EtcdEndpoints: v.GetString("etcd.endpoints"),
 		EtcdPrefix:    v.GetString("etcd.prefix"),
+		EtcdTLS: ClusterTLS{
+			CertFile:   v.GetString("etcd.tls.cert_file"),
+			KeyFile:    v.GetString("etcd.tls.key_file"),
+			CAFile:     v.GetString("etcd.tls.ca_file"),
+			ServerName: v.GetString("etcd.tls.server_name"),
+		},
 		RoomTimeouts: RoomTimeouts{
 			OpeningDefault:  v.GetDuration("room.timeout.opening"),
 			OpeningByAction: roomTimeoutActionDurations(v.GetStringMapString("room.timeout.opening_by_action")),

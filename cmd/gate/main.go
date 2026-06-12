@@ -6,11 +6,9 @@ import (
 	"errors"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"racoo.cn/lsp/internal/app"
 
 	"racoo.cn/lsp/internal/cluster"
@@ -36,12 +34,15 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		return 1
 	}
 	if cfg.EtcdEndpoints != "" {
-		cli, err := clientv3.New(clientv3.Config{Endpoints: splitEtcdEndpoints(cfg.EtcdEndpoints), DialTimeout: 5 * time.Second})
+		cli, err := cluster.NewEtcdClient(cfg.EtcdEndpoints, cfg.EtcdTLS.CertFile, cfg.EtcdTLS.KeyFile, cfg.EtcdTLS.CAFile, cfg.EtcdTLS.ServerName)
 		if err != nil {
 			logx.Error(ctx, "网关服务 etcd 客户端初始化失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
+		if !cfg.EtcdTLS.Enabled() {
+			logx.Warn(ctx, "etcd 客户端未配置 TLS，控制面连接使用明文")
+		}
 		disco := cluster.NewEtcdDiscovery(cli, cfg.EtcdPrefix, 30)
 		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindGate, cluster.NewNodeID(), cluster.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,
@@ -70,16 +71,4 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		return 1
 	}
 	return 0
-}
-
-func splitEtcdEndpoints(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
 }

@@ -25,5 +25,7 @@ func TestTransportCredentialDecisionNotInlined(t *testing.T) {
 		require.NoError(t, err)
 		require.NotContains(t, string(src), "insecure.NewCredentials",
 			"%s 不得在调用点内联凭据决策，凭据须经 internal/cluster 构造注入", name)
+		require.NotContains(t, string(src), "clientv3.New(",
+			"%s 不得内联构造 etcd 客户端，须经 cluster.NewEtcdClient 收口凭据决策", name)
 	}
 }

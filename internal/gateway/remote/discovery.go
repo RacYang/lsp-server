@@ -122,19 +122,6 @@ func (g *remoteRoomGateway) roomClientForAddr(addr string) (svcv1.RoomServiceCli
 	return client, nil
 }
 
-// splitCommaSeparated 将逗号分隔字符串拆分为非空部分并去除空白。
-func splitCommaSeparated(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
-}
-
 // retryGRPC 对 Unavailable 与 DeadlineExceeded 错误最多重试 8 次，每次间隔 100ms。
 func retryGRPC(ctx context.Context, fn func(context.Context) error) error {
 	var lastErr error

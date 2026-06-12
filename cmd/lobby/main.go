@@ -9,7 +9,6 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	lobbyadapter "racoo.cn/lsp/internal/adapter/lobby"
 	"racoo.cn/lsp/internal/app"
@@ -56,15 +55,15 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		selector cluster.RoomNodeSelector
 	)
 	if cfg.EtcdEndpoints != "" {
-		cli, err := clientv3.New(clientv3.Config{
-			Endpoints:   cluster.ParseEndpoints(cfg.EtcdEndpoints),
-			DialTimeout: 5 * time.Second,
-		})
+		cli, err := cluster.NewEtcdClient(cfg.EtcdEndpoints, cfg.EtcdTLS.CertFile, cfg.EtcdTLS.KeyFile, cfg.EtcdTLS.CAFile, cfg.EtcdTLS.ServerName)
 		if err != nil {
 			logx.Error(ctx, "大厅服务 etcd 客户端初始化失败", "err", err.Error())
 			return 1
 		}
 		defer func() { _ = cli.Close() }()
+		if !cfg.EtcdTLS.Enabled() {
+			logx.Warn(ctx, "etcd 客户端未配置 TLS，控制面连接使用明文")
+		}
 		disco := cluster.NewEtcdDiscovery(cli, cfg.EtcdPrefix, 30)
 		reg, err := disco.RegisterAndKeepAlive(ctx, cluster.KindLobby, cluster.NewNodeID(), cluster.NodeMeta{
 			AdvertiseAddr: cfg.ServerAddr,

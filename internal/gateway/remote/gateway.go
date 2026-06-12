@@ -85,14 +85,14 @@ func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache 
 		roomDisc  *cluster.EtcdDiscovery
 	)
 	if strings.TrimSpace(cfg.EtcdEndpoints) != "" {
-		etcdCli, err = clientv3.New(clientv3.Config{
-			Endpoints:   splitCommaSeparated(cfg.EtcdEndpoints),
-			DialTimeout: 5 * time.Second,
-		})
+		etcdCli, err = cluster.NewEtcdClient(cfg.EtcdEndpoints, cfg.EtcdTLS.CertFile, cfg.EtcdTLS.KeyFile, cfg.EtcdTLS.CAFile, cfg.EtcdTLS.ServerName)
 		if err != nil {
 			_ = lobbyConn.Close()
 			_ = roomConn.Close()
 			return nil, nil, fmt.Errorf("dial etcd: %w", err)
+		}
+		if !cfg.EtcdTLS.Enabled() {
+			logx.Warn(context.Background(), "etcd 客户端未配置 TLS，控制面连接使用明文")
 		}
 		roomRoute = cluster.NewEtcdRouter(etcdCli, cfg.EtcdPrefix)
 		roomDisc = cluster.NewEtcdDiscovery(etcdCli, cfg.EtcdPrefix, 30)

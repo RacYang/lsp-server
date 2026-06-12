@@ -45,9 +45,22 @@ func NewServerTransportCredentials(certFile, keyFile, caFile string) (credential
 // NewClientTransportCredentials 构造集群 gRPC 客户端凭据；serverName 仅在证书 SAN
 // 与拨号地址不一致时需要（如经由负载均衡 IP 访问）。
 func NewClientTransportCredentials(certFile, keyFile, caFile, serverName string) (credentials.TransportCredentials, error) {
+	tlsCfg, err := NewClientTLSConfig(certFile, keyFile, caFile, serverName)
+	if err != nil {
+		return nil, err
+	}
+	if tlsCfg == nil {
+		return insecure.NewCredentials(), nil
+	}
+	return credentials.NewTLS(tlsCfg), nil
+}
+
+// NewClientTLSConfig 构造集群客户端 *tls.Config，供 gRPC 与 etcd 等出站连接复用；
+// 三项全空返回 nil 表示明文，半配置返回错误。
+func NewClientTLSConfig(certFile, keyFile, caFile, serverName string) (*tls.Config, error) {
 	switch {
 	case certFile == "" && keyFile == "" && caFile == "":
-		return insecure.NewCredentials(), nil
+		return nil, nil
 	case certFile == "" || keyFile == "" || caFile == "":
 		return nil, fmt.Errorf("集群 TLS 半配置：cert/key/ca 三项必须同时提供或同时为空")
 	}
@@ -59,12 +72,12 @@ func NewClientTransportCredentials(certFile, keyFile, caFile, serverName string)
 	if err != nil {
 		return nil, err
 	}
-	return credentials.NewTLS(&tls.Config{
+	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      pool,
 		ServerName:   serverName,
 		MinVersion:   tls.VersionTLS12,
-	}), nil
+	}, nil
 }
 
 func loadCertPool(caFile string) (*x509.CertPool, error) {

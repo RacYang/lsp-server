@@ -25,14 +25,6 @@ import (
 	"racoo.cn/lsp/pkg/logx"
 )
 
-// TestSplitCommaSeparated 校验逗号分隔符串切分时空白与空段会被忽略。
-func TestSplitCommaSeparated(t *testing.T) {
-	t.Parallel()
-	got := splitCommaSeparated("  a , ,b ,, c")
-	require.Equal(t, []string{"a", "b", "c"}, got)
-	require.Empty(t, splitCommaSeparated(""))
-}
-
 // TestWithOutgoingTrace 校验 trace_id 的注入：缺少 trace_id 时透传 ctx，存在则写入 outgoing metadata。
 func TestWithOutgoingTrace(t *testing.T) {
 	t.Parallel()
