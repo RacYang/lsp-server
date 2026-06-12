@@ -16,6 +16,8 @@ coverage.out
 tmp/
 .cache/
 .DS_Store
+# 运行 scripts/ 下 Python enforcer 时生成的字节码缓存
+__pycache__/
 
 # === 本地配置（不入库）===
 deploy/compose/.env
