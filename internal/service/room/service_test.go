@@ -404,23 +404,22 @@ func driveRoundToClose(ctx context.Context, svc *Service, roomID string) error {
 				}
 			}
 		case "claim_window":
-			if len(view.ClaimCandidates) > 0 {
-				best := view.ClaimCandidates[0]
-				uid := a.Room.PlayerIDs[best.Seat]
-				if len(best.Actions) > 0 {
-					switch best.Actions[0] {
-					case "gang":
-						if _, e := svc.Gang(ctx, roomID, uid, view.PendingTile, nil); e != nil && !roundClosedErr(e) {
-							return e
-						}
-					case "pong":
-						if _, e := svc.Pong(ctx, roomID, uid, nil); e != nil && !roundClosedErr(e) {
-							return e
-						}
-					case "hu":
-						if notifs, e := svc.Hu(ctx, roomID, uid, nil); e == nil && containsSettlement(notifs) {
-							return nil
-						}
+			// ActingSeat 是引擎裁定的最高优先级抢答座位（hu > gang > pong），
+			// AvailableActions 按同序排列；候选列表只用于提示各客户端，
+			// 向引擎提交动作必须以 ActingSeat 为准，否则会被 isTopClaimSeat 拒绝。
+			if userID != "" && len(view.AvailableActions) > 0 {
+				switch view.AvailableActions[0] {
+				case "hu":
+					if notifs, e := svc.Hu(ctx, roomID, userID, nil); e == nil && containsSettlement(notifs) {
+						return nil
+					}
+				case "gang":
+					if _, e := svc.Gang(ctx, roomID, userID, view.PendingTile, nil); e != nil && !roundClosedErr(e) {
+						return e
+					}
+				case "pong":
+					if _, e := svc.Pong(ctx, roomID, userID, nil); e != nil && !roundClosedErr(e) {
+						return e
 					}
 				}
 			} else if userID != "" {
