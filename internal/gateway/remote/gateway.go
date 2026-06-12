@@ -9,7 +9,6 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
@@ -49,6 +48,9 @@ type remoteRoomGateway struct {
 	connMu      sync.Mutex
 	roomConnMap map[string]*grpc.ClientConn
 	roomClients map[string]svcv1.RoomServiceClient
+	// dialCreds 是集群客户端传输凭据，由 New 经 cluster 层统一构造；
+	// 全部出站连接（含按发现地址新建的 room 连接）复用同一凭据。
+	dialCreds grpc.DialOption
 }
 
 // grpcKeepaliveOpt 为集群内 gRPC 连接添加保活参数：每 30s 探测一次，10s 超时，空闲时也发送探测。
@@ -60,11 +62,19 @@ var grpcKeepaliveOpt = grpc.WithKeepaliveParams(keepalive.ClientParameters{
 
 // New 根据配置构造远程房间网关，返回网关实例、清理函数和初始化错误。
 func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache *redis.Client, settlementStore *postgres.SettlementStore) (contract.RoomGateway, func(), error) {
-	lobbyConn, err := grpc.NewClient(cfg.ClusterLobbyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpcKeepaliveOpt)
+	creds, err := cluster.NewClientTransportCredentials(cfg.ClusterTLS.CertFile, cfg.ClusterTLS.KeyFile, cfg.ClusterTLS.CAFile, cfg.ClusterTLS.ServerName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("构造集群客户端凭据: %w", err)
+	}
+	if !cfg.ClusterTLS.Enabled() {
+		logx.Warn(context.Background(), "集群 gRPC 未配置 mTLS，出站连接使用明文传输")
+	}
+	dialCreds := grpc.WithTransportCredentials(creds)
+	lobbyConn, err := grpc.NewClient(cfg.ClusterLobbyAddr, dialCreds, grpcKeepaliveOpt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("dial lobby grpc: %w", err)
 	}
-	roomConn, err := grpc.NewClient(cfg.ClusterRoomAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpcKeepaliveOpt)
+	roomConn, err := grpc.NewClient(cfg.ClusterRoomAddr, dialCreds, grpcKeepaliveOpt)
 	if err != nil {
 		_ = lobbyConn.Close()
 		return nil, nil, fmt.Errorf("dial room grpc: %w", err)
@@ -104,6 +114,7 @@ func New(cfg config.Config, hub *session.Hub, sess *session.Manager, routeCache 
 		roomSeats:             make(map[string]map[int32]string),
 		roomConnMap:           map[string]*grpc.ClientConn{cfg.ClusterRoomAddr: roomConn},
 		roomClients:           map[string]svcv1.RoomServiceClient{cfg.ClusterRoomAddr: svcv1.NewRoomServiceClient(roomConn)},
+		dialCreds:             dialCreds,
 	}
 	cleanup := func() {
 		cancel()

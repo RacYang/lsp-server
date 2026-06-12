@@ -141,9 +141,17 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 		}
 		svc.SetReady(true)
 	}
+	serverCreds, err := cluster.NewServerTransportCredentials(cfg.ClusterTLS.CertFile, cfg.ClusterTLS.KeyFile, cfg.ClusterTLS.CAFile)
+	if err != nil {
+		logx.Error(ctx, "房间服务集群凭据构造失败", "err", err.Error())
+		return 1
+	}
+	if !cfg.ClusterTLS.Enabled() {
+		logx.Warn(ctx, "集群 gRPC 未配置 mTLS，房间服务以明文监听")
+	}
 	a, err := app.NewGRPC(ctx, cfg.ServerAddr, func(s *grpc.Server) {
 		roomadapter.RegisterService(s, svc)
-	})
+	}, grpc.Creds(serverCreds))
 	if err != nil {
 		logx.Error(ctx, "房间服务装配失败", "err", err.Error())
 		return 1
