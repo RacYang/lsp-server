@@ -198,6 +198,10 @@ func (a *App) Run(ctx context.Context) error {
 		shCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = a.srv.Shutdown(shCtx)
+		if a.rooms != nil {
+			// 停机顺序契约：传输层排空后停掉房间自驱动定时器，再由 cleanup 关闭存储依赖。
+			a.rooms.Shutdown(shCtx)
+		}
 		return ctx.Err()
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {

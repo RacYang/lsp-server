@@ -110,6 +110,12 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
+		// 摘增量先于排空：收到停机信号立即注销节点发现，lobby 不再为新房间选中本节点；
+		// 在途请求仍由 GRPCApp 的 GracefulStop 排空。重复 Stop 幂等（撤销同一租约）。
+		go func() {
+			<-ctx.Done()
+			_ = reg.Stop(context.Background())
+		}()
 		// 每 10 秒上报活跃房间数，供 Lobby 负载均衡选节点。
 		go func() {
 			ticker := time.NewTicker(10 * time.Second)
@@ -156,8 +162,13 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 	}
 	defer obsStop()
 	logx.Info(ctx, "房间服务启动", "addr", cfg.ServerAddr)
-	if err := a.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		logx.Error(ctx, "房间服务退出异常", "err", err.Error())
+	runErr := a.Run(ctx)
+	// 停机顺序契约：传输层排空（Run 返回）→ 停房间自驱动定时器 → defer 关闭存储依赖。
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	svcCore.Shutdown(shutdownCtx)
+	cancelShutdown()
+	if runErr != nil && !errors.Is(runErr, context.Canceled) {
+		logx.Error(ctx, "房间服务退出异常", "err", runErr.Error())
 		return 1
 	}
 	return 0

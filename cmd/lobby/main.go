@@ -75,6 +75,12 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
+		// 摘增量先于排空：收到停机信号立即注销节点发现，gate 不再把新请求路由到本节点；
+		// 在途请求仍由 GRPCApp 的 GracefulStop 排空。重复 Stop 幂等（撤销同一租约）。
+		go func() {
+			<-ctx.Done()
+			_ = reg.Stop(context.Background())
+		}()
 		claimer = cluster.NewEtcdRouter(cli, cfg.EtcdPrefix)
 		selector = cluster.NewLeastRoomsSelector(disco)
 	}

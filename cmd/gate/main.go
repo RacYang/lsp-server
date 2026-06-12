@@ -52,6 +52,12 @@ func run(ctx context.Context, stop context.CancelFunc) int {
 			return 1
 		}
 		defer func() { _ = reg.Stop(context.Background()) }()
+		// 摘增量先于排空：收到停机信号立即注销节点发现，客户端发现层不再选中本节点；
+		// 在途连接仍由 HTTP Server 的 Shutdown 排空。重复 Stop 幂等（撤销同一租约）。
+		go func() {
+			<-ctx.Done()
+			_ = reg.Stop(context.Background())
+		}()
 	}
 	a, err := app.NewGate(ctx, cfg)
 	if err != nil {
