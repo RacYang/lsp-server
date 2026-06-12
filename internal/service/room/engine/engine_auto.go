@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 
 	"racoo.cn/lsp/internal/mahjong/hand"
 	"racoo.cn/lsp/internal/mahjong/rules"
@@ -12,6 +13,16 @@ import (
 
 const autoRoundStepLimit = 256
 
+// replaySeedFromRoomID 为回放局派生确定性牌墙种子：同一 roomID 必须复现同一局。
+// 该函数只允许回放路径使用；真实对局的种子由 Engine.nextWallSeed 从 CSPRNG 取得，
+// 任何从客户端可见信息派生对局种子的做法都会破坏牌序不可预测性。
+func replaySeedFromRoomID(roomID string) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(roomID))
+	// 截到 63 位后再转 int64，避免无符号到有符号窄化告警。
+	return int64(h.Sum64() & 0x7fff_ffff_ffff_ffff) //nolint:gosec // G115：已清零最高位
+}
+
 // PlayAutoRound 生成一局确定性回放通知：按规则开局、摸打与结算。
 func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]string) ([]Notification, error) {
 	if e == nil {
@@ -19,8 +30,7 @@ func (e *Engine) PlayAutoRound(ctx context.Context, roomID string, playerIDs [4]
 	}
 	rule := rules.MustGet(e.ruleID)
 	caps := rules.CapabilitiesOf(rule)
-	// 牌墙 seed 仅用于可复现回放；截到 63 位后再转 int64，避免无符号到有符号窄化告警。
-	w := caps.TileSet.BuildWall(ctx, int64(seedFromRoomID(roomID)&0x7fff_ffff_ffff_ffff)) //nolint:gosec // G115：上式已保证最高位清零
+	w := caps.TileSet.BuildWall(ctx, replaySeedFromRoomID(roomID))
 	hands := make([]*hand.Hand, 4)
 	for i := range hands {
 		hands[i] = hand.New()

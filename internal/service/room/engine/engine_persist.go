@@ -301,6 +301,7 @@ func (rs *RoundState) MarshalRoundPersistJSON() ([]byte, error) {
 	if rs.wall != nil {
 		rp.WallRemaining = tilesToStrings(rs.wall.Tiles())
 	}
+	rp.WallSeed = rs.wallSeed
 	return json.Marshal(rp)
 }
 
@@ -379,6 +380,7 @@ func buildRoundStateFromPersist(roomID string, rp *roundPersist) (*RoundState, e
 		playerIDs:              rp.PlayerIDs,
 		rule:                   rule,
 		caps:                   caps,
+		wallSeed:               rp.WallSeed,
 		wall:                   wall.NewFromOrderedTiles(wallTiles),
 		hands:                  hands,
 		discards:               make([][]tile.Tile, 4),
