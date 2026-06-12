@@ -507,8 +507,8 @@ func TestPersistRoomMetaKeepsQueSuits(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	srv.persistRoomMeta(ctx, "r-meta", 1, &eng.Notification{Kind: eng.KindOpeningDone, Payload: quePayload})
-	srv.persistRoomMeta(ctx, "r-meta", 2, &eng.Notification{Kind: eng.KindAction, Payload: actionPayload})
+	srv.persistRoomMeta(ctx, "r-meta", 1, []eng.Notification{{Kind: eng.KindOpeningDone, Payload: quePayload}})
+	srv.persistRoomMeta(ctx, "r-meta", 2, []eng.Notification{{Kind: eng.KindAction, Payload: actionPayload}})
 
 	meta, ok, err := rdb.GetRoomSnapMeta(ctx, "r-meta")
 	require.NoError(t, err)

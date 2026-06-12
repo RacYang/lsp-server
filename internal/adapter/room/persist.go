@@ -22,8 +22,14 @@ func (s *GRPCServer) PersistPublishAndFinalize(ctx context.Context, roomID, idem
 		return err
 	}
 	for idx, event := range events {
-		s.afterEventSideEffects(ctx, roomID, notifications[idx], event.evt, event.cursor)
+		s.afterEventSideEffects(ctx, roomID, notifications[idx], event.evt)
 		s.publishToRedis(ctx, roomID, event.evt)
+	}
+	// snapmeta 是批次完成后的一致切片：actor 内存态在批次开始前已是最终态，
+	// 逐事件写入只会产生"最终局面 + 中间序号"的不一致中间快照，因此整批只写一次。
+	if len(events) > 0 {
+		lastSeq := parseSinceSeq(roomID, events[len(events)-1].cursor)
+		s.persistRoomMeta(ctx, roomID, lastSeq, notifications)
 	}
 	s.markIdempotency(ctx, roomID, idemKey)
 	return nil
@@ -88,8 +94,7 @@ func (s *GRPCServer) persistNotifications(ctx context.Context, roomID string, no
 	return out, nil
 }
 
-func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification eng.Notification, evt *svcv1.RoomServiceStreamEventsResponse, cursor string) {
-	s.persistRoomMeta(ctx, roomID, parseSinceSeq(roomID, cursor), &notification)
+func (s *GRPCServer) afterEventSideEffects(ctx context.Context, roomID string, notification eng.Notification, evt *svcv1.RoomServiceStreamEventsResponse) {
 	if s.gs != nil {
 		players, _, _, ok := s.rooms.RoomSnapshot(roomID)
 		if ok && len(players) > 0 {
