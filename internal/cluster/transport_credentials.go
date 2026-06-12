@@ -81,7 +81,7 @@ func NewClientTLSConfig(certFile, keyFile, caFile, serverName string) (*tls.Conf
 }
 
 func loadCertPool(caFile string) (*x509.CertPool, error) {
-	caPEM, err := os.ReadFile(caFile)
+	caPEM, err := os.ReadFile(caFile) //nolint:gosec // G304：路径来自部署配置（cluster.tls/etcd.tls），非外部输入
 	if err != nil {
 		return nil, fmt.Errorf("读取集群 CA 证书: %w", err)
 	}

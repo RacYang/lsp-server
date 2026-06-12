@@ -80,7 +80,7 @@ func TestPlayAutoRoundReplayDeterministicForSameRoomID(t *testing.T) {
 	second, err := NewEngine("sichuan_xuezhandaodi_huansanzhang").PlayAutoRound(context.Background(), roomID, players)
 	require.NoError(t, err)
 
-	require.Equal(t, len(first), len(second))
+	require.Len(t, second, len(first))
 	for i := range first {
 		require.Equal(t, first[i].Kind, second[i].Kind, "第 %d 条通知类型应一致", i)
 		require.Equal(t, first[i].Payload, second[i].Payload, "第 %d 条通知载荷应逐字节一致", i)
